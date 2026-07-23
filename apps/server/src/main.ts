@@ -42,7 +42,6 @@ import { ZeroMCP } from './routes/agent/mcp';
 import { publicRouter } from './routes/auth';
 import { ensureConfiguredAdmin } from './lib/admin-provisioning';
 import { WorkflowRunner } from './pipelines';
-import { autumnApi } from './routes/autumn';
 import { initTracing } from './lib/tracing';
 import { env, type ZeroEnv } from './env';
 import type { HonoContext } from './ctx';
@@ -706,7 +705,6 @@ const api = new Hono<HonoContext>()
     c.set('auth', undefined as any);
   })
   .route('/ai', aiRouter)
-  .route('/autumn', autumnApi)
   .route('/public', publicRouter)
   .on(['GET', 'POST', 'OPTIONS'], '/auth/*', (c) => {
     return c.var.auth.handler(c.req.raw);

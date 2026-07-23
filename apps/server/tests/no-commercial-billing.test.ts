@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -66,5 +66,22 @@ describe('self-hosted commercial billing removal', () => {
       'billingCustomer',
       'Get verified',
     ]);
+  });
+
+  it('contains no backend Autumn runtime or Pro authorization', () => {
+    const paths = [
+      'apps/server/src/main.ts',
+      'apps/server/src/ctx.ts',
+      'apps/server/src/env.ts',
+      'apps/server/src/lib/auth.ts',
+      'apps/server/src/lib/utils.ts',
+      'apps/server/src/trpc/routes/meet.ts',
+    ];
+
+    for (const path of paths) {
+      expectNoTokens(path, ['Autumn', 'autumn', 'isProCustomer', 'AUTUMN_SECRET_KEY']);
+    }
+
+    expect(existsSync(resolve(repoRoot, 'apps/server/src/routes/autumn.ts'))).toBe(false);
   });
 });
