@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -17,7 +17,49 @@ const expectNoTokens = (relativePath: string, tokens: string[]) => {
   }
 };
 
+const listRuntimeSourceFiles = (relativeDirectory: string): string[] => {
+  const absoluteDirectory = resolve(repoRoot, relativeDirectory);
+
+  return readdirSync(absoluteDirectory, { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = `${relativeDirectory}/${entry.name}`;
+    if (entry.isDirectory()) return listRuntimeSourceFiles(relativePath);
+    return /\.[cm]?[jt]sx?$/.test(entry.name) ? [relativePath] : [];
+  });
+};
+
 describe('self-hosted commercial billing removal', () => {
+  it('keeps all runtime source free of commercial entitlement architecture', () => {
+    const runtimeFiles = [
+      ...listRuntimeSourceFiles('apps/mail/app'),
+      ...listRuntimeSourceFiles('apps/mail/components'),
+      ...listRuntimeSourceFiles('apps/mail/config'),
+      ...listRuntimeSourceFiles('apps/mail/hooks'),
+      ...listRuntimeSourceFiles('apps/mail/lib'),
+      ...listRuntimeSourceFiles('apps/mail/providers'),
+      ...listRuntimeSourceFiles('apps/server/src'),
+    ];
+    const forbiddenPatterns = [
+      /\bpricingDialog\b/,
+      /\buseBilling\b/,
+      /\bisProCustomer\b/,
+      /\bAutumnProvider\b/,
+      /\bAUTUMN_SECRET_KEY\b/,
+      /\bautumn-js\b/,
+      /\bisPro\b/,
+      /\bZero Pro\b/i,
+    ];
+
+    for (const relativePath of runtimeFiles) {
+      const source = read(relativePath);
+      for (const pattern of forbiddenPatterns) {
+        expect(
+          pattern.test(source),
+          `${relativePath} still contains forbidden commercial billing pattern: ${pattern}`,
+        ).toBe(false);
+      }
+    }
+  });
+
   it('keeps AI chat independent of billing and entitlements', () => {
     expectNoTokens('apps/mail/components/create/ai-chat.tsx', [
       'useBilling',
