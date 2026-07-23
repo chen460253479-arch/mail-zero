@@ -84,4 +84,35 @@ describe('self-hosted commercial billing removal', () => {
 
     expect(existsSync(resolve(repoRoot, 'apps/server/src/routes/autumn.ts'))).toBe(false);
   });
+
+  it('removes pricing routes, subscription copy, and Pro email campaigns', () => {
+    const removedFiles = [
+      'apps/mail/app/(full-width)/pricing.tsx',
+      'apps/mail/components/pricing/comparision.tsx',
+      'apps/mail/components/pricing/pricing-card.tsx',
+      'apps/mail/components/ui/pricing-dialog.tsx',
+      'apps/mail/components/ui/pricing-switch.tsx',
+    ];
+
+    for (const path of removedFiles) {
+      expect(existsSync(resolve(repoRoot, path)), `${path} should be deleted`).toBe(false);
+    }
+
+    expectNoTokens('apps/mail/app/routes.ts', ["route('/pricing'"]);
+    expectNoTokens('apps/mail/components/navigation.tsx', ['/pricing', '>Pricing<']);
+    expectNoTokens('apps/mail/app/(full-width)/privacy.tsx', [
+      'Pricing and Refund Policy',
+      'subscription fees',
+      '7-day free trial',
+    ]);
+    expectNoTokens('apps/server/src/lib/auth.ts', ['Mail0ProEmail']);
+    expectNoTokens('apps/server/src/lib/react-emails/email-sequences.tsx', [
+      'Mail0ProEmail',
+      'Mail0ProWelcomeEmail',
+      'Mail0CancellationEmail',
+      '/pricing',
+    ]);
+    expectNoTokens('README.md', ['Autumn Setup', 'AUTUMN_SECRET_KEY']);
+    expectNoTokens('AGENT.md', ['AUTUMN_SECRET_KEY']);
+  });
 });

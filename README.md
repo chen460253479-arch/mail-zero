@@ -176,19 +176,7 @@ You can set up Zero in two ways:
 > [!WARNING]
 > The authorized redirect URIs in Google Cloud Console must match **exactly** what you configure in the `.env`, including the protocol (http/https), domain, and path - these are provided above.
 
-3. **Autumn Setup** (Required for some encryption)
-
-   - Go to [Autumn](https://useautumn.com/)
-   - For Local Use, click [onboarding](https://app.useautumn.com/sandbox/onboarding) button and generate an Autumn Secret Key
-   - For production, select the production mode from upper left corner and generate and fill the other fields. After that, generate an Autumn Secret Key
-
-   - Add to `.env`:
-
-   ```env
-   AUTUMN_SECRET_KEY=your_autumn_secret
-   ```
-
-4. **Twilio Setup** (Required for SMS Integration)
+3. **Twilio Setup** (Required for SMS Integration)
 
    - Go to the [Twilio](https://www.twilio.com/)
    - Create a Twilio account if you don’t already have one

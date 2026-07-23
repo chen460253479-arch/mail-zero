@@ -2,7 +2,6 @@ import {
   AIWritingAssistantEmail,
   AutoLabelingEmail,
   CategoriesEmail,
-  Mail0ProEmail,
   ShortcutsEmail,
   SuperSearchEmail,
   WelcomeEmail,
@@ -48,11 +47,6 @@ const scheduleCampaign = (userInfo: { address: string; name: string }) =>
         subject: 'Welcome to 0.email',
         react: WelcomeEmail({ name }),
         scheduledAt: undefined,
-      },
-      {
-        subject: 'Mail0 Pro is here 🚀💼',
-        react: Mail0ProEmail({ name }),
-        scheduledAt: 'in 1 day',
       },
       {
         subject: 'Auto-labeling is here 🎉📥',
