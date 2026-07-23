@@ -115,4 +115,19 @@ describe('self-hosted commercial billing removal', () => {
     expectNoTokens('README.md', ['Autumn Setup', 'AUTUMN_SECRET_KEY']);
     expectNoTokens('AGENT.md', ['AUTUMN_SECRET_KEY']);
   });
+
+  it('contains no Autumn packages, configuration, or dead billing helpers', () => {
+    expect(existsSync(resolve(repoRoot, 'apps/mail/hooks/use-billing.ts'))).toBe(false);
+    expectNoTokens('apps/mail/lib/utils.ts', ['isProCustomer', "from 'autumn-js'"]);
+    expectNoTokens('.env.example', ['AUTUMN_SECRET_KEY']);
+
+    for (const path of [
+      'apps/mail/package.json',
+      'apps/server/package.json',
+      'pnpm-workspace.yaml',
+      'pnpm-lock.yaml',
+    ]) {
+      expectNoTokens(path, ['autumn-js']);
+    }
+  });
 });
