@@ -21,7 +21,6 @@ import { MailList } from '@/components/mail/mail-list';
 import { useNavigate, useParams } from 'react-router';
 import { useMail } from '@/components/mail/use-mail';
 import { SidebarToggle } from '../ui/sidebar-toggle';
-import { PricingDialog } from '../ui/pricing-dialog';
 import { clearBulkSelectionAtom } from './use-mail';
 import AISidebar from '@/components/ui/ai-sidebar';
 import { useThreads } from '@/hooks/use-threads';
@@ -50,7 +49,6 @@ import { useAtom } from 'jotai';
 //       },
 //     }),
 //   );
-//   const [, setPricingDialog] = useQueryState('pricingDialog');
 //   const [labels, setLabels] = useState<ITag[]>([]);
 //   const [newLabel, setNewLabel] = useState({ name: '', usecase: '' });
 //   const { mutateAsync: EnableBrain, isPending: isEnablingBrain } = useMutation(
@@ -60,7 +58,6 @@ import { useAtom } from 'jotai';
 //     trpc.brain.disableBrain.mutationOptions(),
 //   );
 //   const { data: brainState, refetch: refetchBrainState } = useBrainState();
-//   const { isLoading, isPro } = useBilling();
 
 //   useEffect(() => {
 //     if (storedLabels) {
@@ -156,13 +153,7 @@ import { useAtom } from 'jotai';
 //   return (
 //     <Dialog
 //       open={open}
-//       onOpenChange={(state) => {
-//         if (!isPro) {
-//           setPricingDialog('true');
-//         } else {
-//           setOpen(state);
-//         }
-//       }}
+//       onOpenChange={setOpen}
 //     >
 //       <DialogTrigger asChild>
 //         <div className="flex items-center gap-2">
@@ -416,7 +407,6 @@ export function MailLayout() {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <PricingDialog />
       <div className="rounded-inherit z-5 relative flex p-0 md:mr-0.5 md:mt-1">
         <ResizablePanelGroup
           direction="horizontal"

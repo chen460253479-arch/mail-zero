@@ -35,4 +35,36 @@ describe('self-hosted commercial billing removal', () => {
       'Upgrade for unlimited messages',
     ]);
   });
+
+  it('keeps connections and the application shell independent of billing', () => {
+    const paths = [
+      'apps/mail/app/(routes)/settings/connections/page.tsx',
+      'apps/mail/components/connection/add.tsx',
+      'apps/mail/components/ui/app-sidebar.tsx',
+      'apps/mail/components/ui/nav-user.tsx',
+      'apps/mail/components/mail/mail.tsx',
+      'apps/mail/components/settings/settings-card.tsx',
+      'apps/mail/providers/server-providers.tsx',
+    ];
+
+    for (const path of paths) {
+      expectNoTokens(path, [
+        'useBilling',
+        'pricingDialog',
+        'PricingDialog',
+        'AutumnProvider',
+        'Start 7 day free trial',
+      ]);
+    }
+
+    expectNoTokens('apps/mail/components/connection/add.tsx', [
+      'canCreateConnection',
+      'handleUpgrade',
+    ]);
+    expectNoTokens('apps/mail/components/ui/nav-user.tsx', [
+      'openBillingPortal',
+      'billingCustomer',
+      'Get verified',
+    ]);
+  });
 });
