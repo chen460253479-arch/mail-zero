@@ -94,7 +94,16 @@ export interface IConnection {
   createdAt: Date;
   channelId: 'gmail' | 'outlook' | 'zoho_mail' | 'imap_smtp';
   status: 'connected' | 'disconnected' | 'reconnect_required' | 'deleting';
-  providerId: string;
+  authSource: 'zero_oauth' | 'nango' | 'manual' | null;
+  capabilities: Array<
+    | 'read_messages'
+    | 'send_messages'
+    | 'drafts'
+    | 'attachments'
+    | 'labels'
+    | 'threads'
+    | 'push_sync'
+  >;
 }
 
 export interface Attachment {

@@ -1,6 +1,5 @@
 import {
   GmailSearchAssistantSystemPrompt,
-  OutlookSearchAssistantSystemPrompt,
 } from '../../../lib/prompts';
 import { activeDriverProcedure } from '../../trpc';
 import { openai } from '@ai-sdk/openai';
@@ -12,14 +11,10 @@ export const generateSearchQuery = activeDriverProcedure
   .input(z.object({ query: z.string() }))
   .mutation(async ({ input, ctx }) => {
     const {
-      activeConnection: { providerId },
+      activeConnection: { channelId },
     } = ctx;
-    const systemPrompt =
-      providerId === 'google'
-        ? GmailSearchAssistantSystemPrompt()
-        : providerId === 'microsoft'
-          ? OutlookSearchAssistantSystemPrompt()
-          : '';
+    if (channelId !== 'gmail') throw new Error(`Search is not supported by ${channelId}`);
+    const systemPrompt = GmailSearchAssistantSystemPrompt();
 
     const result = await generateObject({
       model: openai(env.OPENAI_MODEL || 'gpt-4o'),

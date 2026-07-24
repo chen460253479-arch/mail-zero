@@ -69,7 +69,7 @@ export const AddConnectionDialog = ({
                   className="h-24 w-full flex-col items-center justify-center gap-2"
                   onClick={async () =>
                     await authClient.linkSocial({
-                      provider: provider.providerId,
+                      provider: provider.zeroOAuthProvider,
                       callbackURL: `${window.location.origin}${pathname}`,
                     })
                   }

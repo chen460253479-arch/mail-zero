@@ -145,6 +145,10 @@ export class DbRpcDO extends RpcTarget {
     return await this.mainDo.findManyConnections(this.userId);
   }
 
+  async findManyConnectionsWithAuthorization(): Promise<ConnectionWithAuthorization[]> {
+    return await this.mainDo.findManyConnectionsWithAuthorization(this.userId);
+  }
+
   async findManyNotesByThreadId(threadId: string): Promise<(typeof note.$inferSelect)[]> {
     return await this.mainDo.findManyNotesByThreadId(this.userId, threadId);
   }
@@ -371,6 +375,22 @@ class ZeroDB extends DurableObject<ZeroEnv> {
     return await this.db.query.connection.findMany({
       where: eq(connection.userId, userId),
     });
+  }
+
+  async findManyConnectionsWithAuthorization(
+    userId: string,
+  ): Promise<ConnectionWithAuthorization[]> {
+    return await this.db
+      .select({
+        connection,
+        authorization: authorizationBinding,
+      })
+      .from(connection)
+      .leftJoin(
+        authorizationBinding,
+        eq(authorizationBinding.connectionId, connection.id),
+      )
+      .where(eq(connection.userId, userId));
   }
 
   async findManyNotesByThreadId(

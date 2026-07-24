@@ -11,6 +11,7 @@ import {
 import { Ratelimit } from '@upstash/ratelimit';
 import { TRPCError } from '@trpc/server';
 import { disableBrainFunction } from '../../lib/brain';
+import { getMailChannel } from '../../lib/mail-channel/registry';
 import type { EProviders } from '../../types';
 import { z } from 'zod';
 
@@ -52,14 +53,14 @@ export const connectionsRouter = router({
     .query(async ({ ctx }) => {
       const { sessionUser } = ctx;
       const db = await getZeroDB(sessionUser.id);
-      const connections = await db.findManyConnections();
+      const records = await db.findManyConnectionsWithAuthorization();
 
-      const disconnectedIds = connections
-        .filter((connection) => connection.status === 'disconnected')
-        .map((connection) => connection.id);
+      const disconnectedIds = records
+        .filter(({ connection }) => connection.status === 'disconnected')
+        .map(({ connection }) => connection.id);
 
       return {
-        connections: connections.map((connection) => {
+        connections: records.map(({ connection, authorization }) => {
           return {
             id: connection.id,
             email: connection.email,
@@ -68,7 +69,8 @@ export const connectionsRouter = router({
             createdAt: connection.createdAt,
             channelId: connection.channelId,
             status: connection.status,
-            providerId: connection.providerId,
+            authSource: authorization?.authSource ?? null,
+            capabilities: Array.from(getMailChannel(connection.channelId).capabilities),
           };
         }),
         disconnectedIds,
@@ -111,10 +113,14 @@ export const connectionsRouter = router({
     if (!ctx.sessionUser) return null;
     const db = await getZeroDB(ctx.sessionUser.id);
     const user = await db.findUser();
-    const connection = user?.defaultConnectionId
-      ? (await db.findUserConnection(user.defaultConnectionId)) || (await db.findFirstConnection())
+    const selectedConnection = user?.defaultConnectionId
+      ? (await db.findUserConnection(user.defaultConnectionId)) ||
+        (await db.findFirstConnection())
       : await db.findFirstConnection();
-    if (!connection) return null;
+    if (!selectedConnection) return null;
+    const record = await db.findConnectionWithAuthorization(selectedConnection.id);
+    if (!record) return null;
+    const { connection, authorization } = record;
     return {
       id: connection.id,
       email: connection.email,
@@ -123,7 +129,8 @@ export const connectionsRouter = router({
       createdAt: connection.createdAt,
       channelId: connection.channelId,
       status: connection.status,
-      providerId: connection.providerId,
+      authSource: authorization?.authSource ?? null,
+      capabilities: Array.from(getMailChannel(connection.channelId).capabilities),
     };
   }),
 });

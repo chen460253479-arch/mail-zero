@@ -60,8 +60,11 @@ export default function ConnectionsPage() {
             <div className="lg: grid gap-4 sm:grid-cols-1 md:grid-cols-2">
               {data.connections.map((connection) => {
                 const Icon = emailProviders.find(
-                  (p) => p.providerId === connection.providerId,
+                  (provider) => provider.channelId === connection.channelId,
                 )?.icon;
+                const zeroOAuthProvider = emailProviders.find(
+                  (provider) => provider.channelId === connection.channelId,
+                )?.zeroOAuthProvider;
                 return (
                   <div
                     key={connection.id}
@@ -122,19 +125,21 @@ export default function ConnectionsPage() {
                               {m['pages.settings.connections.disconnected']()}
                             </Badge>
                           </div>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={async () => {
-                              await authClient.linkSocial({
-                                provider: connection.providerId,
-                                callbackURL: `${window.location.origin}/settings/connections`,
-                              });
-                            }}
-                          >
-                            <Unplug className="size-4" />
-                            {m['pages.settings.connections.reconnect']()}
-                          </Button>
+                          {zeroOAuthProvider ? (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={async () => {
+                                await authClient.linkSocial({
+                                  provider: zeroOAuthProvider,
+                                  callbackURL: `${window.location.origin}/settings/connections`,
+                                });
+                              }}
+                            >
+                              <Unplug className="size-4" />
+                              {m['pages.settings.connections.reconnect']()}
+                            </Button>
+                          ) : null}
                           <DeleteRetainedDataDialog
                             connectionId={connection.id}
                             onCompleted={refreshConnectionData}

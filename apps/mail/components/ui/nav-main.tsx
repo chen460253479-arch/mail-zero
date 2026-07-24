@@ -239,9 +239,9 @@ export function NavMain({ items }: NavMainProps) {
             <SidebarMenuItem className="mb-4" style={{ height: 'auto' }}>
               <div className="mx-2 mb-4 flex items-center justify-between">
                 <span className="text-muted-foreground text-[13px] dark:text-[#898989]">
-                  {activeAccount?.providerId === 'google' ? 'Labels' : 'Folders'}
+                  {activeAccount?.capabilities.includes('labels') ? 'Labels' : 'Folders'}
                 </span>
-                {activeAccount?.providerId === 'google' ? (
+                {activeAccount?.capabilities.includes('labels') ? (
                   <LabelDialog
                     trigger={
                       <Button
@@ -254,7 +254,7 @@ export function NavMain({ items }: NavMainProps) {
                     }
                     onSubmit={onSubmit}
                   />
-                ) : activeAccount?.providerId === 'microsoft' ? null : null}
+                ) : null}
               </div>
 
               {activeAccount ? <SidebarLabels data={userLabels ?? []} /> : null}

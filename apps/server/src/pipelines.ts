@@ -25,7 +25,6 @@ import { getMailChannel, providerIdToChannelId } from './lib/mail-channel/regist
 import { DurableObject } from 'cloudflare:workers';
 import { bulkDeleteKeys } from './lib/bulk-delete';
 import { Effect, Console, Logger } from 'effect';
-import { EProviders } from './types';
 import type { ZeroEnv } from './env';
 import { initTracing } from './lib/tracing';
 import { EPrompts } from './types';
@@ -74,7 +73,6 @@ export type ZeroWorkflowParams = {
 export type ThreadWorkflowParams = {
   connectionId: string;
   threadId: string;
-  providerId: string;
 };
 
 export type MainWorkflowParams = {
@@ -107,7 +105,6 @@ export type ZeroWorkflowError =
   | { _tag: 'ConnectionNotFound'; connectionId: string }
   | { _tag: 'ConnectionNotAuthorized'; connectionId: string }
   | { _tag: 'HistoryNotFound'; historyId: string; connectionId: string }
-  | { _tag: 'UnsupportedProvider'; providerId: string }
   | { _tag: 'UnsupportedSyncChannel'; channelId: string }
   | { _tag: 'DatabaseError'; error: unknown }
   | { _tag: 'GmailApiError'; error: unknown }
@@ -118,7 +115,6 @@ export type ThreadWorkflowError =
   | { _tag: 'ConnectionNotFound'; connectionId: string }
   | { _tag: 'ConnectionNotAuthorized'; connectionId: string }
   | { _tag: 'ThreadNotFound'; threadId: string }
-  | { _tag: 'UnsupportedProvider'; providerId: string }
   | { _tag: 'DatabaseError'; error: unknown }
   | { _tag: 'GmailApiError'; error: unknown }
   | { _tag: 'VectorizationError'; error: unknown }
@@ -426,7 +422,6 @@ export class WorkflowRunner extends DurableObject<ZeroEnv> {
                 this.runThreadWorkflow({
                   connectionId,
                   threadId,
-                  providerId: foundConnection.providerId,
                 }).pipe(
                   Effect.tap(() =>
                     Console.log(`[ZERO_WORKFLOW] Successfully ran thread workflow for ${threadId}`),
@@ -549,11 +544,11 @@ export class WorkflowRunner extends DurableObject<ZeroEnv> {
   public runThreadWorkflow(params: ThreadWorkflowParams) {
     return Effect.gen(this, function* () {
       yield* Console.log('[THREAD_WORKFLOW] Starting workflow with payload:', params);
-      const { connectionId, threadId, providerId } = params;
+      const { connectionId, threadId } = params;
       const keysToDelete: string[] = [];
 
-      if (providerId === EProviders.google) {
-        yield* Console.log('[THREAD_WORKFLOW] Processing Google provider workflow');
+      {
+        yield* Console.log('[THREAD_WORKFLOW] Processing channel-neutral workflow');
         const { db, conn } = createDb(this.env.HYPERDRIVE.connectionString);
 
         const foundConnection = yield* Effect.tryPromise({
@@ -660,12 +655,6 @@ export class WorkflowRunner extends DurableObject<ZeroEnv> {
 
         yield* Console.log('[THREAD_WORKFLOW] Thread processing complete');
         return 'Thread workflow completed successfully';
-      } else {
-        yield* Console.log('[THREAD_WORKFLOW] Unsupported provider:', providerId);
-        return yield* Effect.fail({
-          _tag: 'UnsupportedProvider' as const,
-          providerId,
-        });
       }
     }).pipe(
       Effect.tapError((error) => Console.log('[THREAD_WORKFLOW] Error in workflow:', error)),
@@ -702,11 +691,11 @@ export class WorkflowRunner extends DurableObject<ZeroEnv> {
   private async runThreadWorkflowWithoutEffectImpl(params: ThreadWorkflowParams): Promise<string> {
     try {
       console.log('[THREAD_WORKFLOW] Starting workflow with payload:', params);
-      const { connectionId, threadId, providerId } = params;
+      const { connectionId, threadId } = params;
       const keysToDelete: string[] = [];
 
-      if (providerId === EProviders.google) {
-        console.log('[THREAD_WORKFLOW] Processing Google provider workflow');
+      {
+        console.log('[THREAD_WORKFLOW] Processing channel-neutral workflow');
         const { db, conn } = createDb(this.env.HYPERDRIVE.connectionString);
 
         let foundConnection;
@@ -823,9 +812,6 @@ export class WorkflowRunner extends DurableObject<ZeroEnv> {
 
         console.log('[THREAD_WORKFLOW] Thread processing complete');
         return 'Thread workflow completed successfully';
-      } else {
-        console.log('[THREAD_WORKFLOW] Unsupported provider:', providerId);
-        throw { _tag: 'UnsupportedProvider' as const, providerId };
       }
     } catch (error) {
       console.error('[THREAD_WORKFLOW] Error in workflow:', error);
