@@ -2,10 +2,10 @@ import { pathToFileURL } from 'node:url';
 
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 
-import { encryptCredential } from '../lib/credentials/encryption';
 import { createZeroOAuthSnapshot } from '../lib/credentials/zero-oauth';
-import { createDb, type DB } from '.';
+import { encryptCredential } from '../lib/credentials/encryption';
 import { authorizationBinding, connection } from './schema';
+import { createDb, type DB } from '.';
 
 export type LegacyOAuthConnection = {
   id: string;
@@ -21,6 +21,7 @@ export interface AuthorizationBackfillRepository {
   listLegacyOAuthConnections(): Promise<LegacyOAuthConnection[]>;
   assertBindingsExist(connectionIds: string[]): Promise<void>;
   saveSnapshot(authorizationId: string, snapshot: string, expiresAt: Date): Promise<void>;
+  clearLegacyCredentials(connectionId: string): Promise<void>;
 }
 
 type BackfillDependencies = {
@@ -38,6 +39,7 @@ export const backfillAuthorizationBindings = async ({
   let populatedCount = 0;
   for (const row of rows) {
     if (row.encryptedCredentialSnapshot) {
+      await repository.clearLegacyCredentials(row.id);
       populatedCount += 1;
       continue;
     }
@@ -52,15 +54,14 @@ export const backfillAuthorizationBindings = async ({
       encryptionKey,
     );
     await repository.saveSnapshot(row.authorizationId, snapshot, row.expiresAt);
+    await repository.clearLegacyCredentials(row.id);
     populatedCount += 1;
   }
 
   return { sourceCount: rows.length, populatedCount };
 };
 
-export const createAuthorizationBackfillRepository = (
-  db: DB,
-): AuthorizationBackfillRepository => ({
+export const createAuthorizationBackfillRepository = (db: DB): AuthorizationBackfillRepository => ({
   async listLegacyOAuthConnections() {
     const rows = await db
       .select({
@@ -73,10 +74,7 @@ export const createAuthorizationBackfillRepository = (
         encryptedCredentialSnapshot: authorizationBinding.encryptedCredentialSnapshot,
       })
       .from(connection)
-      .leftJoin(
-        authorizationBinding,
-        eq(authorizationBinding.connectionId, connection.id),
-      )
+      .leftJoin(authorizationBinding, eq(authorizationBinding.connectionId, connection.id))
       .where(and(isNotNull(connection.accessToken), isNotNull(connection.refreshToken)));
 
     return rows.map((row) => {
@@ -114,6 +112,13 @@ export const createAuthorizationBackfillRepository = (
         updatedAt: now,
       })
       .where(eq(authorizationBinding.id, authorizationId));
+  },
+
+  async clearLegacyCredentials(connectionId) {
+    await db
+      .update(connection)
+      .set({ accessToken: null, refreshToken: null, updatedAt: new Date() })
+      .where(eq(connection.id, connectionId));
   },
 });
 

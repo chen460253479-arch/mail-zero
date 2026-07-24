@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { decryptCredential } from '../lib/credentials/encryption';
 import {
   backfillAuthorizationBindings,
   type LegacyOAuthConnection,
 } from './backfill-authorization-bindings';
+import { decryptCredential } from '../lib/credentials/encryption';
 
 const encryptionKey = Buffer.alloc(32, 4).toString('base64');
 const expiresAt = new Date('2026-07-24T00:00:00.000Z');
@@ -23,6 +23,7 @@ const createRepository = (rows: LegacyOAuthConnection[] = [legacyRow]) => ({
   listLegacyOAuthConnections: vi.fn().mockResolvedValue(rows),
   assertBindingsExist: vi.fn().mockResolvedValue(undefined),
   saveSnapshot: vi.fn().mockResolvedValue(undefined),
+  clearLegacyCredentials: vi.fn().mockResolvedValue(undefined),
 });
 
 describe('authorization binding backfill', () => {
@@ -43,6 +44,7 @@ describe('authorization binding backfill', () => {
       expect.any(String),
       expiresAt,
     );
+    expect(repository.clearLegacyCredentials).toHaveBeenCalledWith('connection-1');
   });
 
   it('skips a binding that already has an encrypted snapshot', async () => {
@@ -53,15 +55,16 @@ describe('authorization binding backfill', () => {
     await backfillAuthorizationBindings({ repository, encryptionKey });
 
     expect(repository.saveSnapshot).not.toHaveBeenCalled();
+    expect(repository.clearLegacyCredentials).toHaveBeenCalledWith('connection-1');
   });
 
   it('fails before writing when a legacy connection has no authorization binding', async () => {
     const repository = createRepository();
     repository.assertBindingsExist.mockRejectedValue(new Error('Missing authorization binding'));
 
-    await expect(
-      backfillAuthorizationBindings({ repository, encryptionKey }),
-    ).rejects.toThrow('Missing authorization binding');
+    await expect(backfillAuthorizationBindings({ repository, encryptionKey })).rejects.toThrow(
+      'Missing authorization binding',
+    );
     expect(repository.saveSnapshot).not.toHaveBeenCalled();
   });
 
@@ -76,8 +79,9 @@ describe('authorization binding backfill', () => {
       },
     ]);
 
-    await expect(
-      backfillAuthorizationBindings({ repository, encryptionKey }),
-    ).resolves.toEqual({ sourceCount: 2, populatedCount: 2 });
+    await expect(backfillAuthorizationBindings({ repository, encryptionKey })).resolves.toEqual({
+      sourceCount: 2,
+      populatedCount: 2,
+    });
   });
 });

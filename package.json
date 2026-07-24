@@ -25,6 +25,7 @@
     "docker:db:down": "docker compose -f docker-compose.db.yaml down",
     "docker:db:clean": "docker compose -f docker-compose.db.yaml down -v",
     "db:generate": "dotenv -- pnpm run -C apps/server db:generate",
+    "db:backfill-mail-auth": "dotenv -- pnpm run -C apps/server db:backfill-mail-auth",
     "db:migrate": "dotenv -- pnpm run -C apps/server db:migrate",
     "db:push": "dotenv -- pnpm run -C apps/server db:push",
     "db:studio": "dotenv -- pnpm run -C apps/server db:studio",

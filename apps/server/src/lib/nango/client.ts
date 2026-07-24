@@ -50,9 +50,28 @@ export class NangoClient {
   }
 
   async listConnections(integrationId: string): Promise<NangoConnectionSummary[]> {
-    const payload = await this.request('/connections');
-    const result = this.parse(connectionListSchema, payload);
-    const connections = 'data' in result ? result.data : result.connections;
+    const pageSize = 100;
+    const connections: NangoConnectionSummary[] = [];
+    const seen = new Set<string>();
+
+    for (let page = 1; ; page++) {
+      const query = new URLSearchParams({ limit: String(pageSize), page: String(page) });
+      const payload = await this.request(`/connections?${query.toString()}`);
+      const result = this.parse(connectionListSchema, payload);
+      const pageConnections = 'data' in result ? result.data : result.connections;
+      let added = 0;
+
+      for (const connection of pageConnections) {
+        const key = `${connection.provider_config_key}\u0000${connection.connection_id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        connections.push(connection);
+        added++;
+      }
+
+      if (pageConnections.length < pageSize || added === 0) break;
+    }
+
     return connections.filter(({ provider_config_key }) => provider_config_key === integrationId);
   }
 

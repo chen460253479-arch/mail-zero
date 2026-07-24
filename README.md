@@ -145,6 +145,15 @@ You can set up Zero in two ways:
      BETTER_AUTH_SECRET=your_secret_key
      ```
 
+   - Generate one stable credential-encryption key and keep it available to every server instance.
+     Do not rotate it without re-encrypting existing credentials:
+
+     ```bash
+     openssl rand -base64 32
+     ```
+
+     Store the output as `CREDENTIAL_ENCRYPTION_KEY`.
+
 2. **Google OAuth Setup** (Optional Zero-managed Gmail authorization)
 
    - Go to [Google Cloud Console](https://console.cloud.google.com)
@@ -246,6 +255,15 @@ Zero uses PostgreSQL for storing data. Here's how to set it up:
      ```bash
      pnpm db:migrate
      ```
+
+   - **Backfill encrypted mailbox authorization snapshots** (required once after migration `0039` and before deploying the updated server):
+
+     ```bash
+     pnpm db:backfill-mail-auth
+     ```
+
+     This command is idempotent. It verifies every legacy mailbox binding, encrypts its OAuth
+     credentials with `CREDENTIAL_ENCRYPTION_KEY`, and removes the legacy plaintext token copies.
 
    - **View database content**:
      ```bash

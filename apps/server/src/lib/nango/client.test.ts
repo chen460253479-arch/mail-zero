@@ -62,6 +62,27 @@ describe('NangoClient', () => {
     expect(connections.map(({ connection_id }) => connection_id)).toEqual(['mailbox-1']);
   });
 
+  it('finds integration connections beyond the first API page', async () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({
+      ...connectionSummary,
+      connection_id: `other-${index}`,
+      provider_config_key: 'other',
+    }));
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ connections: firstPage }))
+      .mockResolvedValueOnce(Response.json({ connections: [connectionSummary] }));
+
+    const connections = await createClient(fetchMock).listConnections('gmail-primary');
+
+    expect(connections).toEqual([connectionSummary]);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://api.nango.dev/connections?limit=100&page=2',
+      { headers: { Authorization: 'Bearer nango-secret' } },
+    );
+  });
+
   it('requires provider_config_key when reading one connection', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({
