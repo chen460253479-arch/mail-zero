@@ -1,3 +1,4 @@
+import { gmailNangoProviders } from './gmail-metadata';
 import { GoogleMailManager } from '../driver/google';
 import { gmailSyncAdapter } from './gmail-sync';
 import type { MailboxChannel } from './types';
@@ -6,7 +7,7 @@ export const gmailChannel: MailboxChannel = {
   id: 'gmail',
   displayName: 'Gmail',
   legacyProviderId: 'google',
-  nangoProviders: ['google-mail', 'google'],
+  nangoProviders: gmailNangoProviders,
   capabilities: new Set([
     'read_messages',
     'send_messages',

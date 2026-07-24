@@ -62,6 +62,7 @@ export interface SystemIntegrationRepository {
   get<K extends IntegrationKey>(key: K): Promise<SystemIntegrationRecord | null>;
   saveActive<K extends IntegrationKey>(input: SaveActiveIntegrationInput<K>): Promise<void>;
   delete(key: IntegrationKey): Promise<void>;
+  deleteNangoConfiguration(): Promise<void>;
   getMapping(
     channelId: MailChannelId,
     authSource: 'nango',
@@ -114,6 +115,17 @@ export const createSystemIntegrationRepository = (db: DB): SystemIntegrationRepo
 
   delete: async (key) => {
     await db.delete(systemIntegrationConfig).where(eq(systemIntegrationConfig.integrationKey, key));
+  },
+
+  deleteNangoConfiguration: async () => {
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(channelIntegrationMapping)
+        .where(eq(channelIntegrationMapping.authSource, 'nango'));
+      await tx
+        .delete(systemIntegrationConfig)
+        .where(eq(systemIntegrationConfig.integrationKey, 'nango'));
+    });
   },
 
   getMapping: async (channelId, authSource) =>

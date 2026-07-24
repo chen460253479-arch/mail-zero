@@ -9,48 +9,68 @@ import {
   NangoBindingError,
 } from '../../lib/nango/bind';
 import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router } from '../trpc';
+import { withNangoRuntime, type NangoRuntime } from '../../lib/credentials/nango-runtime';
 import { getMailChannel, listMailChannels } from '../../lib/mail-channel/registry';
-import { deleteConnectionLocalData, getZeroDB } from '../../lib/server-utils';
 import { mailChannelIds, type MailChannelId } from '../../lib/mail-channel/types';
+import { deleteConnectionLocalData, getZeroDB } from '../../lib/server-utils';
+import { NangoIntegrationError } from '../../lib/integrations/nango-service';
 import { listAvailableNangoChannels } from '../../lib/nango/channel-catalog';
 import { resolveFetchedNangoCredential } from '../../lib/credentials/nango';
 import { disableBrainFunction } from '../../lib/brain';
-import { NangoClient } from '../../lib/nango/client';
 import { Ratelimit } from '@upstash/ratelimit';
 import type { EProviders } from '../../types';
 import { TRPCError } from '@trpc/server';
 import { env } from '../../env';
 import { z } from 'zod';
 
-const isNangoEnabled = () => Boolean(env.NANGO_BASE_URL && env.NANGO_SECRET_KEY);
+const nangoRuntimeConfig = () => ({
+  databaseUrl: env.HYPERDRIVE.connectionString,
+  encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
+});
 
-const getNangoClient = () => {
-  if (!env.NANGO_BASE_URL || !env.NANGO_SECRET_KEY) {
-    throw new TRPCError({
-      code: 'PRECONDITION_FAILED',
-      message: 'NANGO_NOT_CONFIGURED',
-    });
+const withConfiguredNango = async <T>(run: (runtime: NangoRuntime) => Promise<T>): Promise<T> => {
+  try {
+    return await withNangoRuntime(nangoRuntimeConfig(), run);
+  } catch (error) {
+    if (error instanceof NangoIntegrationError && error.code === 'NANGO_NOT_CONFIGURED') {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: error.code,
+      });
+    }
+    throw error;
   }
-  return new NangoClient({
-    baseUrl: env.NANGO_BASE_URL,
-    secretKey: env.NANGO_SECRET_KEY,
-    fetch,
-  });
 };
 
-const getNangoCatalog = async (client: NangoClient) =>
-  listAvailableNangoChannels(await client.listIntegrations(), listMailChannels());
+const isNangoEnabled = async (): Promise<boolean> => {
+  try {
+    return await withNangoRuntime(nangoRuntimeConfig(), async ({ integrationRepository }) =>
+      Boolean(await integrationRepository.getMapping('gmail', 'nango')),
+    );
+  } catch (error) {
+    if (error instanceof NangoIntegrationError && error.code === 'NANGO_NOT_CONFIGURED') {
+      return false;
+    }
+    throw error;
+  }
+};
 
-const isCatalogSelectionValid = (
-  catalog: Awaited<ReturnType<typeof getNangoCatalog>>,
+const assertConfiguredMapping = async (
+  runtime: NangoRuntime,
   channelId: MailChannelId,
   integrationId: string,
-) =>
-  catalog.some(
-    (channel) =>
-      channel.channelId === channelId &&
-      channel.integrations.some((integration) => integration.integrationId === integrationId),
-  );
+): Promise<void> => {
+  const mapping = await runtime.integrationRepository.getMapping(channelId, 'nango');
+  if (!mapping || mapping.externalIntegrationId !== integrationId) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: 'MAIL_CHANNEL_UNAVAILABLE',
+    });
+  }
+};
+
+const getNangoCatalog = async (client: NangoRuntime['client']) =>
+  listAvailableNangoChannels(await client.listIntegrations(), listMailChannels());
 
 const mapNangoBindingError = (error: unknown): never => {
   if (error instanceof NangoBindingError) {
@@ -107,7 +127,7 @@ export const connectionsRouter = router({
         .map(({ connection }) => connection.id);
 
       return {
-        nangoEnabled: isNangoEnabled(),
+        nangoEnabled: await isNangoEnabled(),
         connections: records.map(({ connection, authorization }) => {
           return {
             id: connection.id,
@@ -125,8 +145,21 @@ export const connectionsRouter = router({
       };
     }),
   nangoChannels: privateProcedure.query(async () => {
-    if (!isNangoEnabled()) return [];
-    return await getNangoCatalog(getNangoClient());
+    if (!(await isNangoEnabled())) return [];
+    return await withConfiguredNango(async (runtime) => {
+      const mapping = await runtime.integrationRepository.getMapping('gmail', 'nango');
+      if (!mapping) return [];
+      const catalog = await getNangoCatalog(runtime.client);
+      return catalog
+        .filter(({ channelId }) => channelId === 'gmail')
+        .map((channel) => ({
+          ...channel,
+          integrations: channel.integrations.filter(
+            ({ integrationId }) => integrationId === mapping.externalIntegrationId,
+          ),
+        }))
+        .filter(({ integrations }) => integrations.length > 0);
+    });
   }),
   nangoConnections: privateProcedure
     .input(
@@ -136,30 +169,32 @@ export const connectionsRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const client = getNangoClient();
-      const catalog = await getNangoCatalog(client);
-      if (!isCatalogSelectionValid(catalog, input.channelId, input.integrationId)) {
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message: 'MAIL_CHANNEL_UNAVAILABLE',
-        });
-      }
-      const channel = getMailChannel(input.channelId);
-      return await listSafeNangoConnections(input.integrationId, client, async (connectionId) => {
-        const connection = await client.getConnection(connectionId, input.integrationId);
-        const resolved = resolveFetchedNangoCredential(connection.credentials);
-        if (resolved.credential.type !== 'oauth2') {
-          throw new Error('Unsupported Nango credential');
-        }
-        const identity = await channel.resolveIdentity({
-          auth: {
-            userId: ctx.sessionUser.id,
-            accessToken: resolved.credential.accessToken,
-            refreshToken: '',
-            email: '',
+      return await withConfiguredNango(async (runtime) => {
+        await assertConfiguredMapping(runtime, input.channelId, input.integrationId);
+        const channel = getMailChannel(input.channelId);
+        return await listSafeNangoConnections(
+          input.integrationId,
+          runtime.client,
+          async (connectionId) => {
+            const connection = await runtime.client.getConnection(
+              connectionId,
+              input.integrationId,
+            );
+            const resolved = resolveFetchedNangoCredential(connection.credentials);
+            if (resolved.credential.type !== 'oauth2') {
+              throw new Error('Unsupported Nango credential');
+            }
+            const identity = await channel.resolveIdentity({
+              auth: {
+                userId: ctx.sessionUser.id,
+                accessToken: resolved.credential.accessToken,
+                refreshToken: '',
+                email: '',
+              },
+            });
+            return { email: identity.email, displayName: identity.name };
           },
-        });
-        return { email: identity.email, displayName: identity.name };
+        );
       });
     }),
   bindNango: privateProcedure
@@ -171,49 +206,52 @@ export const connectionsRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const client = getNangoClient();
-      const catalog = await getNangoCatalog(client);
       const db = await getZeroDB(ctx.sessionUser.id);
       try {
-        return await bindNangoMailbox(
-          { ...input, userId: ctx.sessionUser.id },
-          {
-            client,
-            getChannel: getMailChannel,
-            isIntegrationAvailable: async (channelId, integrationId) =>
-              isCatalogSelectionValid(catalog, channelId, integrationId),
-            repository: {
-              findMailboxByNormalizedEmail: (normalizedEmail) =>
-                db.findConnectionByNormalizedEmail(normalizedEmail),
-              findByNangoReference: (integrationId, connectionId) =>
-                db.findAuthorizationByNangoReference(integrationId, connectionId),
-              save: async ({ mailbox, authorization }) => {
-                try {
-                  return await db.createMailboxWithAuthorization(mailbox, authorization);
-                } catch (error) {
-                  if (
-                    await db.findAuthorizationByNangoReference(
-                      authorization.nangoProviderConfigKey,
-                      authorization.nangoConnectionId,
-                    )
-                  ) {
-                    throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
-                  }
-                  const existing = await db.findConnectionByNormalizedEmail(
-                    mailbox.normalizedEmail,
-                  );
-                  if (existing && existing.channelId !== mailbox.channelId) {
-                    throw new NangoBindingError('MAILBOX_IDENTITY_MISMATCH');
-                  }
-                  if (existing) throw new NangoBindingError('MAILBOX_ALREADY_CONNECTED');
-                  throw error;
-                }
+        return await withConfiguredNango(async (runtime) => {
+          await assertConfiguredMapping(runtime, input.channelId, input.integrationId);
+          return await bindNangoMailbox(
+            { ...input, userId: ctx.sessionUser.id },
+            {
+              client: runtime.client,
+              getChannel: getMailChannel,
+              isIntegrationAvailable: async (channelId, integrationId) => {
+                const mapping = await runtime.integrationRepository.getMapping(channelId, 'nango');
+                return mapping?.externalIntegrationId === integrationId;
               },
+              repository: {
+                findMailboxByNormalizedEmail: (normalizedEmail) =>
+                  db.findConnectionByNormalizedEmail(normalizedEmail),
+                findByNangoReference: (integrationId, connectionId) =>
+                  db.findAuthorizationByNangoReference(integrationId, connectionId),
+                save: async ({ mailbox, authorization }) => {
+                  try {
+                    return await db.createMailboxWithAuthorization(mailbox, authorization);
+                  } catch (error) {
+                    if (
+                      await db.findAuthorizationByNangoReference(
+                        authorization.nangoProviderConfigKey,
+                        authorization.nangoConnectionId,
+                      )
+                    ) {
+                      throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
+                    }
+                    const existing = await db.findConnectionByNormalizedEmail(
+                      mailbox.normalizedEmail,
+                    );
+                    if (existing && existing.channelId !== mailbox.channelId) {
+                      throw new NangoBindingError('MAILBOX_IDENTITY_MISMATCH');
+                    }
+                    if (existing) throw new NangoBindingError('MAILBOX_ALREADY_CONNECTED');
+                    throw error;
+                  }
+                },
+              },
+              encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
+              now: () => new Date(),
             },
-            encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
-            now: () => new Date(),
-          },
-        );
+          );
+        });
       } catch (error) {
         mapNangoBindingError(error);
       }

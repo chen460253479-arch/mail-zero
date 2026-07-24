@@ -672,9 +672,8 @@ export const connectionToDriver = async (record: ConnectionWithAuthorization) =>
       return isNango
         ? await withNangoCredentialResolver(
             {
-              baseUrl: env.NANGO_BASE_URL,
-              secretKey: env.NANGO_SECRET_KEY,
               databaseUrl: env.HYPERDRIVE.connectionString,
+              encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
             },
             async (nango) =>
               await resolveConnectionCredential(record, env.CREDENTIAL_ENCRYPTION_KEY, {
@@ -714,9 +713,8 @@ export const connectionToDriver = async (record: ConnectionWithAuthorization) =>
     refreshCredential: async () =>
       await withNangoCredentialResolver(
         {
-          baseUrl: env.NANGO_BASE_URL,
-          secretKey: env.NANGO_SECRET_KEY,
           databaseUrl: env.HYPERDRIVE.connectionString,
+          encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
         },
         async (nango) => {
           await nango.repository.invalidate(authorizationId);
