@@ -7,18 +7,19 @@ import {
 } from '@/components/ui/dialog';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from '@/components/ui/sidebar';
 import { navigationConfig, bottomNavItems } from '@/config/navigation';
+import { useActiveConnection } from '@/hooks/use-connections';
+import { isAdministrator } from '@/lib/administrator';
 import { useSidebar } from '@/components/ui/sidebar';
 import { CreateEmail } from '../create/create-email';
-import { PencilCompose } from '../icons/icons';
 import { useIsMobile } from '@/hooks/use-mobile';
-import React, { useMemo } from 'react';
 import { useSession } from '@/lib/auth-client';
-import { useActiveConnection } from '@/hooks/use-connections';
+import { PencilCompose } from '../icons/icons';
 import { useAIFullScreen } from './ai-sidebar';
 import { useStats } from '@/hooks/use-stats';
 import { useLocation } from 'react-router';
 import { cn, FOLDERS } from '@/lib/utils';
 import { m } from '@/paraglide/messages';
+import React, { useMemo } from 'react';
 import { NavUser } from './nav-user';
 import { NavMain } from './nav-main';
 import { useQueryState } from 'nuqs';
@@ -37,7 +38,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
     const currentSection = section?.[0] || 'mail';
     if (navigationConfig[currentSection]) {
-      const items = [...navigationConfig[currentSection].sections];
+      const items = navigationConfig[currentSection].sections.map((section) => ({
+        ...section,
+        items: section.items.filter((item) => !item.adminOnly || isAdministrator(session)),
+      }));
 
       if (currentSection === 'mail' && stats && stats.length) {
         if (items[0]?.items[0]) {
@@ -57,7 +61,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         navItems: [],
       };
     }
-  }, [location.pathname, stats]);
+  }, [location.pathname, session, stats]);
 
   const showComposeButton = currentSection === 'mail';
   const { state } = useSidebar();

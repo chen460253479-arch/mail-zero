@@ -15,7 +15,7 @@ import {
   LockIcon,
   Clock,
 } from '@/components/icons/icons';
-import { MessageSquareIcon } from 'lucide-react';
+import { MessageSquareIcon, PlugZap } from 'lucide-react';
 import { m } from '@/paraglide/messages';
 
 export interface NavItem {
@@ -29,6 +29,8 @@ export interface NavItem {
   disabled?: boolean;
   target?: string;
   shortcut?: string;
+  adminOnly?: boolean;
+  isSettingsPage?: boolean;
 }
 
 interface NavSection {
@@ -157,6 +159,12 @@ export const navigationConfig: Record<string, NavConfig> = {
             title: m['navigation.settings.connections'](),
             url: '/settings/connections',
             icon: Users,
+          },
+          {
+            title: 'Integrations',
+            url: '/settings/integrations',
+            icon: PlugZap,
+            adminOnly: true,
           },
           {
             title: m['navigation.settings.privacy'](),
