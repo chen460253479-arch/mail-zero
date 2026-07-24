@@ -105,6 +105,12 @@ Secret 输入框留空表示继续使用现有值；输入新值表示轮换。�
 
 只有全部验证成功才在事务中替换当前配置。验证失败时旧配置保持不变。若 Nango 中没有可用于验证 Credentials 权限的 Connection，配置不能被标记为 Active，页面需说明需要先在 Nango 中准备一个测试 Connection。
 
+存在 Nango Authorization Binding 时：
+
+- 禁止修改 Base URL，因为这等同于切换整套 Nango 实例；
+- 允许轮换 Secret Key，但候选 Secret 必须成功读取所有现有绑定引用的 Connection 和 Credentials 后才能保存；
+- 验证现有绑定时采用有上限的并发读取，任意一个绑定无法访问都拒绝轮换并保留旧 Secret。
+
 Nango 配置不从 `NANGO_BASE_URL` 或 `NANGO_SECRET_KEY` 环境变量读取。
 
 ### 4.3 Gmail Zero OAuth
@@ -216,12 +222,13 @@ UNIQUE(channel_id, auth_source)
 
 第一阶段只创建 `gmail + nango` 映射。
 
-### 8.3 Integration Validation Session
+### 8.3 Integration OAuth Session
 
 ```text
 id
 integration_key
-encrypted_candidate
+purpose = validate_config | connect_mailbox
+encrypted_payload
 state_hash
 created_by
 expires_at
@@ -229,7 +236,7 @@ consumed_at
 created_at
 ```
 
-该表只用于需要跨请求完成的 Gmail OAuth 测试。过期会话按请求惰性清理，并提供定时清理任务。成功或失败后立即删除候选 Secret。
+该表用于需要跨请求完成的 Gmail OAuth 配置测试和邮箱连接。`validate_config` 的加密 payload 保存候选配置；`connect_mailbox` 的加密 payload 保存邮箱连接意图。两种会话都绑定发起用户、十分钟过期且只能消费一次。过期会话按请求惰性清理，并提供定时清理任务；成功或失败后立即删除敏感 payload。
 
 ## 9. 服务端组件
 
@@ -354,6 +361,7 @@ connections.bindNango
 ## 13. 删除与故障行为
 
 - 删除 Nango 配置前检查所有 Nango Authorization Bindings；存在任意绑定即拒绝。
+- 存在 Nango 绑定时禁止修改 Base URL；Secret 轮换必须验证所有现有 Connection 引用。
 - 删除 Gmail Zero OAuth 配置前检查所有 Gmail Zero OAuth Bindings；存在任意绑定即拒绝。
 - Nango 更新验证失败时保留当前配置和映射。
 - Gmail 测试失败时保留当前配置。
@@ -434,6 +442,7 @@ MICROSOFT_CLIENT_SECRET
 - Nango 配置必须验证 Integrations、Connections、Credentials 权限后才能保存。
 - Gmail Zero OAuth 必须完成测试授权后才能保存。
 - 每个渠道最多启用一个 Nango Integration。
+- 存在 Nango 绑定时不能切换 Base URL，Secret 轮换必须验证所有绑定。
 - 存在相关邮箱绑定时不能更新、停用或删除配置。
 - Connect Email 只显示 Gmail，并按可用来源自动分流。
 - Nango 已授权邮箱使用小图标或 Badge 标记。
