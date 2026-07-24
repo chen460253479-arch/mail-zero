@@ -37,12 +37,11 @@ export type ResolvedCredential = OAuth2Credential | BasicCredential;
 export interface MailboxChannel {
   id: MailChannelId;
   displayName: string;
+  nangoProviders?: readonly string[];
   capabilities: ReadonlySet<MailCapability>;
   sync?: ChannelSyncAdapter;
   createClient(config: ManagerConfig): MailClient;
-  resolveIdentity(
-    config: ManagerConfig,
-  ): Promise<{ email: string; name: string; picture: string }>;
+  resolveIdentity(config: ManagerConfig): Promise<{ email: string; name: string; picture: string }>;
   getScope(config: ManagerConfig): string;
   revoke(config: ManagerConfig, token: string): Promise<boolean>;
 }
