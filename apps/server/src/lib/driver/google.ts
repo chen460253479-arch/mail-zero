@@ -12,9 +12,9 @@ import { mapGoogleLabelColor, mapToGoogleLabelColor } from './google-label-color
 import { parseAddressList, parseFrom, wasSentWithTLS } from '../email-utils';
 import type { IOutgoingMessage, Label, ParsedMessage } from '../../types';
 import { sanitizeTipTapHtml } from '../sanitize-tip-tap-html';
-import type { MailClient, ManagerConfig } from './types';
 import { mapGmailHistory } from '../mail-channel/gmail-sync';
 import { type gmail_v1, gmail } from '@googleapis/gmail';
+import type { MailClient, ManagerConfig } from './types';
 import { OAuth2Client } from 'google-auth-library';
 import type { CreateDraftData } from '../schemas';
 import { createMimeMessage } from 'mimetext';
@@ -52,7 +52,8 @@ export class GoogleMailManager implements MailClient {
 
     if (config.auth)
       this.auth.setCredentials({
-        refresh_token: config.auth.refreshToken,
+        access_token: config.auth.accessToken || undefined,
+        refresh_token: config.auth.refreshToken || undefined,
         scope: this.getScope(),
       });
 
@@ -74,10 +75,7 @@ export class GoogleMailManager implements MailClient {
           userId: 'me',
           startHistoryId: cursor,
         });
-        return mapGmailHistory(
-          response.data.history ?? [],
-          response.data.historyId ?? cursor,
-        );
+        return mapGmailHistory(response.data.history ?? [], response.data.historyId ?? cursor);
       },
       { cursor },
     );

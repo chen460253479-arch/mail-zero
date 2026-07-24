@@ -6,21 +6,21 @@ import {
   SuperSearchEmail,
   WelcomeEmail,
 } from './react-emails/email-sequences';
-import { createAuthMiddleware, jwt, bearer, mcp } from 'better-auth/plugins';
+import { getMailChannel, providerIdToChannelId } from './mail-channel/registry';
 import { type Account, betterAuth, type BetterAuthOptions } from 'better-auth';
-import { getBrowserTimezone, isValidTimezone } from './timezones';
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { getZeroDB, resetConnection } from './server-utils';
-import { encryptCredential } from './credentials/encryption';
+import { createAuthMiddleware, jwt, bearer, mcp } from 'better-auth/plugins';
 import { resolveConnectionCredential } from './credentials/resolve';
 import { createZeroOAuthSnapshot } from './credentials/zero-oauth';
-import { getMailChannel, providerIdToChannelId } from './mail-channel/registry';
+import { getBrowserTimezone, isValidTimezone } from './timezones';
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { encryptCredential } from './credentials/encryption';
+import { getZeroDB, resetConnection } from './server-utils';
 import { getSocialProviders } from './auth-providers';
-import { redis, resend } from './services';
 import { dubAnalytics } from '@dub/better-auth';
 import { defaultUserSettings } from './schemas';
 import { disableBrainFunction } from './brain';
 import { APIError } from 'better-auth/api';
+import { redis, resend } from './services';
 import { type EProviders } from '../types';
 import { createDb } from '../db';
 import { Effect } from 'effect';
@@ -225,6 +225,7 @@ export const createAuth = () => {
                 });
                 const record = await db.findConnectionWithAuthorization(connection.id);
                 if (!record) return false;
+                if (record.authorization?.authSource === 'nango') return true;
                 const credential = await resolveConnectionCredential(
                   record,
                   env.CREDENTIAL_ENCRYPTION_KEY,

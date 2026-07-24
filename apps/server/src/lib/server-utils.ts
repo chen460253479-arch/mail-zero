@@ -1,15 +1,16 @@
 import type { IGetThreadResponse, IGetThreadsResponse } from './driver/types';
+import { withNangoCredentialResolver } from './credentials/nango-runtime';
 import { resolveConnectionCredential } from './credentials/resolve';
-import { getMailChannel } from './mail-channel/registry';
-import { OutgoingMessageType } from '../routes/agent/types';
-import { EPrompts } from '../types';
-import { getContext } from 'hono/context-storage';
 import { authorizationBinding, connection } from '../db/schema';
+import { OutgoingMessageType } from '../routes/agent/types';
+import { getMailChannel } from './mail-channel/registry';
+import { getContext } from 'hono/context-storage';
 import { defaultPageSize } from './utils';
 import type { HonoContext } from '../ctx';
-import { createClient } from 'dormroom';
-import { eq } from 'drizzle-orm';
 import { createDb, type DB } from '../db';
+import { createClient } from 'dormroom';
+import { EPrompts } from '../types';
+import { eq } from 'drizzle-orm';
 import { Effect } from 'effect';
 import { env } from '../env';
 
@@ -32,7 +33,7 @@ class MockExecutionContext implements ExecutionContext {
       console.error('MockExecutionContext: Error in waitUntil', error);
     }
   }
-  passThroughOnException(): void { }
+  passThroughOnException(): void {}
   props: any;
 }
 
@@ -291,15 +292,15 @@ export const getThread: (
   connectionId: string,
   threadId: string,
 ) => {
-    const result = await Effect.runPromise(getThreadEffect(connectionId, threadId));
-    if (!result.result) {
-      throw new Error(`Thread ${threadId} not found`);
-    }
-    if (!result.shardId) {
-      throw new Error(`Thread ${threadId} not found in any shard`);
-    }
-    return { result: result.result, shardId: result.shardId };
-  };
+  const result = await Effect.runPromise(getThreadEffect(connectionId, threadId));
+  if (!result.result) {
+    throw new Error(`Thread ${threadId} not found`);
+  }
+  if (!result.shardId) {
+    throw new Error(`Thread ${threadId} not found in any shard`);
+  }
+  return { result: result.result, shardId: result.shardId };
+};
 
 export const modifyThreadLabelsInDB = async (
   connectionId: string,
@@ -637,20 +638,27 @@ export const findConnectionWithAuthorization = async (
       authorization: authorizationBinding,
     })
     .from(connection)
-    .leftJoin(
-      authorizationBinding,
-      eq(authorizationBinding.connectionId, connection.id),
-    )
+    .leftJoin(authorizationBinding, eq(authorizationBinding.connectionId, connection.id))
     .where(eq(connection.id, connectionId))
     .limit(1);
   return record;
 };
 
 export const connectionToDriver = async (record: ConnectionWithAuthorization) => {
-  const credential = await resolveConnectionCredential(
-    record,
-    env.CREDENTIAL_ENCRYPTION_KEY,
-  );
+  const credential =
+    record.authorization?.authSource === 'nango'
+      ? await withNangoCredentialResolver(
+          {
+            baseUrl: env.NANGO_BASE_URL,
+            secretKey: env.NANGO_SECRET_KEY,
+            databaseUrl: env.HYPERDRIVE.connectionString,
+          },
+          async (nango) =>
+            await resolveConnectionCredential(record, env.CREDENTIAL_ENCRYPTION_KEY, {
+              nango,
+            }),
+        )
+      : await resolveConnectionCredential(record, env.CREDENTIAL_ENCRYPTION_KEY);
   const channel = getMailChannel(record.connection.channelId);
   if (credential.type !== 'oauth2') {
     throw new Error(`Credential ${credential.type} is not supported by ${channel.id}`);
@@ -681,8 +689,6 @@ export const verifyToken = async (token: string) => {
   const data = (await response.json()) as any;
   return !!data;
 };
-
-
 
 export const resetConnection = async (connectionId: string) => {
   const { db, conn } = createDb(env.HYPERDRIVE.connectionString);

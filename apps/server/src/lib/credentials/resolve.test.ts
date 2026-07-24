@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { encryptCredential } from './encryption';
-import { createZeroOAuthSnapshot } from './zero-oauth';
 import { resolveConnectionCredential, type ConnectionCredentialRecord } from './resolve';
+import { createZeroOAuthSnapshot } from './zero-oauth';
+import { encryptCredential } from './encryption';
 
 const encryptionKey = Buffer.alloc(32, 9).toString('base64');
 
@@ -64,14 +64,14 @@ describe('connection credential resolution', () => {
   it('rejects an auth source that has no registered resolver', async () => {
     const record = createRecord({
       authorization: {
-        authSource: 'nango',
+        authSource: 'manual',
         encryptedCredentialSnapshot: 'unused',
         accessTokenExpiresAt: null,
       },
     });
 
     await expect(resolveConnectionCredential(record, encryptionKey)).rejects.toThrow(
-      'Unsupported authorization source: nango',
+      'Unsupported authorization source: manual',
     );
   });
 });
