@@ -232,6 +232,28 @@ export class GoogleMailManager implements MailClient {
       {},
     );
   }
+  public getMailboxIdentity() {
+    return this.withErrorHandler(
+      'getMailboxIdentity',
+      async () => {
+        const profile = await this.gmail.users.getProfile({ userId: 'me' });
+        try {
+          const person = await people({ version: 'v1', auth: this.auth }).people.get({
+            resourceName: 'people/me',
+            personFields: 'names,photos',
+          });
+          return {
+            email: profile.data.emailAddress ?? '',
+            name: person.data.names?.[0]?.displayName ?? '',
+            picture: person.data.photos?.[0]?.url ?? '',
+          };
+        } catch {
+          return { email: profile.data.emailAddress ?? '', name: '', picture: '' };
+        }
+      },
+      {},
+    );
+  }
   public getTokens<T>(code: string) {
     return this.withErrorHandler(
       'getTokens',

@@ -200,4 +200,29 @@ describe('Nango credential resolution', () => {
     expect(result).toMatchObject({ type: 'basic', username: 'fresh-user' });
     expect(client.getConnection).toHaveBeenCalledTimes(1);
   });
+
+  it('uses a still-valid cached token when Nango is temporarily unavailable', async () => {
+    const encryptedCredentialSnapshot = await encryptCredential(
+      createNangoCredentialSnapshot({
+        type: 'oauth2',
+        accessToken: 'cached-access-token',
+        scope: '',
+      }),
+      encryptionKey,
+    );
+    const state = {
+      encryptedCredentialSnapshot,
+      accessTokenExpiresAt: new Date('2026-07-24T12:10:00.000Z'),
+    };
+    const repository = createRepository(state);
+    const client = {
+      getConnection: vi.fn().mockRejectedValue(new Error('Nango unavailable')),
+    } as unknown as NangoClient;
+
+    await expect(
+      resolveNangoCredential(authorization(state), encryptionKey, { client, repository }, now),
+    ).resolves.toMatchObject({
+      accessToken: 'cached-access-token',
+    });
+  });
 });

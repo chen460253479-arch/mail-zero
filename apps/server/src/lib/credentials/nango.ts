@@ -215,6 +215,16 @@ export const resolveNangoCredential = async (
   inFlightRefreshes.set(authorization.id, refresh);
   try {
     return await refresh;
+  } catch (error) {
+    if (
+      !options.forceRefresh &&
+      cached?.type === 'oauth2' &&
+      authorization.accessTokenExpiresAt &&
+      authorization.accessTokenExpiresAt.getTime() > now.getTime()
+    ) {
+      return cached;
+    }
+    throw error;
   } finally {
     inFlightRefreshes.delete(authorization.id);
   }

@@ -19,11 +19,11 @@ export const gmailChannel: MailboxChannel = {
   sync: gmailSyncAdapter,
   createClient: (config) => new GoogleMailManager(config),
   resolveIdentity: async (config) => {
-    const identity = await new GoogleMailManager(config).getUserInfo();
+    const identity = await new GoogleMailManager(config).getMailboxIdentity();
     return {
-      email: identity.address,
+      email: identity.email,
       name: identity.name,
-      picture: identity.photo,
+      picture: identity.picture,
     };
   },
   getScope: (config) => new GoogleMailManager(config).getScope(),

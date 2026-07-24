@@ -1,5 +1,6 @@
 import type { IGetThreadResponse, IGetThreadsResponse } from './driver/types';
 import { withNangoCredentialResolver } from './credentials/nango-runtime';
+import { createRetryingMailClient } from './credentials/retrying-client';
 import { resolveConnectionCredential } from './credentials/resolve';
 import { authorizationBinding, connection } from '../db/schema';
 import { OutgoingMessageType } from '../routes/agent/types';
@@ -644,33 +645,100 @@ export const findConnectionWithAuthorization = async (
   return record;
 };
 
+const getAuthErrorCode = (error: unknown): string => {
+  const candidate = error as {
+    code?: string | number;
+    originalError?: { code?: string | number };
+  };
+  return String(candidate.code ?? candidate.originalError?.code ?? '');
+};
+
+const markReconnectRequired = async (connectionId: string): Promise<void> => {
+  const { db, conn } = createDb(env.HYPERDRIVE.connectionString);
+  try {
+    await db
+      .update(connection)
+      .set({ status: 'reconnect_required', updatedAt: new Date() })
+      .where(eq(connection.id, connectionId));
+  } finally {
+    await conn.end();
+  }
+};
+
 export const connectionToDriver = async (record: ConnectionWithAuthorization) => {
-  const credential =
-    record.authorization?.authSource === 'nango'
-      ? await withNangoCredentialResolver(
-          {
-            baseUrl: env.NANGO_BASE_URL,
-            secretKey: env.NANGO_SECRET_KEY,
-            databaseUrl: env.HYPERDRIVE.connectionString,
-          },
-          async (nango) =>
-            await resolveConnectionCredential(record, env.CREDENTIAL_ENCRYPTION_KEY, {
-              nango,
-            }),
-        )
-      : await resolveConnectionCredential(record, env.CREDENTIAL_ENCRYPTION_KEY);
+  const isNango = record.authorization?.authSource === 'nango';
+  const credential = await (async () => {
+    try {
+      return isNango
+        ? await withNangoCredentialResolver(
+            {
+              baseUrl: env.NANGO_BASE_URL,
+              secretKey: env.NANGO_SECRET_KEY,
+              databaseUrl: env.HYPERDRIVE.connectionString,
+            },
+            async (nango) =>
+              await resolveConnectionCredential(record, env.CREDENTIAL_ENCRYPTION_KEY, {
+                nango,
+              }),
+          )
+        : await resolveConnectionCredential(record, env.CREDENTIAL_ENCRYPTION_KEY);
+    } catch (error) {
+      if (isNango && getAuthErrorCode(error) === 'INVALID_CREDENTIALS') {
+        await markReconnectRequired(record.connection.id);
+      }
+      throw error;
+    }
+  })();
   const channel = getMailChannel(record.connection.channelId);
   if (credential.type !== 'oauth2') {
     throw new Error(`Credential ${credential.type} is not supported by ${channel.id}`);
   }
 
-  return channel.createClient({
-    auth: {
-      userId: record.connection.userId,
-      accessToken: credential.accessToken,
-      refreshToken: credential.refreshToken ?? '',
-      email: record.connection.email,
+  const createDriver = (resolved: typeof credential) =>
+    channel.createClient({
+      auth: {
+        userId: record.connection.userId,
+        accessToken: resolved.accessToken,
+        refreshToken: resolved.refreshToken ?? '',
+        email: record.connection.email,
+      },
+    });
+
+  if (!isNango) return createDriver(credential);
+  if (!record.authorization?.id) throw new Error('Nango authorization ID is missing');
+  const authorizationId = record.authorization.id;
+
+  return createRetryingMailClient({
+    initialCredential: credential,
+    createClient: createDriver,
+    refreshCredential: async () =>
+      await withNangoCredentialResolver(
+        {
+          baseUrl: env.NANGO_BASE_URL,
+          secretKey: env.NANGO_SECRET_KEY,
+          databaseUrl: env.HYPERDRIVE.connectionString,
+        },
+        async (nango) => {
+          await nango.repository.invalidate(authorizationId);
+          const refreshed = await resolveConnectionCredential(
+            record,
+            env.CREDENTIAL_ENCRYPTION_KEY,
+            { nango: { ...nango, forceRefresh: true } },
+          );
+          if (refreshed.type !== 'oauth2') {
+            throw new Error(`Credential ${refreshed.type} is not supported by ${channel.id}`);
+          }
+          return refreshed;
+        },
+      ),
+    classifyError: (error) => {
+      const code = getAuthErrorCode(error);
+      return {
+        unauthorized: code === '401',
+        unrecoverableAuth: code === 'INVALID_CREDENTIALS',
+      };
     },
+    onUnrecoverableAuth: async () => await markReconnectRequired(record.connection.id),
   });
 };
 
