@@ -1,10 +1,10 @@
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { SettingsCard } from '@/components/settings/settings-card';
-import { AddConnectionDialog } from '@/components/connection/add';
 import {
   DeleteRetainedDataDialog,
   DisconnectDialog,
 } from '@/components/connection/disconnect-dialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { SettingsCard } from '@/components/settings/settings-card';
+import { AddConnectionDialog } from '@/components/connection/add';
 
 import { useSession, authClient } from '@/lib/auth-client';
 import { useConnections } from '@/hooks/use-connections';
@@ -114,11 +114,34 @@ export default function ConnectionsPage() {
                               <div className="font-mono">{connection.email}</div>
                             </TooltipContent>
                           </Tooltip>
+                          {connection.authSource === 'nango' ||
+                          connection.authSource === 'zero_oauth' ? (
+                            <Badge variant="outline">
+                              {connection.authSource === 'nango'
+                                ? 'Nango'
+                                : m['pages.settings.connections.zeroOAuth']()}
+                            </Badge>
+                          ) : null}
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
-                      {data.disconnectedIds?.includes(connection.id) ? (
+                      {connection.status === 'reconnect_required' ? (
+                        <>
+                          <Badge variant="destructive">
+                            {m['pages.settings.connections.nangoNeedsAttention']()}
+                          </Badge>
+                          <DisconnectDialog
+                            connectionId={connection.id}
+                            onCompleted={refreshConnectionData}
+                          >
+                            <Button variant="destructive" size="sm">
+                              <Trash className="size-4" />
+                              {m['pages.settings.connections.remove']()}
+                            </Button>
+                          </DisconnectDialog>
+                        </>
+                      ) : data.disconnectedIds?.includes(connection.id) ? (
                         <>
                           <div>
                             <Badge variant="destructive">
@@ -172,7 +195,10 @@ export default function ConnectionsPage() {
           ) : null}
 
           <div className="flex items-center justify-start">
-            <AddConnectionDialog>
+            <AddConnectionDialog
+              nangoEnabled={data?.nangoEnabled}
+              onConnected={refreshConnectionData}
+            >
               <Button
                 variant="outline"
                 className="group relative w-9 overflow-hidden duration-200 hover:w-full sm:hover:w-[32.5%]"

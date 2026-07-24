@@ -6,97 +6,144 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '../ui/dialog';
+import { NangoConnectDialog } from './nango-connect-dialog';
+import { Plug, Plus, UserPlus } from 'lucide-react';
 import { emailProviders } from '@/lib/constants';
 import { authClient } from '@/lib/auth-client';
-import { Plus, UserPlus } from 'lucide-react';
 import { useLocation } from 'react-router';
 import { m } from '@/paraglide/messages';
 import { motion } from 'motion/react';
 import { Button } from '../ui/button';
 import { cn } from '@/lib/utils';
+import { useState } from 'react';
 
 export const AddConnectionDialog = ({
   children,
   className,
+  nangoEnabled = false,
+  onConnected,
   onOpenChange,
 }: {
   children?: React.ReactNode;
   className?: string;
+  nangoEnabled?: boolean;
+  onConnected?: () => void;
   onOpenChange?: (open: boolean) => void;
 }) => {
   const pathname = useLocation().pathname;
+  const [open, setOpen] = useState(false);
+  const [nangoOpen, setNangoOpen] = useState(false);
+
+  const setDialogOpen = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  };
 
   return (
-    <Dialog onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        {children || (
-          <Button
-            size={'dropdownItem'}
-            variant={'dropdownItem'}
-            className={cn('w-full justify-start gap-2', className)}
+    <>
+      <Dialog open={open} onOpenChange={setDialogOpen}>
+        <DialogTrigger asChild>
+          {children || (
+            <Button
+              size={'dropdownItem'}
+              variant={'dropdownItem'}
+              className={cn('w-full justify-start gap-2', className)}
+            >
+              <UserPlus size={16} strokeWidth={2} className="opacity-60" aria-hidden="true" />
+              <p className="text-[13px] opacity-60">{m['pages.settings.connections.addEmail']()}</p>
+            </Button>
+          )}
+        </DialogTrigger>
+        <DialogContent showOverlay={true}>
+          <DialogHeader>
+            <DialogTitle>{m['pages.settings.connections.connectEmail']()}</DialogTitle>
+            <DialogDescription>
+              {m['pages.settings.connections.connectEmailDescription']()}
+            </DialogDescription>
+          </DialogHeader>
+          <motion.div
+            className="mt-4 grid grid-cols-2 gap-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
           >
-            <UserPlus size={16} strokeWidth={2} className="opacity-60" aria-hidden="true" />
-            <p className="text-[13px] opacity-60">{m['pages.settings.connections.addEmail']()}</p>
-          </Button>
-        )}
-      </DialogTrigger>
-      <DialogContent showOverlay={true}>
-        <DialogHeader>
-          <DialogTitle>{m['pages.settings.connections.connectEmail']()}</DialogTitle>
-          <DialogDescription>
-            {m['pages.settings.connections.connectEmailDescription']()}
-          </DialogDescription>
-        </DialogHeader>
-        <motion.div
-          className="mt-4 grid grid-cols-2 gap-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-        >
-          {emailProviders.map((provider, index) => {
-            const Icon = provider.icon;
-            return (
+            {emailProviders.map((provider, index) => {
+              const Icon = provider.icon;
+              return (
+                <motion.div
+                  key={provider.name}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1, duration: 0.3 }}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  <Button
+                    variant="outline"
+                    className="h-24 w-full flex-col items-center justify-center gap-2"
+                    onClick={async () =>
+                      await authClient.linkSocial({
+                        provider: provider.zeroOAuthProvider,
+                        callbackURL: `${window.location.origin}${pathname}`,
+                      })
+                    }
+                  >
+                    <Icon className="size-6!" />
+                    <span className="text-xs">{provider.name}</span>
+                  </Button>
+                </motion.div>
+              );
+            })}
+            {nangoEnabled ? (
               <motion.div
-                key={provider.name}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1, duration: 0.3 }}
+                transition={{ delay: emailProviders.length * 0.1, duration: 0.3 }}
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
               >
                 <Button
                   variant="outline"
                   className="h-24 w-full flex-col items-center justify-center gap-2"
-                  onClick={async () =>
-                    await authClient.linkSocial({
-                      provider: provider.zeroOAuthProvider,
-                      callbackURL: `${window.location.origin}${pathname}`,
-                    })
-                  }
+                  onClick={() => {
+                    setDialogOpen(false);
+                    setNangoOpen(true);
+                  }}
                 >
-                  <Icon className="size-6!" />
-                  <span className="text-xs">{provider.name}</span>
+                  <Plug className="size-6" />
+                  <span className="text-xs">Nango</span>
                 </Button>
               </motion.div>
-            );
-          })}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: emailProviders.length * 0.1, duration: 0.3 }}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-          >
-            <Button
-              variant="outline"
-              className="h-24 w-full flex-col items-center justify-center gap-2 border-dashed"
+            ) : null}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                delay: (emailProviders.length + Number(nangoEnabled)) * 0.1,
+                duration: 0.3,
+              }}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
             >
-              <Plus className="h-12 w-12" />
-              <span className="text-xs">{m['pages.settings.connections.moreComingSoon']()}</span>
-            </Button>
+              <Button
+                variant="outline"
+                className="h-24 w-full flex-col items-center justify-center gap-2 border-dashed"
+              >
+                <Plus className="h-12 w-12" />
+                <span className="text-xs">{m['pages.settings.connections.moreComingSoon']()}</span>
+              </Button>
+            </motion.div>
           </motion.div>
-        </motion.div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+      <NangoConnectDialog
+        open={nangoOpen}
+        onOpenChange={setNangoOpen}
+        onConnected={() => {
+          setDialogOpen(false);
+          onConnected?.();
+        }}
+      />
+    </>
   );
 };
