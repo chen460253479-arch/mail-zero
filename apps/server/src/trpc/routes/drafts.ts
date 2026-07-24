@@ -1,4 +1,4 @@
-import type { MailManager } from '../../lib/driver/types';
+import type { MailClient } from '../../lib/driver/types';
 import { activeDriverProcedure, router } from '../trpc';
 import { getZeroAgent } from '../../lib/server-utils';
 import { createDraftData } from '../../lib/schemas';
@@ -14,7 +14,7 @@ export const draftsRouter = router({
     const { activeConnection } = ctx;
     const { stub: agent } = await getZeroAgent(activeConnection.id);
     const { id } = input;
-    return agent.getDraft(id) as ReturnType<MailManager['getDraft']>;
+    return agent.getDraft(id) as ReturnType<MailClient['getDraft']>;
   }),
   list: activeDriverProcedure
     .input(
@@ -29,7 +29,7 @@ export const draftsRouter = router({
       const { stub: agent } = await getZeroAgent(activeConnection.id);
       const { q, maxResults, pageToken } = input;
       return agent.listDrafts({ q, maxResults, pageToken }) as Awaited<
-        ReturnType<MailManager['listDrafts']>
+        ReturnType<MailClient['listDrafts']>
       >;
     }),
   delete: activeDriverProcedure

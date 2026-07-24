@@ -12,7 +12,7 @@ import { mapGoogleLabelColor, mapToGoogleLabelColor } from './google-label-color
 import { parseAddressList, parseFrom, wasSentWithTLS } from '../email-utils';
 import type { IOutgoingMessage, Label, ParsedMessage } from '../../types';
 import { sanitizeTipTapHtml } from '../sanitize-tip-tap-html';
-import type { MailManager, ManagerConfig } from './types';
+import type { MailClient, ManagerConfig } from './types';
 import { type gmail_v1, gmail } from '@googleapis/gmail';
 import { OAuth2Client } from 'google-auth-library';
 import type { CreateDraftData } from '../schemas';
@@ -23,7 +23,7 @@ import { env } from '../../env';
 import { Effect } from 'effect';
 import * as he from 'he';
 
-export class GoogleMailManager implements MailManager {
+export class GoogleMailManager implements MailClient {
   private auth;
   private gmail;
 

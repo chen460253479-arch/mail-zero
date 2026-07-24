@@ -14,13 +14,13 @@ import type {
 import type { IOutgoingMessage, Label, ParsedMessage } from '../../types';
 import { sanitizeTipTapHtml } from '../sanitize-tip-tap-html';
 import { Client } from '@microsoft/microsoft-graph-client';
-import type { MailManager, ManagerConfig } from './types';
+import type { MailClient, ManagerConfig } from './types';
 import { getContext } from 'hono/context-storage';
 import type { CreateDraftData } from '../schemas';
 import type { HonoContext } from '../../ctx';
 import * as he from 'he';
 
-export class OutlookMailManager implements MailManager {
+export class OutlookMailManager implements MailClient {
   private graphClient: Client;
 
   constructor(public config: ManagerConfig) {

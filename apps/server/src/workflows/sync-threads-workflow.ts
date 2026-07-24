@@ -13,12 +13,15 @@
  *
  * Reuse or distribution of this file requires a license from Zero Email Inc.
  */
-import { getZeroAgent, connectionToDriver } from '../lib/server-utils';
+import {
+  getZeroAgent,
+  connectionToDriver,
+  findConnectionWithAuthorization,
+  type ConnectionWithAuthorization,
+} from '../lib/server-utils';
 import { WorkflowEntrypoint, WorkflowStep } from 'cloudflare:workers';
 import type { WorkflowEvent } from 'cloudflare:workers';
-import { connection } from '../db/schema';
 import type { ZeroEnv } from '../env';
-import { eq } from 'drizzle-orm';
 import { createDb } from '../db';
 
 export interface SyncThreadsParams {
@@ -76,29 +79,26 @@ export class SyncThreadsWorkflow extends WorkflowEntrypoint<ZeroEnv, SyncThreads
     const setupResult = await step.do(`setup-connection-${connectionId}-${folder}`, async () => {
       const { db, conn } = createDb(this.env.HYPERDRIVE.connectionString);
 
-      const foundConnection = await db.query.connection.findFirst({
-        where: eq(connection.id, connectionId),
-      });
+      const record = await findConnectionWithAuthorization(db, connectionId).finally(() =>
+        conn.end(),
+      );
 
-      await conn.end();
-
-      if (!foundConnection) {
+      if (!record) {
         throw new Error(`Connection ${connectionId} not found`);
       }
 
       const maxCount = parseInt(this.env.THREAD_SYNC_MAX_COUNT || '20');
       const shouldLoop = this.env.THREAD_SYNC_LOOP === 'true';
 
-      return { maxCount, shouldLoop, foundConnection };
+      return { maxCount, shouldLoop, record };
     });
 
-    const { maxCount, foundConnection } = setupResult as {
-      driver: any;
+    const { maxCount, record } = setupResult as {
       maxCount: number;
       shouldLoop: boolean;
-      foundConnection: any;
+      record: ConnectionWithAuthorization;
     };
-    const driver = connectionToDriver(foundConnection);
+    const driver = await connectionToDriver(record);
 
     if (connectionId.includes('aggregate')) {
       console.info(`[SyncThreadsWorkflow] Skipping sync for aggregate instance - folder ${folder}`);
@@ -144,7 +144,7 @@ export class SyncThreadsWorkflow extends WorkflowEntrypoint<ZeroEnv, SyncThreads
           try {
             const latest = await this.env.THREAD_SYNC_WORKER.get(
               this.env.THREAD_SYNC_WORKER.newUniqueId(),
-            ).syncThread(foundConnection, thread.id);
+            ).syncThread(record.connection, thread.id);
 
             if (latest) {
               const normalizedReceivedOn = new Date(latest.receivedOn).toISOString();

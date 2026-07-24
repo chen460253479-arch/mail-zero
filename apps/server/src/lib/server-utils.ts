@@ -1,13 +1,14 @@
 import type { IGetThreadResponse, IGetThreadsResponse } from './driver/types';
+import { resolveConnectionCredential } from './credentials/resolve';
+import { getMailChannel } from './mail-channel/registry';
 import { OutgoingMessageType } from '../routes/agent/types';
 import { getContext } from 'hono/context-storage';
-import { connection } from '../db/schema';
+import { authorizationBinding, connection } from '../db/schema';
 import { defaultPageSize } from './utils';
 import type { HonoContext } from '../ctx';
 import { createClient } from 'dormroom';
-import { createDriver } from './driver';
 import { eq } from 'drizzle-orm';
-import { createDb } from '../db';
+import { createDb, type DB } from '../db';
 import { Effect } from 'effect';
 import { env } from '../env';
 
@@ -573,17 +574,46 @@ export const getActiveConnection = async () => {
   return firstConnection;
 };
 
-export const connectionToDriver = (activeConnection: typeof connection.$inferSelect) => {
-  if (!activeConnection.accessToken || !activeConnection.refreshToken) {
-    throw new Error(`Invalid connection ${JSON.stringify(activeConnection?.id)}`);
+export type ConnectionWithAuthorization = {
+  connection: typeof connection.$inferSelect;
+  authorization: typeof authorizationBinding.$inferSelect | null;
+};
+
+export const findConnectionWithAuthorization = async (
+  db: DB,
+  connectionId: string,
+): Promise<ConnectionWithAuthorization | undefined> => {
+  const [record] = await db
+    .select({
+      connection,
+      authorization: authorizationBinding,
+    })
+    .from(connection)
+    .leftJoin(
+      authorizationBinding,
+      eq(authorizationBinding.connectionId, connection.id),
+    )
+    .where(eq(connection.id, connectionId))
+    .limit(1);
+  return record;
+};
+
+export const connectionToDriver = async (record: ConnectionWithAuthorization) => {
+  const credential = await resolveConnectionCredential(
+    record,
+    env.CREDENTIAL_ENCRYPTION_KEY,
+  );
+  const channel = getMailChannel(record.connection.channelId);
+  if (credential.type !== 'oauth2') {
+    throw new Error(`Credential ${credential.type} is not supported by ${channel.id}`);
   }
 
-  return createDriver(activeConnection.providerId, {
+  return channel.createClient({
     auth: {
-      userId: activeConnection.userId,
-      accessToken: activeConnection.accessToken,
-      refreshToken: activeConnection.refreshToken,
-      email: activeConnection.email,
+      userId: record.connection.userId,
+      accessToken: credential.accessToken,
+      refreshToken: credential.refreshToken ?? '',
+      email: record.connection.email,
     },
   });
 };

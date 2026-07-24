@@ -14,11 +14,13 @@
  * Reuse or distribution of this file requires a license from Zero Email Inc.
  */
 import { WorkflowEntrypoint, WorkflowStep } from 'cloudflare:workers';
-import { connectionToDriver } from '../lib/server-utils';
+import {
+  connectionToDriver,
+  findConnectionWithAuthorization,
+  type ConnectionWithAuthorization,
+} from '../lib/server-utils';
 import type { WorkflowEvent } from 'cloudflare:workers';
-import { connection } from '../db/schema';
 import type { ZeroEnv } from '../env';
-import { eq } from 'drizzle-orm';
 import { createDb } from '../db';
 
 export interface SyncThreadsCoordinatorParams {
@@ -71,28 +73,26 @@ export class SyncThreadsCoordinatorWorkflow extends WorkflowEntrypoint<
     const setupResult = await step.do(`setup-connection-${connectionId}-${folder}`, async () => {
       const { db, conn } = createDb(this.env.HYPERDRIVE.connectionString);
 
-      const foundConnection = await db.query.connection.findFirst({
-        where: eq(connection.id, connectionId),
-      });
+      const record = await findConnectionWithAuthorization(db, connectionId).finally(() =>
+        conn.end(),
+      );
 
-      await conn.end();
-
-      if (!foundConnection) {
+      if (!record) {
         throw new Error(`Connection ${connectionId} not found`);
       }
 
       const maxCount = parseInt(this.env.THREAD_SYNC_MAX_COUNT || '20');
       const shouldLoop = this.env.THREAD_SYNC_LOOP === 'true';
 
-      return { maxCount, shouldLoop, foundConnection };
+      return { maxCount, shouldLoop, record };
     });
 
-    const { maxCount, shouldLoop, foundConnection } = setupResult as {
+    const { maxCount, shouldLoop, record } = setupResult as {
       maxCount: number;
       shouldLoop: boolean;
-      foundConnection: any;
+      record: ConnectionWithAuthorization;
     };
-    const driver = connectionToDriver(foundConnection);
+    const driver = await connectionToDriver(record);
 
     if (connectionId.includes('aggregate')) {
       console.info(

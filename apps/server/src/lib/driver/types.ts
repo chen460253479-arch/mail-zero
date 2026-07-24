@@ -50,7 +50,7 @@ export type ManagerConfig = {
   };
 };
 
-export interface MailManager {
+export interface MailClient {
   config: ManagerConfig;
   getMessageAttachments(id: string): Promise<
     {
@@ -86,13 +86,6 @@ export interface MailManager {
     nextPageToken: string | null;
   }>;
   count(): Promise<{ count?: number; label?: string }[]>;
-  getTokens(
-    code: string,
-  ): Promise<{ tokens: { access_token?: string; refresh_token?: string; expiry_date?: number } }>;
-  getUserInfo(
-    tokens?: ManagerConfig['auth'],
-  ): Promise<{ address: string; name: string; photo: string }>;
-  getScope(): string;
   listHistory<T>(historyId: string): Promise<{ history: T[]; historyId: string }>;
   markAsRead(threadIds: string[]): Promise<void>;
   markAsUnread(threadIds: string[]): Promise<void>;
@@ -114,7 +107,6 @@ export interface MailManager {
   ): Promise<void>;
   deleteLabel(id: string): Promise<void>;
   getEmailAliases(): Promise<{ email: string; name?: string; primary?: boolean }[]>;
-  revokeToken(token: string): Promise<boolean>;
   deleteAllSpam(): Promise<DeleteAllSpamResponse>;
   getRawEmail(id: string): Promise<string>;
 }

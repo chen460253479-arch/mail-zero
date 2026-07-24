@@ -42,8 +42,13 @@ import {
   type ISnoozeBatch,
   type ParsedMessage,
 } from '../../types';
-import type { IGetThreadResponse, IGetThreadsResponse, MailManager } from '../../lib/driver/types';
-import { connectionToDriver, getZeroSocketAgent, reSyncThread } from '../../lib/server-utils';
+import type { IGetThreadResponse, IGetThreadsResponse, MailClient } from '../../lib/driver/types';
+import {
+  connectionToDriver,
+  findConnectionWithAuthorization,
+  getZeroSocketAgent,
+  reSyncThread,
+} from '../../lib/server-utils';
 import { generateWhatUserCaresAbout, type UserTopic } from '../../lib/analyze/interests';
 import { DurableObjectOAuthClientProvider } from 'agents/mcp/do-oauth-client-provider';
 import { AiChatPrompt, GmailSearchAssistantSystemPrompt } from '../../lib/prompts';
@@ -251,13 +256,13 @@ export interface TopicGenerationRequirements {
 }
 
 export interface ThreadSyncRequirements {
-  readonly driver: MailManager;
+  readonly driver: MailClient;
   readonly agent?: DurableObjectStub<ZeroAgent>;
   readonly connectionId: string;
 }
 
 export interface FolderSyncRequirements {
-  readonly driver: MailManager;
+  readonly driver: MailClient;
   readonly agent?: DurableObjectStub<ZeroAgent>;
   readonly connectionId: string;
 }
@@ -324,7 +329,7 @@ export class ZeroDriver extends DurableObject<ZeroEnv> {
   sql: SqlStorage;
   private db: DB;
   private syncThreadsInProgress: Map<string, boolean> = new Map();
-  private driver: MailManager | null = null;
+  private driver: MailClient | null = null;
   private agent: DurableObjectStub<ZeroAgent> | null = null;
   private name: string = 'general';
   private connection: typeof connection.$inferSelect | null = null;
@@ -703,12 +708,10 @@ export class ZeroDriver extends DurableObject<ZeroEnv> {
     if (this.name === 'general') return;
     if (!this.driver) {
       const { db, conn } = createDb(this.env.HYPERDRIVE.connectionString);
-      const _connection = await db.query.connection.findFirst({
-        where: eq(connection.id, this.name),
-      });
-      if (_connection) {
-        this.driver = connectionToDriver(_connection);
-        this.connection = _connection;
+      const record = await findConnectionWithAuthorization(db, this.name);
+      if (record) {
+        this.driver = await connectionToDriver(record);
+        this.connection = record.connection;
       }
       this.ctx.waitUntil(conn.end());
     }

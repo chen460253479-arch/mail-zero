@@ -14,10 +14,13 @@ import {
 } from '../lib/prompts';
 import { type Connection, type ConnectionContext, type WSMessage } from 'agents';
 import { EPrompts, type IOutgoingMessage, type ParsedMessage } from '../types';
-import type { IGetThreadResponse, MailManager } from '../lib/driver/types';
+import type { IGetThreadResponse, MailClient } from '../lib/driver/types';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { createSimpleAuth, type SimpleAuth } from '../lib/auth';
-import { connectionToDriver } from '../lib/server-utils';
+import {
+  connectionToDriver,
+  findConnectionWithAuthorization,
+} from '../lib/server-utils';
 import type { CreateDraftData } from '../lib/schemas';
 import { FOLDERS, parseHeaders } from '../lib/utils';
 import { env, RpcTarget } from 'cloudflare:workers';
@@ -310,7 +313,7 @@ export class ZeroAgent extends AIChatAgent<typeof env> {
   private chatMessageAbortControllers: Map<string, AbortController> = new Map();
   private foldersInSync: string[] = [];
   private currentFolder: string | null = 'inbox';
-  driver: MailManager | null = null;
+  driver: MailClient | null = null;
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     if (shouldDropTables) this.dropTables();
@@ -387,10 +390,8 @@ export class ZeroAgent extends AIChatAgent<typeof env> {
   public async setupAuth(connectionId: string) {
     if (!this.driver) {
       const { db, conn } = createDb(env.HYPERDRIVE.connectionString);
-      const _connection = await db.query.connection.findFirst({
-        where: eq(connection.id, connectionId),
-      });
-      if (_connection) this.driver = connectionToDriver(_connection);
+      const record = await findConnectionWithAuthorization(db, connectionId);
+      if (record) this.driver = await connectionToDriver(record);
       this.ctx.waitUntil(conn.end());
       this.ctx.waitUntil(this.syncThreads('inbox'));
       this.ctx.waitUntil(this.syncThreads('sent'));
@@ -1188,7 +1189,9 @@ export class ZeroMCP extends McpAgent<typeof env, {}, { userId: string }> {
       throw new Error('Unauthorized');
     }
     this.activeConnectionId = _connection.id;
-    const driver = connectionToDriver(_connection);
+    const record = await findConnectionWithAuthorization(db, _connection.id);
+    if (!record) throw new Error('Mailbox authorization is missing');
+    const driver = await connectionToDriver(record);
 
     this.server.tool('getConnections', async () => {
       const connections = await db.query.connection.findMany({
@@ -1197,7 +1200,7 @@ export class ZeroMCP extends McpAgent<typeof env, {}, { userId: string }> {
       return {
         content: connections.map((c) => ({
           type: 'text',
-          text: `Email: ${c.email} | Provider: ${c.providerId}`,
+          text: `Email: ${c.email} | Channel: ${c.channelId}`,
         })),
       };
     });
@@ -1216,7 +1219,7 @@ export class ZeroMCP extends McpAgent<typeof env, {}, { userId: string }> {
         content: [
           {
             type: 'text' as const,
-            text: `Email: ${_connection.email} | Provider: ${_connection.providerId}`,
+            text: `Email: ${_connection.email} | Channel: ${_connection.channelId}`,
           },
         ],
       };

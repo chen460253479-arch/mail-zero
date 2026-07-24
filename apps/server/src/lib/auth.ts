@@ -11,6 +11,10 @@ import { type Account, betterAuth, type BetterAuthOptions } from 'better-auth';
 import { getBrowserTimezone, isValidTimezone } from './timezones';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { getZeroDB, resetConnection } from './server-utils';
+import { encryptCredential } from './credentials/encryption';
+import { resolveConnectionCredential } from './credentials/resolve';
+import { createZeroOAuthSnapshot } from './credentials/zero-oauth';
+import { getMailChannel, providerIdToChannelId } from './mail-channel/registry';
 import { getSocialProviders } from './auth-providers';
 import { redis, resend } from './services';
 import { dubAnalytics } from '@dub/better-auth';
@@ -18,7 +22,6 @@ import { defaultUserSettings } from './schemas';
 import { disableBrainFunction } from './brain';
 import { APIError } from 'better-auth/api';
 import { type EProviders } from '../types';
-import { createDriver } from './driver';
 import { createDb } from '../db';
 import { Effect } from 'effect';
 import { env } from '../env';
@@ -91,29 +94,31 @@ const connectionHandlerHook = async (account: Account) => {
     });
   }
 
-  const driver = createDriver(account.providerId, {
+  const channelId = providerIdToChannelId(account.providerId);
+  const channel = getMailChannel(channelId);
+  const managerConfig = {
     auth: {
       accessToken: account.accessToken,
       refreshToken: account.refreshToken,
       userId: account.userId,
       email: '',
     },
-  });
+  };
 
-  const userInfo = await driver.getUserInfo().catch(async () => {
+  const identity = await channel.resolveIdentity(managerConfig).catch(async () => {
     if (account.accessToken) {
-      await driver.revokeToken(account.accessToken);
+      await channel.revoke(managerConfig, account.accessToken);
       await resetConnection(account.id);
     }
     throw new Response(null, { status: 301, headers: { Location: '/' } });
   });
 
-  if (!userInfo?.address) {
+  if (!identity.email) {
     try {
       await Promise.allSettled(
         [account.accessToken, account.refreshToken]
           .filter(Boolean)
-          .map((t) => driver.revokeToken(t as string)),
+          .map((token) => channel.revoke(managerConfig, token as string)),
       );
       await resetConnection(account.id);
     } catch (error) {
@@ -122,25 +127,40 @@ const connectionHandlerHook = async (account: Account) => {
     throw new Response(null, { status: 303, headers: { Location: '/' } });
   }
 
-  const updatingInfo = {
-    name: userInfo.name || 'Unknown',
-    picture: userInfo.photo || '',
-    accessToken: account.accessToken,
-    refreshToken: account.refreshToken,
-    scope: driver.getScope(),
-    expiresAt: new Date(Date.now() + (account.accessTokenExpiresAt?.getTime() || 3600000)),
-  };
+  const scope = channel.getScope(managerConfig);
+  const expiresAt = account.accessTokenExpiresAt ?? new Date(Date.now() + 3_600_000);
+  const encryptedCredentialSnapshot = await encryptCredential(
+    createZeroOAuthSnapshot({
+      accessToken: account.accessToken,
+      refreshToken: account.refreshToken,
+      scope,
+    }),
+    env.CREDENTIAL_ENCRYPTION_KEY,
+  );
 
   const db = await getZeroDB(account.userId);
-  const [result] = await db.createConnection(
-    account.providerId as EProviders,
-    userInfo.address,
-    updatingInfo,
+  const result = await db.createMailboxWithAuthorization(
+    {
+      email: identity.email,
+      name: identity.name || 'Unknown',
+      picture: identity.picture || '',
+      channelId,
+      providerId: account.providerId as EProviders,
+      scope,
+      expiresAt,
+    },
+    {
+      authSource: 'zero_oauth',
+      credentialType: 'oauth2',
+      encryptedCredentialSnapshot,
+      accessTokenExpiresAt: expiresAt,
+      credentialFetchedAt: new Date(),
+    },
   );
 
   if (env.NODE_ENV === 'production') {
     await Effect.runPromise(
-      scheduleCampaign({ address: userInfo.address, name: userInfo.name || 'there' }),
+      scheduleCampaign({ address: identity.email, name: identity.name || 'there' }),
     );
   }
 
@@ -199,21 +219,30 @@ export const createAuth = () => {
           const revokedAccounts = (
             await Promise.allSettled(
               connections.map(async (connection) => {
-                if (!connection.accessToken || !connection.refreshToken) return false;
                 await disableBrainFunction({
                   id: connection.id,
                   providerId: connection.providerId as EProviders,
                 });
-                const driver = createDriver(connection.providerId, {
+                const record = await db.findConnectionWithAuthorization(connection.id);
+                if (!record) return false;
+                const credential = await resolveConnectionCredential(
+                  record,
+                  env.CREDENTIAL_ENCRYPTION_KEY,
+                );
+                if (credential.type !== 'oauth2') return false;
+                const channel = getMailChannel(connection.channelId);
+                const managerConfig = {
                   auth: {
-                    accessToken: connection.accessToken,
-                    refreshToken: connection.refreshToken,
+                    accessToken: credential.accessToken,
+                    refreshToken: credential.refreshToken ?? '',
                     userId: user.id,
                     email: connection.email,
                   },
-                });
-                const token = connection.refreshToken;
-                return await driver.revokeToken(token || '');
+                };
+                return await channel.revoke(
+                  managerConfig,
+                  credential.refreshToken ?? credential.accessToken,
+                );
               }),
             )
           ).map((result) => {
@@ -223,7 +252,7 @@ export const createAuth = () => {
             return false;
           });
 
-          if (revokedAccounts.every((value) => !!value)) {
+          if (!revokedAccounts.every((value) => !!value)) {
             console.log('Failed to revoke some accounts');
           }
 

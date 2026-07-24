@@ -1,4 +1,4 @@
-import type { MailManager, ManagerConfig } from '../driver/types';
+import type { MailClient, ManagerConfig } from '../driver/types';
 
 export const mailChannelIds = ['gmail', 'outlook', 'zoho_mail', 'imap_smtp'] as const;
 export type MailChannelId = (typeof mailChannelIds)[number];
@@ -37,7 +37,7 @@ export interface MailboxChannel {
   id: MailChannelId;
   displayName: string;
   capabilities: ReadonlySet<MailCapability>;
-  createClient(config: ManagerConfig): MailManager;
+  createClient(config: ManagerConfig): MailClient;
   resolveIdentity(
     config: ManagerConfig,
   ): Promise<{ email: string; name: string; picture: string }>;

@@ -1,11 +1,11 @@
-import type { MailManager, ManagerConfig } from './types';
+import type { MailClient, ManagerConfig } from './types';
 import { getMailChannel, providerIdToChannelId } from '../mail-channel/registry';
 import type { MailChannelId } from '../mail-channel/types';
 
 export const createDriver = (
   provider: MailChannelId | 'google' | 'microsoft' | (string & {}),
   config: ManagerConfig,
-): MailManager => {
+): MailClient => {
   const channelId =
     provider === 'google' || provider === 'microsoft'
       ? providerIdToChannelId(provider)
