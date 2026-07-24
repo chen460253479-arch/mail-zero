@@ -6,37 +6,52 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '../ui/dialog';
-import { NangoConnectDialog } from './nango-connect-dialog';
-import { Plug, Plus, UserPlus } from 'lucide-react';
+import { GmailConnectDialog } from './gmail-connect-dialog';
+import { useTRPC } from '@/providers/query-provider';
+import { useQuery } from '@tanstack/react-query';
 import { emailProviders } from '@/lib/constants';
-import { authClient } from '@/lib/auth-client';
-import { useLocation } from 'react-router';
+import { Plus, UserPlus } from 'lucide-react';
 import { m } from '@/paraglide/messages';
 import { motion } from 'motion/react';
 import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 
 export const AddConnectionDialog = ({
   children,
   className,
-  nangoEnabled = false,
   onConnected,
   onOpenChange,
 }: {
   children?: React.ReactNode;
   className?: string;
-  nangoEnabled?: boolean;
   onConnected?: () => void;
   onOpenChange?: (open: boolean) => void;
 }) => {
-  const pathname = useLocation().pathname;
+  const trpc = useTRPC();
   const [open, setOpen] = useState(false);
-  const [nangoOpen, setNangoOpen] = useState(false);
+  const [gmailOpen, setGmailOpen] = useState(false);
+  const options = useQuery(
+    trpc.connections.getGmailAuthorizationOptions.queryOptions(undefined, { enabled: open }),
+  );
 
   const setDialogOpen = (nextOpen: boolean) => {
     setOpen(nextOpen);
     onOpenChange?.(nextOpen);
+  };
+
+  const connectGmail = () => {
+    if (!options.data) return;
+    if (options.data.mode === 'zero_oauth') {
+      const baseUrl = import.meta.env.VITE_PUBLIC_BACKEND_URL.replace(/\/+$/, '');
+      window.location.assign(`${baseUrl}/api/integrations/gmail/connect/start`);
+      return;
+    }
+    if (options.data.mode === 'choice' || options.data.mode === 'nango') {
+      setDialogOpen(false);
+      setGmailOpen(true);
+    }
   };
 
   return (
@@ -80,46 +95,29 @@ export const AddConnectionDialog = ({
                 >
                   <Button
                     variant="outline"
-                    className="h-24 w-full flex-col items-center justify-center gap-2"
-                    onClick={async () =>
-                      await authClient.linkSocial({
-                        provider: provider.zeroOAuthProvider,
-                        callbackURL: `${window.location.origin}${pathname}`,
-                      })
-                    }
+                    className="relative h-24 w-full flex-col items-center justify-center gap-2"
+                    disabled={options.isLoading || options.data?.mode === 'unavailable'}
+                    onClick={connectGmail}
                   >
                     <Icon className="size-6!" />
                     <span className="text-xs">{provider.name}</span>
+                    {options.data?.nangoAvailable ? (
+                      <Badge
+                        variant="outline"
+                        className="absolute right-2 top-2 px-1.5 py-0 text-[10px]"
+                      >
+                        Nango
+                      </Badge>
+                    ) : null}
                   </Button>
                 </motion.div>
               );
             })}
-            {nangoEnabled ? (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: emailProviders.length * 0.1, duration: 0.3 }}
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-              >
-                <Button
-                  variant="outline"
-                  className="h-24 w-full flex-col items-center justify-center gap-2"
-                  onClick={() => {
-                    setDialogOpen(false);
-                    setNangoOpen(true);
-                  }}
-                >
-                  <Plug className="size-6" />
-                  <span className="text-xs">Nango</span>
-                </Button>
-              </motion.div>
-            ) : null}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{
-                delay: (emailProviders.length + Number(nangoEnabled)) * 0.1,
+                delay: emailProviders.length * 0.1,
                 duration: 0.3,
               }}
               whileHover={{ scale: 1.03 }}
@@ -134,11 +132,18 @@ export const AddConnectionDialog = ({
               </Button>
             </motion.div>
           </motion.div>
+          {options.data?.mode === 'unavailable' ? (
+            <p className="text-muted-foreground mt-3 text-sm">
+              Gmail authorization has not been configured by an administrator.
+            </p>
+          ) : null}
         </DialogContent>
       </Dialog>
-      <NangoConnectDialog
-        open={nangoOpen}
-        onOpenChange={setNangoOpen}
+      <GmailConnectDialog
+        open={gmailOpen}
+        zeroOAuthAvailable={options.data?.zeroOAuthAvailable ?? false}
+        nangoAvailable={options.data?.nangoAvailable ?? false}
+        onOpenChange={setGmailOpen}
         onConnected={() => {
           setDialogOpen(false);
           onConnected?.();

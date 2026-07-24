@@ -6,13 +6,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { SettingsCard } from '@/components/settings/settings-card';
 import { AddConnectionDialog } from '@/components/connection/add';
 
-import { useSession, authClient } from '@/lib/auth-client';
 import { useConnections } from '@/hooks/use-connections';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Trash, Plus, Unplug } from 'lucide-react';
 import { useThreads } from '@/hooks/use-threads';
 import { emailProviders } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
+import { useSession } from '@/lib/auth-client';
 import { Badge } from '@/components/ui/badge';
 import { m } from '@/paraglide/messages';
 import { useState } from 'react';
@@ -62,9 +62,6 @@ export default function ConnectionsPage() {
                 const Icon = emailProviders.find(
                   (provider) => provider.channelId === connection.channelId,
                 )?.icon;
-                const zeroOAuthProvider = emailProviders.find(
-                  (provider) => provider.channelId === connection.channelId,
-                )?.zeroOAuthProvider;
                 return (
                   <div
                     key={connection.id}
@@ -148,21 +145,12 @@ export default function ConnectionsPage() {
                               {m['pages.settings.connections.disconnected']()}
                             </Badge>
                           </div>
-                          {zeroOAuthProvider ? (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={async () => {
-                                await authClient.linkSocial({
-                                  provider: zeroOAuthProvider,
-                                  callbackURL: `${window.location.origin}/settings/connections`,
-                                });
-                              }}
-                            >
+                          <AddConnectionDialog onConnected={refreshConnectionData}>
+                            <Button variant="secondary" size="sm">
                               <Unplug className="size-4" />
                               {m['pages.settings.connections.reconnect']()}
                             </Button>
-                          ) : null}
+                          </AddConnectionDialog>
                           <DeleteRetainedDataDialog
                             connectionId={connection.id}
                             onCompleted={refreshConnectionData}
@@ -195,10 +183,7 @@ export default function ConnectionsPage() {
           ) : null}
 
           <div className="flex items-center justify-start">
-            <AddConnectionDialog
-              nangoEnabled={data?.nangoEnabled}
-              onConnected={refreshConnectionData}
-            >
+            <AddConnectionDialog onConnected={refreshConnectionData}>
               <Button
                 variant="outline"
                 className="group relative w-9 overflow-hidden duration-200 hover:w-full sm:hover:w-[32.5%]"

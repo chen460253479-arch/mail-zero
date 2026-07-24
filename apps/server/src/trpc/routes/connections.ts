@@ -9,17 +9,18 @@ import {
   NangoBindingError,
 } from '../../lib/nango/bind';
 import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router } from '../trpc';
+import { resolveGmailConnectMode } from '../../lib/integrations/gmail-connection-options';
 import { withNangoRuntime, type NangoRuntime } from '../../lib/credentials/nango-runtime';
-import { getMailChannel, listMailChannels } from '../../lib/mail-channel/registry';
-import { mailChannelIds, type MailChannelId } from '../../lib/mail-channel/types';
+import { createSystemIntegrationRepository } from '../../lib/integrations/repository';
 import { deleteConnectionLocalData, getZeroDB } from '../../lib/server-utils';
 import { NangoIntegrationError } from '../../lib/integrations/nango-service';
-import { listAvailableNangoChannels } from '../../lib/nango/channel-catalog';
 import { resolveFetchedNangoCredential } from '../../lib/credentials/nango';
+import { getMailChannel } from '../../lib/mail-channel/registry';
 import { disableBrainFunction } from '../../lib/brain';
 import { Ratelimit } from '@upstash/ratelimit';
 import type { EProviders } from '../../types';
 import { TRPCError } from '@trpc/server';
+import { createDb } from '../../db';
 import { env } from '../../env';
 import { z } from 'zod';
 
@@ -42,35 +43,27 @@ const withConfiguredNango = async <T>(run: (runtime: NangoRuntime) => Promise<T>
   }
 };
 
-const isNangoEnabled = async (): Promise<boolean> => {
+const getGmailAuthorizationOptions = async () => {
+  const { db, conn } = createDb(env.HYPERDRIVE.connectionString);
   try {
-    return await withNangoRuntime(nangoRuntimeConfig(), async ({ integrationRepository }) =>
-      Boolean(await integrationRepository.getMapping('gmail', 'nango')),
-    );
-  } catch (error) {
-    if (error instanceof NangoIntegrationError && error.code === 'NANGO_NOT_CONFIGURED') {
-      return false;
-    }
-    throw error;
+    const repository = createSystemIntegrationRepository(db);
+    const [zeroOAuth, nango, nangoMapping] = await Promise.all([
+      repository.get('gmail_zero_oauth'),
+      repository.get('nango'),
+      repository.getMapping('gmail', 'nango'),
+    ]);
+    const availability = {
+      zeroOAuthAvailable: zeroOAuth?.status === 'active',
+      nangoAvailable: nango?.status === 'active' && nangoMapping !== null,
+    };
+    return {
+      ...availability,
+      mode: resolveGmailConnectMode(availability),
+    };
+  } finally {
+    await conn.end();
   }
 };
-
-const assertConfiguredMapping = async (
-  runtime: NangoRuntime,
-  channelId: MailChannelId,
-  integrationId: string,
-): Promise<void> => {
-  const mapping = await runtime.integrationRepository.getMapping(channelId, 'nango');
-  if (!mapping || mapping.externalIntegrationId !== integrationId) {
-    throw new TRPCError({
-      code: 'PRECONDITION_FAILED',
-      message: 'MAIL_CHANNEL_UNAVAILABLE',
-    });
-  }
-};
-
-const getNangoCatalog = async (client: NangoRuntime['client']) =>
-  listAvailableNangoChannels(await client.listIntegrations(), listMailChannels());
 
 const mapNangoBindingError = (error: unknown): never => {
   if (error instanceof NangoBindingError) {
@@ -127,7 +120,6 @@ export const connectionsRouter = router({
         .map(({ connection }) => connection.id);
 
       return {
-        nangoEnabled: await isNangoEnabled(),
         connections: records.map(({ connection, authorization }) => {
           return {
             id: connection.id,
@@ -144,86 +136,76 @@ export const connectionsRouter = router({
         disconnectedIds,
       };
     }),
-  nangoChannels: privateProcedure.query(async () => {
-    if (!(await isNangoEnabled())) return [];
+  getGmailAuthorizationOptions: privateProcedure.query(getGmailAuthorizationOptions),
+  listNangoGmailConnections: privateProcedure.query(async ({ ctx }) => {
     return await withConfiguredNango(async (runtime) => {
       const mapping = await runtime.integrationRepository.getMapping('gmail', 'nango');
-      if (!mapping) return [];
-      const catalog = await getNangoCatalog(runtime.client);
-      return catalog
-        .filter(({ channelId }) => channelId === 'gmail')
-        .map((channel) => ({
-          ...channel,
-          integrations: channel.integrations.filter(
-            ({ integrationId }) => integrationId === mapping.externalIntegrationId,
-          ),
-        }))
-        .filter(({ integrations }) => integrations.length > 0);
+      if (!mapping) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'MAIL_CHANNEL_UNAVAILABLE',
+        });
+      }
+      const channel = getMailChannel('gmail');
+      const connections = await listSafeNangoConnections(
+        mapping.externalIntegrationId,
+        runtime.client,
+        async (connectionId) => {
+          const connection = await runtime.client.getConnection(
+            connectionId,
+            mapping.externalIntegrationId,
+          );
+          const resolved = resolveFetchedNangoCredential(connection.credentials);
+          if (resolved.credential.type !== 'oauth2') {
+            throw new Error('Unsupported Nango credential');
+          }
+          const identity = await channel.resolveIdentity({
+            auth: {
+              userId: ctx.sessionUser.id,
+              accessToken: resolved.credential.accessToken,
+              refreshToken: '',
+              email: '',
+            },
+          });
+          return { email: identity.email, displayName: identity.name };
+        },
+      );
+      return connections.map(({ connectionId, email, displayName, authorizationStatus }) => ({
+        connectionId,
+        email,
+        displayName,
+        authorizationStatus,
+      }));
     });
   }),
-  nangoConnections: privateProcedure
-    .input(
-      z.object({
-        channelId: z.enum(mailChannelIds),
-        integrationId: z.string().min(1),
-      }),
-    )
-    .query(async ({ input, ctx }) => {
-      return await withConfiguredNango(async (runtime) => {
-        await assertConfiguredMapping(runtime, input.channelId, input.integrationId);
-        const channel = getMailChannel(input.channelId);
-        return await listSafeNangoConnections(
-          input.integrationId,
-          runtime.client,
-          async (connectionId) => {
-            const connection = await runtime.client.getConnection(
-              connectionId,
-              input.integrationId,
-            );
-            const resolved = resolveFetchedNangoCredential(connection.credentials);
-            if (resolved.credential.type !== 'oauth2') {
-              throw new Error('Unsupported Nango credential');
-            }
-            const identity = await channel.resolveIdentity({
-              auth: {
-                userId: ctx.sessionUser.id,
-                accessToken: resolved.credential.accessToken,
-                refreshToken: '',
-                email: '',
-              },
-            });
-            return { email: identity.email, displayName: identity.name };
-          },
-        );
-      });
-    }),
   bindNango: privateProcedure
-    .input(
-      z.object({
-        channelId: z.enum(mailChannelIds),
-        integrationId: z.string().min(1),
-        connectionId: z.string().min(1),
-      }),
-    )
+    .input(z.object({ connectionId: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
       const db = await getZeroDB(ctx.sessionUser.id);
       try {
         return await withConfiguredNango(async (runtime) => {
-          await assertConfiguredMapping(runtime, input.channelId, input.integrationId);
+          const mapping = await runtime.integrationRepository.getMapping('gmail', 'nango');
+          if (!mapping) {
+            throw new NangoBindingError('MAIL_CHANNEL_UNAVAILABLE');
+          }
+          const integrationId = mapping.externalIntegrationId;
           return await bindNangoMailbox(
-            { ...input, userId: ctx.sessionUser.id },
+            {
+              userId: ctx.sessionUser.id,
+              channelId: 'gmail',
+              integrationId,
+              connectionId: input.connectionId,
+            },
             {
               client: runtime.client,
               getChannel: getMailChannel,
-              isIntegrationAvailable: async (channelId, integrationId) => {
-                const mapping = await runtime.integrationRepository.getMapping(channelId, 'nango');
-                return mapping?.externalIntegrationId === integrationId;
-              },
+              isIntegrationAvailable: async (channelId, candidateIntegrationId) =>
+                channelId === 'gmail' && candidateIntegrationId === integrationId,
               repository: {
                 findMailboxByNormalizedEmail: (normalizedEmail) =>
                   db.findConnectionByNormalizedEmail(normalizedEmail),
-                findByNangoReference: (integrationId, connectionId) =>
-                  db.findAuthorizationByNangoReference(integrationId, connectionId),
+                findByNangoReference: (candidateIntegrationId, connectionId) =>
+                  db.findAuthorizationByNangoReference(candidateIntegrationId, connectionId),
                 save: async ({ mailbox, authorization }) => {
                   try {
                     return await db.createMailboxWithAuthorization(mailbox, authorization);
@@ -242,7 +224,9 @@ export const connectionsRouter = router({
                     if (existing && existing.channelId !== mailbox.channelId) {
                       throw new NangoBindingError('MAILBOX_IDENTITY_MISMATCH');
                     }
-                    if (existing) throw new NangoBindingError('MAILBOX_ALREADY_CONNECTED');
+                    if (existing && existing.status !== 'disconnected') {
+                      throw new NangoBindingError('MAILBOX_ALREADY_CONNECTED');
+                    }
                     throw error;
                   }
                 },

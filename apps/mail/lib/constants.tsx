@@ -17,7 +17,6 @@ export const emailProviders = [
     name: 'Gmail',
     icon: GmailColor,
     channelId: 'gmail',
-    zeroOAuthProvider: 'google',
   },
 ] as const;
 
