@@ -174,6 +174,54 @@ export const authorizationBinding = createTable(
   ],
 );
 
+export const systemIntegrationConfig = createTable('system_integration_config', {
+  id: text('id').primaryKey(),
+  integrationKey: text('integration_key').$type<'nango' | 'gmail_zero_oauth'>().notNull().unique(),
+  publicConfig: jsonb('public_config').notNull(),
+  encryptedSecret: text('encrypted_secret').notNull(),
+  status: text('status').$type<'active' | 'error'>().notNull(),
+  validatedAt: timestamp('validated_at').notNull(),
+  updatedBy: text('updated_by')
+    .notNull()
+    .references(() => user.id),
+  createdAt: timestamp('created_at').notNull(),
+  updatedAt: timestamp('updated_at').notNull(),
+});
+
+export const channelIntegrationMapping = createTable(
+  'channel_integration_mapping',
+  {
+    id: text('id').primaryKey(),
+    channelId: text('channel_id').$type<MailChannelId>().notNull(),
+    authSource: text('auth_source').$type<'nango'>().notNull(),
+    externalIntegrationId: text('external_integration_id').notNull(),
+    createdAt: timestamp('created_at').notNull(),
+    updatedAt: timestamp('updated_at').notNull(),
+  },
+  (t) => [unique().on(t.channelId, t.authSource)],
+);
+
+export const integrationOAuthSession = createTable(
+  'integration_oauth_session',
+  {
+    id: text('id').primaryKey(),
+    integrationKey: text('integration_key').$type<'gmail_zero_oauth'>().notNull(),
+    purpose: text('purpose').$type<'validate_config' | 'connect_mailbox'>().notNull(),
+    encryptedPayload: text('encrypted_payload').notNull(),
+    stateHash: text('state_hash').notNull().unique(),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    expiresAt: timestamp('expires_at').notNull(),
+    consumedAt: timestamp('consumed_at'),
+    createdAt: timestamp('created_at').notNull(),
+  },
+  (t) => [
+    index('integration_oauth_session_expires_at_idx').on(t.expiresAt),
+    index('integration_oauth_session_created_by_idx').on(t.createdBy),
+  ],
+);
+
 export const summary = createTable(
   'summary',
   {

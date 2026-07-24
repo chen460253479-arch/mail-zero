@@ -288,6 +288,13 @@
       "when": 1784869624643,
       "tag": "0039_perfect_marvel_boy",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1784882190992,
+      "tag": "0040_admin_integrations",
+      "breakpoints": true
     }
   ]
 }
