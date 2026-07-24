@@ -704,6 +704,14 @@ export class ZeroDriver extends DurableObject<ZeroEnv> {
     await this.syncFolders();
   }
 
+  async deleteLocalData() {
+    this.syncThreadsInProgress.clear();
+    this.driver = null;
+    this.connection = null;
+    this.dropTables();
+    await this.ctx.storage.deleteAll();
+  }
+
   public async setupAuth() {
     if (this.name === 'general') return;
     if (!this.driver) {
@@ -1702,6 +1710,14 @@ export class ZeroDriver extends DurableObject<ZeroEnv> {
 
 export class ZeroAgent extends AIChatAgent<ZeroEnv> {
   private chatMessageAbortControllers: Map<string, AbortController> = new Map();
+
+  async deleteLocalData() {
+    for (const controller of this.chatMessageAbortControllers.values()) {
+      controller.abort();
+    }
+    this.chatMessageAbortControllers.clear();
+    await this.ctx.storage.deleteAll();
+  }
 
   async registerZeroMCP() {
     await this.mcp.connect(this.env.VITE_PUBLIC_BACKEND_URL + '/sse', {

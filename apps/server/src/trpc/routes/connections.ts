@@ -1,8 +1,45 @@
 import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router } from '../trpc';
-import { getActiveConnection, getZeroDB } from '../../lib/server-utils';
+import {
+  deleteConnectionLocalData,
+  getZeroDB,
+} from '../../lib/server-utils';
+import {
+  deleteRetainedMailboxData,
+  disconnectAuthorization,
+  type ConnectionLifecycleDependencies,
+} from '../../lib/connection-lifecycle';
 import { Ratelimit } from '@upstash/ratelimit';
 import { TRPCError } from '@trpc/server';
+import { disableBrainFunction } from '../../lib/brain';
+import type { EProviders } from '../../types';
 import { z } from 'zod';
+
+const createLifecycleDependencies = async (
+  userId: string,
+): Promise<ConnectionLifecycleDependencies> => {
+  const db = await getZeroDB(userId);
+  return {
+    repository: {
+      getConnection: (connectionId) => db.findUserConnection(connectionId),
+      removeAuthorizationBinding: (connectionId) =>
+        db.removeAuthorizationBinding(connectionId),
+      markDisconnected: (connectionId, disconnectedAt) =>
+        db.markConnectionDisconnected(connectionId, disconnectedAt),
+      markDeleting: (connectionId) => db.markConnectionDeleting(connectionId),
+      deleteMailbox: (connectionId) => db.deleteMailbox(connectionId),
+    },
+    stopMailboxTasks: async (connection) => {
+      const mailbox = await db.findUserConnection(connection.id);
+      if (!mailbox) return;
+      await disableBrainFunction({
+        id: connection.id,
+        providerId: mailbox.providerId as EProviders,
+      });
+    },
+    cleanupLocalData: (connection) => deleteConnectionLocalData(connection.id),
+    now: () => new Date(),
+  };
+};
 
 export const connectionsRouter = router({
   list: privateProcedure
@@ -18,8 +55,8 @@ export const connectionsRouter = router({
       const connections = await db.findManyConnections();
 
       const disconnectedIds = connections
-        .filter((c) => !c.accessToken || !c.refreshToken)
-        .map((c) => c.id);
+        .filter((connection) => connection.status === 'disconnected')
+        .map((connection) => connection.id);
 
       return {
         connections: connections.map((connection) => {
@@ -29,6 +66,8 @@ export const connectionsRouter = router({
             name: connection.name,
             picture: connection.picture,
             createdAt: connection.createdAt,
+            channelId: connection.channelId,
+            status: connection.status,
             providerId: connection.providerId,
           };
         }),
@@ -45,16 +84,28 @@ export const connectionsRouter = router({
       if (!foundConnection) throw new TRPCError({ code: 'NOT_FOUND' });
       await db.updateUser({ defaultConnectionId: connectionId });
     }),
-  delete: privateProcedure
-    .input(z.object({ connectionId: z.string() }))
+  disconnect: privateProcedure
+    .input(
+      z.object({
+        connectionId: z.string().uuid(),
+        deleteLocalData: z.boolean(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
-      const { connectionId } = input;
-      const user = ctx.sessionUser;
-      const db = await getZeroDB(user.id);
-      await db.deleteConnection(connectionId);
-
-      const activeConnection = await getActiveConnection();
-      if (connectionId === activeConnection.id) await db.updateUser({ defaultConnectionId: null });
+      const dependencies = await createLifecycleDependencies(ctx.sessionUser.id);
+      const result = await disconnectAuthorization(input, dependencies);
+      const db = await getZeroDB(ctx.sessionUser.id);
+      const user = await db.findUser();
+      if (user?.defaultConnectionId === input.connectionId) {
+        await db.updateUser({ defaultConnectionId: null });
+      }
+      return result;
+    }),
+  deleteRetainedData: privateProcedure
+    .input(z.object({ connectionId: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const dependencies = await createLifecycleDependencies(ctx.sessionUser.id);
+      return await deleteRetainedMailboxData(input.connectionId, dependencies);
     }),
   getDefault: publicProcedure.query(async ({ ctx }) => {
     if (!ctx.sessionUser) return null;
@@ -70,6 +121,8 @@ export const connectionsRouter = router({
       name: connection.name,
       picture: connection.picture,
       createdAt: connection.createdAt,
+      channelId: connection.channelId,
+      status: connection.status,
       providerId: connection.providerId,
     };
   }),

@@ -1,21 +1,14 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogClose,
-} from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { SettingsCard } from '@/components/settings/settings-card';
 import { AddConnectionDialog } from '@/components/connection/add';
+import {
+  DeleteRetainedDataDialog,
+  DisconnectDialog,
+} from '@/components/connection/disconnect-dialog';
 
 import { useSession, authClient } from '@/lib/auth-client';
 import { useConnections } from '@/hooks/use-connections';
-import { useTRPC } from '@/providers/query-provider';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useMutation } from '@tanstack/react-query';
 import { Trash, Plus, Unplug } from 'lucide-react';
 import { useThreads } from '@/hooks/use-threads';
 import { emailProviders } from '@/lib/constants';
@@ -23,31 +16,18 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { m } from '@/paraglide/messages';
 import { useState } from 'react';
-import { toast } from 'sonner';
 
 export default function ConnectionsPage() {
   const { data, isLoading, refetch: refetchConnections } = useConnections();
   const { refetch } = useSession();
   const [openTooltip, setOpenTooltip] = useState<string | null>(null);
 
-  const trpc = useTRPC();
-  const { mutateAsync: deleteConnection } = useMutation(trpc.connections.delete.mutationOptions());
   const [{ refetch: refetchThreads }] = useThreads({
     enabled: Boolean(data?.connections?.length),
   });
-  const disconnectAccount = async (connectionId: string) => {
-    await deleteConnection(
-      { connectionId },
-      {
-        onError: (error) => {
-          console.error('Error disconnecting account:', error);
-          toast.error(m['pages.settings.connections.disconnectError']());
-        },
-      },
-    );
-    toast.success(m['pages.settings.connections.disconnectSuccess']());
+  const refreshConnectionData = () => {
     void refetchConnections();
-    refetch();
+    void refetch();
     void refetchThreads();
   };
 
@@ -155,42 +135,30 @@ export default function ConnectionsPage() {
                             <Unplug className="size-4" />
                             {m['pages.settings.connections.reconnect']()}
                           </Button>
+                          <DeleteRetainedDataDialog
+                            connectionId={connection.id}
+                            onCompleted={refreshConnectionData}
+                          >
+                            <Button variant="destructive" size="sm">
+                              <Trash className="size-4" />
+                              {m['pages.settings.connections.deleteRetainedData']()}
+                            </Button>
+                          </DeleteRetainedDataDialog>
                         </>
-                      ) : null}
-                      <Dialog>
-                        <DialogTrigger asChild>
+                      ) : (
+                        <DisconnectDialog
+                          connectionId={connection.id}
+                          onCompleted={refreshConnectionData}
+                        >
                           <Button
                             variant="ghost"
                             size="icon"
                             className="text-muted-foreground hover:text-primary ml-4 shrink-0"
-                            disabled={data.connections.length === 1}
                           >
                             <Trash className="h-4 w-4" />
                           </Button>
-                        </DialogTrigger>
-                        <DialogContent showOverlay>
-                          <DialogHeader>
-                            <DialogTitle>
-                              {m['pages.settings.connections.disconnectTitle']()}
-                            </DialogTitle>
-                            <DialogDescription>
-                              {m['pages.settings.connections.disconnectDescription']()}
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="flex justify-end gap-4">
-                            <DialogClose asChild>
-                              <Button variant="outline">
-                                {m['pages.settings.connections.cancel']()}
-                              </Button>
-                            </DialogClose>
-                            <DialogClose asChild>
-                              <Button onClick={() => disconnectAccount(connection.id)}>
-                                {m['pages.settings.connections.remove']()}
-                              </Button>
-                            </DialogClose>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
+                        </DisconnectDialog>
+                      )}
                     </div>
                   </div>
                 );

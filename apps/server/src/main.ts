@@ -18,6 +18,7 @@ import {
 } from './db/schema';
 import { normalizeMailboxEmail } from './lib/mail-channel/mailbox-identity';
 import { providerIdToChannelId } from './lib/mail-channel/registry';
+import { assertAuthorizationCanBeAttached } from './lib/connection-lifecycle';
 import {
   toAttachmentFiles,
   type SerializedAttachment,
@@ -114,6 +115,26 @@ export class DbRpcDO extends RpcTarget {
 
   async deleteConnection(connectionId: string) {
     return await this.mainDo.deleteConnection(connectionId, this.userId);
+  }
+
+  async removeAuthorizationBinding(connectionId: string) {
+    return await this.mainDo.removeAuthorizationBinding(this.userId, connectionId);
+  }
+
+  async markConnectionDisconnected(connectionId: string, disconnectedAt: Date) {
+    return await this.mainDo.markConnectionDisconnected(
+      this.userId,
+      connectionId,
+      disconnectedAt,
+    );
+  }
+
+  async markConnectionDeleting(connectionId: string) {
+    return await this.mainDo.markConnectionDeleting(this.userId, connectionId);
+  }
+
+  async deleteMailbox(connectionId: string) {
+    return await this.mainDo.deleteMailbox(this.userId, connectionId);
   }
 
   async findFirstConnection(): Promise<typeof connection.$inferSelect | undefined> {
@@ -296,6 +317,46 @@ class ZeroDB extends DurableObject<ZeroEnv> {
       throw new Error('Cannot delete the last connection. At least one connection is required.');
     }
     return await this.db
+      .delete(connection)
+      .where(and(eq(connection.id, connectionId), eq(connection.userId, userId)));
+  }
+
+  private async requireUserConnection(userId: string, connectionId: string) {
+    const foundConnection = await this.findUserConnection(userId, connectionId);
+    if (!foundConnection) throw new Error('Mailbox not found');
+    return foundConnection;
+  }
+
+  async removeAuthorizationBinding(userId: string, connectionId: string) {
+    await this.requireUserConnection(userId, connectionId);
+    await this.db
+      .delete(authorizationBinding)
+      .where(eq(authorizationBinding.connectionId, connectionId));
+  }
+
+  async markConnectionDisconnected(
+    userId: string,
+    connectionId: string,
+    disconnectedAt: Date,
+  ) {
+    await this.requireUserConnection(userId, connectionId);
+    await this.db
+      .update(connection)
+      .set({ status: 'disconnected', disconnectedAt, updatedAt: disconnectedAt })
+      .where(and(eq(connection.id, connectionId), eq(connection.userId, userId)));
+  }
+
+  async markConnectionDeleting(userId: string, connectionId: string) {
+    await this.requireUserConnection(userId, connectionId);
+    await this.db
+      .update(connection)
+      .set({ status: 'deleting', updatedAt: new Date() })
+      .where(and(eq(connection.id, connectionId), eq(connection.userId, userId)));
+  }
+
+  async deleteMailbox(userId: string, connectionId: string) {
+    await this.requireUserConnection(userId, connectionId);
+    await this.db
       .delete(connection)
       .where(and(eq(connection.id, connectionId), eq(connection.userId, userId)));
   }
@@ -503,32 +564,52 @@ class ZeroDB extends DurableObject<ZeroEnv> {
     authorization: CreateAuthorizationInput,
   ): Promise<{ id: string }> {
     const now = new Date();
-    const connectionId = crypto.randomUUID();
+    const normalizedEmail = normalizeMailboxEmail(mailbox.email);
 
     return await this.db.transaction(async (tx) => {
-      const [created] = await tx
-        .insert(connection)
-        .values({
+      const existing = await tx.query.connection.findFirst({
+        where: and(
+          eq(connection.userId, userId),
+          eq(connection.normalizedEmail, normalizedEmail),
+        ),
+      });
+      const connectionId = existing?.id ?? crypto.randomUUID();
+
+      if (existing) {
+        const existingAuthorization = await tx.query.authorizationBinding.findFirst({
+          where: eq(authorizationBinding.connectionId, existing.id),
+        });
+        assertAuthorizationCanBeAttached(existing.status, Boolean(existingAuthorization));
+        await tx
+          .update(connection)
+          .set({
+            ...mailbox,
+            normalizedEmail,
+            status: 'connected',
+            disconnectedAt: null,
+            updatedAt: now,
+          })
+          .where(eq(connection.id, existing.id));
+      } else {
+        await tx.insert(connection).values({
           ...mailbox,
           id: connectionId,
           userId,
-          normalizedEmail: normalizeMailboxEmail(mailbox.email),
+          normalizedEmail,
           createdAt: now,
           updatedAt: now,
-        })
-        .returning({ id: connection.id });
-
-      if (!created) throw new Error('Failed to create mailbox');
+        });
+      }
 
       await tx.insert(authorizationBinding).values({
         ...authorization,
         id: crypto.randomUUID(),
-        connectionId: created.id,
+        connectionId,
         createdAt: now,
         updatedAt: now,
       });
 
-      return created;
+      return { id: connectionId };
     });
   }
 

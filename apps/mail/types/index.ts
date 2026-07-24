@@ -92,6 +92,8 @@ export interface IConnection {
   name?: string;
   picture?: string;
   createdAt: Date;
+  channelId: 'gmail' | 'outlook' | 'zoho_mail' | 'imap_smtp';
+  status: 'connected' | 'disconnected' | 'reconnect_required' | 'deleting';
   providerId: string;
 }
 

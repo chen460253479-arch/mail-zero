@@ -2,6 +2,7 @@ import type { IGetThreadResponse, IGetThreadsResponse } from './driver/types';
 import { resolveConnectionCredential } from './credentials/resolve';
 import { getMailChannel } from './mail-channel/registry';
 import { OutgoingMessageType } from '../routes/agent/types';
+import { EPrompts } from '../types';
 import { getContext } from 'hono/context-storage';
 import { authorizationBinding, connection } from '../db/schema';
 import { defaultPageSize } from './utils';
@@ -44,12 +45,15 @@ const getRegistryClient = async (connectionId: string) => {
   return registryClient;
 };
 
-const getShardClient = async (connectionId: string, shardId: string) => {
-  const shardClient = createClient({
+const getRawShardClient = (connectionId: string, shardId: string) =>
+  createClient({
     doNamespace: env.ZERO_DRIVER,
     ctx: new MockExecutionContext(),
     configs: [{ name: `connection:${connectionId}:shard:${shardId}` }],
   });
+
+const getShardClient = async (connectionId: string, shardId: string) => {
+  const shardClient = getRawShardClient(connectionId, shardId);
   try {
     await shardClient.stub.setName(connectionId);
     await shardClient.stub.setupAuth();
@@ -380,6 +384,50 @@ export const forceReSync = async (connectionId: string) => {
 
   const agent = await getZeroAgent(connectionId);
   return agent.stub.forceReSync();
+};
+
+export const deleteConnectionLocalData = async (connectionId: string): Promise<void> => {
+  const registry = await getRegistryClient(connectionId);
+  const shards = await listShards(registry);
+  await Promise.all(
+    shards.map(({ shard_id: shardId }) =>
+      getRawShardClient(connectionId, shardId).stub.deleteLocalData(),
+    ),
+  );
+  await deleteAllShards(registry);
+  await getZeroSocketAgent(connectionId).then((agent) => agent.deleteLocalData());
+
+  await Promise.all([
+    env.gmail_history_id.delete(connectionId),
+    env.gmail_sub_age.delete(connectionId),
+    env.subscribed_accounts.delete(connectionId),
+    env.connection_labels.delete(connectionId),
+    ...Object.values(EPrompts).map((prompt) =>
+      env.prompts_storage.delete(`${connectionId}-${prompt}`),
+    ),
+  ]);
+
+  let lockCursor: string | undefined;
+  do {
+    const page = await env.gmail_processing_threads.list({
+      prefix: `history_${connectionId}__`,
+      cursor: lockCursor,
+    });
+    await Promise.all(page.keys.map(({ name }) => env.gmail_processing_threads.delete(name)));
+    lockCursor = page.list_complete ? undefined : page.cursor;
+  } while (lockCursor);
+
+  let objectCursor: string | undefined;
+  do {
+    const page = await env.THREADS_BUCKET.list({
+      prefix: `${connectionId}/`,
+      cursor: objectCursor,
+    });
+    if (page.objects.length) {
+      await env.THREADS_BUCKET.delete(page.objects.map(({ key }) => key));
+    }
+    objectCursor = page.truncated ? page.cursor : undefined;
+  } while (objectCursor);
 };
 
 export const reSyncThread = async (connectionId: string, threadId: string) => {
