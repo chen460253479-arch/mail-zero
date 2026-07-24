@@ -45,6 +45,7 @@ export type ZeroEnv = {
   BASE_URL: string;
   VITE_PUBLIC_APP_URL: string;
   DATABASE_URL: string;
+  CREDENTIAL_ENCRYPTION_KEY: string;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
   GOOGLE_CLIENT_ID: string;
