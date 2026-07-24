@@ -6,6 +6,7 @@ import {
 } from './services/writing-style-service';
 import {
   account,
+  authorizationBinding,
   connection,
   note,
   session,
@@ -15,6 +16,8 @@ import {
   writingStyleMatrix,
   emailTemplate,
 } from './db/schema';
+import { normalizeMailboxEmail } from './lib/mail-channel/mailbox-identity';
+import { providerIdToChannelId } from './lib/mail-channel/registry';
 import {
   toAttachmentFiles,
   type SerializedAttachment,
@@ -55,6 +58,32 @@ import { Hono } from 'hono';
 const SENTRY_HOST = 'o4509328786915328.ingest.us.sentry.io';
 const SENTRY_PROJECT_IDS = new Set(['4509328795303936']);
 
+type ConnectionWithAuthorization = {
+  connection: typeof connection.$inferSelect;
+  authorization: typeof authorizationBinding.$inferSelect | null;
+};
+
+type CreateMailboxInput = Omit<
+  typeof connection.$inferInsert,
+  'id' | 'userId' | 'normalizedEmail' | 'createdAt' | 'updatedAt'
+>;
+
+type CreateAuthorizationInput = Omit<
+  typeof authorizationBinding.$inferInsert,
+  'id' | 'connectionId' | 'createdAt' | 'updatedAt'
+>;
+
+type LegacyConnectionDetails = Pick<
+  typeof connection.$inferInsert,
+  'expiresAt' | 'scope'
+> &
+  Partial<
+    Pick<
+      typeof connection.$inferInsert,
+      'accessToken' | 'refreshToken' | 'name' | 'picture'
+    >
+  >;
+
 export class DbRpcDO extends RpcTarget {
   constructor(
     private mainDo: ZeroDB,
@@ -71,6 +100,12 @@ export class DbRpcDO extends RpcTarget {
     connectionId: string,
   ): Promise<typeof connection.$inferSelect | undefined> {
     return await this.mainDo.findUserConnection(this.userId, connectionId);
+  }
+
+  async findConnectionWithAuthorization(
+    connectionId: string,
+  ): Promise<ConnectionWithAuthorization | undefined> {
+    return await this.mainDo.findConnectionWithAuthorization(this.userId, connectionId);
   }
 
   async updateUser(data: Partial<typeof user.$inferInsert>) {
@@ -150,12 +185,20 @@ export class DbRpcDO extends RpcTarget {
   async createConnection(
     providerId: EProviders,
     email: string,
-    updatingInfo: {
-      expiresAt: Date;
-      scope: string;
-    },
+    updatingInfo: LegacyConnectionDetails,
   ): Promise<{ id: string }[]> {
     return await this.mainDo.createConnection(providerId, email, this.userId, updatingInfo);
+  }
+
+  async createMailboxWithAuthorization(
+    mailbox: CreateMailboxInput,
+    authorization: CreateAuthorizationInput,
+  ): Promise<{ id: string }> {
+    return await this.mainDo.createMailboxWithAuthorization(
+      this.userId,
+      mailbox,
+      authorization,
+    );
   }
 
   async findConnectionById(
@@ -222,6 +265,25 @@ class ZeroDB extends DurableObject<ZeroEnv> {
     return await this.db.query.connection.findFirst({
       where: and(eq(connection.userId, userId), eq(connection.id, connectionId)),
     });
+  }
+
+  async findConnectionWithAuthorization(
+    userId: string,
+    connectionId: string,
+  ): Promise<ConnectionWithAuthorization | undefined> {
+    const [result] = await this.db
+      .select({
+        connection,
+        authorization: authorizationBinding,
+      })
+      .from(connection)
+      .leftJoin(
+        authorizationBinding,
+        eq(authorizationBinding.connectionId, connection.id),
+      )
+      .where(and(eq(connection.userId, userId), eq(connection.id, connectionId)))
+      .limit(1);
+    return result;
   }
 
   async updateUser(userId: string, data: Partial<typeof user.$inferInsert>) {
@@ -415,30 +477,59 @@ class ZeroDB extends DurableObject<ZeroEnv> {
     providerId: EProviders,
     email: string,
     userId: string,
-    updatingInfo: {
-      expiresAt: Date;
-      scope: string;
-    },
+    updatingInfo: LegacyConnectionDetails,
   ): Promise<{ id: string }[]> {
-    return await this.db
-      .insert(connection)
-      .values({
+    const created = await this.createMailboxWithAuthorization(
+      userId,
+      {
         ...updatingInfo,
         providerId,
-        id: crypto.randomUUID(),
+        channelId: providerIdToChannelId(providerId),
         email,
-        userId,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: [connection.email, connection.userId],
-        set: {
-          ...updatingInfo,
-          updatedAt: new Date(),
-        },
-      })
-      .returning({ id: connection.id });
+      },
+      {
+        authSource: 'zero_oauth',
+        credentialType: 'oauth2',
+        accessTokenExpiresAt: updatingInfo.expiresAt,
+        credentialFetchedAt: new Date(),
+      },
+    );
+    return [created];
+  }
+
+  async createMailboxWithAuthorization(
+    userId: string,
+    mailbox: CreateMailboxInput,
+    authorization: CreateAuthorizationInput,
+  ): Promise<{ id: string }> {
+    const now = new Date();
+    const connectionId = crypto.randomUUID();
+
+    return await this.db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(connection)
+        .values({
+          ...mailbox,
+          id: connectionId,
+          userId,
+          normalizedEmail: normalizeMailboxEmail(mailbox.email),
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning({ id: connection.id });
+
+      if (!created) throw new Error('Failed to create mailbox');
+
+      await tx.insert(authorizationBinding).values({
+        ...authorization,
+        id: crypto.randomUUID(),
+        connectionId: created.id,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      return created;
+    });
   }
 
   /**

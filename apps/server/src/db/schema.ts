@@ -9,6 +9,7 @@ import {
   unique,
   index,
 } from 'drizzle-orm/pg-core';
+import type { MailChannelId } from '../lib/mail-channel/types';
 import { defaultUserSettings } from '../lib/schemas';
 
 export const createTable = pgTableCreator((name) => `mail0_${name}`);
@@ -124,8 +125,15 @@ export const connection = createTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
     email: text('email').notNull(),
+    normalizedEmail: text('normalized_email').notNull(),
     name: text('name'),
     picture: text('picture'),
+    channelId: text('channel_id').$type<MailChannelId>().notNull(),
+    status: text('status')
+      .$type<'connected' | 'disconnected' | 'reconnect_required' | 'deleting'>()
+      .notNull()
+      .default('connected'),
+    disconnectedAt: timestamp('disconnected_at'),
     accessToken: text('access_token'),
     refreshToken: text('refresh_token'),
     scope: text('scope').notNull(),
@@ -135,10 +143,34 @@ export const connection = createTable(
     updatedAt: timestamp('updated_at').notNull(),
   },
   (t) => [
-    unique().on(t.userId, t.email),
+    unique().on(t.userId, t.normalizedEmail),
     index('connection_user_id_idx').on(t.userId),
     index('connection_expires_at_idx').on(t.expiresAt),
     index('connection_provider_id_idx').on(t.providerId),
+  ],
+);
+
+export const authorizationBinding = createTable(
+  'authorization_binding',
+  {
+    id: text('id').primaryKey(),
+    connectionId: text('connection_id')
+      .notNull()
+      .unique()
+      .references(() => connection.id, { onDelete: 'cascade' }),
+    authSource: text('auth_source').$type<'zero_oauth' | 'nango' | 'manual'>().notNull(),
+    credentialType: text('credential_type').$type<'oauth2' | 'basic' | 'custom'>().notNull(),
+    encryptedCredentialSnapshot: text('encrypted_credential_snapshot'),
+    accessTokenExpiresAt: timestamp('access_token_expires_at'),
+    credentialFetchedAt: timestamp('credential_fetched_at'),
+    nangoConnectionId: text('nango_connection_id'),
+    nangoProviderConfigKey: text('nango_provider_config_key'),
+    createdAt: timestamp('created_at').notNull(),
+    updatedAt: timestamp('updated_at').notNull(),
+  },
+  (t) => [
+    unique().on(t.nangoProviderConfigKey, t.nangoConnectionId),
+    index('authorization_connection_id_idx').on(t.connectionId),
   ],
 );
 
