@@ -11,6 +11,7 @@ import {
 import { mapGoogleLabelColor, mapToGoogleLabelColor } from './google-label-color-map';
 import { parseAddressList, parseFrom, wasSentWithTLS } from '../email-utils';
 import type { IOutgoingMessage, Label, ParsedMessage } from '../../types';
+import { gmailOAuthScopes } from '../mail-channel/gmail-metadata';
 import { sanitizeTipTapHtml } from '../sanitize-tip-tap-html';
 import { mapGmailHistory } from '../mail-channel/gmail-sync';
 import { type gmail_v1, gmail } from '@googleapis/gmail';
@@ -48,7 +49,11 @@ export class GoogleMailManager implements MailClient {
   ]);
 
   constructor(public config: ManagerConfig) {
-    this.auth = new OAuth2Client(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET);
+    this.auth = new OAuth2Client(
+      config.oauth?.clientId,
+      config.oauth?.clientSecret,
+      config.oauth?.redirectUri,
+    );
 
     if (config.auth)
       this.auth.setCredentials({
@@ -60,12 +65,7 @@ export class GoogleMailManager implements MailClient {
     this.gmail = gmail({ version: 'v1', auth: this.auth });
   }
   public getScope(): string {
-    return [
-      'https://mail.google.com/',
-      'https://www.googleapis.com/auth/gmail.modify',
-      'https://www.googleapis.com/auth/userinfo.profile',
-      'https://www.googleapis.com/auth/userinfo.email',
-    ].join(' ');
+    return gmailOAuthScopes.join(' ');
   }
   public async listChanges(cursor: string) {
     return this.withErrorHandler(

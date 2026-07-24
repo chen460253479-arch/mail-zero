@@ -1,7 +1,7 @@
 import type { IOutgoingMessage, ParsedMessage, Label, DeleteAllSpamResponse } from '../../types';
+import type { ChannelChangeSet } from '../mail-channel/sync-types';
 import { ParsedMessageSchema } from '../../types';
 import type { CreateDraftData } from '../schemas';
-import type { ChannelChangeSet } from '../mail-channel/sync-types';
 import { z } from 'zod';
 
 export interface IGetThreadResponse {
@@ -48,6 +48,11 @@ export type ManagerConfig = {
     accessToken: string;
     refreshToken: string;
     email: string;
+  };
+  oauth?: {
+    clientId: string;
+    clientSecret: string;
+    redirectUri?: string;
   };
 };
 

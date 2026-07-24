@@ -1,3 +1,4 @@
+import { loadGmailOAuthRuntimeConfig } from './integrations/gmail-oauth-runtime';
 import type { IGetThreadResponse, IGetThreadsResponse } from './driver/types';
 import { withNangoCredentialResolver } from './credentials/nango-runtime';
 import { createRetryingMailClient } from './credentials/retrying-client';
@@ -667,6 +668,7 @@ const markReconnectRequired = async (connectionId: string): Promise<void> => {
 
 export const connectionToDriver = async (record: ConnectionWithAuthorization) => {
   const isNango = record.authorization?.authSource === 'nango';
+  const channel = getMailChannel(record.connection.channelId);
   const credential = await (async () => {
     try {
       return isNango
@@ -688,10 +690,17 @@ export const connectionToDriver = async (record: ConnectionWithAuthorization) =>
       throw error;
     }
   })();
-  const channel = getMailChannel(record.connection.channelId);
   if (credential.type !== 'oauth2') {
     throw new Error(`Credential ${credential.type} is not supported by ${channel.id}`);
   }
+  const oauth =
+    !isNango && channel.id === 'gmail'
+      ? await loadGmailOAuthRuntimeConfig({
+          databaseUrl: env.HYPERDRIVE.connectionString,
+          encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
+          redirectUri: `${env.VITE_PUBLIC_BACKEND_URL.replace(/\/+$/, '')}/api/integrations/gmail/connect/callback`,
+        })
+      : undefined;
 
   const createDriver = (resolved: typeof credential) =>
     channel.createClient({
@@ -701,6 +710,7 @@ export const connectionToDriver = async (record: ConnectionWithAuthorization) =>
         refreshToken: resolved.refreshToken ?? '',
         email: record.connection.email,
       },
+      oauth,
     });
 
   if (!isNango) return createDriver(credential);
