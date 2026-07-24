@@ -1,17 +1,14 @@
 import type { MailManager, ManagerConfig } from './types';
-import { OutlookMailManager } from './microsoft';
-import { GoogleMailManager } from './google';
-
-const supportedProviders = {
-  google: GoogleMailManager,
-  microsoft: OutlookMailManager,
-};
+import { getMailChannel, providerIdToChannelId } from '../mail-channel/registry';
+import type { MailChannelId } from '../mail-channel/types';
 
 export const createDriver = (
-  provider: keyof typeof supportedProviders | (string & {}),
+  provider: MailChannelId | 'google' | 'microsoft' | (string & {}),
   config: ManagerConfig,
 ): MailManager => {
-  const Provider = supportedProviders[provider as keyof typeof supportedProviders];
-  if (!Provider) throw new Error('Provider not supported');
-  return new Provider(config);
+  const channelId =
+    provider === 'google' || provider === 'microsoft'
+      ? providerIdToChannelId(provider)
+      : provider;
+  return getMailChannel(channelId).createClient(config);
 };
