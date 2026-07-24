@@ -16,17 +16,19 @@ import {
   type WorkflowContext,
 } from './thread-workflow-utils/workflow-engine';
 import { getServiceAccount } from './lib/factories/google-subscription.factory';
-import { getThread, getZeroAgent } from './lib/server-utils';
+import {
+  findConnectionWithAuthorization,
+  getThread,
+  getZeroAgent,
+} from './lib/server-utils';
+import { getMailChannel, providerIdToChannelId } from './lib/mail-channel/registry';
 import { DurableObject } from 'cloudflare:workers';
 import { bulkDeleteKeys } from './lib/bulk-delete';
-import { type gmail_v1 } from '@googleapis/gmail';
 import { Effect, Console, Logger } from 'effect';
-import { connection } from './db/schema';
 import { EProviders } from './types';
 import type { ZeroEnv } from './env';
 import { initTracing } from './lib/tracing';
 import { EPrompts } from './types';
-import { eq } from 'drizzle-orm';
 import { createDb } from './db';
 
 // Configure pretty logger to stderr
@@ -67,7 +69,6 @@ export const getPromptName = (connectionId: string, prompt: EPrompts) => {
 export type ZeroWorkflowParams = {
   connectionId: string;
   historyId: string;
-  nextHistoryId: string;
 };
 
 export type ThreadWorkflowParams = {
@@ -98,6 +99,7 @@ export type MainWorkflowError =
   | { _tag: 'InvalidSubscriptionName'; subscriptionName: string }
   | { _tag: 'InvalidConnectionId'; connectionId: string }
   | { _tag: 'UnsupportedProvider'; providerId: string }
+  | { _tag: 'UnsupportedSyncChannel'; channelId: string }
   | { _tag: 'WorkflowCreationFailed'; error: unknown };
 
 export type ZeroWorkflowError =
@@ -106,6 +108,7 @@ export type ZeroWorkflowError =
   | { _tag: 'ConnectionNotAuthorized'; connectionId: string }
   | { _tag: 'HistoryNotFound'; historyId: string; connectionId: string }
   | { _tag: 'UnsupportedProvider'; providerId: string }
+  | { _tag: 'UnsupportedSyncChannel'; channelId: string }
   | { _tag: 'DatabaseError'; error: unknown }
   | { _tag: 'GmailApiError'; error: unknown }
   | { _tag: 'WorkflowCreationFailed'; error: unknown }
@@ -179,31 +182,34 @@ export class WorkflowRunner extends DurableObject<ZeroEnv> {
 
       span.setAttributes({ 'history.previous_id': previousHistoryId || 'none' });
 
-      if (providerId === EProviders.google) {
-        yield* Console.log('[MAIN_WORKFLOW] Processing Google provider workflow');
-        yield* Console.log('[MAIN_WORKFLOW] Previous history ID:', previousHistoryId);
-
-        const zeroWorkflowParams = {
-          connectionId,
-          historyId: previousHistoryId || historyId,
-          nextHistoryId: historyId,
-        };
-
-        const result = yield* Effect.tryPromise({
-          try: () => this.runZeroWorkflow(zeroWorkflowParams),
-          catch: (error) => ({ _tag: 'WorkflowCreationFailed' as const, error }),
-        });
-
-        yield* Console.log('[MAIN_WORKFLOW] Zero workflow result:', result);
-        span.setAttributes({ 'workflow.result': typeof result === 'string' ? result : JSON.stringify(result) });
-      } else {
-        yield* Console.log('[MAIN_WORKFLOW] Unsupported provider:', providerId);
-        span.setAttributes({ 'error.type': 'unsupported_provider' });
+      const channel = yield* Effect.try({
+        try: () => getMailChannel(providerIdToChannelId(providerId)),
+        catch: () => ({ _tag: 'UnsupportedProvider' as const, providerId }),
+      });
+      if (!channel.sync) {
+        span.setAttributes({ 'error.type': 'unsupported_sync_channel' });
         return yield* Effect.fail({
-          _tag: 'UnsupportedProvider' as const,
-          providerId,
+          _tag: 'UnsupportedSyncChannel' as const,
+          channelId: channel.id,
         });
       }
+
+      yield* Console.log(`[MAIN_WORKFLOW] Processing ${channel.id} workflow`);
+      yield* Console.log('[MAIN_WORKFLOW] Previous sync cursor:', previousHistoryId);
+
+      const result = yield* Effect.tryPromise({
+        try: () =>
+          this.runZeroWorkflow({
+            connectionId,
+            historyId: previousHistoryId || historyId,
+          }),
+        catch: (error) => ({ _tag: 'WorkflowCreationFailed' as const, error }),
+      });
+
+      yield* Console.log('[MAIN_WORKFLOW] Zero workflow result:', result);
+      span.setAttributes({
+        'workflow.result': typeof result === 'string' ? result : JSON.stringify(result),
+      });
 
       yield* Console.log('[MAIN_WORKFLOW] Workflow completed successfully');
       span.setAttributes({ 'workflow.success': true });
@@ -224,7 +230,7 @@ export class WorkflowRunner extends DurableObject<ZeroEnv> {
   public runZeroWorkflow(params: ZeroWorkflowParams) {
     return Effect.gen(this, function* () {
       yield* Console.log('[ZERO_WORKFLOW] Starting workflow with payload:', params);
-      const { connectionId, historyId, nextHistoryId } = params;
+      const { connectionId, historyId } = params;
 
       const historyProcessingKey = `history_${connectionId}__${historyId}`;
       const keysToDelete: string[] = [];
@@ -263,30 +269,26 @@ export class WorkflowRunner extends DurableObject<ZeroEnv> {
 
       const { db, conn } = createDb(this.env.HYPERDRIVE.connectionString);
 
-      const foundConnection = yield* Effect.tryPromise({
+      const record = yield* Effect.tryPromise({
         try: async () => {
           console.log('[ZERO_WORKFLOW] Finding connection:', connectionId);
-          const [foundConnection] = await db
-            .select()
-            .from(connection)
-            .where(eq(connection.id, connectionId.toString()));
-          await conn.end();
-          if (!foundConnection) {
+          const record = await findConnectionWithAuthorization(
+            db,
+            connectionId.toString(),
+          ).finally(() => conn.end());
+          if (!record) {
             throw new Error(`Connection not found ${connectionId}`);
           }
-          if (!foundConnection.accessToken || !foundConnection.refreshToken) {
+          if (record.connection.status !== 'connected' || !record.authorization) {
             throw new Error(`Connection is not authorized ${connectionId}`);
           }
-          console.log('[ZERO_WORKFLOW] Found connection:', foundConnection.id);
-          return foundConnection;
+          console.log('[ZERO_WORKFLOW] Found connection:', record.connection.id);
+          return record;
         },
         catch: (error) => ({ _tag: 'DatabaseError' as const, error }),
       });
 
-      yield* Effect.tryPromise({
-        try: async () => conn.end(),
-        catch: (error) => ({ _tag: 'DatabaseError' as const, error }),
-      });
+      const foundConnection = record.connection;
 
       const agent = yield* Effect.tryPromise({
         try: async () => {
@@ -296,31 +298,40 @@ export class WorkflowRunner extends DurableObject<ZeroEnv> {
         catch: (error) => ({ _tag: 'DatabaseError' as const, error }),
       });
 
-      if (foundConnection.providerId === EProviders.google) {
-        yield* Console.log('[ZERO_WORKFLOW] Processing Google provider workflow');
+      const channel = getMailChannel(foundConnection.channelId);
+      if (!channel.sync) {
+        return yield* Effect.fail({
+          _tag: 'UnsupportedSyncChannel' as const,
+          channelId: channel.id,
+        });
+      }
 
-        const history = yield* Effect.tryPromise({
+      {
+        yield* Console.log(`[ZERO_WORKFLOW] Processing ${channel.id} sync workflow`);
+
+        const changeSet = yield* Effect.tryPromise({
           try: async () => {
-            console.log('[ZERO_WORKFLOW] Getting Gmail history with ID:', historyId);
-            const { history } = (await agent.listHistory(historyId.toString())) as {
-              history: gmail_v1.Schema$History[];
-            };
-            console.log('[ZERO_WORKFLOW] Found history entries:', history);
-            return history;
+            console.log('[ZERO_WORKFLOW] Getting channel changes with cursor:', historyId);
+            const changes = await agent.listChanges(historyId.toString());
+            console.log('[ZERO_WORKFLOW] Found channel changes:', changes.changes.length);
+            return changes;
           },
           catch: (error) => ({ _tag: 'GmailApiError' as const, error }),
         });
 
         yield* Effect.tryPromise({
           try: () => {
-            console.log('[ZERO_WORKFLOW] Updating next history ID:', nextHistoryId);
-            return this.env.gmail_history_id.put(connectionId.toString(), nextHistoryId.toString());
+            console.log('[ZERO_WORKFLOW] Updating next sync cursor:', changeSet.nextCursor);
+            return this.env.gmail_history_id.put(
+              connectionId.toString(),
+              changeSet.nextCursor,
+            );
           },
           catch: (error) => ({ _tag: 'WorkflowCreationFailed' as const, error }),
         });
 
-        if (!history.length) {
-          yield* Console.log('[ZERO_WORKFLOW] No history found, skipping');
+        if (!changeSet.changes.length) {
+          yield* Console.log('[ZERO_WORKFLOW] No changes found, skipping');
           // Add the history processing key to cleanup list
           keysToDelete.push(historyProcessingKey);
           return 'No history found';
@@ -333,40 +344,18 @@ export class WorkflowRunner extends DurableObject<ZeroEnv> {
           { addLabels: Set<string>; removeLabels: Set<string> }
         >();
 
-        // Optimal single-pass functional processing
-        const processLabelChange = (
-          labelChange: { message?: gmail_v1.Schema$Message; labelIds?: string[] | null },
-          isAddition: boolean,
-        ) => {
-          const threadId = labelChange.message?.threadId;
-          if (!threadId || !labelChange.labelIds?.length) return;
-
-          let changes = threadLabelChanges.get(threadId);
-          if (!changes) {
-            changes = { addLabels: new Set<string>(), removeLabels: new Set<string>() };
-            threadLabelChanges.set(threadId, changes);
-          }
-
-          const targetSet = isAddition ? changes.addLabels : changes.removeLabels;
-          labelChange.labelIds.forEach((labelId) => targetSet.add(labelId));
-        };
-
-        history.forEach((historyItem) => {
-          // Extract thread IDs from messages
-          historyItem.messagesAdded?.forEach((msg) => {
-            if (msg.message?.labelIds?.includes('DRAFT')) return;
-            // if (msg.message?.labelIds?.includes('SPAM')) return;
-            if (msg.message?.threadId) {
-              threadsAdded.add(msg.message.threadId);
+        for (const change of changeSet.changes) {
+          if (!change.deleted) threadsAdded.add(change.remoteThreadId);
+          if (change.addedLabelIds.length || change.removedLabelIds.length) {
+            let labels = threadLabelChanges.get(change.remoteThreadId);
+            if (!labels) {
+              labels = { addLabels: new Set<string>(), removeLabels: new Set<string>() };
+              threadLabelChanges.set(change.remoteThreadId, labels);
             }
-          });
-
-          // Process label changes using shared helper
-          historyItem.labelsAdded?.forEach((labelAdded) => processLabelChange(labelAdded, true));
-          historyItem.labelsRemoved?.forEach((labelRemoved) =>
-            processLabelChange(labelRemoved, false),
-          );
-        });
+            change.addedLabelIds.forEach((labelId) => labels.addLabels.add(labelId));
+            change.removedLabelIds.forEach((labelId) => labels.removeLabels.add(labelId));
+          }
+        }
 
         yield* Console.log(
           '[ZERO_WORKFLOW] Found unique thread IDs:',
@@ -527,12 +516,6 @@ export class WorkflowRunner extends DurableObject<ZeroEnv> {
 
         yield* Console.log('[ZERO_WORKFLOW] Processing complete');
         return 'Zero workflow completed successfully';
-      } else {
-        yield* Console.log('[ZERO_WORKFLOW] Unsupported provider:', foundConnection.providerId);
-        return yield* Effect.fail({
-          _tag: 'UnsupportedProvider' as const,
-          providerId: foundConnection.providerId,
-        });
       }
     }).pipe(
       Effect.tapError((error) => Console.log('[ZERO_WORKFLOW] Error in workflow:', error)),
@@ -576,24 +559,19 @@ export class WorkflowRunner extends DurableObject<ZeroEnv> {
         const foundConnection = yield* Effect.tryPromise({
           try: async () => {
             console.log('[THREAD_WORKFLOW] Finding connection:', connectionId);
-            const [foundConnection] = await db
-              .select()
-              .from(connection)
-              .where(eq(connection.id, connectionId.toString()));
-            if (!foundConnection) {
+            const record = await findConnectionWithAuthorization(
+              db,
+              connectionId.toString(),
+            ).finally(() => conn.end());
+            if (!record) {
               throw new Error(`Connection not found ${connectionId}`);
             }
-            if (!foundConnection.accessToken || !foundConnection.refreshToken) {
+            if (record.connection.status !== 'connected' || !record.authorization) {
               throw new Error(`Connection is not authorized ${connectionId}`);
             }
-            console.log('[THREAD_WORKFLOW] Found connection:', foundConnection.id);
-            return foundConnection;
+            console.log('[THREAD_WORKFLOW] Found connection:', record.connection.id);
+            return record.connection;
           },
-          catch: (error) => ({ _tag: 'DatabaseError' as const, error }),
-        });
-
-        yield* Effect.tryPromise({
-          try: async () => conn.end(),
           catch: (error) => ({ _tag: 'DatabaseError' as const, error }),
         });
 
@@ -734,19 +712,15 @@ export class WorkflowRunner extends DurableObject<ZeroEnv> {
         let foundConnection;
         try {
           console.log('[THREAD_WORKFLOW] Finding connection:', connectionId);
-          const [connectionRecord] = await db
-            .select()
-            .from(connection)
-            .where(eq(connection.id, connectionId.toString()));
-
-          if (!connectionRecord) {
+          const record = await findConnectionWithAuthorization(db, connectionId.toString());
+          if (!record) {
             throw new Error(`Connection not found ${connectionId}`);
           }
-          if (!connectionRecord.accessToken || !connectionRecord.refreshToken) {
+          if (record.connection.status !== 'connected' || !record.authorization) {
             throw new Error(`Connection is not authorized ${connectionId}`);
           }
-          console.log('[THREAD_WORKFLOW] Found connection:', connectionRecord.id);
-          foundConnection = connectionRecord;
+          console.log('[THREAD_WORKFLOW] Found connection:', record.connection.id);
+          foundConnection = record.connection;
         } catch (error) {
           console.error('[THREAD_WORKFLOW] Database error:', error);
           throw { _tag: 'DatabaseError' as const, error };

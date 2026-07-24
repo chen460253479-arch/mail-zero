@@ -13,6 +13,7 @@ import { parseAddressList, parseFrom, wasSentWithTLS } from '../email-utils';
 import type { IOutgoingMessage, Label, ParsedMessage } from '../../types';
 import { sanitizeTipTapHtml } from '../sanitize-tip-tap-html';
 import type { MailClient, ManagerConfig } from './types';
+import { mapGmailHistory } from '../mail-channel/gmail-sync';
 import { type gmail_v1, gmail } from '@googleapis/gmail';
 import { OAuth2Client } from 'google-auth-library';
 import type { CreateDraftData } from '../schemas';
@@ -65,21 +66,20 @@ export class GoogleMailManager implements MailClient {
       'https://www.googleapis.com/auth/userinfo.email',
     ].join(' ');
   }
-  public async listHistory<T>(historyId: string): Promise<{ history: T[]; historyId: string }> {
+  public async listChanges(cursor: string) {
     return this.withErrorHandler(
-      'listHistory',
+      'listChanges',
       async () => {
         const response = await this.gmail.users.history.list({
           userId: 'me',
-          startHistoryId: historyId,
+          startHistoryId: cursor,
         });
-
-        const history = response.data.history || [];
-        const nextHistoryId = response.data.historyId || historyId;
-
-        return { history: history as T[], historyId: nextHistoryId };
+        return mapGmailHistory(
+          response.data.history ?? [],
+          response.data.historyId ?? cursor,
+        );
       },
-      { historyId },
+      { cursor },
     );
   }
   public async getAttachment(messageId: string, attachmentId: string) {

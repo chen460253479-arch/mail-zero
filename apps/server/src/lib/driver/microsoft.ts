@@ -14,13 +14,13 @@ import type {
 import type { IOutgoingMessage, Label, ParsedMessage } from '../../types';
 import { sanitizeTipTapHtml } from '../sanitize-tip-tap-html';
 import { Client } from '@microsoft/microsoft-graph-client';
-import type { MailClient, ManagerConfig } from './types';
+import type { ManagerConfig } from './types';
 import { getContext } from 'hono/context-storage';
 import type { CreateDraftData } from '../schemas';
 import type { HonoContext } from '../../ctx';
 import * as he from 'he';
 
-export class OutlookMailManager implements MailClient {
+export class OutlookMailManager {
   private graphClient: Client;
 
   constructor(public config: ManagerConfig) {
@@ -1287,8 +1287,5 @@ export class OutlookMailManager implements MailClient {
       if (isFatal) void deleteActiveConnection();
       throw new StandardizedError(error, operation, context);
     }
-  }
-  listHistory<T>(historyId: string): Promise<{ history: T[]; historyId: string }> {
-    return Promise.resolve({ history: [], historyId });
   }
 }

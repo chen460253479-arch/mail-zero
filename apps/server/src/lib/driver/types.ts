@@ -1,6 +1,7 @@
 import type { IOutgoingMessage, ParsedMessage, Label, DeleteAllSpamResponse } from '../../types';
 import { ParsedMessageSchema } from '../../types';
 import type { CreateDraftData } from '../schemas';
+import type { ChannelChangeSet } from '../mail-channel/sync-types';
 import { z } from 'zod';
 
 export interface IGetThreadResponse {
@@ -86,7 +87,7 @@ export interface MailClient {
     nextPageToken: string | null;
   }>;
   count(): Promise<{ count?: number; label?: string }[]>;
-  listHistory<T>(historyId: string): Promise<{ history: T[]; historyId: string }>;
+  listChanges(cursor: string): Promise<ChannelChangeSet>;
   markAsRead(threadIds: string[]): Promise<void>;
   markAsUnread(threadIds: string[]): Promise<void>;
   normalizeIds(id: string[]): { threadIds: string[] };

@@ -1,4 +1,5 @@
 import { GoogleMailManager } from '../driver/google';
+import { gmailSyncAdapter } from './gmail-sync';
 import type { MailboxChannel } from './types';
 
 export const gmailChannel: MailboxChannel = {
@@ -13,6 +14,7 @@ export const gmailChannel: MailboxChannel = {
     'threads',
     'push_sync',
   ]),
+  sync: gmailSyncAdapter,
   createClient: (config) => new GoogleMailManager(config),
   resolveIdentity: async (config) => {
     const identity = await new GoogleMailManager(config).getUserInfo();

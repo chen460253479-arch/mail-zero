@@ -790,11 +790,11 @@ export class ZeroDriver extends DurableObject<ZeroEnv> {
     });
   }
 
-  async listHistory<T>(historyId: string) {
+  async listChanges(cursor: string) {
     if (!this.driver) {
       throw new Error('No driver available');
     }
-    return await this.driver.listHistory<T>(historyId);
+    return await this.driver.listChanges(cursor);
   }
 
   async getUserLabels() {
