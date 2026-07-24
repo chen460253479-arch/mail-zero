@@ -37,6 +37,7 @@ export type ResolvedCredential = OAuth2Credential | BasicCredential;
 export interface MailboxChannel {
   id: MailChannelId;
   displayName: string;
+  legacyProviderId?: 'google' | 'microsoft';
   nangoProviders?: readonly string[];
   capabilities: ReadonlySet<MailCapability>;
   sync?: ChannelSyncAdapter;

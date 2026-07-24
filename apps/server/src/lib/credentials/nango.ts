@@ -145,7 +145,7 @@ const resolveBasicCredential = (
   };
 };
 
-const resolveFetchedCredential = (
+export const resolveFetchedNangoCredential = (
   credential: NangoCredential,
 ): { credential: ResolvedCredential; expiresAt: Date | null } => {
   if (credential.type === 'OAUTH2') {
@@ -196,7 +196,7 @@ export const resolveNangoCredential = async (
         authorization.nangoConnectionId,
         authorization.nangoProviderConfigKey,
       );
-      const resolved = resolveFetchedCredential(connection.credentials);
+      const resolved = resolveFetchedNangoCredential(connection.credentials);
       return {
         encryptedCredentialSnapshot: await encryptCredential(
           createNangoCredentialSnapshot(resolved.credential),

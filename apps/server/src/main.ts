@@ -1,10 +1,4 @@
 import {
-  createUpdatedMatrixFromNewEmail,
-  initializeStyleMatrixFromEmail,
-  type EmailMatrix,
-  type WritingStyleMatrix,
-} from './services/writing-style-service';
-import {
   account,
   authorizationBinding,
   connection,
@@ -16,9 +10,12 @@ import {
   writingStyleMatrix,
   emailTemplate,
 } from './db/schema';
-import { normalizeMailboxEmail } from './lib/mail-channel/mailbox-identity';
-import { providerIdToChannelId } from './lib/mail-channel/registry';
-import { assertAuthorizationCanBeAttached } from './lib/connection-lifecycle';
+import {
+  createUpdatedMatrixFromNewEmail,
+  initializeStyleMatrixFromEmail,
+  type EmailMatrix,
+  type WritingStyleMatrix,
+} from './services/writing-style-service';
 import {
   toAttachmentFiles,
   type SerializedAttachment,
@@ -26,16 +23,20 @@ import {
 } from './lib/attachments';
 import { SyncThreadsCoordinatorWorkflow } from './workflows/sync-threads-coordinator-workflow';
 import { WorkerEntrypoint, DurableObject, RpcTarget } from 'cloudflare:workers';
+import { assertAuthorizationCanBeAttached } from './lib/connection-lifecycle';
+import { normalizeMailboxEmail } from './lib/mail-channel/mailbox-identity';
 // import { instrument, type ResolveConfigFn } from '@microlabs/otel-cf-workers';
 import { getZeroAgent, getZeroDB, verifyToken } from './lib/server-utils';
 import { SyncThreadsWorkflow } from './workflows/sync-threads-workflow';
 import { ShardRegistry, ZeroAgent, ZeroDriver } from './routes/agent';
+import { providerIdToChannelId } from './lib/mail-channel/registry';
 import { ThreadSyncWorker } from './routes/agent/sync-worker';
 import { oAuthDiscoveryMetadata } from 'better-auth/plugins';
 import { EProviders, type IEmailSendBatch } from './types';
 import { eq, and, desc, asc, inArray } from 'drizzle-orm';
 import { ThinkingMCP } from './lib/sequential-thinking';
 
+import { ensureConfiguredAdmin } from './lib/admin-provisioning';
 import { contextStorage } from 'hono/context-storage';
 import { defaultUserSettings } from './lib/schemas';
 import { createLocalJWKSet, jwtVerify } from 'jose';
@@ -44,7 +45,6 @@ import { trpcServer } from '@hono/trpc-server';
 import { agentsMiddleware } from 'hono-agents';
 import { ZeroMCP } from './routes/agent/mcp';
 import { publicRouter } from './routes/auth';
-import { ensureConfiguredAdmin } from './lib/admin-provisioning';
 import { WorkflowRunner } from './pipelines';
 import { initTracing } from './lib/tracing';
 import { env, type ZeroEnv } from './env';
@@ -74,15 +74,9 @@ type CreateAuthorizationInput = Omit<
   'id' | 'connectionId' | 'createdAt' | 'updatedAt'
 >;
 
-type LegacyConnectionDetails = Pick<
-  typeof connection.$inferInsert,
-  'expiresAt' | 'scope'
-> &
+type LegacyConnectionDetails = Pick<typeof connection.$inferInsert, 'expiresAt' | 'scope'> &
   Partial<
-    Pick<
-      typeof connection.$inferInsert,
-      'accessToken' | 'refreshToken' | 'name' | 'picture'
-    >
+    Pick<typeof connection.$inferInsert, 'accessToken' | 'refreshToken' | 'name' | 'picture'>
   >;
 
 export class DbRpcDO extends RpcTarget {
@@ -122,11 +116,7 @@ export class DbRpcDO extends RpcTarget {
   }
 
   async markConnectionDisconnected(connectionId: string, disconnectedAt: Date) {
-    return await this.mainDo.markConnectionDisconnected(
-      this.userId,
-      connectionId,
-      disconnectedAt,
-    );
+    return await this.mainDo.markConnectionDisconnected(this.userId, connectionId, disconnectedAt);
   }
 
   async markConnectionDeleting(connectionId: string) {
@@ -147,6 +137,14 @@ export class DbRpcDO extends RpcTarget {
 
   async findManyConnectionsWithAuthorization(): Promise<ConnectionWithAuthorization[]> {
     return await this.mainDo.findManyConnectionsWithAuthorization(this.userId);
+  }
+
+  async findConnectionByNormalizedEmail(normalizedEmail: string) {
+    return await this.mainDo.findConnectionByNormalizedEmail(this.userId, normalizedEmail);
+  }
+
+  async findAuthorizationByNangoReference(integrationId: string, connectionId: string) {
+    return await this.mainDo.findAuthorizationByNangoReference(integrationId, connectionId);
   }
 
   async findManyNotesByThreadId(threadId: string): Promise<(typeof note.$inferSelect)[]> {
@@ -219,11 +217,7 @@ export class DbRpcDO extends RpcTarget {
     mailbox: CreateMailboxInput,
     authorization: CreateAuthorizationInput,
   ): Promise<{ id: string }> {
-    return await this.mainDo.createMailboxWithAuthorization(
-      this.userId,
-      mailbox,
-      authorization,
-    );
+    return await this.mainDo.createMailboxWithAuthorization(this.userId, mailbox, authorization);
   }
 
   async findConnectionById(
@@ -302,10 +296,7 @@ class ZeroDB extends DurableObject<ZeroEnv> {
         authorization: authorizationBinding,
       })
       .from(connection)
-      .leftJoin(
-        authorizationBinding,
-        eq(authorizationBinding.connectionId, connection.id),
-      )
+      .leftJoin(authorizationBinding, eq(authorizationBinding.connectionId, connection.id))
       .where(and(eq(connection.userId, userId), eq(connection.id, connectionId)))
       .limit(1);
     return result;
@@ -338,11 +329,7 @@ class ZeroDB extends DurableObject<ZeroEnv> {
       .where(eq(authorizationBinding.connectionId, connectionId));
   }
 
-  async markConnectionDisconnected(
-    userId: string,
-    connectionId: string,
-    disconnectedAt: Date,
-  ) {
+  async markConnectionDisconnected(userId: string, connectionId: string, disconnectedAt: Date) {
     await this.requireUserConnection(userId, connectionId);
     await this.db
       .update(connection)
@@ -386,11 +373,31 @@ class ZeroDB extends DurableObject<ZeroEnv> {
         authorization: authorizationBinding,
       })
       .from(connection)
-      .leftJoin(
-        authorizationBinding,
-        eq(authorizationBinding.connectionId, connection.id),
-      )
+      .leftJoin(authorizationBinding, eq(authorizationBinding.connectionId, connection.id))
       .where(eq(connection.userId, userId));
+  }
+
+  async findConnectionByNormalizedEmail(userId: string, normalizedEmail: string) {
+    const mailbox = await this.db.query.connection.findFirst({
+      where: and(eq(connection.userId, userId), eq(connection.normalizedEmail, normalizedEmail)),
+      columns: {
+        id: true,
+        channelId: true,
+        status: true,
+      },
+    });
+    return mailbox ?? null;
+  }
+
+  async findAuthorizationByNangoReference(integrationId: string, connectionId: string) {
+    const binding = await this.db.query.authorizationBinding.findFirst({
+      where: and(
+        eq(authorizationBinding.nangoProviderConfigKey, integrationId),
+        eq(authorizationBinding.nangoConnectionId, connectionId),
+      ),
+      columns: { connectionId: true },
+    });
+    return binding ?? null;
   }
 
   async findManyNotesByThreadId(
@@ -588,14 +595,14 @@ class ZeroDB extends DurableObject<ZeroEnv> {
 
     return await this.db.transaction(async (tx) => {
       const existing = await tx.query.connection.findFirst({
-        where: and(
-          eq(connection.userId, userId),
-          eq(connection.normalizedEmail, normalizedEmail),
-        ),
+        where: and(eq(connection.userId, userId), eq(connection.normalizedEmail, normalizedEmail)),
       });
       const connectionId = existing?.id ?? crypto.randomUUID();
 
       if (existing) {
+        if (existing.channelId !== mailbox.channelId) {
+          throw new Error('MAILBOX_IDENTITY_MISMATCH');
+        }
         const existingAuthorization = await tx.query.authorizationBinding.findFirst({
           where: eq(authorizationBinding.connectionId, existing.id),
         });
@@ -768,7 +775,7 @@ function hashIpAddress(ip: string | undefined): string | undefined {
 
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash; // Convert to 32bit integer
   }
 
@@ -802,13 +809,18 @@ const api = new Hono<HonoContext>()
     });
 
     // Start authentication span
-    const authSpan = TraceContext.startSpan(traceId, 'authentication', {
-      method: c.req.method,
-      url: c.req.url,
-      hasAuthHeader: !!c.req.header('Authorization'),
-    }, {
-      'auth.method': c.req.header('Authorization') ? 'bearer_token' : 'session_cookie'
-    });
+    const authSpan = TraceContext.startSpan(
+      traceId,
+      'authentication',
+      {
+        method: c.req.method,
+        url: c.req.url,
+        hasAuthHeader: !!c.req.header('Authorization'),
+      },
+      {
+        'auth.method': c.req.header('Authorization') ? 'bearer_token' : 'session_cookie',
+      },
+    );
 
     await ensureConfiguredAdmin();
     const auth = createAuth();
@@ -818,11 +830,16 @@ const api = new Hono<HonoContext>()
 
     if (c.req.header('Authorization') && !session?.user) {
       // Start token verification span
-      const tokenSpan = TraceContext.startSpan(traceId, 'token_verification', {
-        tokenPresent: true,
-      }, {
-        'auth.token_type': 'jwt'
-      });
+      const tokenSpan = TraceContext.startSpan(
+        traceId,
+        'token_verification',
+        {
+          tokenPresent: true,
+        },
+        {
+          'auth.token_type': 'jwt',
+        },
+      );
 
       const token = c.req.header('Authorization')?.split(' ')[1];
 
@@ -850,10 +867,15 @@ const api = new Hono<HonoContext>()
             });
           }
         } catch (error) {
-          TraceContext.completeSpan(traceId, tokenSpan.id, {
-            success: false,
-            reason: 'token_verification_failed',
-          }, error instanceof Error ? error.message : 'Unknown token error');
+          TraceContext.completeSpan(
+            traceId,
+            tokenSpan.id,
+            {
+              success: false,
+              reason: 'token_verification_failed',
+            },
+            error instanceof Error ? error.message : 'Unknown token error',
+          );
         }
       } else {
         TraceContext.completeSpan(traceId, tokenSpan.id, {
@@ -867,7 +889,7 @@ const api = new Hono<HonoContext>()
     TraceContext.completeSpan(traceId, authSpan.id, {
       authenticated: !!c.var.sessionUser,
       userId: c.var.sessionUser?.id,
-      authMethod: session?.user ? 'session' : (c.req.header('Authorization') ? 'token' : 'none'),
+      authMethod: session?.user ? 'session' : c.req.header('Authorization') ? 'token' : 'none',
     });
 
     // Update trace metadata with user info
@@ -884,11 +906,16 @@ const api = new Hono<HonoContext>()
       await next();
       // Don't complete the request span here - let TRPC middleware handle it
     } catch (error) {
-      TraceContext.completeSpan(traceId, requestSpan.id, {
-        success: false,
+      TraceContext.completeSpan(
+        traceId,
+        requestSpan.id,
+        {
+          success: false,
 
-        statusCode: c.res.status,
-      }, error instanceof Error ? error.message : 'Unknown request error');
+          statusCode: c.res.status,
+        },
+        error instanceof Error ? error.message : 'Unknown request error',
+      );
       throw error;
     }
     // Note: Trace will be completed by TRPC middleware after logging

@@ -1,19 +1,67 @@
-import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router } from '../trpc';
-import {
-  deleteConnectionLocalData,
-  getZeroDB,
-} from '../../lib/server-utils';
 import {
   deleteRetainedMailboxData,
   disconnectAuthorization,
   type ConnectionLifecycleDependencies,
 } from '../../lib/connection-lifecycle';
-import { Ratelimit } from '@upstash/ratelimit';
-import { TRPCError } from '@trpc/server';
+import {
+  bindNangoMailbox,
+  listSafeNangoConnections,
+  NangoBindingError,
+} from '../../lib/nango/bind';
+import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router } from '../trpc';
+import { getMailChannel, listMailChannels } from '../../lib/mail-channel/registry';
+import { deleteConnectionLocalData, getZeroDB } from '../../lib/server-utils';
+import { mailChannelIds, type MailChannelId } from '../../lib/mail-channel/types';
+import { listAvailableNangoChannels } from '../../lib/nango/channel-catalog';
+import { resolveFetchedNangoCredential } from '../../lib/credentials/nango';
 import { disableBrainFunction } from '../../lib/brain';
-import { getMailChannel } from '../../lib/mail-channel/registry';
+import { NangoClient } from '../../lib/nango/client';
+import { Ratelimit } from '@upstash/ratelimit';
 import type { EProviders } from '../../types';
+import { TRPCError } from '@trpc/server';
+import { env } from '../../env';
 import { z } from 'zod';
+
+const isNangoEnabled = () => Boolean(env.NANGO_BASE_URL && env.NANGO_SECRET_KEY);
+
+const getNangoClient = () => {
+  if (!env.NANGO_BASE_URL || !env.NANGO_SECRET_KEY) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: 'NANGO_NOT_CONFIGURED',
+    });
+  }
+  return new NangoClient({
+    baseUrl: env.NANGO_BASE_URL,
+    secretKey: env.NANGO_SECRET_KEY,
+    fetch,
+  });
+};
+
+const getNangoCatalog = async (client: NangoClient) =>
+  listAvailableNangoChannels(await client.listIntegrations(), listMailChannels());
+
+const isCatalogSelectionValid = (
+  catalog: Awaited<ReturnType<typeof getNangoCatalog>>,
+  channelId: MailChannelId,
+  integrationId: string,
+) =>
+  catalog.some(
+    (channel) =>
+      channel.channelId === channelId &&
+      channel.integrations.some((integration) => integration.integrationId === integrationId),
+  );
+
+const mapNangoBindingError = (error: unknown): never => {
+  if (error instanceof NangoBindingError) {
+    const conflictCodes = new Set(['MAILBOX_ALREADY_CONNECTED', 'NANGO_CONNECTION_ALREADY_BOUND']);
+    throw new TRPCError({
+      code: conflictCodes.has(error.code) ? 'CONFLICT' : 'PRECONDITION_FAILED',
+      message: error.code,
+    });
+  }
+  throw error;
+};
 
 const createLifecycleDependencies = async (
   userId: string,
@@ -22,8 +70,7 @@ const createLifecycleDependencies = async (
   return {
     repository: {
       getConnection: (connectionId) => db.findUserConnection(connectionId),
-      removeAuthorizationBinding: (connectionId) =>
-        db.removeAuthorizationBinding(connectionId),
+      removeAuthorizationBinding: (connectionId) => db.removeAuthorizationBinding(connectionId),
       markDisconnected: (connectionId, disconnectedAt) =>
         db.markConnectionDisconnected(connectionId, disconnectedAt),
       markDeleting: (connectionId) => db.markConnectionDeleting(connectionId),
@@ -60,6 +107,7 @@ export const connectionsRouter = router({
         .map(({ connection }) => connection.id);
 
       return {
+        nangoEnabled: isNangoEnabled(),
         connections: records.map(({ connection, authorization }) => {
           return {
             id: connection.id,
@@ -75,6 +123,100 @@ export const connectionsRouter = router({
         }),
         disconnectedIds,
       };
+    }),
+  nangoChannels: privateProcedure.query(async () => {
+    if (!isNangoEnabled()) return [];
+    return await getNangoCatalog(getNangoClient());
+  }),
+  nangoConnections: privateProcedure
+    .input(
+      z.object({
+        channelId: z.enum(mailChannelIds),
+        integrationId: z.string().min(1),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const client = getNangoClient();
+      const catalog = await getNangoCatalog(client);
+      if (!isCatalogSelectionValid(catalog, input.channelId, input.integrationId)) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'MAIL_CHANNEL_UNAVAILABLE',
+        });
+      }
+      const channel = getMailChannel(input.channelId);
+      return await listSafeNangoConnections(input.integrationId, client, async (connectionId) => {
+        const connection = await client.getConnection(connectionId, input.integrationId);
+        const resolved = resolveFetchedNangoCredential(connection.credentials);
+        if (resolved.credential.type !== 'oauth2') {
+          throw new Error('Unsupported Nango credential');
+        }
+        const identity = await channel.resolveIdentity({
+          auth: {
+            userId: ctx.sessionUser.id,
+            accessToken: resolved.credential.accessToken,
+            refreshToken: '',
+            email: '',
+          },
+        });
+        return { email: identity.email, displayName: identity.name };
+      });
+    }),
+  bindNango: privateProcedure
+    .input(
+      z.object({
+        channelId: z.enum(mailChannelIds),
+        integrationId: z.string().min(1),
+        connectionId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const client = getNangoClient();
+      const catalog = await getNangoCatalog(client);
+      const db = await getZeroDB(ctx.sessionUser.id);
+      try {
+        return await bindNangoMailbox(
+          { ...input, userId: ctx.sessionUser.id },
+          {
+            client,
+            getChannel: getMailChannel,
+            isIntegrationAvailable: async (channelId, integrationId) =>
+              isCatalogSelectionValid(catalog, channelId, integrationId),
+            repository: {
+              findMailboxByNormalizedEmail: (normalizedEmail) =>
+                db.findConnectionByNormalizedEmail(normalizedEmail),
+              findByNangoReference: (integrationId, connectionId) =>
+                db.findAuthorizationByNangoReference(integrationId, connectionId),
+              save: async ({ mailbox, authorization }) => {
+                try {
+                  return await db.createMailboxWithAuthorization(mailbox, authorization);
+                } catch (error) {
+                  if (
+                    await db.findAuthorizationByNangoReference(
+                      authorization.nangoProviderConfigKey,
+                      authorization.nangoConnectionId,
+                    )
+                  ) {
+                    throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
+                  }
+                  const existing = await db.findConnectionByNormalizedEmail(
+                    mailbox.normalizedEmail,
+                  );
+                  if (existing && existing.channelId !== mailbox.channelId) {
+                    throw new NangoBindingError('MAILBOX_IDENTITY_MISMATCH');
+                  }
+                  if (existing) throw new NangoBindingError('MAILBOX_ALREADY_CONNECTED');
+                  throw error;
+                }
+              },
+            },
+            encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
+            now: () => new Date(),
+          },
+        );
+      } catch (error) {
+        mapNangoBindingError(error);
+      }
     }),
   setDefault: privateProcedure
     .input(z.object({ connectionId: z.string() }))
@@ -114,8 +256,7 @@ export const connectionsRouter = router({
     const db = await getZeroDB(ctx.sessionUser.id);
     const user = await db.findUser();
     const selectedConnection = user?.defaultConnectionId
-      ? (await db.findUserConnection(user.defaultConnectionId)) ||
-        (await db.findFirstConnection())
+      ? (await db.findUserConnection(user.defaultConnectionId)) || (await db.findFirstConnection())
       : await db.findFirstConnection();
     if (!selectedConnection) return null;
     const record = await db.findConnectionWithAuthorization(selectedConnection.id);

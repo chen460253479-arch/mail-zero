@@ -5,6 +5,7 @@ import type { MailboxChannel } from './types';
 export const gmailChannel: MailboxChannel = {
   id: 'gmail',
   displayName: 'Gmail',
+  legacyProviderId: 'google',
   nangoProviders: ['google-mail', 'google'],
   capabilities: new Set([
     'read_messages',
