@@ -1,176 +1,19 @@
-import {
-  AIWritingAssistantEmail,
-  AutoLabelingEmail,
-  CategoriesEmail,
-  ShortcutsEmail,
-  SuperSearchEmail,
-  WelcomeEmail,
-} from './react-emails/email-sequences';
-import { getMailChannel, providerIdToChannelId } from './mail-channel/registry';
-import { type Account, betterAuth, type BetterAuthOptions } from 'better-auth';
 import { createAuthMiddleware, jwt, bearer, mcp } from 'better-auth/plugins';
 import { resolveConnectionCredential } from './credentials/resolve';
-import { createZeroOAuthSnapshot } from './credentials/zero-oauth';
 import { getBrowserTimezone, isValidTimezone } from './timezones';
+import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { encryptCredential } from './credentials/encryption';
-import { getZeroDB, resetConnection } from './server-utils';
-import { getSocialProviders } from './auth-providers';
+import { getMailChannel } from './mail-channel/registry';
 import { dubAnalytics } from '@dub/better-auth';
 import { defaultUserSettings } from './schemas';
 import { disableBrainFunction } from './brain';
 import { APIError } from 'better-auth/api';
+import { getZeroDB } from './server-utils';
 import { redis, resend } from './services';
 import { type EProviders } from '../types';
 import { createDb } from '../db';
-import { Effect } from 'effect';
 import { env } from '../env';
 import { Dub } from 'dub';
-
-const scheduleCampaign = (userInfo: { address: string; name: string }) =>
-  Effect.gen(function* () {
-    const name = userInfo.name || 'there';
-    const resendService = resend();
-
-    const sendEmail = (subject: string, react: unknown, scheduledAt?: string) =>
-      Effect.promise(() =>
-        resendService.emails
-          .send({
-            from: '0.email <onboarding@0.email>',
-            to: userInfo.address,
-            subject,
-            react: react as any,
-            ...(scheduledAt && { scheduledAt }),
-          })
-          .then(() => void 0),
-      );
-
-    const emails = [
-      {
-        subject: 'Welcome to 0.email',
-        react: WelcomeEmail({ name }),
-        scheduledAt: undefined,
-      },
-      {
-        subject: 'Auto-labeling is here 🎉📥',
-        react: AutoLabelingEmail({ name }),
-        scheduledAt: 'in 2 days',
-      },
-      {
-        subject: 'AI Writing Assistant is here 🤖💬',
-        react: AIWritingAssistantEmail({ name }),
-        scheduledAt: 'in 3 days',
-      },
-      {
-        subject: 'Shortcuts are here 🔧🚀',
-        react: ShortcutsEmail({ name }),
-        scheduledAt: 'in 4 days',
-      },
-      {
-        subject: 'Categories are here 📂🔍',
-        react: CategoriesEmail({ name }),
-        scheduledAt: 'in 5 days',
-      },
-      {
-        subject: 'Super Search is here 🔍🚀',
-        react: SuperSearchEmail({ name }),
-        scheduledAt: 'in 6 days',
-      },
-    ];
-
-    yield* Effect.all(
-      emails.map((email) => sendEmail(email.subject, email.react, email.scheduledAt)),
-      { concurrency: 'unbounded' },
-    );
-  });
-
-const connectionHandlerHook = async (account: Account) => {
-  if (account.providerId === 'credential') return;
-
-  if (!account.accessToken || !account.refreshToken) {
-    console.error('Missing Access/Refresh Tokens', { account });
-    throw new APIError('EXPECTATION_FAILED', {
-      message: 'Missing Access/Refresh Tokens, contact us on Discord for support',
-    });
-  }
-
-  const channelId = providerIdToChannelId(account.providerId);
-  const channel = getMailChannel(channelId);
-  const managerConfig = {
-    auth: {
-      accessToken: account.accessToken,
-      refreshToken: account.refreshToken,
-      userId: account.userId,
-      email: '',
-    },
-  };
-
-  const identity = await channel.resolveIdentity(managerConfig).catch(async () => {
-    if (account.accessToken) {
-      await channel.revoke(managerConfig, account.accessToken);
-      await resetConnection(account.id);
-    }
-    throw new Response(null, { status: 301, headers: { Location: '/' } });
-  });
-
-  if (!identity.email) {
-    try {
-      await Promise.allSettled(
-        [account.accessToken, account.refreshToken]
-          .filter(Boolean)
-          .map((token) => channel.revoke(managerConfig, token as string)),
-      );
-      await resetConnection(account.id);
-    } catch (error) {
-      console.error('Failed to revoke tokens:', error);
-    }
-    throw new Response(null, { status: 303, headers: { Location: '/' } });
-  }
-
-  const scope = channel.getScope(managerConfig);
-  const expiresAt = account.accessTokenExpiresAt ?? new Date(Date.now() + 3_600_000);
-  const encryptedCredentialSnapshot = await encryptCredential(
-    createZeroOAuthSnapshot({
-      accessToken: account.accessToken,
-      refreshToken: account.refreshToken,
-      scope,
-    }),
-    env.CREDENTIAL_ENCRYPTION_KEY,
-  );
-
-  const db = await getZeroDB(account.userId);
-  const result = await db.createMailboxWithAuthorization(
-    {
-      email: identity.email,
-      name: identity.name || 'Unknown',
-      picture: identity.picture || '',
-      channelId,
-      providerId: account.providerId as EProviders,
-      scope,
-      expiresAt,
-    },
-    {
-      authSource: 'zero_oauth',
-      credentialType: 'oauth2',
-      encryptedCredentialSnapshot,
-      accessTokenExpiresAt: expiresAt,
-      credentialFetchedAt: new Date(),
-    },
-  );
-
-  if (env.NODE_ENV === 'production') {
-    await Effect.runPromise(
-      scheduleCampaign({ address: identity.email, name: identity.name || 'there' }),
-    );
-  }
-
-  if (env.GOOGLE_S_ACCOUNT && env.GOOGLE_S_ACCOUNT !== '{}') {
-    await env.subscribe_queue.send({
-      connectionId: result.id,
-      providerId: account.providerId,
-    });
-  }
-};
 
 export const createAuth = () => {
   const dub = new Dub();
@@ -258,16 +101,6 @@ export const createAuth = () => {
           }
 
           await db.deleteUser();
-        },
-      },
-    },
-    databaseHooks: {
-      account: {
-        create: {
-          after: connectionHandlerHook,
-        },
-        update: {
-          after: connectionHandlerHook,
         },
       },
     },
@@ -384,14 +217,6 @@ const createAuthConfig = () => {
       },
       expiresIn: 60 * 60 * 24 * 30, // 30 days
       updateAge: 60 * 60 * 24 * 3, // 1 day (every 1 day the session expiration is updated)
-    },
-    socialProviders: getSocialProviders(env as unknown as Record<string, string>),
-    account: {
-      accountLinking: {
-        enabled: true,
-        allowDifferentEmails: true,
-        trustedProviders: ['google', 'microsoft'],
-      },
     },
     onAPIError: {
       onError: (error) => {

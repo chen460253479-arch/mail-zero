@@ -4,13 +4,6 @@ import { readFile, writeFile } from 'fs/promises';
 import type { Command } from '.';
 import { join } from 'path';
 
-const requiredManualVariables = [
-  'GOOGLE_CLIENT_ID',
-  'GOOGLE_CLIENT_SECRET',
-  'MICROSOFT_CLIENT_ID',
-  'MICROSOFT_CLIENT_SECRET',
-];
-
 export const command: Command = {
   id: 'env',
   description: 'Setup/Fix your environment variables',
@@ -37,22 +30,6 @@ export const command: Command = {
           return v;
         });
       }
-    }
-
-    for (const key of requiredManualVariables) {
-      const currentValue = envVariables.find((v) => v.key === key)?.value || '';
-      const newValue = await text({
-        message: `Enter value for ${key}`,
-        initialValue: currentValue,
-        validate: (value) => (value.length > 0 ? undefined : 'Value is required'),
-      });
-
-      if (isCancel(newValue)) {
-        log.error('Cancelled');
-        process.exit(0);
-      }
-
-      envVariables.push({ key, value: newValue });
     }
 
     const missingVariables = exampleEnvVariables.filter(

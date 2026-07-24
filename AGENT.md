@@ -77,7 +77,7 @@ This is a pnpm workspace monorepo with the following structure:
 
 ### Important Environment Variables
 - `BETTER_AUTH_SECRET` - Auth secret key
-- `GOOGLE_CLIENT_ID` & `GOOGLE_CLIENT_SECRET` - Gmail integration
+- `CREDENTIAL_ENCRYPTION_KEY` - Encrypts database-stored integration and mailbox credentials
 - `TWILIO_*` - SMS integration
 - `DATABASE_URL` - PostgreSQL connection string
 

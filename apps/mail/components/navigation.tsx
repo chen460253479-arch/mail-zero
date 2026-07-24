@@ -9,15 +9,14 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { GitHub, Twitter, Discord, LinkedIn, Star } from './icons/icons';
 import { AnimatedNumber } from '@/components/ui/animated-number';
-import { signIn, useSession } from '@/lib/auth-client';
 import { Separator } from '@/components/ui/separator';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '@/components/ui/button';
+import { useSession } from '@/lib/auth-client';
 import { useState, useEffect } from 'react';
 import { Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
 
 const resources = [
   {
@@ -122,7 +121,7 @@ export function Navigation() {
             <NavigationMenu>
               <NavigationMenuList className="gap-1">
                 <NavigationMenuItem>
-                  <NavigationMenuTrigger className="bg-transparent text-white cursor-pointer">
+                  <NavigationMenuTrigger className="cursor-pointer bg-transparent text-white">
                     Company
                   </NavigationMenuTrigger>
                   <NavigationMenuContent>
@@ -136,7 +135,7 @@ export function Navigation() {
                   </NavigationMenuContent>
                 </NavigationMenuItem>
                 <NavigationMenuItem>
-                  <NavigationMenuTrigger className="bg-transparent text-white cursor-pointer">
+                  <NavigationMenuTrigger className="cursor-pointer bg-transparent text-white">
                     Resources
                   </NavigationMenuTrigger>
                   <NavigationMenuContent>
@@ -154,7 +153,7 @@ export function Navigation() {
                     </ul>
                   </NavigationMenuContent>
                 </NavigationMenuItem>
-                <NavigationMenuItem className="bg-transparent text-white cursor-pointer">
+                <NavigationMenuItem className="cursor-pointer bg-transparent text-white">
                   <a href="/privacy">
                     <Button variant="ghost" className="ml-1 h-9 bg-transparent">
                       Privacy
@@ -184,20 +183,12 @@ export function Navigation() {
               </div>
             </a>
             <Button
-              className="h-8 bg-white text-black hover:bg-white hover:text-black cursor-pointer"
+              className="h-8 cursor-pointer bg-white text-black hover:bg-white hover:text-black"
               onClick={() => {
                 if (session) {
                   navigate('/mail/inbox');
                 } else {
-                  toast.promise(
-                    signIn.social({
-                      provider: 'google',
-                      callbackURL: `${window.location.origin}/mail`,
-                    }),
-                    {
-                      error: 'Login redirect failed',
-                    },
-                  );
+                  navigate('/login');
                 }
               }}
             >

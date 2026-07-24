@@ -19,7 +19,6 @@
   "exports": {
     "./trpc": "./src/trpc/index.ts",
     "./auth": "./src/lib/auth.ts",
-    "./auth-providers": "./src/lib/auth-providers.ts",
     "./schemas": "./src/lib/schemas.ts"
   },
   "dependencies": {

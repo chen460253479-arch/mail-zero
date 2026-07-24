@@ -87,10 +87,16 @@ integrationOAuthRouter.get('/gmail/connect/callback', async (c) => {
 
   const { db, conn } = createDb(c.env.HYPERDRIVE.connectionString);
   try {
-    await createService({
+    const result = await createService({
       env: c.env,
       repository: createSystemIntegrationRepository(db),
     }).completeMailboxAuthorization({ ...input, userId: sessionUser.id });
+    if (c.env.GOOGLE_S_ACCOUNT && c.env.GOOGLE_S_ACCOUNT !== '{}') {
+      await c.env.subscribe_queue.send({
+        connectionId: result.id,
+        providerId: 'google',
+      });
+    }
     return c.redirect(
       resultRedirect(
         c.env.VITE_PUBLIC_APP_URL,

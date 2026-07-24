@@ -46,12 +46,8 @@ export type ZeroEnv = {
   VITE_PUBLIC_APP_URL: string;
   DATABASE_URL: string;
   CREDENTIAL_ENCRYPTION_KEY: string;
-  NANGO_BASE_URL?: string;
-  NANGO_SECRET_KEY?: string;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
-  GOOGLE_CLIENT_ID: string;
-  GOOGLE_CLIENT_SECRET: string;
   RESEND_API_KEY: string;
   VITE_PUBLIC_POSTHOG_KEY: string;
   VITE_PUBLIC_POSTHOG_HOST: string;
@@ -64,8 +60,6 @@ export type ZeroEnv = {
   ZERO_ADMIN_BOOTSTRAP_SECRET?: string;
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
-  GOOGLE_REDIRECT_URI: string;
-  GOOGLE_APPLICATION_CREDENTIALS: string;
   HISTORY_OFFSET: string;
   ZERO_CLIENT_ID: string;
   ZERO_CLIENT_SECRET: string;
@@ -85,8 +79,6 @@ export type ZeroEnv = {
   TWILIO_PHONE_NUMBER: string;
   VITE_PUBLIC_ELEVENLABS_AGENT_ID: string;
   REACT_SCAN: string;
-  MICROSOFT_CLIENT_ID: string;
-  MICROSOFT_CLIENT_SECRET: string;
   VOICE_SECRET: string;
   ARCADE_API_KEY: string;
   OPENAI_MODEL: string;

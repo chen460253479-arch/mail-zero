@@ -145,7 +145,7 @@ You can set up Zero in two ways:
      BETTER_AUTH_SECRET=your_secret_key
      ```
 
-2. **Google OAuth Setup** (Required for Gmail integration)
+2. **Google OAuth Setup** (Optional Zero-managed Gmail authorization)
 
    - Go to [Google Cloud Console](https://console.cloud.google.com)
    - Create a new project
@@ -157,15 +157,13 @@ You can set up Zero in two ways:
    - Create OAuth 2.0 credentials (Web application type)
    - Add authorized redirect URIs:
      - Development:
-       - `http://localhost:8787/api/auth/callback/google`
+       - `http://localhost:8787/api/integrations/gmail/validation/callback`
+       - `http://localhost:8787/api/integrations/gmail/connect/callback`
      - Production:
-       - `https://your-production-url/api/auth/callback/google`
-   - Add to `.env`:
-
-     ```env
-     GOOGLE_CLIENT_ID=your_client_id
-     GOOGLE_CLIENT_SECRET=your_client_secret
-     ```
+       - `https://your-production-url/api/integrations/gmail/validation/callback`
+       - `https://your-production-url/api/integrations/gmail/connect/callback`
+   - Sign in as an administrator and configure the Client ID and Client Secret under
+     **Settings → Integrations → Gmail**.
 
    - Add yourself as a test user:
 
@@ -174,7 +172,8 @@ You can set up Zero in two ways:
      - Add your email and click 'Save'
 
 > [!WARNING]
-> The authorized redirect URIs in Google Cloud Console must match **exactly** what you configure in the `.env`, including the protocol (http/https), domain, and path - these are provided above.
+> The authorized redirect URIs in Google Cloud Console must exactly match the URLs shown in
+> **Settings → Integrations → Gmail**, including protocol, domain, and path.
 
 3. **Twilio Setup** (Required for SMS Integration)
 

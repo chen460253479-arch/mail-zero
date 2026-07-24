@@ -1,10 +1,14 @@
 import { BaseSubscriptionFactory, type SubscriptionData } from './base-subscription.factory';
+import { findConnectionWithAuthorization, resetConnection } from '../server-utils';
+import { readGmailOAuthRuntimeConfig } from '../integrations/gmail-oauth-service';
+import { createSystemIntegrationRepository } from '../integrations/repository';
+import { resolveConnectionCredential } from '../credentials/resolve';
 import { c, getNotificationsUrl } from '../../lib/utils';
-import { resetConnection } from '../server-utils';
 import jwt from '@tsndr/cloudflare-worker-jwt';
-import { env } from '../../env';
 import { connection } from '../../db/schema';
 import { EProviders } from '../../types';
+import { createDb } from '../../db';
+import { env } from '../../env';
 
 interface GoogleServiceAccount {
   type: string;
@@ -199,29 +203,36 @@ class GoogleSubscriptionFactory extends BaseSubscriptionFactory {
     connectionData: typeof connection.$inferSelect,
     topicName: string,
   ): Promise<void> {
-    // Create Gmail client with OAuth2
-    const { OAuth2Client } = await import('google-auth-library');
-    const auth = new OAuth2Client({
-      clientId: env.GOOGLE_CLIENT_ID,
-      clientSecret: env.GOOGLE_CLIENT_SECRET,
-    });
-
-    auth.setCredentials({
-      refresh_token: connectionData.refreshToken,
-      scope: 'https://www.googleapis.com/auth/gmail.readonly',
-    });
-
-    // Refresh access token
-    const { credentials } = await auth.refreshAccessToken();
-    if (credentials.access_token) {
-      auth.setCredentials({
-        access_token: credentials.access_token,
-        scope: 'https://www.googleapis.com/auth/gmail.readonly',
+    const { db, conn } = createDb(env.HYPERDRIVE.connectionString);
+    let accessToken: string;
+    try {
+      const record = await findConnectionWithAuthorization(db, connectionData.id);
+      if (!record || record.authorization?.authSource !== 'zero_oauth') {
+        throw new Error('Gmail watch requires a Zero OAuth authorization');
+      }
+      const credential = await resolveConnectionCredential(record, env.CREDENTIAL_ENCRYPTION_KEY);
+      if (credential.type !== 'oauth2' || !credential.refreshToken) {
+        throw new Error('Gmail watch requires an OAuth refresh token');
+      }
+      const oauth = await readGmailOAuthRuntimeConfig({
+        repository: createSystemIntegrationRepository(db),
+        encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
+        redirectUri: `${env.VITE_PUBLIC_BACKEND_URL.replace(/\/+$/, '')}/api/integrations/gmail/connect/callback`,
       });
+      const { OAuth2Client } = await import('google-auth-library');
+      const auth = new OAuth2Client(oauth.clientId, oauth.clientSecret, oauth.redirectUri);
+      auth.setCredentials({
+        refresh_token: credential.refreshToken,
+        scope: credential.scope,
+      });
+      const { credentials } = await auth.refreshAccessToken();
+      accessToken = credentials.access_token ?? '';
+      if (!accessToken) throw new Error('Google did not return an access token');
+    } finally {
+      await conn.end();
     }
 
     // Setup Gmail watch using direct API call instead of heavy googleapis package
-    const accessToken = credentials.access_token || auth.credentials.access_token;
     const serviceAccount = getServiceAccount();
 
     console.log(
