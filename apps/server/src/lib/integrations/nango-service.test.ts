@@ -85,6 +85,7 @@ const createRepository = () => {
     countZeroOAuthBindings: vi.fn(async () => 0),
     listNangoReferences: vi.fn(async () => references),
     createOAuthSession: vi.fn(),
+    getOAuthSession: vi.fn(),
     consumeOAuthSession: vi.fn(),
     deleteOAuthSession: vi.fn(),
     deleteExpiredOAuthSessions: vi.fn(),

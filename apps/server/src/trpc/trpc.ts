@@ -66,7 +66,11 @@ export const privateProcedure = publicProcedure.use(async ({ ctx, next }) => {
 });
 
 export const adminProcedure = privateProcedure.use(async ({ ctx, next }) => {
-  assertAdministrator(ctx.sessionUser);
+  try {
+    assertAdministrator(ctx.sessionUser);
+  } catch {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'ADMIN_REQUIRED' });
+  }
   return next({ ctx });
 });
 

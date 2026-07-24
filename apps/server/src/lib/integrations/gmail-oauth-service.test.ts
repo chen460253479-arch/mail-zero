@@ -57,6 +57,12 @@ const createRepository = () => {
     countZeroOAuthBindings: vi.fn(async () => 0),
     listNangoReferences: vi.fn(async () => []),
     createOAuthSession,
+    getOAuthSession: vi.fn(async ({ id, createdBy, purpose }) => {
+      const session = sessions.get(id);
+      return session && session.createdBy === createdBy && session.purpose === purpose
+        ? session
+        : null;
+    }),
     consumeOAuthSession: vi.fn(async ({ stateHash, createdBy, purpose, now: consumedAt }) => {
       const session = [...sessions.values()].find(
         (candidate) =>

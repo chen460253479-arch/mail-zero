@@ -73,6 +73,11 @@ export interface SystemIntegrationRepository {
   countZeroOAuthBindings(channelId: MailChannelId): Promise<number>;
   listNangoReferences(): Promise<Array<{ integrationId: string; connectionId: string }>>;
   createOAuthSession(input: CreateOAuthSessionInput): Promise<string>;
+  getOAuthSession(input: {
+    id: string;
+    createdBy: string;
+    purpose: IntegrationOAuthPurpose;
+  }): Promise<OAuthSessionRecord | null>;
   consumeOAuthSession(input: {
     stateHash: string;
     createdBy: string;
@@ -205,6 +210,15 @@ export const createSystemIntegrationRepository = (db: DB): SystemIntegrationRepo
     await db.insert(integrationOAuthSession).values({ id, ...input });
     return id;
   },
+
+  getOAuthSession: async ({ id, createdBy, purpose }) =>
+    (await db.query.integrationOAuthSession.findFirst({
+      where: and(
+        eq(integrationOAuthSession.id, id),
+        eq(integrationOAuthSession.createdBy, createdBy),
+        eq(integrationOAuthSession.purpose, purpose),
+      ),
+    })) ?? null,
 
   consumeOAuthSession: async ({ stateHash, createdBy, purpose, now }) => {
     const [record] = await db

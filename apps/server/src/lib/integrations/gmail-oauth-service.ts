@@ -98,6 +98,14 @@ const hashState = async (state: string): Promise<string> =>
 
 const createState = (): string => base64Url(crypto.getRandomValues(new Uint8Array(32)));
 
+export const gmailOAuthRedirectUris = (backendUrl: string) => {
+  const baseUrl = backendUrl.replace(/\/+$/, '');
+  return {
+    validation: `${baseUrl}/api/integrations/gmail/validation/callback`,
+    mailbox: `${baseUrl}/api/integrations/gmail/connect/callback`,
+  };
+};
+
 export const readGmailOAuthRuntimeConfig = async (input: {
   repository: SystemIntegrationRepository;
   encryptionKey: string;
@@ -221,6 +229,20 @@ export class GmailOAuthService {
       userId,
       await this.getRuntimeConfig('mailbox'),
     );
+  }
+
+  async getValidationStatus(
+    sessionId: string,
+    adminId: string,
+  ): Promise<'pending' | 'complete' | 'expired'> {
+    const session = await this.dependencies.repository.getOAuthSession({
+      id: sessionId,
+      createdBy: adminId,
+      purpose: 'validate_config',
+    });
+    if (!session) return 'complete';
+    if (session.expiresAt <= this.dependencies.now()) return 'expired';
+    return session.consumedAt ? 'complete' : 'pending';
   }
 
   async completeMailboxAuthorization(input: {

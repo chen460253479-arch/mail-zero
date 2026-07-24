@@ -1,4 +1,5 @@
 import { type inferRouterInputs, type inferRouterOutputs } from '@trpc/server';
+import { integrationsRouter } from './routes/integrations';
 import { cookiePreferencesRouter } from './routes/cookies';
 import { connectionsRouter } from './routes/connections';
 import { categoriesRouter } from './routes/categories';
@@ -6,6 +7,7 @@ import { templatesRouter } from './routes/templates';
 import { shortcutRouter } from './routes/shortcut';
 import { settingsRouter } from './routes/settings';
 import { getContext } from 'hono/context-storage';
+import { loggingRouter } from './routes/logging';
 import { draftsRouter } from './routes/drafts';
 import { labelsRouter } from './routes/label';
 import { notesRouter } from './routes/notes';
@@ -17,7 +19,6 @@ import { bimiRouter } from './routes/bimi';
 import type { HonoContext } from '../ctx';
 import { aiRouter } from './routes/ai';
 import { router } from './trpc';
-import { loggingRouter } from './routes/logging';
 
 export const appRouter = router({
   ai: aiRouter,
@@ -25,6 +26,7 @@ export const appRouter = router({
   brain: brainRouter,
   categories: categoriesRouter,
   connections: connectionsRouter,
+  integrations: integrationsRouter,
   cookiePreferences: cookiePreferencesRouter,
   drafts: draftsRouter,
   labels: labelsRouter,

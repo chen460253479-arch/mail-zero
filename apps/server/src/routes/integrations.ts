@@ -1,20 +1,16 @@
 import { Hono } from 'hono';
 
-import { GmailOAuthError, GmailOAuthService } from '../lib/integrations/gmail-oauth-service';
+import {
+  GmailOAuthError,
+  GmailOAuthService,
+  gmailOAuthRedirectUris,
+} from '../lib/integrations/gmail-oauth-service';
 import { createSystemIntegrationRepository } from '../lib/integrations/repository';
 import { GoogleGmailOAuthGateway } from '../lib/integrations/google-gmail-oauth';
 import { assertAdministrator } from '../lib/integrations/permissions';
 import { getZeroDB } from '../lib/server-utils';
 import type { HonoContext } from '../ctx';
 import { createDb } from '../db';
-
-export const gmailOAuthRedirectUris = (backendUrl: string) => {
-  const baseUrl = backendUrl.replace(/\/+$/, '');
-  return {
-    validation: `${baseUrl}/api/integrations/gmail/validation/callback`,
-    mailbox: `${baseUrl}/api/integrations/gmail/connect/callback`,
-  };
-};
 
 const integrationOAuthRouter = new Hono<HonoContext>();
 
