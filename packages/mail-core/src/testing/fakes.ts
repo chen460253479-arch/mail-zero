@@ -16,6 +16,7 @@ import {
 } from './memory-mail-store';
 
 export interface CreateMemoryMailCoreDependenciesOptions {
+  corruptBlobOnCommit?: 'sha256' | 'size';
   failBlobCommit?: boolean;
   now?: Date;
   sanitizeHtml?: (html: string) => string;
@@ -48,6 +49,7 @@ export const createMemoryMailCoreDependencies = (
 ) => {
   const unitOfWork = new MemoryMailUnitOfWork();
   const blobStore = new MemoryBlobStore({
+    corruptOnCommit: options.corruptBlobOnCommit,
     failCommit: options.failBlobCommit,
   });
   const searchStore = new MemorySearchStore();

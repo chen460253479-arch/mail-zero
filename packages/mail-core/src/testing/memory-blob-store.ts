@@ -28,6 +28,7 @@ const copyBlob = (blob: StoredBlob): StoredBlob => ({
 });
 
 export interface MemoryBlobStoreOptions {
+  corruptOnCommit?: 'sha256' | 'size';
   failCommit?: boolean;
 }
 
@@ -36,9 +37,11 @@ export class MemoryBlobStore implements BlobStore {
   private readonly objects = new Map<string, StoredBlob>();
   private readonly failingDeletes = new Set<string>();
   private nextTemporaryKey = 1;
+  private readonly corruptOnCommit: 'sha256' | 'size' | undefined;
   private failCommit: boolean;
 
   constructor(options: MemoryBlobStoreOptions = {}) {
+    this.corruptOnCommit = options.corruptOnCommit;
     this.failCommit = options.failCommit ?? false;
   }
 
@@ -82,8 +85,20 @@ export class MemoryBlobStore implements BlobStore {
     if (this.objects.has(input.objectKey)) {
       throw new Error('blob object already exists');
     }
-    this.objects.set(input.objectKey, copyBlob(pending));
+    const committed = copyBlob(pending);
+    if (this.corruptOnCommit === 'sha256') {
+      committed.bytes[0] = (committed.bytes[0] ?? 0) ^ 0xff;
+    } else if (this.corruptOnCommit === 'size') {
+      const expanded = new Uint8Array(committed.bytes.byteLength + 1);
+      expanded.set(committed.bytes);
+      committed.bytes = expanded;
+    }
+    this.objects.set(input.objectKey, committed);
     this.temporary.delete(input.temporaryKey);
+  }
+
+  async deleteTemporary(temporaryKey: string): Promise<void> {
+    this.temporary.delete(temporaryKey);
   }
 
   async get(objectKey: string): Promise<Uint8Array> {
@@ -112,6 +127,15 @@ export class MemoryBlobStore implements BlobStore {
   snapshot(): ReadonlyMap<string, Uint8Array> {
     return new Map(
       [...this.objects].map(([key, blob]) => [key, copyBytes(blob.bytes)]),
+    );
+  }
+
+  temporarySnapshot(): ReadonlyMap<string, Uint8Array> {
+    return new Map(
+      [...this.temporary].map(([key, blob]) => [
+        key,
+        copyBytes(blob.bytes),
+      ]),
     );
   }
 }

@@ -1,0 +1,10 @@
+From: Simple Sender <sender@example.test>
+To: Simple Recipient <recipient@example.test>
+Message-ID: <simple-message@Example.TEST>
+Date: Thu, 1 Jan 2026 10:00:00 +0000
+Subject: Simple fixture
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Hello from the simple fixture.

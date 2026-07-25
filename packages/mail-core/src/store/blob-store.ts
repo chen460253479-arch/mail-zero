@@ -10,6 +10,7 @@ export interface BlobStore {
     temporaryKey: string;
     objectKey: string;
   }): Promise<void>;
+  deleteTemporary(temporaryKey: string): Promise<void>;
   get(objectKey: string): Promise<Uint8Array>;
   delete(objectKey: string): Promise<void>;
 }

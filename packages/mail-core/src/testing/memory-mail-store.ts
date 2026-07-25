@@ -124,7 +124,7 @@ const updateScoped = <
 
 const createRepositories = (
   state: MemoryMailState,
-): Omit<MailTransaction, 'nextStateVersion'> => {
+): Omit<MailTransaction, 'lockAccount' | 'nextStateVersion'> => {
   const accounts: AccountRepository = {
     async findById(id) {
       const record = state.accounts.get(id);
@@ -440,6 +440,7 @@ const createRepositories = (
 export class MemoryMailUnitOfWork implements MailUnitOfWork {
   private state = createEmptyState();
   private tail: Promise<void> = Promise.resolve();
+  private commitAcknowledgementsBeforeFailure: number | null = null;
 
   async run<Result>(
     operation: (tx: MailTransaction) => Promise<Result>,
@@ -465,6 +466,15 @@ export class MemoryMailUnitOfWork implements MailUnitOfWork {
     const repositories = createRepositories(transactionState);
     const transaction: MailTransaction = {
       ...repositories,
+      lockAccount: async (accountId) => {
+        if (!transactionState.accounts.has(accountId)) {
+          throw new MailCoreError('ACCOUNT_NOT_FOUND', {
+            entityId: accountId,
+          });
+        }
+        // The memory adapter serializes every callback, which is stronger
+        // than the account-scoped lock required by the port.
+      },
       nextStateVersion: async (accountId) => {
         const allocated = allocatedVersions.get(accountId);
         if (allocated !== undefined) {
@@ -491,7 +501,18 @@ export class MemoryMailUnitOfWork implements MailUnitOfWork {
 
     const result = await operation(transaction);
     this.state = transactionState;
+    if (this.commitAcknowledgementsBeforeFailure !== null) {
+      this.commitAcknowledgementsBeforeFailure -= 1;
+      if (this.commitAcknowledgementsBeforeFailure === 0) {
+        this.commitAcknowledgementsBeforeFailure = null;
+        throw new Error('transaction commit outcome unknown');
+      }
+    }
     return result;
+  }
+
+  failCommitAcknowledgementAfter(completedOperations: number): void {
+    this.commitAcknowledgementsBeforeFailure = completedOperations;
   }
 
   snapshot(): MemoryMailState {

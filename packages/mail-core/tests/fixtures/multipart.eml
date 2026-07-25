@@ -1,0 +1,34 @@
+From: Fixture Sender <sender@example.test>
+To: Fixture Recipient <recipient@example.test>
+Reply-To: Replies <replies@example.test>
+Message-ID: <multipart-message@Example.TEST>
+In-Reply-To: <root-message@Example.TEST>
+References: <root-message@Example.TEST> <prior-message@example.test>
+Date: Thu, 1 Jan 2026 11:00:00 +0000
+Subject: Multipart fixture
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="mixed-fixture"
+
+--mixed-fixture
+Content-Type: multipart/related; boundary="related-fixture"
+
+--related-fixture
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<html><body><p>Hello</p><img src="cid:pixel@example.test"></body></html>
+--related-fixture
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+Content-Disposition: inline; filename="pixel.png"
+Content-ID: <pixel@example.test>
+
+AQIDBA==
+--related-fixture--
+--mixed-fixture
+Content-Type: application/octet-stream
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="sample.bin"
+
+AQIDBA==
+--mixed-fixture--
