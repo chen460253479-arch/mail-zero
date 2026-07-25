@@ -1,19 +1,15 @@
 import type {
-  EmailId,
-  Id,
-  MailAccountId,
-} from '../types';
-import type {
+  EmailRecord,
   MailCoreDependencies,
+  SearchEmailCursor,
   SearchEmailInput,
   SearchEmailResult,
   SearchStore,
 } from '../store';
+import { createMemoryMailInspector, MemoryMailUnitOfWork } from './memory-mail-store';
+import type { EmailId, Id, MailAccountId } from '../types';
 import { MemoryBlobStore } from './memory-blob-store';
-import {
-  createMemoryMailInspector,
-  MemoryMailUnitOfWork,
-} from './memory-mail-store';
+import type { CursorSortValue } from '../search';
 
 export interface CreateMemoryMailCoreDependenciesOptions {
   corruptBlobOnCommit?: 'sha256' | 'size';
@@ -39,8 +35,141 @@ export class MemoryClock {
 }
 
 export class MemorySearchStore implements SearchStore {
-  async query(_input: SearchEmailInput): Promise<SearchEmailResult> {
-    return { emailIds: [], nextCursor: null };
+  constructor(
+    private readonly unitOfWork: MemoryMailUnitOfWork,
+    private readonly blobStore: MemoryBlobStore,
+  ) {}
+
+  async query(input: SearchEmailInput): Promise<SearchEmailResult> {
+    const normalize = (value: string): string =>
+      value.trim().normalize('NFC').toLocaleLowerCase('und');
+    const addressFields = (email: EmailRecord) => [
+      ...email.sender,
+      ...email.from,
+      ...email.replyTo,
+      ...email.to,
+      ...email.cc,
+      ...email.bcc,
+    ];
+    const state = this.unitOfWork.snapshot();
+    const bodyText = async (email: EmailRecord): Promise<string> => {
+      const chunks: string[] = [];
+      for (const blobId of [email.textBlobId, email.htmlBlobId]) {
+        if (blobId === null) {
+          continue;
+        }
+        const blob = [...state.blobs.values()].find(
+          (candidate) =>
+            candidate.accountId === email.accountId &&
+            candidate.id === blobId &&
+            candidate.status === 'ready' &&
+            candidate.deletedAt === null,
+        );
+        if (blob !== undefined) {
+          chunks.push(new TextDecoder().decode(await this.blobStore.get(blob.objectKey)));
+        }
+      }
+      return chunks.join(' ');
+    };
+    const candidates = await Promise.all(
+      [...state.emails.values()]
+        .filter((email) => email.accountId === input.accountId && email.destroyedAt === null)
+        .map(async (email) => ({
+          email,
+          body: input.filter.text === undefined ? '' : await bodyText(email),
+        })),
+    );
+    const filtered = candidates
+      .filter(({ email, body }) => {
+        if (email.accountId !== input.accountId || email.destroyedAt !== null) {
+          return false;
+        }
+        const filter = input.filter;
+        return (
+          (filter.mailboxId === undefined || email.mailboxIds.includes(filter.mailboxId)) &&
+          (filter.hasKeyword === undefined || email.keywords.includes(filter.hasKeyword)) &&
+          (filter.after === undefined || email.receivedAt > filter.after) &&
+          (filter.before === undefined || email.receivedAt < filter.before) &&
+          (filter.address === undefined ||
+            addressFields(email).some(
+              ({ email: address }) => normalize(address) === filter.address,
+            )) &&
+          (filter.hasAttachment === undefined || email.hasAttachment === filter.hasAttachment) &&
+          (filter.text === undefined ||
+            normalize(
+              [
+                email.subject,
+                email.preview,
+                body,
+                ...addressFields(email).flatMap(({ email: address, name }) => [
+                  address,
+                  name ?? '',
+                ]),
+              ].join(' '),
+            ).includes(filter.text))
+        );
+      })
+      .map(({ email }) => email);
+
+    const valueOf = (email: EmailRecord): CursorSortValue => {
+      switch (input.sort.property) {
+        case 'receivedAt':
+          return { type: 'date', value: email.receivedAt.toISOString() };
+        case 'sentAt':
+          return email.sentAt === null
+            ? { type: 'null' }
+            : { type: 'date', value: email.sentAt.toISOString() };
+        case 'size':
+          return { type: 'bigint', value: email.sizeBytes.toString() };
+        case 'subject':
+          return { type: 'string', value: normalize(email.subject) };
+      }
+    };
+
+    const compareValues = (left: CursorSortValue, right: CursorSortValue): number => {
+      if (left.type === 'null' || right.type === 'null') {
+        if (left.type === right.type) {
+          return 0;
+        }
+        return left.type === 'null' ? 1 : -1;
+      }
+      let comparison: number;
+      if (left.type === 'bigint' && right.type === 'bigint') {
+        const leftValue = BigInt(left.value);
+        const rightValue = BigInt(right.value);
+        comparison = leftValue === rightValue ? 0 : leftValue < rightValue ? -1 : 1;
+      } else if (
+        (left.type === 'date' && right.type === 'date') ||
+        (left.type === 'string' && right.type === 'string')
+      ) {
+        comparison = left.value.localeCompare(right.value);
+      } else {
+        return left.type.localeCompare(right.type);
+      }
+      return input.sort.direction === 'asc' ? comparison : -comparison;
+    };
+
+    const comparePosition = (
+      left: Pick<SearchEmailCursor, 'emailId' | 'value'>,
+      right: Pick<SearchEmailCursor, 'emailId' | 'value'>,
+    ): number => {
+      const valueComparison = compareValues(left.value, right.value);
+      return valueComparison === 0 ? left.emailId.localeCompare(right.emailId) : valueComparison;
+    };
+
+    const ordered = filtered
+      .map((email) => ({
+        emailId: email.id,
+        value: valueOf(email),
+      }))
+      .sort(comparePosition)
+      .filter((position) => input.cursor === null || comparePosition(position, input.cursor) > 0);
+    const page = ordered.slice(0, input.limit);
+    const hasMore = ordered.length > input.limit;
+    return {
+      emailIds: page.map(({ emailId }) => emailId),
+      nextCursor: hasMore ? page.at(-1)! : null,
+    };
   }
 }
 
@@ -52,7 +181,7 @@ export const createMemoryMailCoreDependencies = (
     corruptOnCommit: options.corruptBlobOnCommit,
     failCommit: options.failBlobCommit,
   });
-  const searchStore = new MemorySearchStore();
+  const searchStore = new MemorySearchStore(unitOfWork, blobStore);
   const clock = new MemoryClock(options.now);
   const baseInspector = createMemoryMailInspector(unitOfWork);
   let nextId = 1;

@@ -249,6 +249,7 @@ export interface BlobRepository {
 
 export interface ThreadRepository {
   findById(accountId: MailAccountId, id: ThreadId): Promise<ThreadRecord | null>;
+  existsOutsideAccount(accountId: MailAccountId, id: ThreadId): Promise<boolean>;
   listByAccount(accountId: MailAccountId): Promise<ThreadRecord[]>;
   insert(record: ThreadRecord): Promise<ThreadRecord>;
   update(
@@ -344,5 +345,7 @@ export interface QueryChangesInput {
 
 export interface ChangeRepository {
   recordChange(record: MailChangeRecord): Promise<void>;
+  oldestAvailableState(accountId: MailAccountId): Promise<bigint>;
   queryChanges(input: QueryChangesInput): Promise<MailChangeRecord[]>;
+  hasChanges(input: Omit<QueryChangesInput, 'limit'>): Promise<boolean>;
 }

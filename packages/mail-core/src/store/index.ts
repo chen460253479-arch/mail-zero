@@ -16,6 +16,7 @@ export type { BlobCommitReceipt, BlobStore } from './blob-store';
 export * from './repositories';
 export type {
   SearchEmailFilter,
+  SearchEmailCursor,
   SearchEmailInput,
   SearchEmailResult,
   SearchEmailSort,

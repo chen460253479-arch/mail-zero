@@ -1,7 +1,9 @@
 export * from './account';
 export * from './changes';
 export * from './mailbox';
+export { createMailCore, type MailCore } from './mail-core';
 export * from './message';
+export * from './search';
 export * from './store';
 export * from './submission';
 export * from './thread';

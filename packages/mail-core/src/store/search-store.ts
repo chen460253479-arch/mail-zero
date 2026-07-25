@@ -1,18 +1,12 @@
-import type { EmailId, Keyword, MailAccountId, MailboxId } from '../types';
+import type { CursorSortValue, EmailQueryFilter, EmailQuerySort } from '../search';
+import type { EmailId, MailAccountId } from '../types';
 
-export interface SearchEmailFilter {
-  mailboxId?: MailboxId;
-  hasKeyword?: Keyword;
-  after?: Date;
-  before?: Date;
-  address?: string;
-  hasAttachment?: boolean;
-  text?: string;
-}
+export type SearchEmailFilter = EmailQueryFilter;
+export type SearchEmailSort = EmailQuerySort;
 
-export interface SearchEmailSort {
-  property: 'receivedAt' | 'sentAt' | 'size' | 'subject';
-  direction: 'asc' | 'desc';
+export interface SearchEmailCursor {
+  value: CursorSortValue;
+  emailId: EmailId;
 }
 
 export interface SearchEmailInput {
@@ -20,12 +14,12 @@ export interface SearchEmailInput {
   filter: SearchEmailFilter;
   sort: SearchEmailSort;
   limit: number;
-  cursor: string | null;
+  cursor: SearchEmailCursor | null;
 }
 
 export interface SearchEmailResult {
   emailIds: EmailId[];
-  nextCursor: string | null;
+  nextCursor: SearchEmailCursor | null;
 }
 
 export interface SearchStore {

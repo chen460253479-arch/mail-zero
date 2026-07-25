@@ -46,6 +46,7 @@ export interface MemoryMailState {
   submissions: Map<string, SubmissionRecord>;
   submissionAttempts: Map<string, SubmissionAttemptRecord>;
   changes: Map<string, MailChangeRecord>;
+  oldestAvailableStates: Map<MailAccountId, bigint>;
 }
 
 const copy = <Value>(value: Value): Value => structuredClone(value);
@@ -73,6 +74,7 @@ const createEmptyState = (): MemoryMailState => ({
   submissions: new Map(),
   submissionAttempts: new Map(),
   changes: new Map(),
+  oldestAvailableStates: new Map(),
 });
 
 const findScoped = <RecordType>(
@@ -115,6 +117,7 @@ const updateScoped = <RecordType extends { id: string; accountId: MailAccountId 
 
 const createRepositories = (
   state: MemoryMailState,
+  observeChangeQuery: (input: QueryChangesInput) => void,
 ): Omit<MailTransaction, 'lockAccount' | 'nextStateVersion'> => {
   const accounts: AccountRepository = {
     async findById(id) {
@@ -229,6 +232,11 @@ const createRepositories = (
   const threads: ThreadRepository = {
     async findById(accountId, id) {
       return findScoped(state.threads, accountId, id);
+    },
+    async existsOutsideAccount(accountId, id) {
+      return [...state.threads.values()].some(
+        (candidate) => candidate.id === id && candidate.accountId !== accountId,
+      );
     },
     async listByAccount(accountId) {
       return listScoped(state.threads, accountId);
@@ -392,7 +400,11 @@ const createRepositories = (
     async recordChange(record) {
       state.changes.set(changeKey(record), copy(record));
     },
+    async oldestAvailableState(accountId) {
+      return state.oldestAvailableStates.get(accountId) ?? 0n;
+    },
     async queryChanges(input: QueryChangesInput) {
+      observeChangeQuery(copy(input));
       const records = [...state.changes.values()]
         .filter(
           (record) =>
@@ -407,7 +419,20 @@ const createRepositories = (
           }
           return left.entityId.localeCompare(right.entityId);
         });
-      return records.slice(0, input.limit).map(copy);
+      if (input.limit === undefined || records.length <= input.limit) {
+        return records.map(copy);
+      }
+      const cutoffState = records[input.limit - 1]!.stateVersion;
+      return records.filter(({ stateVersion }) => stateVersion <= cutoffState).map(copy);
+    },
+    async hasChanges(input) {
+      return [...state.changes.values()].some(
+        (record) =>
+          record.accountId === input.accountId &&
+          (input.collection === undefined || record.collection === input.collection) &&
+          (input.afterState === undefined || record.stateVersion > input.afterState) &&
+          (input.throughState === undefined || record.stateVersion <= input.throughState),
+      );
     },
   };
 
@@ -425,6 +450,7 @@ const createRepositories = (
 
 export class MemoryMailUnitOfWork implements MailUnitOfWork {
   private state = createEmptyState();
+  private readonly changeQueries: QueryChangesInput[] = [];
   private tail: Promise<void> = Promise.resolve();
   private commitAcknowledgementsBeforeFailure: number | null = null;
 
@@ -447,7 +473,9 @@ export class MemoryMailUnitOfWork implements MailUnitOfWork {
   ): Promise<Result> {
     const transactionState = copy(this.state);
     const allocatedVersions = new Map<MailAccountId, bigint>();
-    const repositories = createRepositories(transactionState);
+    const repositories = createRepositories(transactionState, (input) => {
+      this.changeQueries.push(input);
+    });
     const transaction: MailTransaction = {
       ...repositories,
       lockAccount: async (accountId) => {
@@ -502,6 +530,19 @@ export class MemoryMailUnitOfWork implements MailUnitOfWork {
   snapshot(): MemoryMailState {
     return copy(this.state);
   }
+
+  pruneChangesThrough(accountId: MailAccountId, stateVersion: bigint): void {
+    for (const [key, change] of this.state.changes) {
+      if (change.accountId === accountId && change.stateVersion <= stateVersion) {
+        this.state.changes.delete(key);
+      }
+    }
+    this.state.oldestAvailableStates.set(accountId, stateVersion);
+  }
+
+  observedChangeQueries(): QueryChangesInput[] {
+    return copy(this.changeQueries);
+  }
 }
 
 export interface MemoryMailInspector {
@@ -521,6 +562,7 @@ export interface MemoryMailInspector {
   submission(id: EmailSubmissionId): Promise<SubmissionRecord | null>;
   attempts(submissionId: EmailSubmissionId): Promise<SubmissionAttemptRecord[]>;
   changes(accountId?: MailAccountId): Promise<MailChangeRecord[]>;
+  changeQueries(): Promise<QueryChangesInput[]>;
   stateVersion(accountId: MailAccountId): Promise<bigint>;
   seedMailboxEmail(mailboxId: MailboxId): Promise<void>;
 }
@@ -595,6 +637,9 @@ export const createMemoryMailInspector = (
   },
   async changes(accountId) {
     return filterByAccount(unitOfWork.snapshot().changes.values(), accountId);
+  },
+  async changeQueries() {
+    return unitOfWork.observedChangeQueries();
   },
   async stateVersion(accountId) {
     return unitOfWork.snapshot().accounts.get(accountId)?.stateVersion ?? 0n;
