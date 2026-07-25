@@ -251,6 +251,10 @@ export interface MailboxRepository {
     parentId: MailboxId | null,
     normalizedName: string,
   ): Promise<MailboxRecord | null>;
+  existsOutsideAccount(
+    accountId: MailAccountId,
+    id: MailboxId,
+  ): Promise<boolean>;
   listByAccount(accountId: MailAccountId): Promise<MailboxRecord[]>;
   insert(record: MailboxRecord): Promise<MailboxRecord>;
   update(

@@ -1,0 +1,227 @@
+import type { CreateIdentityInput, DestroyIdentityInput, UpdateIdentityInput } from './types';
+import type { IdentityRecord, MailCoreDependencies } from '../store';
+import type { IdentityId } from '../types';
+import { MailCoreError } from '../types';
+
+const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+
+const normalizeEmail = (email: string): string => {
+  const normalized = email.trim().normalize('NFC').toLocaleLowerCase('und');
+  const [localPart, domain, extraPart] = normalized.split('@');
+  if (
+    !validEmail.test(normalized) ||
+    localPart === undefined ||
+    domain === undefined ||
+    extraPart !== undefined ||
+    localPart.startsWith('.') ||
+    localPart.endsWith('.') ||
+    localPart.includes('..') ||
+    domain.startsWith('.') ||
+    domain.endsWith('.') ||
+    domain.includes('..')
+  ) {
+    throw new MailCoreError('INVALID_EMAIL');
+  }
+  return normalized;
+};
+
+export async function createIdentity(
+  dependencies: MailCoreDependencies,
+  input: CreateIdentityInput,
+): Promise<IdentityRecord> {
+  const id = dependencies.idFactory.next<'Identity'>() as IdentityId;
+  const email = normalizeEmail(input.email);
+  const replyTo = input.replyTo === null ? null : normalizeEmail(input.replyTo);
+  const now = dependencies.clock.now();
+
+  return dependencies.unitOfWork.run(async (tx) => {
+    if ((await tx.accounts.findById(input.accountId)) === null) {
+      throw new MailCoreError('ACCOUNT_NOT_FOUND', {
+        entityId: input.accountId,
+      });
+    }
+    const identities = await tx.identities.listByAccount(input.accountId);
+    const isDefault = input.makeDefault || identities.length === 0;
+    const clearedDefaults: IdentityRecord[] = [];
+    if (isDefault) {
+      for (const identity of identities) {
+        if (identity.isDefault) {
+          await tx.identities.update(input.accountId, identity.id, {
+            isDefault: false,
+            updatedAt: now,
+          });
+          clearedDefaults.push(identity);
+        }
+      }
+    }
+
+    const identity = await tx.identities.insert({
+      id,
+      accountId: input.accountId,
+      name: input.name,
+      email,
+      replyTo,
+      isDefault,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const stateVersion = await tx.nextStateVersion(input.accountId);
+    for (const clearedDefault of clearedDefaults) {
+      await tx.changes.recordChange({
+        accountId: input.accountId,
+        stateVersion,
+        collection: 'identity',
+        entityId: clearedDefault.id,
+        changeType: 'updated',
+        changedProperties: ['isDefault'],
+        createdAt: now,
+      });
+    }
+    await tx.changes.recordChange({
+      accountId: input.accountId,
+      stateVersion,
+      collection: 'identity',
+      entityId: identity.id,
+      changeType: 'created',
+      changedProperties: null,
+      createdAt: now,
+    });
+    return identity;
+  });
+}
+
+export async function updateIdentity(
+  dependencies: MailCoreDependencies,
+  input: UpdateIdentityInput,
+): Promise<IdentityRecord> {
+  const email = input.email === undefined ? undefined : normalizeEmail(input.email);
+  const replyTo =
+    input.replyTo === undefined
+      ? undefined
+      : input.replyTo === null
+        ? null
+        : normalizeEmail(input.replyTo);
+  const now = dependencies.clock.now();
+
+  return dependencies.unitOfWork.run(async (tx) => {
+    const identity = await tx.identities.findById(input.accountId, input.identityId);
+    if (identity === null) {
+      throw new MailCoreError('IDENTITY_NOT_FOUND', {
+        entityId: input.identityId,
+      });
+    }
+    const nextName = input.name === undefined ? identity.name : input.name;
+    const nextEmail = email === undefined ? identity.email : email;
+    const nextReplyTo = replyTo === undefined ? identity.replyTo : replyTo;
+    const shouldBecomeDefault = input.makeDefault === true && !identity.isDefault;
+    const changedProperties = [
+      ...(nextName !== identity.name ? ['name'] : []),
+      ...(nextEmail !== identity.email ? ['email'] : []),
+      ...(nextReplyTo !== identity.replyTo ? ['replyTo'] : []),
+      ...(shouldBecomeDefault ? ['isDefault'] : []),
+    ];
+    if (changedProperties.length === 0) {
+      return identity;
+    }
+
+    const clearedDefaults: IdentityRecord[] = [];
+    if (shouldBecomeDefault) {
+      for (const candidate of await tx.identities.listByAccount(input.accountId)) {
+        if (candidate.id !== identity.id && candidate.isDefault) {
+          await tx.identities.update(input.accountId, candidate.id, {
+            isDefault: false,
+            updatedAt: now,
+          });
+          clearedDefaults.push(candidate);
+        }
+      }
+    }
+    const updated = await tx.identities.update(input.accountId, input.identityId, {
+      name: nextName,
+      email: nextEmail,
+      replyTo: nextReplyTo,
+      isDefault: shouldBecomeDefault ? true : identity.isDefault,
+      updatedAt: now,
+    });
+    const stateVersion = await tx.nextStateVersion(input.accountId);
+    for (const clearedDefault of clearedDefaults) {
+      await tx.changes.recordChange({
+        accountId: input.accountId,
+        stateVersion,
+        collection: 'identity',
+        entityId: clearedDefault.id,
+        changeType: 'updated',
+        changedProperties: ['isDefault'],
+        createdAt: now,
+      });
+    }
+    await tx.changes.recordChange({
+      accountId: input.accountId,
+      stateVersion,
+      collection: 'identity',
+      entityId: updated.id,
+      changeType: 'updated',
+      changedProperties,
+      createdAt: now,
+    });
+    return updated;
+  });
+}
+
+const nonterminalSubmissionStatuses = new Set(['scheduled', 'queued', 'sending', 'retry_wait']);
+
+export async function destroyIdentity(
+  dependencies: MailCoreDependencies,
+  input: DestroyIdentityInput,
+): Promise<void> {
+  const now = dependencies.clock.now();
+
+  return dependencies.unitOfWork.run(async (tx) => {
+    const identity = await tx.identities.findById(input.accountId, input.identityId);
+    if (identity === null) {
+      throw new MailCoreError('IDENTITY_NOT_FOUND', {
+        entityId: input.identityId,
+      });
+    }
+    const submissions = await tx.submissions.listByIdentity(input.accountId, input.identityId);
+    if (submissions.some(({ status }) => nonterminalSubmissionStatuses.has(status))) {
+      throw new MailCoreError('IDENTITY_IN_USE', {
+        entityId: input.identityId,
+      });
+    }
+
+    const replacement = identity.isDefault
+      ? (await tx.identities.listByAccount(input.accountId)).find(
+          (candidate) => candidate.id !== identity.id,
+        )
+      : undefined;
+    if (replacement !== undefined) {
+      await tx.identities.update(input.accountId, replacement.id, {
+        isDefault: true,
+        updatedAt: now,
+      });
+    }
+    await tx.identities.delete(input.accountId, identity.id);
+    const stateVersion = await tx.nextStateVersion(input.accountId);
+    if (replacement !== undefined) {
+      await tx.changes.recordChange({
+        accountId: input.accountId,
+        stateVersion,
+        collection: 'identity',
+        entityId: replacement.id,
+        changeType: 'updated',
+        changedProperties: ['isDefault'],
+        createdAt: now,
+      });
+    }
+    await tx.changes.recordChange({
+      accountId: input.accountId,
+      stateVersion,
+      collection: 'identity',
+      entityId: identity.id,
+      changeType: 'destroyed',
+      changedProperties: null,
+      createdAt: now,
+    });
+  });
+}

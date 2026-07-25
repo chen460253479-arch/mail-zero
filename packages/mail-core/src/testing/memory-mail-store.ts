@@ -185,6 +185,12 @@ const createRepositories = (
       );
       return record === undefined ? null : copy(record);
     },
+    async existsOutsideAccount(accountId, id) {
+      return [...state.mailboxes.values()].some(
+        (candidate) =>
+          candidate.id === id && candidate.accountId !== accountId,
+      );
+    },
     async listByAccount(accountId) {
       return listScoped(state.mailboxes, accountId);
     },
@@ -511,6 +517,7 @@ export interface MemoryMailInspector {
   attempts(submissionId: EmailSubmissionId): Promise<SubmissionAttemptRecord[]>;
   changes(accountId?: MailAccountId): Promise<MailChangeRecord[]>;
   stateVersion(accountId: MailAccountId): Promise<bigint>;
+  seedMailboxEmail(mailboxId: MailboxId): Promise<void>;
 }
 
 const findById = <RecordType extends { id: string }>(
@@ -586,5 +593,54 @@ export const createMemoryMailInspector = (
   },
   async stateVersion(accountId) {
     return unitOfWork.snapshot().accounts.get(accountId)?.stateVersion ?? 0n;
+  },
+  async seedMailboxEmail(mailboxId) {
+    const mailbox = findById(
+      unitOfWork.snapshot().mailboxes.values(),
+      mailboxId,
+    );
+    if (mailbox === null) {
+      throw new MailCoreError('MAILBOX_NOT_FOUND', { entityId: mailboxId });
+    }
+    const suffix = (unitOfWork.snapshot().emails.size + 1)
+      .toString()
+      .padStart(8, '0');
+    const now = new Date('2026-01-01T00:00:00.000Z');
+    await unitOfWork.run((tx) =>
+      tx.emails.insert({
+        id: `seed-email-${suffix}` as EmailId,
+        accountId: mailbox.accountId,
+        threadId: `seed-thread-${suffix}` as ThreadId,
+        blobId: null,
+        messageId: null,
+        inReplyTo: [],
+        references: [],
+        subject: '',
+        preview: '',
+        sentAt: null,
+        receivedAt: now,
+        sizeBytes: 0n,
+        hasAttachment: false,
+        lifecycle: 'received',
+        draftRevision: 0,
+        createdAt: now,
+        updatedAt: now,
+        destroyedAt: null,
+        sender: [],
+        from: [],
+        replyTo: [],
+        to: [],
+        cc: [],
+        bcc: [],
+        textBlobId: null,
+        htmlBlobId: null,
+        parserVersion: 1,
+        parseWarnings: [],
+        parts: [],
+        mailboxIds: [mailboxId],
+        restoreMailboxIds: [],
+        keywords: [],
+      }),
+    );
   },
 });

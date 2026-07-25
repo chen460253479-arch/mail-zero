@@ -7,6 +7,14 @@ export const mailCoreErrorCodes = [
   'BLOB_NOT_FOUND',
   'IDENTITY_NOT_FOUND',
   'EMAIL_SUBMISSION_NOT_FOUND',
+  'MAILBOX_ROLE_CONFLICT',
+  'MAILBOX_NAME_CONFLICT',
+  'CROSS_ACCOUNT_REFERENCE',
+  'MAILBOX_HAS_CHILD',
+  'MAILBOX_HAS_EMAIL',
+  'MAILBOX_PARENT_CYCLE',
+  'INVALID_EMAIL',
+  'IDENTITY_IN_USE',
 ] as const;
 
 export type MailCoreErrorCode = (typeof mailCoreErrorCodes)[number];
