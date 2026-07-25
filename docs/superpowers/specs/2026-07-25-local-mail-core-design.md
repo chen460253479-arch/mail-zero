@@ -241,17 +241,17 @@ apps/server/tests/mail-core/
 JMAP 是领域语义和 API 契约，不是数据库物理格式。Zero 不把整封 JMAP JSON 作为
 单一文档存储。
 
-| JMAP 对象 | Zero 实体 |
-| --- | --- |
-| Account | `mail_account` |
-| Mailbox | `mailbox`, `email_mailbox` |
-| Email | `email`, `email_address`, `email_content`, `email_part` |
-| Thread | `thread` |
-| Blob | `blob` |
-| Identity | `mail_identity` |
-| EmailSubmission | `email_submission`, `submission_attempt` |
-| Keywords | `email_keyword` |
-| Changes | `mail_change` |
+| JMAP 对象       | Zero 实体                                               |
+| --------------- | ------------------------------------------------------- |
+| Account         | `mail_account`                                          |
+| Mailbox         | `mailbox`, `email_mailbox`                              |
+| Email           | `email`, `email_address`, `email_content`, `email_part` |
+| Thread          | `thread`                                                |
+| Blob            | `blob`                                                  |
+| Identity        | `mail_identity`                                         |
+| EmailSubmission | `email_submission`, `submission_attempt`                |
+| Keywords        | `email_keyword`                                         |
+| Changes         | `mail_change`                                           |
 
 `SearchSnippet` 是查询结果或短期缓存，不是权威实体。PushSubscription 属于后续
 Provider/JMAP API 阶段。
@@ -292,7 +292,7 @@ JMAP Mailbox 同时承载系统邮箱、传统文件夹和产品标签。
 - `name`, `normalized_name`；
 - `kind`：`system | folder | label`；
 - `role`：`inbox | sent | drafts | trash | junk | archive | outbox |
-  scheduled | null`；
+scheduled | null`；
 - `color`, `sort_order`, `is_subscribed`；
 - `total_emails`, `unread_emails`, `total_threads`, `unread_threads`；
 - `created_at`, `updated_at`, `deleted_at`。
@@ -364,6 +364,10 @@ Email 与 Mailbox 多对多关系。
 ```
 
 两个实体必须属于同一个 MailAccount。
+
+`email_trash_restore` 保存 Email 移入 Trash 前的非 Trash Mailbox 集合。恢复操作使用
+该关系重建原位置；永久删除时同步清除。该表不是用户可见 Mailbox 关系，也不参与
+Mailbox 计数。
 
 ### 7.7 `email_keyword`
 
@@ -445,7 +449,7 @@ Mailbox 和 Thread 的未读统计由 `$seen` 和 `$draft` 派生。为了查询
 
 - `id`, `mail_account_id`, `email_id`, `identity_id`；
 - `status`：`scheduled | queued | sending | retry_wait | sent | failed |
-  canceled`；
+canceled`；
 - `send_at`；
 - `idempotency_key`；
 - `attempt_count`；
@@ -546,6 +550,10 @@ Destroyed。
 ```ts
 interface MailCore {
   createAccount(input: CreateMailAccount): Promise<MailAccount>;
+
+  createIdentity(input: CreateIdentity): Promise<Identity>;
+  updateIdentity(input: UpdateIdentity): Promise<Identity>;
+  destroyIdentity(input: DestroyIdentity): Promise<void>;
 
   createMailbox(input: CreateMailbox): Promise<Mailbox>;
   updateMailbox(input: UpdateMailbox): Promise<Mailbox>;
@@ -671,6 +679,7 @@ THREAD_NOT_FOUND
 BLOB_NOT_FOUND
 CROSS_ACCOUNT_REFERENCE
 MAILBOX_ROLE_CONFLICT
+MAILBOX_NAME_CONFLICT
 MAILBOX_HAS_CHILD
 MAILBOX_HAS_EMAIL
 EMAIL_MUST_HAVE_MAILBOX
@@ -678,6 +687,9 @@ EMAIL_CONTENT_IMMUTABLE
 DRAFT_REVISION_CONFLICT
 INVALID_EMAIL
 INVALID_KEYWORD
+INVALID_CURSOR
+INVALID_BLOB_KEY
+IDENTITY_IN_USE
 INVALID_SUBMISSION_TRANSITION
 IDEMPOTENCY_CONFLICT
 STATE_MISMATCH
