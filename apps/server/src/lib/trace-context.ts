@@ -229,6 +229,32 @@ export function completeRequestSpan(c: any, spanId: string, metadata?: Record<st
     TraceContext.completeSpan(traceId, spanId, metadata, error);
 }
 
+export function finalizeRequestTrace(
+    c: Parameters<typeof getTraceId>[0],
+    spanId: string,
+    statusCode: number,
+    error?: unknown,
+): void {
+    const traceId = getTraceId(c);
+    if (!traceId) return;
+
+    const message = error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+            ? error
+            : error
+                ? 'Unknown request error'
+                : undefined;
+
+    TraceContext.completeSpan(
+        traceId,
+        spanId,
+        { statusCode, success: !error && statusCode < 400 },
+        message,
+    );
+    TraceContext.completeTrace(traceId);
+}
+
 // Helper function to get trace context statistics for monitoring
 export function getTraceStats(): { totalTraces: number; oldestTraceAge: number } {
     return TraceContext.getStats();

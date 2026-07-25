@@ -799,7 +799,7 @@ const api = new Hono<HonoContext>()
     c.set('traceId', traceId);
     c.set('requestId', requestId);
 
-    const { TraceContext } = await import('./lib/trace-context');
+    const { finalizeRequestTrace, TraceContext } = await import('./lib/trace-context');
 
     // Create trace for this request
     const rawIp = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For');
@@ -903,26 +903,17 @@ const api = new Hono<HonoContext>()
       path: new URL(c.req.url).pathname,
     });
 
+    let requestError: unknown;
     try {
       await next();
-      // Don't complete the request span here - let TRPC middleware handle it
     } catch (error) {
-      TraceContext.completeSpan(
-        traceId,
-        requestSpan.id,
-        {
-          success: false,
-
-          statusCode: c.res.status,
-        },
-        error instanceof Error ? error.message : 'Unknown request error',
-      );
+      requestError = error;
       throw error;
+    } finally {
+      finalizeRequestTrace(c, requestSpan.id, c.res.status, requestError);
+      c.set('sessionUser', undefined);
+      c.set('auth', undefined as any);
     }
-    // Note: Trace will be completed by TRPC middleware after logging
-
-    c.set('sessionUser', undefined);
-    c.set('auth', undefined as any);
   })
   .route('/ai', aiRouter)
   .route('/public', publicRouter)

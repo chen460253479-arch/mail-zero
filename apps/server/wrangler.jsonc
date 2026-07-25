@@ -179,9 +179,6 @@
         "MEET_AUTH_HEADER": "",
         "OTEL_EXPORTER_OTLP_ENDPOINT": "https://api.axiom.co/v1/traces",
         "OTEL_SERVICE_NAME": "zero-email-server-local",
-        "DD_API_KEY": "",
-        "DD_APP_KEY": "",
-        "DD_SITE": "datadoghq.com",
       },
       "kv_namespaces": [
         {
@@ -400,9 +397,6 @@
         "DISABLE_WORKFLOWS": "false",
         "OTEL_EXPORTER_OTLP_ENDPOINT": "https://api.axiom.co/v1/traces",
         "OTEL_SERVICE_NAME": "zero-email-server-staging",
-        "DD_API_KEY": "",
-        "DD_APP_KEY": "",
-        "DD_SITE": "datadoghq.com",
       },
       "kv_namespaces": [
         {
@@ -618,9 +612,6 @@
         "DISABLE_WORKFLOWS": "true",
         "OTEL_EXPORTER_OTLP_ENDPOINT": "https://api.axiom.co/v1/traces",
         "OTEL_SERVICE_NAME": "zero-email-server-production",
-        "DD_API_KEY": "",
-        "DD_APP_KEY": "",
-        "DD_SITE": "datadoghq.com",
       },
       "kv_namespaces": [
         {
