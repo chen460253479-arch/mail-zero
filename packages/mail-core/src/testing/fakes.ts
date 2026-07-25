@@ -187,7 +187,12 @@ export const createMemoryMailCoreDependencies = (
           return null;
         }
         const blob = await baseInspector.blob(email.blobId);
-        return blob === null ? null : blobStore.get(blob.objectKey);
+        return blob === null
+          ? null
+          : blobStore.get({
+              accountId: blob.accountId,
+              objectKey: blob.objectKey,
+            });
       },
       async stateVersion(accountId: MailAccountId): Promise<bigint> {
         return baseInspector.stateVersion(accountId);

@@ -253,6 +253,7 @@ export const createQueryHarness = async () => {
       });
       const objectKey = 'mail/body-search';
       await dependencies.blobStore.commitTemporary({
+        accountId: queryAccountId,
         temporaryKey: pending.temporaryKey,
         objectKey,
       });

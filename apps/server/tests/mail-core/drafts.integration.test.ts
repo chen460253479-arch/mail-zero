@@ -32,7 +32,10 @@ describe('PostgreSQL Draft integration', () => {
         tx.blobs.findById(harness.accountId, draft.textBlobId!),
       );
       expect(initialTextBlob).not.toBeNull();
-      const initialTextBytes = await harness.blobStore.get(initialTextBlob!.objectKey);
+      const initialTextBytes = await harness.blobStore.get({
+        accountId: harness.accountId,
+        objectKey: initialTextBlob!.objectKey,
+      });
       const submission = await createSubmission(harness.dependencies, {
         accountId: harness.accountId,
         emailId: draft.id,
@@ -97,6 +100,11 @@ describe('PostgreSQL Draft integration', () => {
           draftRevision: 1,
         });
       });
-      expect(await harness.blobStore.get(initialTextBlob!.objectKey)).toEqual(initialTextBytes);
+      expect(
+        await harness.blobStore.get({
+          accountId: harness.accountId,
+          objectKey: initialTextBlob!.objectKey,
+        }),
+      ).toEqual(initialTextBytes);
     }));
 });

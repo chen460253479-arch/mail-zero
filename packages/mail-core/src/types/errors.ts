@@ -2,6 +2,7 @@ export const mailCoreErrorCodes = [
   'INVALID_KEYWORD',
   'INVALID_PATCH',
   'INVALID_GC_REQUEST',
+  'INVALID_BLOB_KEY',
   'INVALID_CURSOR',
   'INVALID_QUERY',
   'INVALID_STATE',

@@ -362,6 +362,25 @@ describe('Draft Email', () => {
     expect(await h.inspect.stateVersion()).toBe(stateBefore);
   });
 
+  it('never deletes content owned by an earlier revision after duplicate promotion fails', async () => {
+    const h = await createDraftHarness();
+    const draft = await createDraft(h.deps, h.content);
+    const objectsBefore = h.deps.blobStore.snapshot();
+    h.deps.blobStore.failCommitAfterPromotions(2);
+
+    await expect(
+      updateDraft(h.deps, {
+        accountId: h.accountId,
+        emailId: draft.id,
+        expectedRevision: 1,
+        content: h.content,
+      }),
+    ).rejects.toMatchObject({ code: 'BLOB_STORE_FAILURE' });
+
+    expect(h.deps.blobStore.snapshot()).toEqual(objectsBefore);
+    await expect(h.inspect.rawBytes(draft.id)).resolves.toBeTruthy();
+  });
+
   it('rejects non-ready attachments and over-quota Draft content without state changes', async () => {
     // Catches pending Blob references and quota checks that happen after publication.
     const h = await createDraftHarness();

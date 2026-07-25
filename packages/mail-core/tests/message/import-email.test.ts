@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
@@ -48,7 +49,10 @@ describe('importEmail', () => {
     const bodyBlob = (await deps.core.inspect.blobs(deps.input.accountId)).find(
       ({ id }) => id === email.textBlobId,
     )!;
-    await deps.core.blobStore.delete(bodyBlob.objectKey);
+    await deps.core.blobStore.delete({
+      accountId: deps.input.accountId,
+      objectKey: bodyBlob.objectKey,
+    });
 
     await expect(
       queryEmails(deps.core, {
@@ -88,21 +92,33 @@ describe('importEmail', () => {
     const blobs = await deps.core.inspect.blobs(deps.input.accountId);
     expect(blobs).toHaveLength(3);
     expect(blobs.every(({ status }) => status === 'ready')).toBe(true);
+    expect(
+      blobs.every(
+        ({ objectKey, sha256 }) =>
+          objectKey === `mail/${deps.input.accountId}/sha256/${sha256.slice(0, 2)}/${sha256}`,
+      ),
+    ).toBe(true);
     expect(stored?.parts).toHaveLength(2);
     expect(stored?.parts[0]?.blobId).toBe(stored?.parts[1]?.blobId);
     const attachmentBlob = blobs.find(({ id }) => id === stored?.parts[0]?.blobId)!;
-    await expect(deps.core.blobStore.get(attachmentBlob.objectKey)).resolves.toEqual(
-      new Uint8Array([1, 2, 3, 4]),
-    );
+    await expect(
+      deps.core.blobStore.get({
+        accountId: deps.input.accountId,
+        objectKey: attachmentBlob.objectKey,
+      }),
+    ).resolves.toEqual(new Uint8Array([1, 2, 3, 4]));
     const htmlBlob = blobs.find(({ id }) => id === stored?.htmlBlobId)!;
     const expectedHtml = (
       await parseRawEmail(multipartRaw, {
         sanitizeHtml: (html) => html,
       })
     ).htmlBody;
-    await expect(deps.core.blobStore.get(htmlBlob.objectKey)).resolves.toEqual(
-      new TextEncoder().encode(expectedHtml),
-    );
+    await expect(
+      deps.core.blobStore.get({
+        accountId: deps.input.accountId,
+        objectKey: htmlBlob.objectKey,
+      }),
+    ).resolves.toEqual(new TextEncoder().encode(expectedHtml));
 
     const importChanges = (await deps.core.inspect.changes(deps.input.accountId)).filter(
       ({ stateVersion }) => stateVersion === 2n,
@@ -283,6 +299,7 @@ describe('importEmail', () => {
     });
     const objectKey = 'mail/orphan-attachment';
     await deps.core.blobStore.commitTemporary({
+      accountId: deps.input.accountId,
       temporaryKey: orphan.temporaryKey,
       objectKey,
     });
@@ -364,17 +381,24 @@ describe('importEmail', () => {
 
     expect(textBlob).not.toBeNull();
     expect(htmlBlob).not.toBeNull();
-    await expect(deps.core.blobStore.get(textBlob!.objectKey)).resolves.toEqual(
-      new TextEncoder().encode('Plain body.'),
-    );
-    await expect(deps.core.blobStore.get(htmlBlob!.objectKey)).resolves.toEqual(
-      new TextEncoder().encode('<p>HTML body</p>'),
-    );
+    await expect(
+      deps.core.blobStore.get({
+        accountId: deps.input.accountId,
+        objectKey: textBlob!.objectKey,
+      }),
+    ).resolves.toEqual(new TextEncoder().encode('Plain body.'));
+    await expect(
+      deps.core.blobStore.get({
+        accountId: deps.input.accountId,
+        objectKey: htmlBlob!.objectKey,
+      }),
+    ).resolves.toEqual(new TextEncoder().encode('<p>HTML body</p>'));
   });
 
   it('does not delete a pre-existing destination object when conditional promotion rejects', async () => {
     const deps = await createSeededImportDependencies();
-    const occupiedKey = `mail/${deps.input.accountId}/blobs/id-00000010`;
+    const rawDigest = createHash('sha256').update(deps.input.raw).digest('hex');
+    const occupiedKey = `mail/${deps.input.accountId}/sha256/${rawDigest.slice(0, 2)}/${rawDigest}`;
     const originalBytes = new Uint8Array([9, 8, 7]);
     const occupied = await deps.core.blobStore.putTemporary({
       accountId: deps.input.accountId,
@@ -382,6 +406,7 @@ describe('importEmail', () => {
       contentType: 'application/octet-stream',
     });
     await deps.core.blobStore.commitTemporary({
+      accountId: deps.input.accountId,
       temporaryKey: occupied.temporaryKey,
       objectKey: occupiedKey,
     });
@@ -390,7 +415,12 @@ describe('importEmail', () => {
       code: 'BLOB_STORE_FAILURE',
     });
 
-    await expect(deps.core.blobStore.get(occupiedKey)).resolves.toEqual(originalBytes);
+    await expect(
+      deps.core.blobStore.get({
+        accountId: deps.input.accountId,
+        objectKey: occupiedKey,
+      }),
+    ).resolves.toEqual(originalBytes);
     expect(await deps.core.inspect.emails(deps.input.accountId)).toEqual([]);
   });
 
@@ -458,18 +488,25 @@ describe('importEmail', () => {
       });
       const objectKey = `mail/reused-${failure}`;
       await deps.core.blobStore.commitTemporary({
+        accountId: deps.input.accountId,
         temporaryKey: pending.temporaryKey,
         objectKey,
       });
       if (failure === 'missing') {
-        await deps.core.blobStore.delete(objectKey);
+        await deps.core.blobStore.delete({
+          accountId: deps.input.accountId,
+          objectKey,
+        });
       }
       const expected = await deps.core.blobStore.putTemporary({
         accountId: deps.input.accountId,
         bytes: expectedBytes,
         contentType: 'image/png',
       });
-      await deps.core.blobStore.deleteTemporary(expected.temporaryKey);
+      await deps.core.blobStore.deleteTemporary({
+        accountId: deps.input.accountId,
+        temporaryKey: expected.temporaryKey,
+      });
       await deps.core.unitOfWork.run((tx) =>
         tx.blobs.insert({
           id: `reused-${failure}` as BlobId,

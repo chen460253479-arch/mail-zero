@@ -1,6 +1,7 @@
 import {
   calculateSha256,
   commitPreparedBlob,
+  contentAddressedObjectKey,
   discardCommittedBlobs,
   discardTemporaryBlobs,
   prepareBlob,
@@ -176,7 +177,7 @@ const resolveBlobs = async (
         sha256: candidate.sha256,
         sizeBytes: candidate.sizeBytes,
         contentType: candidate.contentType,
-        objectKey: `mail/${input.accountId}/blobs/${blobId}`,
+        objectKey: contentAddressedObjectKey(input.accountId, candidate.sha256),
         status: 'pending',
         createdAt: now,
         readyAt: null,
@@ -708,7 +709,7 @@ export async function importEmail(
     return result;
   } catch (error) {
     if (!importOperationCompleted) {
-      await discardCommittedBlobs(dependencies.blobStore, committedObjectKeys);
+      await discardCommittedBlobs(dependencies.blobStore, input.accountId, committedObjectKeys);
     }
     throw error;
   } finally {

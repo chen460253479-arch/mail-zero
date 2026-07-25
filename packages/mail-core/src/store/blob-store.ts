@@ -11,12 +11,16 @@ export interface BlobStore {
     bytes: Uint8Array;
     contentType: string;
   }): Promise<{ temporaryKey: string; sha256: string; size: bigint }>;
-  commitTemporary(input: { temporaryKey: string; objectKey: string }): Promise<BlobCommitReceipt>;
-  deleteTemporary(temporaryKey: string): Promise<void>;
-  get(objectKey: string): Promise<Uint8Array>;
+  commitTemporary(input: {
+    accountId: MailAccountId;
+    temporaryKey: string;
+    objectKey: string;
+  }): Promise<BlobCommitReceipt>;
+  deleteTemporary(input: { accountId: MailAccountId; temporaryKey: string }): Promise<void>;
+  get(input: { accountId: MailAccountId; objectKey: string }): Promise<Uint8Array>;
   /**
    * Permanently deletes an object. Implementations must be idempotent: an
    * already-missing object is a successful deletion, including on retries.
    */
-  delete(objectKey: string): Promise<void>;
+  delete(input: { accountId: MailAccountId; objectKey: string }): Promise<void>;
 }

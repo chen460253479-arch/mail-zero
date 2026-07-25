@@ -1,5 +1,6 @@
 import type { BlobRecord, EmailRecord, MailCoreDependencies } from '../store';
 import { MailCoreError, type BlobId, type MailAccountId } from '../types';
+import { contentAddressedObjectKey } from './blob-lifecycle';
 
 const MAX_GC_BATCH = 1000;
 
@@ -12,9 +13,6 @@ export type GarbageCollectBlobsInput = {
 export type GarbageCollectBlobsResult = {
   collectedBlobIds: BlobId[];
 };
-
-const canonicalObjectKey = (accountId: MailAccountId, blobId: BlobId): string =>
-  `mail/${accountId}/blobs/${blobId}`;
 
 const referencedBlobIds = (emails: EmailRecord[]): Set<BlobId> => {
   const referenced = new Set<BlobId>();
@@ -53,20 +51,25 @@ export async function garbageCollectBlobs(
   const result = await dependencies.unitOfWork.run(async (tx) => {
     await tx.lockAccount(input.accountId);
     const referenced = referencedBlobIds(await tx.emails.listByAccount(input.accountId));
-    const candidates: BlobRecord[] = (await tx.blobs.listByAccount(input.accountId))
+    const accountBlobs = await tx.blobs.listByAccount(input.accountId);
+    const candidates: BlobRecord[] = accountBlobs
       .filter(
         (blob) =>
           (blob.status === 'ready' || blob.status === 'deleting') &&
           blob.deletedAt === null &&
           blob.createdAt < input.olderThan &&
           !referenced.has(blob.id) &&
-          blob.objectKey === canonicalObjectKey(input.accountId, blob.id),
+          blob.objectKey === contentAddressedObjectKey(input.accountId, blob.sha256),
       )
       .sort((left, right) => {
         const byCreatedAt = left.createdAt.getTime() - right.createdAt.getTime();
         return byCreatedAt === 0 ? left.id.localeCompare(right.id) : byCreatedAt;
       })
       .slice(0, input.limit);
+    const remainingByObjectKey = new Map<string, number>();
+    for (const blob of accountBlobs) {
+      remainingByObjectKey.set(blob.objectKey, (remainingByObjectKey.get(blob.objectKey) ?? 0) + 1);
+    }
     for (const candidate of candidates) {
       await tx.blobs.update(input.accountId, candidate.id, {
         status: 'deleting',
@@ -76,8 +79,15 @@ export async function garbageCollectBlobs(
     const collectedBlobIds: BlobId[] = [];
     for (let index = 0; index < candidates.length; index += 1) {
       const candidate = candidates[index]!;
+      const remaining = (remainingByObjectKey.get(candidate.objectKey) ?? 1) - 1;
+      remainingByObjectKey.set(candidate.objectKey, remaining);
       try {
-        await dependencies.blobStore.delete(candidate.objectKey);
+        if (remaining === 0) {
+          await dependencies.blobStore.delete({
+            accountId: input.accountId,
+            objectKey: candidate.objectKey,
+          });
+        }
       } catch {
         for (const retryable of candidates.slice(index)) {
           await tx.blobs.update(input.accountId, retryable.id, {

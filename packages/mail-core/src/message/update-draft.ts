@@ -257,7 +257,7 @@ export async function updateDraft(
     });
   } catch (error) {
     if (!operationCompleted) {
-      await discardCommittedBlobs(dependencies.blobStore, committedObjectKeys);
+      await discardCommittedBlobs(dependencies.blobStore, input.accountId, committedObjectKeys);
     }
     throw error;
   } finally {

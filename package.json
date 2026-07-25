@@ -32,6 +32,7 @@
     "sentry:sourcemaps": "sentry-cli sourcemaps inject --org zero-7y --project nextjs ./apps/mail/.next && sentry-cli sourcemaps upload --org zero-7y --project nextjs ./apps/mail/.next",
     "scripts": "dotenv -- pnpx tsx ./scripts/run.ts",
     "test": "pnpm --filter=@zero/testing test",
+    "test:mail-core": "pnpm --filter=@zero/mail-core test && pnpm --dir apps/server test:mail-core",
     "test:watch": "pnpm --filter=@zero/testing test:watch",
     "test:coverage": "pnpm --filter=@zero/testing test:coverage",
     "test:ui": "pnpm --filter=@zero/testing test:ui",

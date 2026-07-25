@@ -38,6 +38,18 @@ Zero is built with modern and reliable technologies:
 
 ## Getting Started
 
+### Backend local mail core verification
+
+Run the backend-local mail kernel and adapter tests with:
+
+```bash
+pnpm test:mail-core
+```
+
+Phase one adds only the backend local-mail kernel, PostgreSQL/R2 adapter boundaries, and runtime
+composition. Existing frontend and provider paths are not switched to this runtime yet; Gmail and
+other provider synchronization remain on the existing paths.
+
 ### Video Tutorial
 
 Watch this helpful video tutorial on how to set up Zero locally:

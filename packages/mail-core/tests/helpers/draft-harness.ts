@@ -50,8 +50,9 @@ const seedBlob = async (
     contentType,
   });
   const id = deps.idFactory.next<'Blob'>() as BlobId;
-  const objectKey = `mail/${accountId}/blobs/${id}`;
+  const objectKey = `mail/${accountId}/sha256/${pending.sha256.slice(0, 2)}/${pending.sha256}`;
   await deps.blobStore.commitTemporary({
+    accountId,
     temporaryKey: pending.temporaryKey,
     objectKey,
   });

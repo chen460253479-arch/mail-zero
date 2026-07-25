@@ -2,11 +2,15 @@ import { MailCoreError, type MailAccountId } from '../types';
 import type { BlobCommitReceipt, BlobStore } from '../store';
 
 export type PreparedBlob = {
+  accountId: MailAccountId;
   temporaryKey: string;
   sha256: string;
   sizeBytes: bigint;
   contentType: string;
 };
+
+export const contentAddressedObjectKey = (accountId: MailAccountId, sha256: string): string =>
+  `mail/${accountId}/sha256/${sha256.slice(0, 2)}/${sha256}`;
 
 const copyBytes = (bytes: Uint8Array): Uint8Array => Uint8Array.from(bytes);
 
@@ -67,11 +71,17 @@ export async function prepareBlob(
   try {
     requireIntegrity(pending.sha256, pending.size, expectedSha256, expectedSize);
   } catch (error) {
-    await blobStore.deleteTemporary(pending.temporaryKey).catch(() => undefined);
+    await blobStore
+      .deleteTemporary({
+        accountId: input.accountId,
+        temporaryKey: pending.temporaryKey,
+      })
+      .catch(() => undefined);
     throw error;
   }
 
   return {
+    accountId: input.accountId,
     temporaryKey: pending.temporaryKey,
     sha256: expectedSha256,
     sizeBytes: expectedSize,
@@ -86,6 +96,7 @@ export async function commitPreparedBlob(
 ): Promise<BlobCommitReceipt> {
   try {
     const receipt = await blobStore.commitTemporary({
+      accountId: prepared.accountId,
       temporaryKey: prepared.temporaryKey,
       objectKey,
     });
@@ -100,13 +111,16 @@ export async function commitPreparedBlob(
 
 export async function verifyPreparedBlob(
   blobStore: BlobStore,
-  prepared: Pick<PreparedBlob, 'sha256' | 'sizeBytes'>,
+  prepared: Pick<PreparedBlob, 'accountId' | 'sha256' | 'sizeBytes'>,
   objectKey: string,
   missingIsIntegrityFailure = false,
 ): Promise<void> {
   let committed: Uint8Array;
   try {
-    committed = await blobStore.get(objectKey);
+    committed = await blobStore.get({
+      accountId: prepared.accountId,
+      objectKey,
+    });
   } catch (error) {
     if (
       missingIsIntegrityFailure &&
@@ -130,13 +144,18 @@ export async function discardTemporaryBlobs(
   prepared: PreparedBlob[],
 ): Promise<void> {
   await Promise.allSettled(
-    prepared.map(({ temporaryKey }) => blobStore.deleteTemporary(temporaryKey)),
+    prepared.map(({ accountId, temporaryKey }) =>
+      blobStore.deleteTemporary({ accountId, temporaryKey }),
+    ),
   );
 }
 
 export async function discardCommittedBlobs(
   blobStore: BlobStore,
+  accountId: MailAccountId,
   objectKeys: string[],
 ): Promise<void> {
-  await Promise.allSettled(objectKeys.map((objectKey) => blobStore.delete(objectKey)));
+  await Promise.allSettled(
+    objectKeys.map((objectKey) => blobStore.delete({ accountId, objectKey })),
+  );
 }

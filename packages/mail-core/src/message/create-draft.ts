@@ -1,5 +1,6 @@
 import {
   commitPreparedBlob,
+  contentAddressedObjectKey,
   discardCommittedBlobs,
   discardTemporaryBlobs,
   prepareBlob,
@@ -167,6 +168,7 @@ export async function loadDraftAttachments(
     await verifyPreparedBlob(
       dependencies.blobStore,
       {
+        accountId: record.accountId,
         sha256: record.sha256,
         sizeBytes: record.sizeBytes,
       },
@@ -175,7 +177,10 @@ export async function loadDraftAttachments(
     );
     let bytes: Uint8Array;
     try {
-      bytes = await dependencies.blobStore.get(record.objectKey);
+      bytes = await dependencies.blobStore.get({
+        accountId: record.accountId,
+        objectKey: record.objectKey,
+      });
     } catch {
       throw new MailCoreError('BLOB_INTEGRITY', { entityId: record.id });
     }
@@ -250,7 +255,7 @@ export function allocateDraftRevisionBlobs(
         sha256: pending.sha256,
         sizeBytes: pending.sizeBytes,
         contentType: pending.contentType,
-        objectKey: `mail/${accountId}/blobs/${id}`,
+        objectKey: contentAddressedObjectKey(accountId, pending.sha256),
         status: 'pending',
         createdAt: now,
         readyAt: null,
@@ -321,7 +326,16 @@ export async function commitDraftRevisionBlobs(
   committedObjectKeys: string[],
 ): Promise<void> {
   for (const { prepared, record } of revision.all) {
-    committedObjectKeys.push(record.objectKey);
+    const objectAlreadyOwned = (await tx.blobs.listByAccount(accountId)).some(
+      (blob) =>
+        blob.id !== record.id &&
+        blob.objectKey === record.objectKey &&
+        blob.status === 'ready' &&
+        blob.deletedAt === null,
+    );
+    if (!objectAlreadyOwned && !committedObjectKeys.includes(record.objectKey)) {
+      committedObjectKeys.push(record.objectKey);
+    }
     const receipt = await commitPreparedBlob(dependencies.blobStore, prepared, record.objectKey);
     await verifyPreparedBlob(dependencies.blobStore, prepared, receipt.objectKey);
     await tx.blobs.update(accountId, record.id, {
@@ -590,7 +604,7 @@ export async function createDraft(
     });
   } catch (error) {
     if (!operationCompleted) {
-      await discardCommittedBlobs(dependencies.blobStore, committedObjectKeys);
+      await discardCommittedBlobs(dependencies.blobStore, input.accountId, committedObjectKeys);
     }
     throw error;
   } finally {

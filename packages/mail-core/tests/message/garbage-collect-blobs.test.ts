@@ -47,6 +47,32 @@ describe('garbageCollectBlobs', () => {
     expect(h.inspect.objectExists(atCutoff.objectKey)).toBe(true);
   });
 
+  it('keeps shared content bytes while another Blob metadata record still owns the key', async () => {
+    const h = await createSeededEmailHarness();
+    const old = await h.inspect.seedOrphanBlob({ ageMs: 2 * DAY });
+    const recentId = h.deps.idFactory.next<'Blob'>() as BlobId;
+    await h.deps.unitOfWork.run((tx) =>
+      tx.blobs.insert({
+        ...old,
+        id: recentId,
+        createdAt: h.clock.now(),
+        readyAt: h.clock.now(),
+      }),
+    );
+
+    await expect(
+      garbageCollectBlobs(h.deps, {
+        accountId: h.accountId,
+        olderThan: new Date(h.clock.now().getTime() - DAY),
+        limit: 100,
+      }),
+    ).resolves.toEqual({ collectedBlobIds: [old.id] });
+
+    expect(await h.inspect.blob(old.id)).toBeNull();
+    expect(await h.inspect.blob(recentId)).not.toBeNull();
+    expect(h.inspect.objectExists(old.objectKey)).toBe(true);
+  });
+
   it('restores ready metadata after object deletion failure so a later run retries', async () => {
     const h = await createSeededEmailHarness();
     const orphan = await h.inspect.seedOrphanBlob({ ageMs: 2 * DAY });
@@ -97,8 +123,8 @@ describe('garbageCollectBlobs', () => {
       markConcurrentDeleteStarted = resolve;
     });
     h.deps.blobStore.failNextDelete(rawBlob.objectKey);
-    h.deps.blobStore.delete = async (objectKey: string) => {
-      if (objectKey === rawBlob.objectKey) {
+    h.deps.blobStore.delete = async (deleteInput) => {
+      if (deleteInput.objectKey === rawBlob.objectKey) {
         deleteCalls += 1;
         if (deleteCalls === 1) {
           markFirstDeleteStarted();
@@ -107,7 +133,7 @@ describe('garbageCollectBlobs', () => {
           markConcurrentDeleteStarted();
         }
       }
-      await originalDelete(objectKey);
+      await originalDelete(deleteInput);
     };
 
     const firstCollection = garbageCollectBlobs(h.deps, input).then(

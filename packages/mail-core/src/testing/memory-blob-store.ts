@@ -43,7 +43,7 @@ export class MemoryBlobStore implements BlobStore {
   private nextTemporaryKey = 1;
   private readonly corruptOnCommit: 'sha256' | 'size' | undefined;
   private failCommit: boolean;
-  private failCommitAfterPromotion = false;
+  private failCommitAfterPromotionCountdown = 0;
 
   constructor(options: MemoryBlobStoreOptions = {}) {
     this.corruptOnCommit = options.corruptOnCommit;
@@ -71,6 +71,7 @@ export class MemoryBlobStore implements BlobStore {
   }
 
   async commitTemporary(input: {
+    accountId: MailAccountId;
     temporaryKey: string;
     objectKey: string;
   }): Promise<BlobCommitReceipt> {
@@ -81,12 +82,30 @@ export class MemoryBlobStore implements BlobStore {
     if (pending === undefined) {
       throw new MailCoreError('BLOB_NOT_FOUND');
     }
+    if (pending.accountId !== input.accountId) {
+      throw new MailCoreError('INVALID_BLOB_KEY');
+    }
     const digest = await sha256(pending.bytes);
     if (digest !== pending.sha256 || BigInt(pending.bytes.byteLength) !== pending.size) {
       throw new MailCoreError('BLOB_NOT_FOUND');
     }
-    if (this.objects.has(input.objectKey)) {
-      throw new Error('blob object already exists');
+    const existing = this.objects.get(input.objectKey);
+    if (
+      existing !== undefined &&
+      (existing.bytes.byteLength !== pending.bytes.byteLength ||
+        existing.bytes.some((byte, index) => byte !== pending.bytes[index]))
+    ) {
+      throw new Error('blob object already exists with different content');
+    }
+    if (existing !== undefined) {
+      this.temporary.delete(input.temporaryKey);
+      if (this.acknowledgementFailsNow()) {
+        throw new Error('blob commit acknowledgement lost');
+      }
+      return {
+        objectKey: input.objectKey,
+        created: true,
+      };
     }
     const committed = copyBlob(pending);
     if (this.corruptOnCommit === 'sha256') {
@@ -98,8 +117,7 @@ export class MemoryBlobStore implements BlobStore {
     }
     this.objects.set(input.objectKey, committed);
     this.temporary.delete(input.temporaryKey);
-    if (this.failCommitAfterPromotion) {
-      this.failCommitAfterPromotion = false;
+    if (this.acknowledgementFailsNow()) {
       throw new Error('blob commit acknowledgement lost');
     }
     return {
@@ -108,23 +126,31 @@ export class MemoryBlobStore implements BlobStore {
     };
   }
 
-  async deleteTemporary(temporaryKey: string): Promise<void> {
-    this.temporary.delete(temporaryKey);
+  async deleteTemporary(input: { accountId: MailAccountId; temporaryKey: string }): Promise<void> {
+    const pending = this.temporary.get(input.temporaryKey);
+    if (pending !== undefined && pending.accountId !== input.accountId) {
+      throw new MailCoreError('INVALID_BLOB_KEY');
+    }
+    this.temporary.delete(input.temporaryKey);
   }
 
-  async get(objectKey: string): Promise<Uint8Array> {
-    const blob = this.objects.get(objectKey);
-    if (blob === undefined) {
+  async get(input: { accountId: MailAccountId; objectKey: string }): Promise<Uint8Array> {
+    const blob = this.objects.get(input.objectKey);
+    if (blob === undefined || blob.accountId !== input.accountId) {
       throw new MailCoreError('BLOB_NOT_FOUND');
     }
     return copyBytes(blob.bytes);
   }
 
-  async delete(objectKey: string): Promise<void> {
-    if (this.failingDeletes.delete(objectKey)) {
+  async delete(input: { accountId: MailAccountId; objectKey: string }): Promise<void> {
+    const blob = this.objects.get(input.objectKey);
+    if (blob !== undefined && blob.accountId !== input.accountId) {
+      throw new MailCoreError('INVALID_BLOB_KEY');
+    }
+    if (this.failingDeletes.delete(input.objectKey)) {
       throw new Error('blob delete failed');
     }
-    this.objects.delete(objectKey);
+    this.objects.delete(input.objectKey);
   }
 
   failNextDelete(objectKey: string): void {
@@ -136,7 +162,11 @@ export class MemoryBlobStore implements BlobStore {
   }
 
   failNextCommitAfterPromotion(): void {
-    this.failCommitAfterPromotion = true;
+    this.failCommitAfterPromotions(1);
+  }
+
+  failCommitAfterPromotions(count: number): void {
+    this.failCommitAfterPromotionCountdown = count;
   }
 
   snapshot(): ReadonlyMap<string, Uint8Array> {
@@ -145,5 +175,11 @@ export class MemoryBlobStore implements BlobStore {
 
   temporarySnapshot(): ReadonlyMap<string, Uint8Array> {
     return new Map([...this.temporary].map(([key, blob]) => [key, copyBytes(blob.bytes)]));
+  }
+
+  private acknowledgementFailsNow(): boolean {
+    if (this.failCommitAfterPromotionCountdown === 0) return false;
+    this.failCommitAfterPromotionCountdown -= 1;
+    return this.failCommitAfterPromotionCountdown === 0;
   }
 }
