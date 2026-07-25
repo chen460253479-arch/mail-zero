@@ -15,6 +15,8 @@ export const mailCoreErrorCodes = [
   'MAILBOX_PARENT_CYCLE',
   'EMAIL_MUST_HAVE_MAILBOX',
   'BLOB_INTEGRITY',
+  'BLOB_STORE_FAILURE',
+  'MIME_PARSE_FAILED',
   'IDEMPOTENCY_CONFLICT',
   'OVER_QUOTA',
   'INVALID_EMAIL',
@@ -29,12 +31,8 @@ export interface MailCoreErrorDetails {
 
 type MailCoreErrorDetailsInput = Readonly<Record<string, unknown>>;
 
-function sanitizeDetails(
-  details: MailCoreErrorDetailsInput,
-): MailCoreErrorDetails {
-  return typeof details.entityId === 'string'
-    ? { entityId: details.entityId }
-    : {};
+function sanitizeDetails(details: MailCoreErrorDetailsInput): MailCoreErrorDetails {
+  return typeof details.entityId === 'string' ? { entityId: details.entityId } : {};
 }
 
 export class MailCoreError extends Error {

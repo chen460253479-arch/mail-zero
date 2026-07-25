@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createMailAccount,
   importEmail,
+  MailCoreError,
   parseRawEmail,
   type BlobId,
   type MailAccountId,
@@ -16,6 +17,9 @@ const multipartRaw = new Uint8Array(
   readFileSync(new URL('../fixtures/multipart.eml', import.meta.url)),
 );
 const simpleRaw = new Uint8Array(readFileSync(new URL('../fixtures/simple.eml', import.meta.url)));
+const relatedRaw = new Uint8Array(
+  readFileSync(new URL('../fixtures/related-no-disposition.eml', import.meta.url)),
+);
 
 describe('importEmail', () => {
   it('publishes one Email and Thread only after every immutable Blob is ready', async () => {
@@ -43,13 +47,22 @@ describe('importEmail', () => {
     expect(await deps.core.inspect.rawBytes(result.emailId)).toEqual(multipartRaw);
 
     const blobs = await deps.core.inspect.blobs(deps.input.accountId);
-    expect(blobs).toHaveLength(2);
+    expect(blobs).toHaveLength(3);
     expect(blobs.every(({ status }) => status === 'ready')).toBe(true);
     expect(stored?.parts).toHaveLength(2);
     expect(stored?.parts[0]?.blobId).toBe(stored?.parts[1]?.blobId);
     const attachmentBlob = blobs.find(({ id }) => id === stored?.parts[0]?.blobId)!;
     await expect(deps.core.blobStore.get(attachmentBlob.objectKey)).resolves.toEqual(
       new Uint8Array([1, 2, 3, 4]),
+    );
+    const htmlBlob = blobs.find(({ id }) => id === stored?.htmlBlobId)!;
+    const expectedHtml = (
+      await parseRawEmail(multipartRaw, {
+        sanitizeHtml: (html) => html,
+      })
+    ).htmlBody;
+    await expect(deps.core.blobStore.get(htmlBlob.objectKey)).resolves.toEqual(
+      new TextEncoder().encode(expectedHtml),
     );
 
     const importChanges = (await deps.core.inspect.changes(deps.input.accountId)).filter(
@@ -146,7 +159,9 @@ describe('importEmail', () => {
     });
     const changesBefore = await deps.core.inspect.changes(deps.input.accountId);
 
-    await expect(importEmail(deps.core, deps.input)).rejects.toThrow('blob commit failed');
+    await expect(importEmail(deps.core, deps.input)).rejects.toMatchObject({
+      code: 'BLOB_STORE_FAILURE',
+    });
 
     expect(await deps.core.inspect.emails(deps.input.accountId)).toEqual([]);
     expect(await deps.core.inspect.threads(deps.input.accountId)).toEqual([]);
@@ -180,7 +195,8 @@ describe('importEmail', () => {
       sanitizeHtml: (html) => html,
     });
     const uniqueAttachmentSize = parsed.attachments[0]!.sizeBytes;
-    const exactQuota = BigInt(multipartRaw.byteLength) + uniqueAttachmentSize;
+    const htmlSize = BigInt(new TextEncoder().encode(parsed.htmlBody).byteLength);
+    const exactQuota = BigInt(multipartRaw.byteLength) + htmlSize + uniqueAttachmentSize;
     const deps = await createSeededImportDependencies({
       storageQuotaBytes: exactQuota,
     });
@@ -193,7 +209,7 @@ describe('importEmail', () => {
 
     expect(first.created).toBe(true);
     expect(second.created).toBe(true);
-    expect(await deps.core.inspect.blobs(deps.input.accountId)).toHaveLength(2);
+    expect(await deps.core.inspect.blobs(deps.input.accountId)).toHaveLength(3);
     expect(await deps.core.inspect.emails(deps.input.accountId)).toHaveLength(2);
   });
 
@@ -266,11 +282,194 @@ describe('importEmail', () => {
     const [stored] = await deps.core.inspect.emails(deps.input.accountId);
     expect(stored).toBeDefined();
     expect(await deps.core.inspect.rawBytes(stored!.id)).toEqual(multipartRaw);
-    expect(deps.core.blobStore.snapshot().size).toBe(2);
+    expect(deps.core.blobStore.snapshot().size).toBe(3);
     await expect(importEmail(deps.core, deps.input)).resolves.toEqual({
       created: false,
       emailId: stored!.id,
     });
+  });
+
+  it('persists normalized text and sanitized HTML as immutable UTF-8 content Blobs', async () => {
+    const raw = new TextEncoder().encode(
+      [
+        'From: Body Sender <body@example.test>',
+        'To: Body Recipient <recipient@example.test>',
+        'Message-ID: <body-blobs@example.test>',
+        'Date: Thu, 1 Jan 2026 13:00:00 +0000',
+        'Subject: Body blobs',
+        'MIME-Version: 1.0',
+        'Content-Type: multipart/alternative; boundary="body-alternative"',
+        '',
+        '--body-alternative',
+        'Content-Type: text/plain; charset=utf-8',
+        '',
+        'Plain body.',
+        '--body-alternative',
+        'Content-Type: text/html; charset=utf-8',
+        '',
+        '<p>HTML body</p><script>private-script</script>',
+        '--body-alternative--',
+      ].join('\r\n'),
+    );
+    const deps = await createSeededImportDependencies({
+      sanitizeHtml: (html) => html.replace(/<script>.*?<\/script>/gu, ''),
+    });
+    const result = await importEmail(deps.core, {
+      ...deps.input,
+      raw,
+      remoteEmailId: 'body-remote',
+    });
+    const stored = (await deps.core.inspect.email(result.emailId))!;
+    const textBlob = await deps.core.inspect.blob(stored.textBlobId!);
+    const htmlBlob = await deps.core.inspect.blob(stored.htmlBlobId!);
+
+    expect(textBlob).not.toBeNull();
+    expect(htmlBlob).not.toBeNull();
+    await expect(deps.core.blobStore.get(textBlob!.objectKey)).resolves.toEqual(
+      new TextEncoder().encode('Plain body.'),
+    );
+    await expect(deps.core.blobStore.get(htmlBlob!.objectKey)).resolves.toEqual(
+      new TextEncoder().encode('<p>HTML body</p>'),
+    );
+  });
+
+  it('does not delete a pre-existing destination object when conditional promotion rejects', async () => {
+    const deps = await createSeededImportDependencies();
+    const occupiedKey = `mail/${deps.input.accountId}/blobs/id-00000010`;
+    const originalBytes = new Uint8Array([9, 8, 7]);
+    const occupied = await deps.core.blobStore.putTemporary({
+      accountId: deps.input.accountId,
+      bytes: originalBytes,
+      contentType: 'application/octet-stream',
+    });
+    await deps.core.blobStore.commitTemporary({
+      temporaryKey: occupied.temporaryKey,
+      objectKey: occupiedKey,
+    });
+
+    await expect(importEmail(deps.core, deps.input)).rejects.toMatchObject({
+      code: 'BLOB_STORE_FAILURE',
+    });
+
+    await expect(deps.core.blobStore.get(occupiedKey)).resolves.toEqual(originalBytes);
+    expect(await deps.core.inspect.emails(deps.input.accountId)).toEqual([]);
+  });
+
+  it('maps sanitizer and BlobStore failures to safe stable errors', async () => {
+    const privateText = 'private-html object/key https://signed.example.test/blob?secret=1';
+    const sanitizerDeps = await createSeededImportDependencies({
+      sanitizeHtml: () => {
+        throw new Error(privateText);
+      },
+    });
+    const sanitizerError = await importEmail(sanitizerDeps.core, sanitizerDeps.input).catch(
+      (error: unknown) => error,
+    );
+    expect(sanitizerError).toMatchObject({ code: 'MIME_PARSE_FAILED' });
+    expect(`${String(sanitizerError)}${JSON.stringify(sanitizerError)}`).not.toContain(privateText);
+
+    const blobDeps = await createSeededImportDependencies();
+    blobDeps.core.blobStore.commitTemporary = async () => {
+      throw new Error(privateText);
+    };
+    const blobError = await importEmail(blobDeps.core, blobDeps.input).catch(
+      (error: unknown) => error,
+    );
+    expect(blobError).toMatchObject({ code: 'BLOB_STORE_FAILURE' });
+    expect(`${String(blobError)}${JSON.stringify(blobError)}`).not.toContain(privateText);
+
+    const knownSanitizerDeps = await createSeededImportDependencies({
+      sanitizeHtml: () => {
+        throw new MailCoreError('INVALID_EMAIL', { entityId: privateText });
+      },
+    });
+    const knownSanitizerError = await importEmail(
+      knownSanitizerDeps.core,
+      knownSanitizerDeps.input,
+    ).catch((error: unknown) => error);
+    expect(knownSanitizerError).toMatchObject({ code: 'INVALID_EMAIL' });
+    expect(`${String(knownSanitizerError)}${JSON.stringify(knownSanitizerError)}`).not.toContain(
+      privateText,
+    );
+
+    const knownBlobDeps = await createSeededImportDependencies();
+    knownBlobDeps.core.blobStore.commitTemporary = async () => {
+      throw new MailCoreError('BLOB_NOT_FOUND', { entityId: privateText });
+    };
+    const knownBlobError = await importEmail(knownBlobDeps.core, knownBlobDeps.input).catch(
+      (error: unknown) => error,
+    );
+    expect(knownBlobError).toMatchObject({ code: 'BLOB_NOT_FOUND' });
+    expect(`${String(knownBlobError)}${JSON.stringify(knownBlobError)}`).not.toContain(privateText);
+  });
+
+  it.each(['missing', 'corrupt'] as const)(
+    'verifies a reused ready Blob object before publishing when it is %s',
+    async (failure) => {
+      const parsed = await parseRawEmail(multipartRaw, {
+        sanitizeHtml: (html) => html,
+      });
+      const expectedBytes = parsed.attachments[0]!.bytes;
+      const deps = await createSeededImportDependencies();
+      const storedBytes = failure === 'missing' ? expectedBytes : new Uint8Array([4, 3, 2, 1]);
+      const pending = await deps.core.blobStore.putTemporary({
+        accountId: deps.input.accountId,
+        bytes: storedBytes,
+        contentType: 'image/png',
+      });
+      const objectKey = `mail/reused-${failure}`;
+      await deps.core.blobStore.commitTemporary({
+        temporaryKey: pending.temporaryKey,
+        objectKey,
+      });
+      if (failure === 'missing') {
+        await deps.core.blobStore.delete(objectKey);
+      }
+      const expected = await deps.core.blobStore.putTemporary({
+        accountId: deps.input.accountId,
+        bytes: expectedBytes,
+        contentType: 'image/png',
+      });
+      await deps.core.blobStore.deleteTemporary(expected.temporaryKey);
+      await deps.core.unitOfWork.run((tx) =>
+        tx.blobs.insert({
+          id: `reused-${failure}` as BlobId,
+          accountId: deps.input.accountId,
+          sha256: expected.sha256,
+          sizeBytes: expected.size,
+          contentType: 'image/png',
+          objectKey,
+          status: 'ready',
+          createdAt: deps.core.clock.now(),
+          readyAt: deps.core.clock.now(),
+          deletedAt: null,
+        }),
+      );
+
+      await expect(importEmail(deps.core, deps.input)).rejects.toMatchObject({
+        code: 'BLOB_INTEGRITY',
+      });
+      expect(await deps.core.inspect.emails(deps.input.accountId)).toEqual([]);
+      expect(await deps.core.inspect.stateVersion(deps.input.accountId)).toBe(1n);
+    },
+  );
+
+  it('imports a related null-disposition CID part with matching attachment metadata', async () => {
+    const deps = await createSeededImportDependencies();
+    const result = await importEmail(deps.core, {
+      ...deps.input,
+      raw: relatedRaw,
+      remoteEmailId: 'related-remote',
+    });
+    const stored = (await deps.core.inspect.email(result.emailId))!;
+
+    expect(stored.hasAttachment).toBe(false);
+    expect(stored.parts).toEqual([
+      expect.objectContaining({
+        disposition: null,
+        kind: 'inline',
+      }),
+    ]);
   });
 
   it('uses normalized references and subjects to place a reply in exactly one local Thread', async () => {

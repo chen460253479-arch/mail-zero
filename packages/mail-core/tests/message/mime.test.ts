@@ -87,4 +87,20 @@ describe('parseRawEmail', () => {
     expect(parsed.attachments[1]?.bytes).toEqual(new Uint8Array([1, 2, 3, 4]));
     expect(parsed.attachments[0]?.bytes).not.toBe(parsed.attachments[1]?.bytes);
   });
+
+  it('classifies a related CID part without Content-Disposition as inline consistently', async () => {
+    const parsed = await parseRawEmail(readFixture('related-no-disposition.eml'), {
+      sanitizeHtml: (html) => html,
+    });
+
+    expect(parsed.hasAttachment).toBe(false);
+    expect(parsed.attachments).toEqual([
+      expect.objectContaining({
+        contentId: '<related-image@example.test>',
+        disposition: null,
+        kind: 'inline',
+        related: true,
+      }),
+    ]);
+  });
 });

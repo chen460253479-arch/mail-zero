@@ -1,0 +1,19 @@
+From: Related Sender <related@example.test>
+To: Related Recipient <recipient@example.test>
+Message-ID: <related-no-disposition@example.test>
+Date: Thu, 1 Jan 2026 13:00:00 +0000
+Subject: Related without disposition
+MIME-Version: 1.0
+Content-Type: multipart/related; boundary="related-only"
+
+--related-only
+Content-Type: text/html; charset=utf-8
+
+<p>Related image</p><img src="cid:related-image@example.test">
+--related-only
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+Content-ID: <related-image@example.test>
+
+AQIDBA==
+--related-only--

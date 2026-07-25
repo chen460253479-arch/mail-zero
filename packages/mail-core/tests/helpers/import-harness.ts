@@ -15,6 +15,7 @@ export const createSeededImportDependencies = async (
   options: {
     corruptBlobOnCommit?: 'sha256' | 'size';
     failBlobCommit?: boolean;
+    sanitizeHtml?: (html: string) => string;
     storageQuotaBytes?: bigint | null;
   } = {},
 ): Promise<{
@@ -24,6 +25,7 @@ export const createSeededImportDependencies = async (
   const core = createMemoryMailCoreDependencies({
     corruptBlobOnCommit: options.corruptBlobOnCommit,
     failBlobCommit: options.failBlobCommit ?? false,
+    sanitizeHtml: options.sanitizeHtml,
   });
   const account = await createMailAccount(core, {
     ...fixtureAccountInput,

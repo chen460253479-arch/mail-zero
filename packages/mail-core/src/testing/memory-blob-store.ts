@@ -1,6 +1,6 @@
-import { MailCoreError } from '../types';
+import type { BlobCommitReceipt, BlobStore } from '../store';
 import type { MailAccountId } from '../types';
-import type { BlobStore } from '../store';
+import { MailCoreError } from '../types';
 
 interface StoredBlob {
   accountId: MailAccountId;
@@ -13,13 +13,8 @@ interface StoredBlob {
 const copyBytes = (bytes: Uint8Array): Uint8Array => Uint8Array.from(bytes);
 
 const sha256 = async (bytes: Uint8Array): Promise<string> => {
-  const digest = await globalThis.crypto.subtle.digest(
-    'SHA-256',
-    copyBytes(bytes),
-  );
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', copyBytes(bytes));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 };
 
 const copyBlob = (blob: StoredBlob): StoredBlob => ({
@@ -53,9 +48,7 @@ export class MemoryBlobStore implements BlobStore {
     const bytes = copyBytes(input.bytes);
     const digest = await sha256(bytes);
     const size = BigInt(bytes.byteLength);
-    const temporaryKey = `temporary/${this.nextTemporaryKey
-      .toString()
-      .padStart(8, '0')}`;
+    const temporaryKey = `temporary/${this.nextTemporaryKey.toString().padStart(8, '0')}`;
     this.nextTemporaryKey += 1;
     this.temporary.set(temporaryKey, {
       accountId: input.accountId,
@@ -70,7 +63,7 @@ export class MemoryBlobStore implements BlobStore {
   async commitTemporary(input: {
     temporaryKey: string;
     objectKey: string;
-  }): Promise<void> {
+  }): Promise<BlobCommitReceipt> {
     if (this.failCommit) {
       throw new Error('blob commit failed');
     }
@@ -95,6 +88,10 @@ export class MemoryBlobStore implements BlobStore {
     }
     this.objects.set(input.objectKey, committed);
     this.temporary.delete(input.temporaryKey);
+    return {
+      objectKey: input.objectKey,
+      created: true,
+    };
   }
 
   async deleteTemporary(temporaryKey: string): Promise<void> {
@@ -125,17 +122,10 @@ export class MemoryBlobStore implements BlobStore {
   }
 
   snapshot(): ReadonlyMap<string, Uint8Array> {
-    return new Map(
-      [...this.objects].map(([key, blob]) => [key, copyBytes(blob.bytes)]),
-    );
+    return new Map([...this.objects].map(([key, blob]) => [key, copyBytes(blob.bytes)]));
   }
 
   temporarySnapshot(): ReadonlyMap<string, Uint8Array> {
-    return new Map(
-      [...this.temporary].map(([key, blob]) => [
-        key,
-        copyBytes(blob.bytes),
-      ]),
-    );
+    return new Map([...this.temporary].map(([key, blob]) => [key, copyBytes(blob.bytes)]));
   }
 }

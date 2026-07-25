@@ -23,16 +23,8 @@ export type SubmissionStatus =
   | 'sent'
   | 'failed'
   | 'canceled';
-export type SubmissionAttemptOutcome =
-  | 'sent'
-  | 'transient_failure'
-  | 'permanent_failure';
-export type ChangeCollection =
-  | 'mailbox'
-  | 'email'
-  | 'thread'
-  | 'identity'
-  | 'email_submission';
+export type SubmissionAttemptOutcome = 'sent' | 'transient_failure' | 'permanent_failure';
+export type ChangeCollection = 'mailbox' | 'email' | 'thread' | 'identity' | 'email_submission';
 export type ChangeType = 'created' | 'updated' | 'destroyed';
 
 export interface MailAccountRecord {
@@ -47,19 +39,11 @@ export interface MailAccountRecord {
   updatedAt: Date;
 }
 
-export type InsertMailAccount = Pick<
-  MailAccountRecord,
-  'id' | 'userId' | 'connectionId'
-> &
+export type InsertMailAccount = Pick<MailAccountRecord, 'id' | 'userId' | 'connectionId'> &
   Partial<
     Pick<
       MailAccountRecord,
-      | 'status'
-      | 'stateVersion'
-      | 'timezone'
-      | 'storageQuotaBytes'
-      | 'createdAt'
-      | 'updatedAt'
+      'status' | 'stateVersion' | 'timezone' | 'storageQuotaBytes' | 'createdAt' | 'updatedAt'
     >
   >;
 
@@ -124,7 +108,15 @@ export interface EmailPartRecord {
   kind: 'body' | 'inline' | 'attachment';
 }
 
-export interface EmailRecord {
+export interface EmailContentRecord {
+  preview: string;
+  textBlobId: BlobId | null;
+  htmlBlobId: BlobId | null;
+  parserVersion: number;
+  parseWarnings: string[];
+}
+
+export interface EmailRecord extends EmailContentRecord {
   id: EmailId;
   accountId: MailAccountId;
   threadId: ThreadId;
@@ -133,7 +125,6 @@ export interface EmailRecord {
   inReplyTo: string[];
   references: string[];
   subject: string;
-  preview: string;
   sentAt: Date | null;
   receivedAt: Date;
   sizeBytes: bigint;
@@ -149,10 +140,6 @@ export interface EmailRecord {
   to: MailAddress[];
   cc: MailAddress[];
   bcc: MailAddress[];
-  textBlobId: BlobId | null;
-  htmlBlobId: BlobId | null;
-  parserVersion: number;
-  parseWarnings: string[];
   parts: EmailPartRecord[];
   mailboxIds: MailboxId[];
   restoreMailboxIds: MailboxId[];
@@ -238,23 +225,14 @@ export interface AccountRepository {
 }
 
 export interface MailboxRepository {
-  findById(
-    accountId: MailAccountId,
-    id: MailboxId,
-  ): Promise<MailboxRecord | null>;
-  findByRole(
-    accountId: MailAccountId,
-    role: MailboxRole,
-  ): Promise<MailboxRecord | null>;
+  findById(accountId: MailAccountId, id: MailboxId): Promise<MailboxRecord | null>;
+  findByRole(accountId: MailAccountId, role: MailboxRole): Promise<MailboxRecord | null>;
   findByNormalizedName(
     accountId: MailAccountId,
     parentId: MailboxId | null,
     normalizedName: string,
   ): Promise<MailboxRecord | null>;
-  existsOutsideAccount(
-    accountId: MailAccountId,
-    id: MailboxId,
-  ): Promise<boolean>;
+  existsOutsideAccount(accountId: MailAccountId, id: MailboxId): Promise<boolean>;
   listByAccount(accountId: MailAccountId): Promise<MailboxRecord[]>;
   insert(record: MailboxRecord): Promise<MailboxRecord>;
   update(
@@ -283,10 +261,7 @@ export interface BlobRepository {
 }
 
 export interface ThreadRepository {
-  findById(
-    accountId: MailAccountId,
-    id: ThreadId,
-  ): Promise<ThreadRecord | null>;
+  findById(accountId: MailAccountId, id: ThreadId): Promise<ThreadRecord | null>;
   listByAccount(accountId: MailAccountId): Promise<ThreadRecord[]>;
   insert(record: ThreadRecord): Promise<ThreadRecord>;
   update(
@@ -307,10 +282,7 @@ export interface EmailRepository {
   findById(accountId: MailAccountId, id: EmailId): Promise<EmailRecord | null>;
   findByRemoteId(input: FindRemoteEmailInput): Promise<RemoteEmailRecord | null>;
   listByAccount(accountId: MailAccountId): Promise<EmailRecord[]>;
-  listByThread(
-    accountId: MailAccountId,
-    threadId: ThreadId,
-  ): Promise<EmailRecord[]>;
+  listByThread(accountId: MailAccountId, threadId: ThreadId): Promise<EmailRecord[]>;
   insert(record: EmailRecord): Promise<EmailRecord>;
   update(
     accountId: MailAccountId,
@@ -323,11 +295,7 @@ export interface EmailRepository {
     emailId: EmailId,
     mailboxIds: MailboxId[],
   ): Promise<void>;
-  replaceKeywords(
-    accountId: MailAccountId,
-    emailId: EmailId,
-    keywords: Keyword[],
-  ): Promise<void>;
+  replaceKeywords(accountId: MailAccountId, emailId: EmailId, keywords: Keyword[]): Promise<void>;
   replaceRestoreMailboxes(
     accountId: MailAccountId,
     emailId: EmailId,
@@ -337,10 +305,7 @@ export interface EmailRepository {
 }
 
 export interface IdentityRepository {
-  findById(
-    accountId: MailAccountId,
-    id: IdentityId,
-  ): Promise<IdentityRecord | null>;
+  findById(accountId: MailAccountId, id: IdentityId): Promise<IdentityRecord | null>;
   listByAccount(accountId: MailAccountId): Promise<IdentityRecord[]>;
   insert(record: IdentityRecord): Promise<IdentityRecord>;
   update(
@@ -352,18 +317,12 @@ export interface IdentityRepository {
 }
 
 export interface SubmissionRepository {
-  findById(
-    accountId: MailAccountId,
-    id: EmailSubmissionId,
-  ): Promise<SubmissionRecord | null>;
+  findById(accountId: MailAccountId, id: EmailSubmissionId): Promise<SubmissionRecord | null>;
   findByIdempotencyKey(
     accountId: MailAccountId,
     idempotencyKey: string,
   ): Promise<SubmissionRecord | null>;
-  listByIdentity(
-    accountId: MailAccountId,
-    identityId: IdentityId,
-  ): Promise<SubmissionRecord[]>;
+  listByIdentity(accountId: MailAccountId, identityId: IdentityId): Promise<SubmissionRecord[]>;
   insert(record: SubmissionRecord): Promise<SubmissionRecord>;
   update(
     accountId: MailAccountId,

@@ -1,3 +1,12 @@
+import {
+  calculateSha256,
+  commitPreparedBlob,
+  discardCommittedBlobs,
+  discardTemporaryBlobs,
+  prepareBlob,
+  type PreparedBlob,
+  verifyPreparedBlob,
+} from './blob-lifecycle';
 import type {
   BlobRecord,
   EmailPartRecord,
@@ -7,14 +16,6 @@ import type {
   RemoteEmailRecord,
   ThreadRecord,
 } from '../store';
-import {
-  calculateSha256,
-  discardCommittedBlobs,
-  discardTemporaryBlobs,
-  prepareBlob,
-  promoteBlob,
-  type PreparedBlob,
-} from './blob-lifecycle';
 import {
   MailCoreError,
   normalizeKeyword,
@@ -155,6 +156,7 @@ const resolveBlobs = async (
           entityId: existing.id,
         });
       }
+      await verifyPreparedBlob(dependencies.blobStore, candidate, existing.objectKey, true);
       blobIdByDigest.set(key, existing.id);
       if (!existingReferencedIds.has(existing.id)) {
         newlyReferencedExistingBytes += existing.sizeBytes;
@@ -374,7 +376,7 @@ const updateMailboxAggregates = async (
 const buildEmailParts = (
   dependencies: MailCoreDependencies,
   parsed: ParsedEmail,
-  prepared: PreparedBlob[],
+  attachmentBlobs: PreparedBlob[],
   blobIdByDigest: Map<string, BlobId>,
 ): EmailPartRecord[] =>
   parsed.attachments.map((attachment, index) => ({
@@ -386,9 +388,9 @@ const buildEmailParts = (
     disposition: attachment.disposition,
     filename: attachment.filename,
     contentId: attachment.contentId,
-    blobId: blobIdByDigest.get(digestKey(prepared[index + 1]!))!,
+    blobId: blobIdByDigest.get(digestKey(attachmentBlobs[index]!))!,
     sizeBytes: attachment.sizeBytes,
-    kind: attachment.disposition === 'inline' ? 'inline' : 'attachment',
+    kind: attachment.kind,
   }));
 
 const recordImportChanges = async (
@@ -490,24 +492,43 @@ export async function importEmail(
     sanitizeHtml: dependencies.sanitizeHtml,
   });
   const prepared: PreparedBlob[] = [];
+  const attachmentBlobs: PreparedBlob[] = [];
   const committedObjectKeys: string[] = [];
+  let rawBlob: PreparedBlob | null = null;
+  let textBlob: PreparedBlob | null = null;
+  let htmlBlob: PreparedBlob | null = null;
   let importOperationCompleted = false;
   try {
-    prepared.push(
-      await prepareBlob(dependencies.blobStore, {
+    rawBlob = await prepareBlob(dependencies.blobStore, {
+      accountId: input.accountId,
+      bytes: raw,
+      contentType: 'message/rfc822',
+    });
+    prepared.push(rawBlob);
+    if (parsed.textBody.length > 0) {
+      textBlob = await prepareBlob(dependencies.blobStore, {
         accountId: input.accountId,
-        bytes: raw,
-        contentType: 'message/rfc822',
-      }),
-    );
+        bytes: new TextEncoder().encode(parsed.textBody),
+        contentType: 'text/plain; charset=utf-8',
+      });
+      prepared.push(textBlob);
+    }
+    if (parsed.htmlBody.length > 0) {
+      htmlBlob = await prepareBlob(dependencies.blobStore, {
+        accountId: input.accountId,
+        bytes: new TextEncoder().encode(parsed.htmlBody),
+        contentType: 'text/html; charset=utf-8',
+      });
+      prepared.push(htmlBlob);
+    }
     for (const attachment of parsed.attachments) {
-      prepared.push(
-        await prepareBlob(dependencies.blobStore, {
-          accountId: input.accountId,
-          bytes: attachment.bytes,
-          contentType: attachment.contentType,
-        }),
-      );
+      const attachmentBlob = await prepareBlob(dependencies.blobStore, {
+        accountId: input.accountId,
+        bytes: attachment.bytes,
+        contentType: attachment.contentType,
+      });
+      prepared.push(attachmentBlob);
+      attachmentBlobs.push(attachmentBlob);
     }
 
     const result = await dependencies.unitOfWork.run(async (tx): Promise<ImportEmailResult> => {
@@ -533,7 +554,7 @@ export async function importEmail(
 
       const thread = await decideThread(dependencies, tx, input, parsed, existingEmails, now);
       const emailId = dependencies.idFactory.next<'Email'>() as EmailId;
-      const rawBlobId = blobIdByDigest.get(digestKey(prepared[0]!))!;
+      const rawBlobId = blobIdByDigest.get(digestKey(rawBlob!))!;
       await tx.emails.insert({
         id: emailId,
         accountId: input.accountId,
@@ -559,11 +580,11 @@ export async function importEmail(
         to: parsed.to,
         cc: parsed.cc,
         bcc: parsed.bcc,
-        textBlobId: null,
-        htmlBlobId: null,
+        textBlobId: textBlob === null ? null : blobIdByDigest.get(digestKey(textBlob))!,
+        htmlBlobId: htmlBlob === null ? null : blobIdByDigest.get(digestKey(htmlBlob))!,
         parserVersion: 1,
         parseWarnings: [],
-        parts: buildEmailParts(dependencies, parsed, prepared, blobIdByDigest),
+        parts: buildEmailParts(dependencies, parsed, attachmentBlobs, blobIdByDigest),
         mailboxIds: validation.mailboxIds,
         restoreMailboxIds: [],
         keywords: validation.keywords,
@@ -582,8 +603,9 @@ export async function importEmail(
       const changedMailboxIds = await updateMailboxAggregates(tx, input, now);
 
       for (const { blobId, prepared: pending, record } of newBlobs) {
-        committedObjectKeys.push(record.objectKey);
-        await promoteBlob(dependencies.blobStore, pending, record.objectKey);
+        const receipt = await commitPreparedBlob(dependencies.blobStore, pending, record.objectKey);
+        committedObjectKeys.push(receipt.objectKey);
+        await verifyPreparedBlob(dependencies.blobStore, pending, receipt.objectKey);
         await tx.blobs.update(input.accountId, blobId, {
           status: 'ready',
           readyAt: now,

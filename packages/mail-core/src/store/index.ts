@@ -1,7 +1,7 @@
-import type { Id } from '../types';
-import type { BlobStore } from './blob-store';
-import type { SearchStore } from './search-store';
 import type { MailUnitOfWork } from './unit-of-work';
+import type { SearchStore } from './search-store';
+import type { BlobStore } from './blob-store';
+import type { Id } from '../types';
 
 export type MailCoreDependencies = {
   unitOfWork: MailUnitOfWork;
@@ -12,7 +12,7 @@ export type MailCoreDependencies = {
   sanitizeHtml(html: string): string;
 };
 
-export type { BlobStore } from './blob-store';
+export type { BlobCommitReceipt, BlobStore } from './blob-store';
 export * from './repositories';
 export type {
   SearchEmailFilter,

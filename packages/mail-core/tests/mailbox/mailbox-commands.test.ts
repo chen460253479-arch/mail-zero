@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createMailAccount, createMailbox, destroyMailbox, updateMailbox } from '../../src';
 import { createMemoryMailCoreDependencies } from '../../src/testing/fakes';
+import type { MailCoreDependencies, MailTransaction } from '../../src';
 
 describe('Mailbox commands', () => {
   it('enforces role, name, parent, child, content, and system invariants', async () => {
@@ -279,5 +280,75 @@ describe('Mailbox commands', () => {
     });
     expect(await deps.inspect.mailbox(child.id)).toBeNull();
     expect(await deps.inspect.mailbox(parent.id)).toBeNull();
+  });
+
+  it('locks the account before checking references and deleting a Mailbox', async () => {
+    const deps = createMemoryMailCoreDependencies();
+    const account = await createMailAccount(deps, {
+      userId: 'lock-user',
+      connectionId: 'lock-connection',
+      timezone: 'UTC',
+      storageQuotaBytes: null,
+    });
+    const mailbox = await createMailbox(deps, {
+      accountId: account.id,
+      name: 'Delete me',
+      kind: 'folder',
+      role: null,
+      parentId: null,
+    });
+    const trace: string[] = [];
+    const tracedDependencies: MailCoreDependencies = {
+      ...deps,
+      unitOfWork: {
+        run: (operation) =>
+          deps.unitOfWork.run((tx) => {
+            const traced: MailTransaction = {
+              ...tx,
+              lockAccount: async (accountId) => {
+                trace.push('lock');
+                await tx.lockAccount(accountId);
+              },
+              mailboxes: {
+                ...tx.mailboxes,
+                findById: async (...args) => {
+                  trace.push('find-mailbox');
+                  return tx.mailboxes.findById(...args);
+                },
+                listByAccount: async (...args) => {
+                  trace.push('read-mailbox-references');
+                  return tx.mailboxes.listByAccount(...args);
+                },
+                delete: async (...args) => {
+                  trace.push('delete-mailbox');
+                  return tx.mailboxes.delete(...args);
+                },
+              },
+              emails: {
+                ...tx.emails,
+                listByAccount: async (...args) => {
+                  trace.push('read-email-references');
+                  return tx.emails.listByAccount(...args);
+                },
+              },
+            };
+            return operation(traced);
+          }),
+      },
+    };
+
+    await destroyMailbox(tracedDependencies, {
+      accountId: account.id,
+      mailboxId: mailbox.id,
+    });
+
+    expect(await deps.inspect.mailbox(mailbox.id)).toBeNull();
+    expect(trace).toEqual([
+      'lock',
+      'find-mailbox',
+      'read-mailbox-references',
+      'read-email-references',
+      'delete-mailbox',
+    ]);
   });
 });

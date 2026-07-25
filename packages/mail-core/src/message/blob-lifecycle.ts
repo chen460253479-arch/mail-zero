@@ -1,5 +1,5 @@
 import { MailCoreError, type MailAccountId } from '../types';
-import type { BlobStore } from '../store';
+import type { BlobCommitReceipt, BlobStore } from '../store';
 
 export type PreparedBlob = {
   temporaryKey: string;
@@ -26,6 +26,11 @@ const requireIntegrity = (
   }
 };
 
+const safeBlobStoreError = (error: unknown): MailCoreError =>
+  error instanceof MailCoreError
+    ? new MailCoreError(error.code)
+    : new MailCoreError('BLOB_STORE_FAILURE');
+
 export async function prepareBlob(
   blobStore: BlobStore,
   input: {
@@ -37,10 +42,15 @@ export async function prepareBlob(
   const bytes = copyBytes(input.bytes);
   const expectedSha256 = await calculateSha256(bytes);
   const expectedSize = BigInt(bytes.byteLength);
-  const pending = await blobStore.putTemporary({
-    ...input,
-    bytes,
-  });
+  let pending: Awaited<ReturnType<BlobStore['putTemporary']>>;
+  try {
+    pending = await blobStore.putTemporary({
+      ...input,
+      bytes,
+    });
+  } catch (error) {
+    throw safeBlobStoreError(error);
+  }
 
   try {
     requireIntegrity(pending.sha256, pending.size, expectedSha256, expectedSize);
@@ -57,16 +67,44 @@ export async function prepareBlob(
   };
 }
 
-export async function promoteBlob(
+export async function commitPreparedBlob(
   blobStore: BlobStore,
   prepared: PreparedBlob,
   objectKey: string,
+): Promise<BlobCommitReceipt> {
+  try {
+    const receipt = await blobStore.commitTemporary({
+      temporaryKey: prepared.temporaryKey,
+      objectKey,
+    });
+    if (receipt.created !== true || receipt.objectKey !== objectKey) {
+      throw new MailCoreError('BLOB_STORE_FAILURE');
+    }
+    return receipt;
+  } catch (error) {
+    throw safeBlobStoreError(error);
+  }
+}
+
+export async function verifyPreparedBlob(
+  blobStore: BlobStore,
+  prepared: Pick<PreparedBlob, 'sha256' | 'sizeBytes'>,
+  objectKey: string,
+  missingIsIntegrityFailure = false,
 ): Promise<void> {
-  await blobStore.commitTemporary({
-    temporaryKey: prepared.temporaryKey,
-    objectKey,
-  });
-  const committed = await blobStore.get(objectKey);
+  let committed: Uint8Array;
+  try {
+    committed = await blobStore.get(objectKey);
+  } catch (error) {
+    if (
+      missingIsIntegrityFailure &&
+      error instanceof MailCoreError &&
+      error.code === 'BLOB_NOT_FOUND'
+    ) {
+      throw new MailCoreError('BLOB_INTEGRITY');
+    }
+    throw safeBlobStoreError(error);
+  }
   requireIntegrity(
     await calculateSha256(committed),
     BigInt(committed.byteLength),

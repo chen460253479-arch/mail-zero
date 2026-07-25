@@ -7,6 +7,8 @@ export type ParseRawEmailDependencies = {
 export type ParsedPart = {
   contentType: string;
   disposition: 'inline' | 'attachment' | null;
+  related: boolean;
+  kind: 'inline' | 'attachment';
   filename: string | null;
   contentId: string | null;
   bytes: Uint8Array;
