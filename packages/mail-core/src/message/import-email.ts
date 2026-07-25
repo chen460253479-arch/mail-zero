@@ -605,6 +605,7 @@ export async function importEmail(
       await tx.emails.insert({
         id: emailId,
         accountId: input.accountId,
+        identityId: null,
         threadId: thread.threadId,
         blobId: rawBlobId,
         messageId: parsed.messageId,

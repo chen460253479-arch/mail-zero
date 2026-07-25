@@ -166,6 +166,7 @@ export async function destroyIdentity(
   const now = dependencies.clock.now();
 
   return dependencies.unitOfWork.run(async (tx) => {
+    await tx.lockAccount(input.accountId);
     const identity = await tx.identities.findById(input.accountId, input.identityId);
     if (identity === null) {
       throw new MailCoreError('IDENTITY_NOT_FOUND', {

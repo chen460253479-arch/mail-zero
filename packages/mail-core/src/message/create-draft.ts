@@ -381,6 +381,7 @@ export function draftEmailContent(
   | 'from'
   | 'hasAttachment'
   | 'htmlBlobId'
+  | 'identityId'
   | 'inReplyTo'
   | 'messageId'
   | 'parserVersion'
@@ -405,6 +406,7 @@ export function draftEmailContent(
     },
   ];
   return {
+    identityId: input.references.identity.id,
     blobId: input.revision.raw.record.id,
     textBlobId: input.revision.text?.record.id ?? null,
     htmlBlobId: input.revision.html?.record.id ?? null,

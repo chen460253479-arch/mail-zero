@@ -11,20 +11,13 @@ import type {
   MailboxRole,
   ThreadId,
 } from '../types';
+import type { SubmissionAttemptOutcome, SubmissionStatus } from '../submission/types';
 import type { ChangeCollection, ChangeType, MailChange } from '../changes/types';
 
 export type AccountStatus = 'active' | 'suspended' | 'deleting';
 export type EmailLifecycle = 'draft' | 'received' | 'sent';
 export type BlobStatus = 'pending' | 'ready' | 'deleting';
-export type SubmissionStatus =
-  | 'scheduled'
-  | 'queued'
-  | 'sending'
-  | 'retry_wait'
-  | 'sent'
-  | 'failed'
-  | 'canceled';
-export type SubmissionAttemptOutcome = 'sent' | 'transient_failure' | 'permanent_failure';
+export type { SubmissionAttemptOutcome, SubmissionStatus } from '../submission/types';
 export type { ChangeCollection, ChangeType } from '../changes/types';
 
 export interface MailAccountRecord {
@@ -119,6 +112,7 @@ export interface EmailContentRecord {
 export interface EmailRecord extends EmailContentRecord {
   id: EmailId;
   accountId: MailAccountId;
+  identityId: IdentityId | null;
   threadId: ThreadId;
   blobId: BlobId | null;
   messageId: string | null;
@@ -273,6 +267,7 @@ export interface FindRemoteEmailInput {
 
 export interface EmailRepository {
   findById(accountId: MailAccountId, id: EmailId): Promise<EmailRecord | null>;
+  existsOutsideAccount(accountId: MailAccountId, id: EmailId): Promise<boolean>;
   findByRemoteId(input: FindRemoteEmailInput): Promise<RemoteEmailRecord | null>;
   listByAccount(accountId: MailAccountId): Promise<EmailRecord[]>;
   listByThread(accountId: MailAccountId, threadId: ThreadId): Promise<EmailRecord[]>;
@@ -299,6 +294,7 @@ export interface EmailRepository {
 
 export interface IdentityRepository {
   findById(accountId: MailAccountId, id: IdentityId): Promise<IdentityRecord | null>;
+  existsOutsideAccount(accountId: MailAccountId, id: IdentityId): Promise<boolean>;
   listByAccount(accountId: MailAccountId): Promise<IdentityRecord[]>;
   insert(record: IdentityRecord): Promise<IdentityRecord>;
   update(
@@ -323,6 +319,15 @@ export interface SubmissionRepository {
     patch: MutableFields<SubmissionRecord, 'id' | 'accountId'>,
   ): Promise<SubmissionRecord>;
   recordAttempt(record: SubmissionAttemptRecord): Promise<void>;
+  updateAttempt(
+    accountId: MailAccountId,
+    submissionId: EmailSubmissionId,
+    attemptNumber: number,
+    patch: MutableFields<
+      SubmissionAttemptRecord,
+      'id' | 'accountId' | 'submissionId' | 'attemptNumber' | 'startedAt'
+    >,
+  ): Promise<SubmissionAttemptRecord>;
   listAttempts(
     accountId: MailAccountId,
     submissionId: EmailSubmissionId,

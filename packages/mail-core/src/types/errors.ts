@@ -25,6 +25,7 @@ export const mailCoreErrorCodes = [
   'OVER_QUOTA',
   'INVALID_EMAIL',
   'IDENTITY_IN_USE',
+  'INVALID_SUBMISSION_TRANSITION',
 ] as const;
 
 export type MailCoreErrorCode = (typeof mailCoreErrorCodes)[number];

@@ -1,15 +1,3 @@
-import { MailCoreError } from '../types';
-import type {
-  BlobId,
-  EmailId,
-  EmailSubmissionId,
-  IdentityId,
-  Keyword,
-  MailAccountId,
-  MailboxId,
-  MailboxRole,
-  ThreadId,
-} from '../types';
 import type {
   AccountRepository,
   BlobRecord,
@@ -33,7 +21,19 @@ import type {
   ThreadRecord,
   ThreadRepository,
 } from '../store/repositories';
+import type {
+  BlobId,
+  EmailId,
+  EmailSubmissionId,
+  IdentityId,
+  Keyword,
+  MailAccountId,
+  MailboxId,
+  MailboxRole,
+  ThreadId,
+} from '../types';
 import type { MailTransaction, MailUnitOfWork } from '../store/unit-of-work';
+import { MailCoreError } from '../types';
 
 export interface MemoryMailState {
   accounts: Map<string, MailAccountRecord>;
@@ -57,12 +57,7 @@ const remoteKey = (input: FindRemoteEmailInput): string =>
   `${input.accountId}\u0000${input.provider}\u0000${input.remoteEmailId}`;
 
 const changeKey = (record: MailChangeRecord): string =>
-  [
-    record.accountId,
-    record.stateVersion,
-    record.collection,
-    record.entityId,
-  ].join('\u0000');
+  [record.accountId, record.stateVersion, record.collection, record.entityId].join('\u0000');
 
 const attemptKey = (record: SubmissionAttemptRecord): string =>
   `${record.accountId}\u0000${record.submissionId}\u0000${record.attemptNumber}`;
@@ -93,13 +88,9 @@ const listScoped = <RecordType extends { accountId: MailAccountId }>(
   records: Map<string, RecordType>,
   accountId: MailAccountId,
 ): RecordType[] =>
-  [...records.values()]
-    .filter((record) => record.accountId === accountId)
-    .map(copy);
+  [...records.values()].filter((record) => record.accountId === accountId).map(copy);
 
-const updateScoped = <
-  RecordType extends { id: string; accountId: MailAccountId },
->(
+const updateScoped = <RecordType extends { id: string; accountId: MailAccountId }>(
   records: Map<string, RecordType>,
   accountId: MailAccountId,
   id: string,
@@ -187,8 +178,7 @@ const createRepositories = (
     },
     async existsOutsideAccount(accountId, id) {
       return [...state.mailboxes.values()].some(
-        (candidate) =>
-          candidate.id === id && candidate.accountId !== accountId,
+        (candidate) => candidate.id === id && candidate.accountId !== accountId,
       );
     },
     async listByAccount(accountId) {
@@ -200,13 +190,7 @@ const createRepositories = (
       return copy(stored);
     },
     async update(accountId, id, patch) {
-      return updateScoped(
-        state.mailboxes,
-        accountId,
-        id,
-        patch,
-        'MAILBOX_NOT_FOUND',
-      );
+      return updateScoped(state.mailboxes, accountId, id, patch, 'MAILBOX_NOT_FOUND');
     },
     async delete(accountId, id) {
       state.mailboxes.delete(entityKey(accountId, id));
@@ -255,13 +239,7 @@ const createRepositories = (
       return copy(stored);
     },
     async update(accountId, id, patch) {
-      return updateScoped(
-        state.threads,
-        accountId,
-        id,
-        patch,
-        'THREAD_NOT_FOUND',
-      );
+      return updateScoped(state.threads, accountId, id, patch, 'THREAD_NOT_FOUND');
     },
     async delete(accountId, id) {
       state.threads.delete(entityKey(accountId, id));
@@ -272,6 +250,11 @@ const createRepositories = (
     async findById(accountId, id) {
       return findScoped(state.emails, accountId, id);
     },
+    async existsOutsideAccount(accountId, id) {
+      return [...state.emails.values()].some(
+        (candidate) => candidate.id === id && candidate.accountId !== accountId,
+      );
+    },
     async findByRemoteId(input) {
       const record = state.remoteEmails.get(remoteKey(input));
       return record === undefined ? null : copy(record);
@@ -280,9 +263,7 @@ const createRepositories = (
       return listScoped(state.emails, accountId);
     },
     async listByThread(accountId, threadId) {
-      return listScoped(state.emails, accountId).filter(
-        (email) => email.threadId === threadId,
-      );
+      return listScoped(state.emails, accountId).filter((email) => email.threadId === threadId);
     },
     async insert(record) {
       const stored = copy(record);
@@ -331,6 +312,11 @@ const createRepositories = (
     async findById(accountId, id) {
       return findScoped(state.identities, accountId, id);
     },
+    async existsOutsideAccount(accountId, id) {
+      return [...state.identities.values()].some(
+        (candidate) => candidate.id === id && candidate.accountId !== accountId,
+      );
+    },
     async listByAccount(accountId) {
       return listScoped(state.identities, accountId);
     },
@@ -340,13 +326,7 @@ const createRepositories = (
       return copy(stored);
     },
     async update(accountId, id, patch) {
-      return updateScoped(
-        state.identities,
-        accountId,
-        id,
-        patch,
-        'IDENTITY_NOT_FOUND',
-      );
+      return updateScoped(state.identities, accountId, id, patch, 'IDENTITY_NOT_FOUND');
     },
     async delete(accountId, id) {
       state.identities.delete(entityKey(accountId, id));
@@ -360,8 +340,7 @@ const createRepositories = (
     async findByIdempotencyKey(accountId, idempotencyKey) {
       const record = [...state.submissions.values()].find(
         (candidate) =>
-          candidate.accountId === accountId &&
-          candidate.idempotencyKey === idempotencyKey,
+          candidate.accountId === accountId && candidate.idempotencyKey === idempotencyKey,
       );
       return record === undefined ? null : copy(record);
     },
@@ -376,23 +355,33 @@ const createRepositories = (
       return copy(stored);
     },
     async update(accountId, id, patch) {
-      return updateScoped(
-        state.submissions,
-        accountId,
-        id,
-        patch,
-        'EMAIL_SUBMISSION_NOT_FOUND',
-      );
+      return updateScoped(state.submissions, accountId, id, patch, 'EMAIL_SUBMISSION_NOT_FOUND');
     },
     async recordAttempt(record) {
-      state.submissionAttempts.set(attemptKey(record), copy(record));
+      const key = attemptKey(record);
+      if (state.submissionAttempts.has(key)) {
+        throw new MailCoreError('INVALID_SUBMISSION_TRANSITION', {
+          entityId: record.submissionId,
+        });
+      }
+      state.submissionAttempts.set(key, copy(record));
+    },
+    async updateAttempt(accountId, submissionId, attemptNumber, patch) {
+      const key = `${accountId}\u0000${submissionId}\u0000${attemptNumber}`;
+      const current = state.submissionAttempts.get(key);
+      if (current === undefined || current.finishedAt !== null) {
+        throw new MailCoreError('INVALID_SUBMISSION_TRANSITION', {
+          entityId: submissionId,
+        });
+      }
+      const updated = copy({ ...current, ...patch });
+      state.submissionAttempts.set(key, updated);
+      return copy(updated);
     },
     async listAttempts(accountId, submissionId) {
       return [...state.submissionAttempts.values()]
         .filter(
-          (attempt) =>
-            attempt.accountId === accountId &&
-            attempt.submissionId === submissionId,
+          (attempt) => attempt.accountId === accountId && attempt.submissionId === submissionId,
         )
         .sort((left, right) => left.attemptNumber - right.attemptNumber)
         .map(copy);
@@ -408,12 +397,9 @@ const createRepositories = (
         .filter(
           (record) =>
             record.accountId === input.accountId &&
-            (input.collection === undefined ||
-              record.collection === input.collection) &&
-            (input.afterState === undefined ||
-              record.stateVersion > input.afterState) &&
-            (input.throughState === undefined ||
-              record.stateVersion <= input.throughState),
+            (input.collection === undefined || record.collection === input.collection) &&
+            (input.afterState === undefined || record.stateVersion > input.afterState) &&
+            (input.throughState === undefined || record.stateVersion <= input.throughState),
         )
         .sort((left, right) => {
           if (left.stateVersion !== right.stateVersion) {
@@ -442,9 +428,7 @@ export class MemoryMailUnitOfWork implements MailUnitOfWork {
   private tail: Promise<void> = Promise.resolve();
   private commitAcknowledgementsBeforeFailure: number | null = null;
 
-  async run<Result>(
-    operation: (tx: MailTransaction) => Promise<Result>,
-  ): Promise<Result> {
+  async run<Result>(operation: (tx: MailTransaction) => Promise<Result>): Promise<Result> {
     const previous = this.tail;
     let release: () => void = () => undefined;
     this.tail = new Promise<void>((resolve) => {
@@ -616,21 +600,17 @@ export const createMemoryMailInspector = (
     return unitOfWork.snapshot().accounts.get(accountId)?.stateVersion ?? 0n;
   },
   async seedMailboxEmail(mailboxId) {
-    const mailbox = findById(
-      unitOfWork.snapshot().mailboxes.values(),
-      mailboxId,
-    );
+    const mailbox = findById(unitOfWork.snapshot().mailboxes.values(), mailboxId);
     if (mailbox === null) {
       throw new MailCoreError('MAILBOX_NOT_FOUND', { entityId: mailboxId });
     }
-    const suffix = (unitOfWork.snapshot().emails.size + 1)
-      .toString()
-      .padStart(8, '0');
+    const suffix = (unitOfWork.snapshot().emails.size + 1).toString().padStart(8, '0');
     const now = new Date('2026-01-01T00:00:00.000Z');
     await unitOfWork.run((tx) =>
       tx.emails.insert({
         id: `seed-email-${suffix}` as EmailId,
         accountId: mailbox.accountId,
+        identityId: null,
         threadId: `seed-thread-${suffix}` as ThreadId,
         blobId: null,
         messageId: null,

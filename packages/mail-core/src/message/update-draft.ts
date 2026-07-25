@@ -45,6 +45,7 @@ const requireMutableDraft = async (
 const changedDraftProperties = (before: EmailRecord, after: EmailRecord): string[] => {
   const properties: (keyof EmailRecord)[] = [
     'blobId',
+    'identityId',
     'textBlobId',
     'htmlBlobId',
     'replyToEmailId',
