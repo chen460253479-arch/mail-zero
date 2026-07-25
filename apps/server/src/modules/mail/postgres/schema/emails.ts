@@ -239,6 +239,7 @@ export const emailPart = createMailTable(
   },
   (t) => [
     unique('email_part_id_account_uidx').on(t.id, t.mailAccountId),
+    unique('email_part_id_email_account_uidx').on(t.id, t.emailId, t.mailAccountId),
     unique('email_part_account_email_path_uidx').on(t.mailAccountId, t.emailId, t.partPath),
     foreignKey({
       name: 'email_part_email_account_fk',
@@ -247,8 +248,8 @@ export const emailPart = createMailTable(
     }).onDelete('cascade'),
     foreignKey({
       name: 'email_part_parent_account_fk',
-      columns: [t.parentPartId, t.mailAccountId],
-      foreignColumns: [t.id, t.mailAccountId],
+      columns: [t.parentPartId, t.emailId, t.mailAccountId],
+      foreignColumns: [t.id, t.emailId, t.mailAccountId],
     }).onDelete('cascade'),
     foreignKey({
       name: 'email_part_blob_account_fk',

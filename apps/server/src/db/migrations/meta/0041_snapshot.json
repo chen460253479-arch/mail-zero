@@ -1,5 +1,5 @@
 {
-  "id": "55de0e0e-e626-4f2c-848e-b76c9f29eb73",
+  "id": "eaaf682d-4005-4adb-8887-3c3f3ab0c2e0",
   "prevId": "7f99f625-ce9c-4e80-878a-fdf48c0e880c",
   "version": "7",
   "dialect": "postgresql",
@@ -3372,10 +3372,12 @@
           "tableTo": "mail0_email_part",
           "columnsFrom": [
             "parent_part_id",
+            "email_id",
             "mail_account_id"
           ],
           "columnsTo": [
             "id",
+            "email_id",
             "mail_account_id"
           ],
           "onDelete": "cascade",
@@ -3404,6 +3406,15 @@
           "nullsNotDistinct": false,
           "columns": [
             "id",
+            "mail_account_id"
+          ]
+        },
+        "email_part_id_email_account_uidx": {
+          "name": "email_part_id_email_account_uidx",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "email_id",
             "mail_account_id"
           ]
         },
@@ -3814,6 +3825,28 @@
           ],
           "isUnique": true,
           "where": "\"mail0_mailbox\".\"deleted_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "mailbox_active_root_name_uidx": {
+          "name": "mailbox_active_root_name_uidx",
+          "columns": [
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "normalized_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"mail0_mailbox\".\"parent_id\" IS NULL AND \"mail0_mailbox\".\"deleted_at\" IS NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}

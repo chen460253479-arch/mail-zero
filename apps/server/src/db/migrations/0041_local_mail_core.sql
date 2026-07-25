@@ -120,6 +120,7 @@ CREATE TABLE "mail0_email_part" (
 	"size_bytes" bigint NOT NULL,
 	"kind" text NOT NULL,
 	CONSTRAINT "email_part_id_account_uidx" UNIQUE("id","mail_account_id"),
+	CONSTRAINT "email_part_id_email_account_uidx" UNIQUE("id","email_id","mail_account_id"),
 	CONSTRAINT "email_part_account_email_path_uidx" UNIQUE("mail_account_id","email_id","part_path")
 );
 --> statement-breakpoint
@@ -232,7 +233,7 @@ ALTER TABLE "mail0_email_mailbox" ADD CONSTRAINT "email_mailbox_email_account_fk
 ALTER TABLE "mail0_email_mailbox" ADD CONSTRAINT "email_mailbox_mailbox_account_fk" FOREIGN KEY ("mailbox_id","mail_account_id") REFERENCES "public"."mail0_mailbox"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail0_email_part" ADD CONSTRAINT "mail0_email_part_mail_account_id_mail0_mail_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "public"."mail0_mail_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail0_email_part" ADD CONSTRAINT "email_part_email_account_fk" FOREIGN KEY ("email_id","mail_account_id") REFERENCES "public"."mail0_email"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "mail0_email_part" ADD CONSTRAINT "email_part_parent_account_fk" FOREIGN KEY ("parent_part_id","mail_account_id") REFERENCES "public"."mail0_email_part"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mail0_email_part" ADD CONSTRAINT "email_part_parent_account_fk" FOREIGN KEY ("parent_part_id","email_id","mail_account_id") REFERENCES "public"."mail0_email_part"("id","email_id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail0_email_part" ADD CONSTRAINT "email_part_blob_account_fk" FOREIGN KEY ("blob_id","mail_account_id") REFERENCES "public"."mail0_blob"("id","mail_account_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail0_email_trash_restore" ADD CONSTRAINT "mail0_email_trash_restore_mail_account_id_mail0_mail_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "public"."mail0_mail_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail0_email_trash_restore" ADD CONSTRAINT "email_trash_restore_email_account_fk" FOREIGN KEY ("email_id","mail_account_id") REFERENCES "public"."mail0_email"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -259,5 +260,6 @@ CREATE INDEX "email_trash_restore_account_email_mailbox_idx" ON "mail0_email_tra
 CREATE UNIQUE INDEX "remote_email_account_provider_remote_uidx" ON "mail0_remote_email" USING btree ("mail_account_id","provider","remote_email_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "mailbox_account_role_active_uidx" ON "mail0_mailbox" USING btree ("mail_account_id","role") WHERE "mail0_mailbox"."role" IS NOT NULL AND "mail0_mailbox"."deleted_at" IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "mailbox_active_sibling_name_uidx" ON "mail0_mailbox" USING btree ("mail_account_id","parent_id","normalized_name") WHERE "mail0_mailbox"."deleted_at" IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "mailbox_active_root_name_uidx" ON "mail0_mailbox" USING btree ("mail_account_id","normalized_name") WHERE "mail0_mailbox"."parent_id" IS NULL AND "mail0_mailbox"."deleted_at" IS NULL;--> statement-breakpoint
 CREATE INDEX "email_submission_account_status_send_idx" ON "mail0_email_submission" USING btree ("mail_account_id","status","send_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "email_submission_account_idempotency_uidx" ON "mail0_email_submission" USING btree ("mail_account_id","idempotency_key");

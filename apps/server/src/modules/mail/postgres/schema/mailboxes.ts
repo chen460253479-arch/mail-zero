@@ -50,5 +50,8 @@ export const mailbox = createMailTable(
     uniqueIndex('mailbox_active_sibling_name_uidx')
       .on(t.mailAccountId, t.parentId, t.normalizedName)
       .where(sql`${t.deletedAt} IS NULL`),
+    uniqueIndex('mailbox_active_root_name_uidx')
+      .on(t.mailAccountId, t.normalizedName)
+      .where(sql`${t.parentId} IS NULL AND ${t.deletedAt} IS NULL`),
   ],
 );
