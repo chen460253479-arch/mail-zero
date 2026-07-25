@@ -19,6 +19,7 @@
 
 # production
 /build
+**/build
 
 # misc
 .DS_Store
@@ -30,8 +31,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 bun-debug.log*
-# env files (can opt-in for committing if needed)
+# env files
 .env
+.env.*
+!.env.example
+**/.dev.vars
 
 # vercel
 .vercel
@@ -44,10 +48,12 @@ next-env.d.ts
 .idea
 .vscode
 .turbo
+**/.turbo
+**/.wrangler
+.git
 i18n.cache
 apps/mail/scripts.ts
 .gitignore
 .husky
 .github
 .devcontainer
-.env.example

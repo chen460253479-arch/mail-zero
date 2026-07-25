@@ -63,40 +63,60 @@ Before running the application, you'll need to set up services and configure env
 You can set up Zero in two ways:
 
 <details open>
-<summary><b>Standard Setup (Recommended)</b></summary>
+<summary><b>Docker Development (Recommended)</b></summary>
 
 #### Quick Start Guide
 
-1. **Clone and Install**
+1. **Clone and configure**
 
    ```bash
-   # Clone the repository
    git clone https://github.com/Mail-0/Zero.git
    cd Zero
-
-   # Install dependencies
-   pnpm install
-
-   # Start database locally
-   pnpm docker:db:up
+   cp .env.example .env
    ```
 
-2. **Set Up Environment**
+   On PowerShell, use `Copy-Item .env.example .env`. Set at least
+   `CREDENTIAL_ENCRYPTION_KEY`, `BETTER_AUTH_SECRET`, and any API keys you need.
 
-   - Run `pnpm nizzy env` to setup your environment variables
-   - Run `pnpm nizzy sync` to sync your environment variables and types
-   - Start the database with the provided docker compose setup: `pnpm docker:db:up`
-   - Initialize the database: `pnpm db:push`
+2. **Initialize the database**
 
-3. **Start the App**
+   Start the infrastructure and apply the schema explicitly:
 
    ```bash
-   pnpm dev
+   docker compose up --detach db valkey upstash-proxy
+   pnpm db:push
    ```
 
-4. **Open in Browser**
+   Run `pnpm db:push` again as part of deployment whenever the database schema changes.
 
-   Visit [http://localhost:3000](http://localhost:3000)
+3. **Start the complete development stack**
+
+   ```bash
+   docker compose up --build --detach
+   ```
+
+   Docker manages the Mail frontend, Wrangler backend, PostgreSQL, Valkey, and the Redis HTTP
+   proxy. Source changes are hot-reloaded without running `pnpm dev` on the host.
+
+4. **Manage the stack**
+
+   ```bash
+   docker compose ps
+   docker compose logs --follow
+   docker compose restart mail server
+   docker compose down
+   ```
+
+   Open [http://localhost:3000](http://localhost:3000). Container ports and the Wrangler
+   environment can be changed in `.env` using the `ZERO_*` variables from `.env.example`.
+   `compose.yaml` is the only Compose definition and is intended exclusively for development.
+
+   Rebuild after changing dependencies or the lockfile:
+
+   ```bash
+   docker compose up --build --detach
+   ```
+
    </details>
 
 <details open>
@@ -122,7 +142,6 @@ You can set up Zero in two ways:
    ```
 
 2. **Set Up Environment**
-
    - Run `pnpm nizzy env` to setup your environment variables
    - Run `pnpm nizzy sync` to sync your environment variables and types
    - Start the database with the provided docker compose setup: `pnpm docker:db:up`
@@ -138,7 +157,6 @@ You can set up Zero in two ways:
 ### Environment Setup
 
 1. **Better Auth Setup**
-
    - Open the `.env` file and change the BETTER_AUTH_SECRET to a random string. (Use `openssl rand -hex 32` to generate a 32 character string)
 
      ```env
@@ -155,7 +173,6 @@ You can set up Zero in two ways:
      Store the output as `CREDENTIAL_ENCRYPTION_KEY`.
 
 2. **Google OAuth Setup** (Optional Zero-managed Gmail authorization)
-
    - Go to [Google Cloud Console](https://console.cloud.google.com)
    - Create a new project
    - Add the following APIs in your Google Cloud Project: [People API](https://console.cloud.google.com/apis/library/people.googleapis.com), [Gmail API](https://console.cloud.google.com/apis/library/gmail.googleapis.com)
@@ -175,7 +192,6 @@ You can set up Zero in two ways:
      **Settings → Integrations → Gmail**.
 
    - Add yourself as a test user:
-
      - Go to [`Audience`](https://console.cloud.google.com/auth/audience)
      - Under 'Test users' click 'Add Users'
      - Add your email and click 'Save'
@@ -185,11 +201,9 @@ You can set up Zero in two ways:
 > **Settings → Integrations → Gmail**, including protocol, domain, and path.
 
 3. **Twilio Setup** (Required for SMS Integration)
-
    - Go to the [Twilio](https://www.twilio.com/)
    - Create a Twilio account if you don’t already have one
    - From the dashboard, locate your:
-
      - Account SID
      - Auth Token
      - Phone Number
@@ -204,8 +218,12 @@ You can set up Zero in two ways:
 
 ### Environment Variables
 
-Run `pnpm nizzy env` to setup your environment variables. It will copy the `.env.example` file to `.env` and fill in the variables for you.
-For local development a connection string example is provided in the `.env.example` file located in the same folder as the database.
+For Docker development, copy `.env.example` to `.env` and edit the values before starting the
+stack. Docker Compose loads this file directly, so `pnpm nizzy sync` is not required.
+`ZERO_WRANGLER_ENV` and the `ZERO_*_PORT` variables control the development containers.
+
+For manual host development, `pnpm nizzy env` creates `.env` and `pnpm nizzy sync` copies it to the
+individual applications.
 
 ### Database Setup
 
@@ -213,14 +231,14 @@ Zero uses PostgreSQL for storing data. Here's how to set it up:
 
 1. **Start the Database**
 
-   Run this command to start a local PostgreSQL instance:
+   Start PostgreSQL, then apply the database schema explicitly:
 
    ```bash
-   pnpm docker:db:up
+   docker compose up --detach db
+   pnpm db:push
    ```
 
    This creates a database with:
-
    - Name: `zerodotemail`
    - Username: `postgres`
    - Password: `postgres`
@@ -228,7 +246,9 @@ Zero uses PostgreSQL for storing data. Here's how to set it up:
 
 2. **Set Up Database Connection**
 
-   Make sure your database connection string is in `.env` file. And you have ran `pnpm nizzy sync` to sync the latest env.
+   Docker Compose constructs the container connection string from `POSTGRES_USER`,
+   `POSTGRES_PASSWORD`, and `POSTGRES_DB`. Keep `DATABASE_URL` pointed at `localhost` for commands
+   that you intentionally run on the host.
 
    For local development use:
 
@@ -237,7 +257,6 @@ Zero uses PostgreSQL for storing data. Here's how to set it up:
    ```
 
 3. **Database Commands**
-
    - **Set up database tables**:
 
      ```bash

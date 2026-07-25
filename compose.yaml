@@ -1,0 +1,137 @@
+name: zero
+
+x-zero-development: &zero-development
+  image: zero-development
+  env_file:
+    - .env
+  environment:
+    ZERO_WRANGLER_ENV: ${ZERO_WRANGLER_ENV:-local}
+    ZERO_DOCKER_DEV: 'true'
+    CHOKIDAR_USEPOLLING: 'true'
+    CHOKIDAR_INTERVAL: '1000'
+    DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-zerodotemail}
+    CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-zerodotemail}
+    WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-zerodotemail}
+    REDIS_URL: http://upstash-proxy:80
+    REDIS_TOKEN: ${REDIS_TOKEN:-upstash-local-token}
+  volumes:
+    - .:/app
+    - zero-node-modules:/app/node_modules
+    - zero-mail-node-modules:/app/apps/mail/node_modules
+    - zero-server-node-modules:/app/apps/server/node_modules
+    - zero-wrangler-state:/app/apps/server/.wrangler
+
+services:
+  mail:
+    <<: *zero-development
+    container_name: zerodotemail-mail
+    command: ['mail']
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+    ports:
+      - '${ZERO_MAIL_PORT:-3000}:3000'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/@vite/client').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  server:
+    <<: *zero-development
+    container_name: zerodotemail-server
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ['server']
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      upstash-proxy:
+        condition: service_healthy
+    ports:
+      - '${ZERO_SERVER_PORT:-8787}:8787'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8787/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  db:
+    container_name: zerodotemail-db
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-zerodotemail}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  valkey:
+    container_name: zerodotemail-redis
+    image: docker.io/bitnami/valkey:latest
+    restart: unless-stopped
+    environment:
+      ALLOW_EMPTY_PASSWORD: 'yes'
+      VALKEY_DISABLE_COMMANDS: FLUSHDB,FLUSHALL
+    ports:
+      - '${VALKEY_PORT:-6379}:6379'
+    volumes:
+      - valkey-data:/bitnami/valkey/data
+    healthcheck:
+      test: ['CMD', 'valkey-cli', '-h', '127.0.0.1', '-p', '6379', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  upstash-proxy:
+    container_name: zerodotemail-upstash-proxy
+    image: hiett/serverless-redis-http:latest
+    restart: unless-stopped
+    environment:
+      SRH_MODE: env
+      SRH_TOKEN: ${REDIS_TOKEN:-upstash-local-token}
+      SRH_CONNECTION_STRING: redis://valkey:6379
+    depends_on:
+      valkey:
+        condition: service_healthy
+    ports:
+      - '${REDIS_HTTP_PORT:-8079}:80'
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '--quiet', 'http://127.0.0.1:80']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
+  valkey-data:
+  zero-node-modules:
+  zero-mail-node-modules:
+  zero-server-node-modules:
+  zero-wrangler-state:

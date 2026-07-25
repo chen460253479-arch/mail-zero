@@ -3,8 +3,8 @@ import { cloudflare } from '@cloudflare/vite-plugin';
 import { reactRouter } from '@react-router/dev/vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import oxlintPlugin from 'vite-plugin-oxlint';
+import tailwindcss from '@tailwindcss/vite';
 import babel from 'vite-plugin-babel';
-import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from 'vite';
 import dedent from 'dedent';
 
@@ -12,18 +12,25 @@ const ReactCompilerConfig = {
   /* ... */
 };
 
+const reactCompilerPlugins =
+  process.env.ZERO_DOCKER_DEV === 'true'
+    ? []
+    : [
+        babel({
+          filter: /\.[jt]sx?$/,
+          babelConfig: {
+            presets: ['@babel/preset-typescript'],
+            plugins: [['babel-plugin-react-compiler', ReactCompilerConfig]],
+          },
+        }),
+      ];
+
 export default defineConfig({
   plugins: [
     oxlintPlugin(),
     reactRouter(),
     cloudflare(),
-    babel({
-      filter: /\.[jt]sx?$/,
-      babelConfig: {
-        presets: ['@babel/preset-typescript'], // if you use TypeScript
-        plugins: [['babel-plugin-react-compiler', ReactCompilerConfig]],
-      },
-    }),
+    ...reactCompilerPlugins,
     tsconfigPaths(),
     tailwindcss(),
     {
