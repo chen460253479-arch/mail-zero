@@ -14,7 +14,7 @@ export type StandardKeyword = (typeof standardKeywords)[number];
 export type Keyword = string;
 
 const standardKeywordSet = new Set<string>(standardKeywords);
-const invalidKeywordCharacter = /[\s\x00-\x1F\x7F]/;
+const invalidKeywordCharacter = /[\s\p{Cc}]/u;
 
 export function normalizeKeyword(keyword: string): Keyword {
   if (

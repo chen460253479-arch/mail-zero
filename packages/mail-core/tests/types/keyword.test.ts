@@ -11,5 +11,6 @@ describe('mail-core vocabulary', () => {
   it('rejects whitespace and control characters in keywords', () => {
     expect(() => normalizeKeyword('team label')).toThrow('INVALID_KEYWORD');
     expect(() => normalizeKeyword('team\nlabel')).toThrow('INVALID_KEYWORD');
+    expect(() => normalizeKeyword('team\u009Blabel')).toThrow('INVALID_KEYWORD');
   });
 });

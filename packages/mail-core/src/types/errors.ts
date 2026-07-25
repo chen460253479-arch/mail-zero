@@ -10,17 +10,30 @@ export const mailCoreErrorCodes = [
 ] as const;
 
 export type MailCoreErrorCode = (typeof mailCoreErrorCodes)[number];
-export type MailCoreErrorDetails = Readonly<Record<string, unknown>>;
+
+export interface MailCoreErrorDetails {
+  readonly entityId?: string;
+}
+
+type MailCoreErrorDetailsInput = Readonly<Record<string, unknown>>;
+
+function sanitizeDetails(
+  details: MailCoreErrorDetailsInput,
+): MailCoreErrorDetails {
+  return typeof details.entityId === 'string'
+    ? { entityId: details.entityId }
+    : {};
+}
 
 export class MailCoreError extends Error {
   readonly code: MailCoreErrorCode;
   readonly details: MailCoreErrorDetails;
 
-  constructor(code: MailCoreErrorCode, details: MailCoreErrorDetails = {}) {
+  constructor(code: MailCoreErrorCode, details: MailCoreErrorDetailsInput = {}) {
     super(code);
     this.name = 'MailCoreError';
     this.code = code;
-    this.details = details;
+    this.details = sanitizeDetails(details);
   }
 
   toJSON() {
