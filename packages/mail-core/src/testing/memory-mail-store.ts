@@ -464,16 +464,20 @@ export class MemoryMailUnitOfWork implements MailUnitOfWork {
         if (allocated !== undefined) {
           return allocated;
         }
-        const account = await repositories.accounts.findById(accountId);
-        if (account === null) {
+        const account = transactionState.accounts.get(accountId);
+        if (account === undefined) {
           throw new MailCoreError('ACCOUNT_NOT_FOUND', {
             entityId: accountId,
           });
         }
         const version = account.stateVersion + 1n;
-        await repositories.accounts.update(accountId, {
-          stateVersion: version,
-        });
+        transactionState.accounts.set(
+          accountId,
+          copy({
+            ...account,
+            stateVersion: version,
+          }),
+        );
         allocatedVersions.set(accountId, version);
         return version;
       },

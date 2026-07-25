@@ -41,4 +41,32 @@ describe('memory blob store', () => {
       size: 3n,
     });
   });
+
+  it('rejects a different blob for an occupied object key', async () => {
+    const deps = createMemoryMailCoreDependencies();
+    const first = await deps.blobStore.putTemporary({
+      accountId: 'account-1' as MailAccountId,
+      bytes: new Uint8Array([1]),
+      contentType: 'application/octet-stream',
+    });
+    await deps.blobStore.commitTemporary({
+      temporaryKey: first.temporaryKey,
+      objectKey: 'objects/blob-1',
+    });
+    const second = await deps.blobStore.putTemporary({
+      accountId: 'account-1' as MailAccountId,
+      bytes: new Uint8Array([2]),
+      contentType: 'application/octet-stream',
+    });
+
+    await expect(
+      deps.blobStore.commitTemporary({
+        temporaryKey: second.temporaryKey,
+        objectKey: 'objects/blob-1',
+      }),
+    ).rejects.toThrow('blob object already exists');
+    await expect(deps.blobStore.get('objects/blob-1')).resolves.toEqual(
+      new Uint8Array([1]),
+    );
+  });
 });

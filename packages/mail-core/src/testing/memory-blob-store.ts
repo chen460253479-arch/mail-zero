@@ -79,6 +79,9 @@ export class MemoryBlobStore implements BlobStore {
     if (digest !== pending.sha256 || BigInt(pending.bytes.byteLength) !== pending.size) {
       throw new MailCoreError('BLOB_NOT_FOUND');
     }
+    if (this.objects.has(input.objectKey)) {
+      throw new Error('blob object already exists');
+    }
     this.objects.set(input.objectKey, copyBlob(pending));
     this.temporary.delete(input.temporaryKey);
   }

@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { createMemoryMailCoreDependencies } from '../../src/testing/fakes';
-import type { MailAccountId } from '../../src';
+import type { AccountRepository, MailAccountId } from '../../src';
 
 const accountId = 'account-1' as MailAccountId;
+type AccountUpdatePatch = Parameters<AccountRepository['update']>[1];
+
+// @ts-expect-error State versions must be allocated through nextStateVersion().
+const directStateVersionPatch: AccountUpdatePatch = { stateVersion: 99n };
+void directStateVersionPatch;
 
 describe('memory mail unit of work', () => {
   it('rolls back writes when the operation throws', async () => {

@@ -233,7 +233,7 @@ export interface AccountRepository {
   insert(input: InsertMailAccount): Promise<MailAccountRecord>;
   update(
     id: MailAccountId,
-    patch: MutableFields<MailAccountRecord, 'id'>,
+    patch: MutableFields<MailAccountRecord, 'id' | 'stateVersion'>,
   ): Promise<MailAccountRecord>;
 }
 
