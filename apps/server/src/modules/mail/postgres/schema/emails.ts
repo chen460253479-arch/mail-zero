@@ -1,6 +1,8 @@
 import {
   bigint,
   boolean,
+  check,
+  customType,
   foreignKey,
   index,
   integer,
@@ -10,12 +12,13 @@ import {
   unique,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
+import { mailAccount, mailIdentity } from './accounts';
 import { createMailTable } from '../table';
-import { mailAccount } from './accounts';
-import { blob } from './blobs';
 import { mailbox } from './mailboxes';
 import { thread } from './threads';
+import { blob } from './blobs';
 
 export const email = createMailTable(
   'email',
@@ -24,10 +27,12 @@ export const email = createMailTable(
     mailAccountId: text('mail_account_id')
       .notNull()
       .references(() => mailAccount.id, { onDelete: 'cascade' }),
+    identityId: text('identity_id'),
     threadId: text('thread_id').notNull(),
     blobId: text('blob_id'),
     messageIdHeader: text('message_id_header'),
-    inReplyTo: text('in_reply_to'),
+    replyToEmailId: text('reply_to_email_id'),
+    inReplyTo: text('in_reply_to').array(),
     references: text('references').array(),
     subject: text('subject'),
     preview: text('preview'),
@@ -42,12 +47,25 @@ export const email = createMailTable(
     destroyedAt: timestamp('destroyed_at', { withTimezone: true }),
   },
   (t) => [
+    check('email_lifecycle_check', sql`${t.lifecycle} IN ('draft', 'received', 'sent')`),
+    check('email_size_nonnegative_check', sql`${t.sizeBytes} >= 0`),
+    check('email_draft_revision_nonnegative_check', sql`${t.draftRevision} >= 0`),
     unique('email_id_account_uidx').on(t.id, t.mailAccountId),
+    foreignKey({
+      name: 'email_identity_account_fk',
+      columns: [t.identityId, t.mailAccountId],
+      foreignColumns: [mailIdentity.id, mailIdentity.mailAccountId],
+    }).onDelete('restrict'),
     foreignKey({
       name: 'email_thread_account_fk',
       columns: [t.threadId, t.mailAccountId],
       foreignColumns: [thread.id, thread.mailAccountId],
     }).onDelete('cascade'),
+    foreignKey({
+      name: 'email_reply_account_fk',
+      columns: [t.replyToEmailId, t.mailAccountId],
+      foreignColumns: [t.id, t.mailAccountId],
+    }).onDelete('restrict'),
     foreignKey({
       name: 'email_blob_account_fk',
       columns: [t.blobId, t.mailAccountId],
@@ -63,6 +81,35 @@ export const email = createMailTable(
   ],
 );
 
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return 'tsvector';
+  },
+});
+
+export const emailSearch = createMailTable(
+  'email_search',
+  {
+    mailAccountId: text('mail_account_id')
+      .notNull()
+      .references(() => mailAccount.id, { onDelete: 'cascade' }),
+    emailId: text('email_id').notNull(),
+    document: tsvector('document').notNull(),
+  },
+  (t) => [
+    primaryKey({
+      name: 'email_search_pk',
+      columns: [t.mailAccountId, t.emailId],
+    }),
+    foreignKey({
+      name: 'email_search_email_account_fk',
+      columns: [t.emailId, t.mailAccountId],
+      foreignColumns: [email.id, email.mailAccountId],
+    }).onDelete('cascade'),
+    index('email_search_document_gin_idx').using('gin', t.document),
+  ],
+);
+
 export const emailAddress = createMailTable(
   'email_address',
   {
@@ -70,14 +117,17 @@ export const emailAddress = createMailTable(
       .notNull()
       .references(() => mailAccount.id, { onDelete: 'cascade' }),
     emailId: text('email_id').notNull(),
-    kind: text('kind')
-      .$type<'sender' | 'from' | 'to' | 'cc' | 'bcc' | 'reply_to'>()
-      .notNull(),
+    kind: text('kind').$type<'sender' | 'from' | 'to' | 'cc' | 'bcc' | 'reply_to'>().notNull(),
     position: integer('position').notNull(),
     name: text('name'),
     address: text('email').notNull(),
   },
   (t) => [
+    check(
+      'email_address_kind_check',
+      sql`${t.kind} IN ('sender', 'from', 'to', 'cc', 'bcc', 'reply_to')`,
+    ),
+    check('email_address_position_nonnegative_check', sql`${t.position} >= 0`),
     primaryKey({
       name: 'email_address_pk',
       columns: [t.mailAccountId, t.emailId, t.kind, t.position],
@@ -98,8 +148,10 @@ export const emailMailbox = createMailTable(
       .references(() => mailAccount.id, { onDelete: 'cascade' }),
     emailId: text('email_id').notNull(),
     mailboxId: text('mailbox_id').notNull(),
+    position: integer('position').notNull(),
   },
   (t) => [
+    check('email_mailbox_position_nonnegative_check', sql`${t.position} >= 0`),
     primaryKey({
       name: 'email_mailbox_pk',
       columns: [t.emailId, t.mailboxId],
@@ -109,16 +161,13 @@ export const emailMailbox = createMailTable(
       columns: [t.emailId, t.mailAccountId],
       foreignColumns: [email.id, email.mailAccountId],
     }).onDelete('cascade'),
+    unique('email_mailbox_account_email_position_uidx').on(t.mailAccountId, t.emailId, t.position),
     foreignKey({
       name: 'email_mailbox_mailbox_account_fk',
       columns: [t.mailboxId, t.mailAccountId],
       foreignColumns: [mailbox.id, mailbox.mailAccountId],
     }).onDelete('cascade'),
-    index('email_mailbox_account_mailbox_email_idx').on(
-      t.mailAccountId,
-      t.mailboxId,
-      t.emailId,
-    ),
+    index('email_mailbox_account_mailbox_email_idx').on(t.mailAccountId, t.mailboxId, t.emailId),
   ],
 );
 
@@ -130,8 +179,10 @@ export const emailTrashRestore = createMailTable(
       .references(() => mailAccount.id, { onDelete: 'cascade' }),
     emailId: text('email_id').notNull(),
     mailboxId: text('mailbox_id').notNull(),
+    position: integer('position').notNull(),
   },
   (t) => [
+    check('email_trash_restore_position_nonnegative_check', sql`${t.position} >= 0`),
     primaryKey({
       name: 'email_trash_restore_pk',
       columns: [t.emailId, t.mailboxId],
@@ -141,6 +192,11 @@ export const emailTrashRestore = createMailTable(
       columns: [t.emailId, t.mailAccountId],
       foreignColumns: [email.id, email.mailAccountId],
     }).onDelete('cascade'),
+    unique('email_trash_restore_account_email_position_uidx').on(
+      t.mailAccountId,
+      t.emailId,
+      t.position,
+    ),
     foreignKey({
       name: 'email_trash_restore_mailbox_account_fk',
       columns: [t.mailboxId, t.mailAccountId],
@@ -162,8 +218,10 @@ export const emailKeyword = createMailTable(
       .references(() => mailAccount.id, { onDelete: 'cascade' }),
     emailId: text('email_id').notNull(),
     keyword: text('keyword').notNull(),
+    position: integer('position').notNull(),
   },
   (t) => [
+    check('email_keyword_position_nonnegative_check', sql`${t.position} >= 0`),
     primaryKey({
       name: 'email_keyword_pk',
       columns: [t.emailId, t.keyword],
@@ -173,11 +231,8 @@ export const emailKeyword = createMailTable(
       columns: [t.emailId, t.mailAccountId],
       foreignColumns: [email.id, email.mailAccountId],
     }).onDelete('cascade'),
-    index('email_keyword_account_keyword_email_idx').on(
-      t.mailAccountId,
-      t.keyword,
-      t.emailId,
-    ),
+    unique('email_keyword_account_email_position_uidx').on(t.mailAccountId, t.emailId, t.position),
+    index('email_keyword_account_keyword_email_idx').on(t.mailAccountId, t.keyword, t.emailId),
   ],
 );
 
@@ -196,6 +251,7 @@ export const emailContent = createMailTable(
     parsedAt: timestamp('parsed_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    check('email_content_parser_version_positive_check', sql`${t.parserVersion} > 0`),
     primaryKey({
       name: 'email_content_pk',
       columns: [t.mailAccountId, t.emailId],
@@ -226,6 +282,7 @@ export const emailPart = createMailTable(
       .notNull()
       .references(() => mailAccount.id, { onDelete: 'cascade' }),
     emailId: text('email_id').notNull(),
+    position: integer('position').notNull(),
     parentPartId: text('parent_part_id'),
     partPath: text('part_path').notNull(),
     contentType: text('content_type').notNull(),
@@ -238,9 +295,17 @@ export const emailPart = createMailTable(
     kind: text('kind').$type<'body' | 'inline' | 'attachment'>().notNull(),
   },
   (t) => [
+    check('email_part_position_nonnegative_check', sql`${t.position} >= 0`),
+    check('email_part_size_nonnegative_check', sql`${t.sizeBytes} >= 0`),
+    check(
+      'email_part_disposition_check',
+      sql`${t.disposition} IS NULL OR ${t.disposition} IN ('inline', 'attachment')`,
+    ),
+    check('email_part_kind_check', sql`${t.kind} IN ('body', 'inline', 'attachment')`),
     unique('email_part_id_account_uidx').on(t.id, t.mailAccountId),
     unique('email_part_id_email_account_uidx').on(t.id, t.emailId, t.mailAccountId),
     unique('email_part_account_email_path_uidx').on(t.mailAccountId, t.emailId, t.partPath),
+    unique('email_part_account_email_position_uidx').on(t.mailAccountId, t.emailId, t.position),
     foreignKey({
       name: 'email_part_email_account_fk',
       columns: [t.emailId, t.mailAccountId],
@@ -265,7 +330,7 @@ export const remoteEmail = createMailTable(
     mailAccountId: text('mail_account_id')
       .notNull()
       .references(() => mailAccount.id, { onDelete: 'cascade' }),
-    provider: text('provider').$type<'google' | 'microsoft' | 'zoho' | 'imap'>().notNull(),
+    provider: text('provider').notNull(),
     remoteEmailId: text('remote_email_id').notNull(),
     remoteThreadId: text('remote_thread_id'),
     emailId: text('email_id').notNull(),

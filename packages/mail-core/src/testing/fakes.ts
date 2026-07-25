@@ -35,10 +35,7 @@ export class MemoryClock {
 }
 
 export class MemorySearchStore implements SearchStore {
-  constructor(
-    private readonly unitOfWork: MemoryMailUnitOfWork,
-    private readonly blobStore: MemoryBlobStore,
-  ) {}
+  constructor(private readonly unitOfWork: MemoryMailUnitOfWork) {}
 
   async query(input: SearchEmailInput): Promise<SearchEmailResult> {
     const normalize = (value: string): string =>
@@ -52,35 +49,14 @@ export class MemorySearchStore implements SearchStore {
       ...email.bcc,
     ];
     const state = this.unitOfWork.snapshot();
-    const bodyText = async (email: EmailRecord): Promise<string> => {
-      const chunks: string[] = [];
-      for (const blobId of [email.textBlobId, email.htmlBlobId]) {
-        if (blobId === null) {
-          continue;
-        }
-        const blob = [...state.blobs.values()].find(
-          (candidate) =>
-            candidate.accountId === email.accountId &&
-            candidate.id === blobId &&
-            candidate.status === 'ready' &&
-            candidate.deletedAt === null,
-        );
-        if (blob !== undefined) {
-          chunks.push(new TextDecoder().decode(await this.blobStore.get(blob.objectKey)));
-        }
-      }
-      return chunks.join(' ');
-    };
-    const candidates = await Promise.all(
-      [...state.emails.values()]
-        .filter((email) => email.accountId === input.accountId && email.destroyedAt === null)
-        .map(async (email) => ({
-          email,
-          body: input.filter.text === undefined ? '' : await bodyText(email),
-        })),
-    );
+    const candidates = [...state.emails.values()]
+      .filter((email) => email.accountId === input.accountId && email.destroyedAt === null)
+      .map((email) => ({
+        email,
+        document: state.emailSearchDocuments.get(`${email.accountId}\u0000${email.id}`),
+      }));
     const filtered = candidates
-      .filter(({ email, body }) => {
+      .filter(({ email, document }) => {
         if (email.accountId !== input.accountId || email.destroyedAt !== null) {
           return false;
         }
@@ -98,13 +74,9 @@ export class MemorySearchStore implements SearchStore {
           (filter.text === undefined ||
             normalize(
               [
-                email.subject,
-                email.preview,
-                body,
-                ...addressFields(email).flatMap(({ email: address, name }) => [
-                  address,
-                  name ?? '',
-                ]),
+                document?.subject ?? email.subject,
+                document?.addressText ?? '',
+                document?.bodyText ?? email.preview,
               ].join(' '),
             ).includes(filter.text))
         );
@@ -181,7 +153,7 @@ export const createMemoryMailCoreDependencies = (
     corruptOnCommit: options.corruptBlobOnCommit,
     failCommit: options.failBlobCommit,
   });
-  const searchStore = new MemorySearchStore(unitOfWork, blobStore);
+  const searchStore = new MemorySearchStore(unitOfWork);
   const clock = new MemoryClock(options.now);
   const baseInspector = createMemoryMailInspector(unitOfWork);
   let nextId = 1;

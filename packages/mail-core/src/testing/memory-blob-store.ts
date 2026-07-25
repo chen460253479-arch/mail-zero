@@ -13,7 +13,16 @@ interface StoredBlob {
 const copyBytes = (bytes: Uint8Array): Uint8Array => Uint8Array.from(bytes);
 
 const sha256 = async (bytes: Uint8Array): Promise<string> => {
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', copyBytes(bytes));
+  const platformCrypto = (
+    globalThis as unknown as {
+      crypto: {
+        subtle: {
+          digest(algorithm: string, data: Uint8Array): Promise<ArrayBuffer>;
+        };
+      };
+    }
+  ).crypto;
+  const digest = await platformCrypto.subtle.digest('SHA-256', copyBytes(bytes));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 };
 

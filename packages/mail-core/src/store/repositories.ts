@@ -152,6 +152,12 @@ export interface RemoteEmailRecord {
   lastSeenAt: Date;
 }
 
+export interface EmailSearchDocument {
+  subject: string;
+  addressText: string;
+  bodyText: string;
+}
+
 export interface IdentityRecord {
   id: IdentityId;
   accountId: MailAccountId;
@@ -289,6 +295,11 @@ export interface EmailRepository {
     accountId: MailAccountId,
     emailId: EmailId,
     mailboxIds: MailboxId[],
+  ): Promise<void>;
+  publishSearchDocument(
+    accountId: MailAccountId,
+    emailId: EmailId,
+    document: EmailSearchDocument,
   ): Promise<void>;
   delete(accountId: MailAccountId, id: EmailId): Promise<void>;
 }

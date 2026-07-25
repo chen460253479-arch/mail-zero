@@ -5,6 +5,7 @@ import type {
   ChangeRepository,
   EmailRecord,
   EmailRepository,
+  EmailSearchDocument,
   FindRemoteEmailInput,
   IdentityRecord,
   IdentityRepository,
@@ -41,6 +42,7 @@ export interface MemoryMailState {
   blobs: Map<string, BlobRecord>;
   threads: Map<string, ThreadRecord>;
   emails: Map<string, EmailRecord>;
+  emailSearchDocuments: Map<string, EmailSearchDocument>;
   remoteEmails: Map<string, RemoteEmailRecord>;
   identities: Map<string, IdentityRecord>;
   submissions: Map<string, SubmissionRecord>;
@@ -63,12 +65,28 @@ const changeKey = (record: MailChangeRecord): string =>
 const attemptKey = (record: SubmissionAttemptRecord): string =>
   `${record.accountId}\u0000${record.submissionId}\u0000${record.attemptNumber}`;
 
+const searchDocumentFromEmail = (record: EmailRecord): EmailSearchDocument => ({
+  subject: record.subject,
+  addressText: [
+    ...record.sender,
+    ...record.from,
+    ...record.replyTo,
+    ...record.to,
+    ...record.cc,
+    ...record.bcc,
+  ]
+    .flatMap(({ email, name }) => [name ?? '', email])
+    .join(' '),
+  bodyText: record.preview,
+});
+
 const createEmptyState = (): MemoryMailState => ({
   accounts: new Map(),
   mailboxes: new Map(),
   blobs: new Map(),
   threads: new Map(),
   emails: new Map(),
+  emailSearchDocuments: new Map(),
   remoteEmails: new Map(),
   identities: new Map(),
   submissions: new Map(),
@@ -276,10 +294,21 @@ const createRepositories = (
     async insert(record) {
       const stored = copy(record);
       state.emails.set(entityKey(record.accountId, record.id), stored);
+      state.emailSearchDocuments.set(
+        entityKey(record.accountId, record.id),
+        searchDocumentFromEmail(record),
+      );
       return copy(stored);
     },
     async update(accountId, id, patch) {
-      return updateScoped(state.emails, accountId, id, patch, 'EMAIL_NOT_FOUND');
+      const updated = updateScoped(state.emails, accountId, id, patch, 'EMAIL_NOT_FOUND');
+      const key = entityKey(accountId, id);
+      const currentDocument = state.emailSearchDocuments.get(key);
+      state.emailSearchDocuments.set(key, {
+        ...searchDocumentFromEmail(updated),
+        bodyText: currentDocument?.bodyText ?? updated.preview,
+      });
+      return updated;
     },
     async linkRemote(record) {
       const stored = copy(record);
@@ -306,8 +335,15 @@ const createRepositories = (
         restoreMailboxIds: [...mailboxIds],
       });
     },
+    async publishSearchDocument(accountId, emailId, document) {
+      if ((await emails.findById(accountId, emailId)) === null) {
+        throw new MailCoreError('EMAIL_NOT_FOUND', { entityId: emailId });
+      }
+      state.emailSearchDocuments.set(entityKey(accountId, emailId), copy(document));
+    },
     async delete(accountId, id) {
       state.emails.delete(entityKey(accountId, id));
+      state.emailSearchDocuments.delete(entityKey(accountId, id));
       for (const [key, remote] of state.remoteEmails) {
         if (remote.accountId === accountId && remote.emailId === id) {
           state.remoteEmails.delete(key);
@@ -416,6 +452,10 @@ const createRepositories = (
         .sort((left, right) => {
           if (left.stateVersion !== right.stateVersion) {
             return left.stateVersion < right.stateVersion ? -1 : 1;
+          }
+          const collectionOrder = left.collection.localeCompare(right.collection);
+          if (collectionOrder !== 0) {
+            return collectionOrder;
           }
           return left.entityId.localeCompare(right.entityId);
         });

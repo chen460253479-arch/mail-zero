@@ -17,6 +17,7 @@ import type { EmailRecord, MailCoreDependencies, MailTransaction } from '../stor
 import { discardCommittedBlobs, discardTemporaryBlobs } from './blob-lifecycle';
 import { updateMailboxCounters, updateThreadCounters } from './update-email';
 import type { DraftResult, UpdateDraftInput } from './draft-types';
+import { createEmailSearchDocument } from './search-document';
 import { renderDraft } from './render-draft';
 import { normalizeSubject } from '../thread';
 import { recordChanges } from '../changes';
@@ -187,6 +188,24 @@ export async function updateDraft(
         ...nextContent,
         updatedAt: now,
       });
+      await tx.emails.publishSearchDocument(
+        input.accountId,
+        input.emailId,
+        createEmailSearchDocument({
+          subject: input.content.subject,
+          addresses: [
+            ...updated.sender,
+            ...updated.from,
+            ...updated.replyTo,
+            ...updated.to,
+            ...updated.cc,
+            ...updated.bcc,
+          ],
+          textBody: input.content.textBody,
+          htmlBody: input.content.htmlBody,
+          sanitizeHtml: dependencies.sanitizeHtml,
+        }),
+      );
       await commitDraftRevisionBlobs(
         dependencies,
         tx,

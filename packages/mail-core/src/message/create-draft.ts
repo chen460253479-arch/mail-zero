@@ -24,6 +24,7 @@ import {
 } from '../types';
 import type { CreateDraftInput, DraftAttachment, DraftContent, DraftResult } from './draft-types';
 import { updateMailboxCounters, updateThreadCounters } from './update-email';
+import { createEmailSearchDocument } from './search-document';
 import { renderDraft } from './render-draft';
 import { normalizeSubject } from '../thread';
 import { recordChanges } from '../changes';
@@ -531,6 +532,24 @@ export async function createDraft(
         restoreMailboxIds: [],
         keywords: ['$draft'],
       });
+      await tx.emails.publishSearchDocument(
+        input.accountId,
+        emailId,
+        createEmailSearchDocument({
+          subject: input.subject,
+          addresses: [
+            ...stored.sender,
+            ...stored.from,
+            ...stored.replyTo,
+            ...stored.to,
+            ...stored.cc,
+            ...stored.bcc,
+          ],
+          textBody: input.textBody,
+          htmlBody: input.htmlBody,
+          sanitizeHtml: dependencies.sanitizeHtml,
+        }),
+      );
       await commitDraftRevisionBlobs(
         dependencies,
         tx,

@@ -276,7 +276,13 @@ export const createQueryHarness = async () => {
             textBlobId: blobId,
           }),
         );
+        await tx.emails.publishSearchDocument(queryAccountId, 'email-body-search' as EmailId, {
+          subject: 'ordinary subject',
+          addressText: '',
+          bodyText: 'body-only ultrasecretterm',
+        });
       });
+      return objectKey;
     },
     insertForeignBrokenBodyEmail: () =>
       dependencies.unitOfWork.run(async (tx) => {

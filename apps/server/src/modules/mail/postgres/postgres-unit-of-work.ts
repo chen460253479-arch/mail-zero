@@ -1,0 +1,74 @@
+import {
+  MailCoreError,
+  type MailAccountId,
+  type MailTransaction,
+  type MailUnitOfWork,
+} from '@zero/mail-core';
+import { eq, sql } from 'drizzle-orm';
+
+import { createPostgresRepositories } from './repositories';
+import { runAdapter } from './repositories/database';
+import { mailAccount } from './schema';
+import type { DB } from '../../../db';
+
+class CallbackFailure {
+  constructor(readonly error: unknown) {}
+}
+
+export class PostgresMailUnitOfWork implements MailUnitOfWork {
+  constructor(private readonly db: DB) {}
+
+  run<Result>(operation: (tx: MailTransaction) => Promise<Result>): Promise<Result> {
+    const execute = async (): Promise<Result> => {
+      try {
+        return await this.db.transaction(async (transaction) => {
+          const allocated = new Map<MailAccountId, bigint>();
+          const repositories = createPostgresRepositories(transaction);
+          try {
+            return (await operation({
+              ...repositories,
+              lockAccount: (accountId) =>
+                runAdapter(async () => {
+                  const rows = await transaction
+                    .select({ id: mailAccount.id })
+                    .from(mailAccount)
+                    .where(eq(mailAccount.id, accountId))
+                    .for('update')
+                    .limit(1);
+                  if (rows.length === 0) {
+                    throw new MailCoreError('ACCOUNT_NOT_FOUND', { entityId: accountId });
+                  }
+                }),
+              nextStateVersion: (accountId) =>
+                runAdapter(async () => {
+                  const existing = allocated.get(accountId);
+                  if (existing !== undefined) {
+                    return existing;
+                  }
+                  const rows = await transaction
+                    .update(mailAccount)
+                    .set({ stateVersion: sql`${mailAccount.stateVersion} + 1` })
+                    .where(eq(mailAccount.id, accountId))
+                    .returning({ stateVersion: mailAccount.stateVersion });
+                  const stateVersion = rows[0]?.stateVersion;
+                  if (stateVersion === undefined) {
+                    throw new MailCoreError('ACCOUNT_NOT_FOUND', { entityId: accountId });
+                  }
+                  allocated.set(accountId, stateVersion);
+                  return stateVersion;
+                }),
+            })) as Result;
+          } catch (error) {
+            throw new CallbackFailure(error);
+          }
+        });
+      } catch (error) {
+        if (error instanceof CallbackFailure) {
+          throw error.error;
+        }
+        return runAdapter(() => Promise.reject(error));
+      }
+    };
+    return execute();
+  }
+}

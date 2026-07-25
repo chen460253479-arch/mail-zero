@@ -27,6 +27,7 @@ import {
 } from '../types';
 import { calculateThreadDecision, normalizeMessageId, normalizeSubject } from '../thread';
 import type { ImportEmailInput, ImportEmailResult, ParsedEmail } from './types';
+import { createEmailSearchDocument } from './search-document';
 import { parseRawEmail } from './mime';
 
 type ImportValidation = {
@@ -638,6 +639,23 @@ export async function importEmail(
         restoreMailboxIds: [],
         keywords: validation.keywords,
       });
+      await tx.emails.publishSearchDocument(
+        input.accountId,
+        emailId,
+        createEmailSearchDocument({
+          subject: parsed.subject,
+          addresses: [
+            ...parsed.sender,
+            ...parsed.from,
+            ...parsed.replyTo,
+            ...parsed.to,
+            ...parsed.cc,
+            ...parsed.bcc,
+          ],
+          textBody: parsed.textBody,
+          htmlBody: parsed.htmlBody,
+        }),
+      );
       await tx.emails.linkRemote({
         accountId: input.accountId,
         provider: input.provider,

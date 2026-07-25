@@ -7,6 +7,7 @@ import {
   importEmail,
   MailCoreError,
   parseRawEmail,
+  queryEmails,
   type BlobId,
   type MailAccountId,
 } from '../../src';
@@ -22,6 +23,44 @@ const relatedRaw = new Uint8Array(
 );
 
 describe('importEmail', () => {
+  it('publishes a transactional full-body search document without later Blob reads', async () => {
+    const deps = await createSeededImportDependencies();
+    const marker = 'projection-only-marker';
+    const raw = new TextEncoder().encode(
+      [
+        'From: sender@example.test',
+        'To: recipient@example.test',
+        'Message-ID: <search-projection@example.test>',
+        'Date: Thu, 1 Jan 2026 11:00:00 +0000',
+        'Subject: Ordinary subject',
+        'Content-Type: text/plain; charset=utf-8',
+        '',
+        `${'prefix '.repeat(80)}${marker}`,
+      ].join('\r\n'),
+    );
+
+    const result = await importEmail(deps.core, {
+      ...deps.input,
+      remoteEmailId: 'remote-search-projection',
+      raw,
+    });
+    const email = (await deps.core.inspect.email(result.emailId))!;
+    const bodyBlob = (await deps.core.inspect.blobs(deps.input.accountId)).find(
+      ({ id }) => id === email.textBlobId,
+    )!;
+    await deps.core.blobStore.delete(bodyBlob.objectKey);
+
+    await expect(
+      queryEmails(deps.core, {
+        accountId: deps.input.accountId,
+        filter: { text: marker },
+        sort: { property: 'receivedAt', direction: 'asc' },
+        limit: 20,
+        cursor: null,
+      }),
+    ).resolves.toMatchObject({ emailIds: [result.emailId] });
+  });
+
   it('publishes one Email and Thread only after every immutable Blob is ready', async () => {
     const deps = await createSeededImportDependencies();
 

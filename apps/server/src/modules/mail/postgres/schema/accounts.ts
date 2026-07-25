@@ -1,5 +1,14 @@
+import {
+  bigint,
+  boolean,
+  check,
+  index,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { bigint, boolean, index, text, timestamp, unique, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { connection, user } from '../../../../db/schema';
 import { createMailTable } from '../table';
@@ -15,13 +24,28 @@ export const mailAccount = createMailTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
     status: text('status').$type<'active' | 'suspended' | 'deleting'>().notNull().default('active'),
-    stateVersion: bigint('state_version', { mode: 'bigint' }).notNull().default(sql`0`),
+    stateVersion: bigint('state_version', { mode: 'bigint' })
+      .notNull()
+      .default(sql`0`),
+    oldestRetainedState: bigint('oldest_retained_state', { mode: 'bigint' })
+      .notNull()
+      .default(sql`0`),
     timezone: text('timezone').notNull().default('UTC'),
     storageQuotaBytes: bigint('storage_quota_bytes', { mode: 'bigint' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    check('mail_account_status_check', sql`${t.status} IN ('active', 'suspended', 'deleting')`),
+    check(
+      'mail_account_state_nonnegative_check',
+      sql`${t.stateVersion} >= 0 AND ${t.oldestRetainedState} >= 0`,
+    ),
+    check('mail_account_retention_floor_check', sql`${t.oldestRetainedState} <= ${t.stateVersion}`),
+    check(
+      'mail_account_quota_nonnegative_check',
+      sql`${t.storageQuotaBytes} IS NULL OR ${t.storageQuotaBytes} >= 0`,
+    ),
     uniqueIndex('mail_account_connection_id_uidx').on(t.connectionId),
     index('mail_account_user_id_idx').on(t.userId),
   ],
@@ -40,6 +64,7 @@ export const mailIdentity = createMailTable(
     isDefault: boolean('is_default').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (t) => [unique('mail_identity_id_account_uidx').on(t.id, t.mailAccountId)],
 );

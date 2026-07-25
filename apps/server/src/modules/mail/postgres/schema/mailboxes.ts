@@ -1,6 +1,6 @@
-import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   foreignKey,
   integer,
   text,
@@ -8,6 +8,7 @@ import {
   unique,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 import { createMailTable } from '../table';
 import { mailAccount } from './accounts';
@@ -38,6 +39,20 @@ export const mailbox = createMailTable(
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (t) => [
+    check('mailbox_kind_check', sql`${t.kind} IN ('system', 'folder', 'label')`),
+    check(
+      'mailbox_role_check',
+      sql`${t.role} IS NULL OR ${t.role} IN ('inbox', 'sent', 'drafts', 'trash', 'junk', 'archive', 'outbox', 'scheduled')`,
+    ),
+    check(
+      'mailbox_counters_nonnegative_check',
+      sql`${t.totalEmails} >= 0
+          AND ${t.unreadEmails} >= 0
+          AND ${t.totalThreads} >= 0
+          AND ${t.unreadThreads} >= 0
+          AND ${t.unreadEmails} <= ${t.totalEmails}
+          AND ${t.unreadThreads} <= ${t.totalThreads}`,
+    ),
     unique('mailbox_id_account_uidx').on(t.id, t.mailAccountId),
     foreignKey({
       name: 'mailbox_parent_account_fk',

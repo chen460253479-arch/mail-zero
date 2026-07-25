@@ -6,7 +6,8 @@ import { createQueryHarness } from '../helpers/query-harness';
 describe('queryEmails', () => {
   it('searches full body text beyond the Email preview through the real memory SearchStore', async () => {
     const h = await createQueryHarness();
-    await h.insertBodySearchEmail();
+    const objectKey = await h.insertBodySearchEmail();
+    await h.dependencies.blobStore.delete(objectKey);
 
     const result = await queryEmails(h.dependencies, {
       accountId: h.accountId,

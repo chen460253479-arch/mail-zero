@@ -1,4 +1,5 @@
-import { bigint, index, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, check, index, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 import { createMailTable } from '../table';
 import { mailAccount } from './accounts';
@@ -19,6 +20,12 @@ export const mailChange = createMailTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    check(
+      'mail_change_collection_check',
+      sql`${t.collection} IN ('mailbox', 'email', 'thread', 'identity', 'email_submission')`,
+    ),
+    check('mail_change_type_check', sql`${t.changeType} IN ('created', 'updated', 'destroyed')`),
+    check('mail_change_state_positive_check', sql`${t.stateVersion} > 0`),
     primaryKey({
       name: 'mail_change_pk',
       columns: [t.mailAccountId, t.stateVersion, t.collection, t.entityId],
