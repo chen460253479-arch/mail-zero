@@ -49,6 +49,7 @@ export async function createSeededEmailHarness(options: { keywords?: Keyword[] }
     archiveId: archive.id,
     trashId: trash.id,
     clock: deps.clock,
+    raw: Uint8Array.from(raw),
     inspect: {
       stateVersion: () => deps.inspect.stateVersion(account.id),
       mailbox: (id: MailboxId) => deps.inspect.mailbox(id),

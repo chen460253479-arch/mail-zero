@@ -325,10 +325,28 @@ export async function updateEmail(
     patch.addKeywords.forEach((keyword) => keywords.add(keyword));
     const nextMailboxIds = sortStrings(mailboxIds);
     const nextKeywords = sortStrings(keywords);
+    const trash = await tx.mailboxes.findByRole(input.accountId, 'trash');
+    if (trash === null) {
+      throw new MailCoreError('MAILBOX_NOT_FOUND');
+    }
+    let nextRestoreMailboxIds = sortStrings(email.restoreMailboxIds);
+    if (email.mailboxIds.includes(trash.id)) {
+      if (nextMailboxIds.includes(trash.id)) {
+        const restoreMailboxIds = new Set(email.restoreMailboxIds);
+        patch.removeMailboxIds.forEach((id) => restoreMailboxIds.delete(id));
+        patch.addMailboxIds
+          .filter((id) => id !== trash.id)
+          .forEach((id) => restoreMailboxIds.add(id));
+        nextRestoreMailboxIds = sortStrings(restoreMailboxIds);
+      } else {
+        nextRestoreMailboxIds = [];
+      }
+    }
+    const mailboxStateChanged =
+      nextMailboxIds.join('\u0000') !== sortStrings(email.mailboxIds).join('\u0000') ||
+      nextRestoreMailboxIds.join('\u0000') !== sortStrings(email.restoreMailboxIds).join('\u0000');
     const changedProperties = [
-      ...(nextMailboxIds.join('\u0000') === sortStrings(email.mailboxIds).join('\u0000')
-        ? []
-        : ['mailboxIds']),
+      ...(mailboxStateChanged ? ['mailboxIds'] : []),
       ...(nextKeywords.join('\u0000') === sortStrings(email.keywords).join('\u0000')
         ? []
         : ['keywords']),
@@ -336,7 +354,7 @@ export async function updateEmail(
     return {
       mailboxIds: nextMailboxIds,
       keywords: nextKeywords,
-      restoreMailboxIds: email.restoreMailboxIds,
+      restoreMailboxIds: nextRestoreMailboxIds,
       changedProperties,
     };
   });
@@ -351,15 +369,8 @@ export async function moveEmailToTrash(
     if (trash === null) {
       throw new MailCoreError('MAILBOX_NOT_FOUND');
     }
-    if (email.mailboxIds.includes(trash.id)) {
-      return {
-        mailboxIds: email.mailboxIds,
-        keywords: email.keywords,
-        restoreMailboxIds: email.restoreMailboxIds,
-        changedProperties: [],
-      };
-    }
     const mailboxIds = new Set<MailboxId>([trash.id]);
+    const restoreMailboxIds = new Set<MailboxId>();
     for (const mailboxId of email.mailboxIds) {
       const mailbox = await tx.mailboxes.findById(input.accountId, mailboxId);
       if (mailbox === null || mailbox.deletedAt !== null) {
@@ -367,17 +378,34 @@ export async function moveEmailToTrash(
           entityId: mailboxId,
         });
       }
-      if (mailbox.role !== 'inbox' && mailbox.role !== 'archive' && mailbox.role !== 'junk') {
+      if (mailbox.role !== 'trash') {
+        restoreMailboxIds.add(mailboxId);
+      }
+      if (
+        mailbox.role !== 'inbox' &&
+        mailbox.role !== 'archive' &&
+        mailbox.role !== 'junk' &&
+        mailbox.role !== 'trash'
+      ) {
         mailboxIds.add(mailboxId);
       }
     }
+    for (const mailboxId of email.restoreMailboxIds) {
+      const mailbox = await tx.mailboxes.findById(input.accountId, mailboxId);
+      if (mailbox !== null && mailbox.deletedAt === null && mailbox.role !== 'trash') {
+        restoreMailboxIds.add(mailboxId);
+      }
+    }
+    const nextMailboxIds = sortStrings(mailboxIds);
+    const nextRestoreMailboxIds = sortStrings(restoreMailboxIds);
+    const mailboxStateChanged =
+      nextMailboxIds.join('\u0000') !== sortStrings(email.mailboxIds).join('\u0000') ||
+      nextRestoreMailboxIds.join('\u0000') !== sortStrings(email.restoreMailboxIds).join('\u0000');
     return {
-      mailboxIds: sortStrings(mailboxIds),
+      mailboxIds: nextMailboxIds,
       keywords: email.keywords,
-      restoreMailboxIds: sortStrings(
-        email.mailboxIds.filter((mailboxId) => mailboxId !== trash.id),
-      ),
-      changedProperties: ['mailboxIds'],
+      restoreMailboxIds: nextRestoreMailboxIds,
+      changedProperties: mailboxStateChanged ? ['mailboxIds'] : [],
     };
   });
 }

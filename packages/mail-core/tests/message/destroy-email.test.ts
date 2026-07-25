@@ -81,6 +81,7 @@ describe('Email Trash and destruction', () => {
       emailId: h.emailId,
       removeMailboxIds: [custom.id],
     });
+    expect((await h.inspect.email(h.emailId))?.restoreMailboxIds).toEqual([]);
     await destroyMailbox(h.deps, {
       accountId: h.accountId,
       mailboxId: custom.id,
@@ -92,6 +93,71 @@ describe('Email Trash and destruction', () => {
     });
 
     expect(restored.mailboxIds).toEqual([h.inboxId]);
+  });
+
+  it('updates the restore projection for Mailbox patches while trashed', async () => {
+    const h = await createSeededEmailHarness();
+    const removed = await createMailbox(h.deps, {
+      accountId: h.accountId,
+      name: 'Removed projection',
+      kind: 'folder',
+      role: null,
+      parentId: null,
+    });
+    const added = await createMailbox(h.deps, {
+      accountId: h.accountId,
+      name: 'Added projection',
+      kind: 'folder',
+      role: null,
+      parentId: null,
+    });
+    await updateEmail(h.deps, {
+      accountId: h.accountId,
+      emailId: h.emailId,
+      addMailboxIds: [removed.id],
+    });
+    await moveEmailToTrash(h.deps, {
+      accountId: h.accountId,
+      emailId: h.emailId,
+    });
+
+    await updateEmail(h.deps, {
+      accountId: h.accountId,
+      emailId: h.emailId,
+      addMailboxIds: [added.id],
+      removeMailboxIds: [removed.id],
+    });
+
+    expect((await h.inspect.email(h.emailId))?.restoreMailboxIds).toEqual(
+      [added.id, h.inboxId].sort(),
+    );
+    await expect(
+      restoreEmail(h.deps, {
+        accountId: h.accountId,
+        emailId: h.emailId,
+      }),
+    ).resolves.toMatchObject({
+      mailboxIds: [added.id, h.inboxId].sort(),
+    });
+  });
+
+  it('normalizes a direct Trash addition before treating move-to-Trash as a no-op', async () => {
+    const h = await createSeededEmailHarness();
+    await updateEmail(h.deps, {
+      accountId: h.accountId,
+      emailId: h.emailId,
+      addMailboxIds: [h.trashId],
+    });
+    const before = await h.inspect.stateVersion();
+
+    const moved = await moveEmailToTrash(h.deps, {
+      accountId: h.accountId,
+      emailId: h.emailId,
+    });
+
+    expect(moved.mailboxIds).toEqual([h.trashId]);
+    expect((await h.inspect.email(h.emailId))?.restoreMailboxIds).toEqual([h.inboxId]);
+    expect(moved.stateVersion).toBe(before + 1n);
   });
 
   it('permanently destroys visible state while retaining a tombstone for Blob GC', async () => {
@@ -174,7 +240,7 @@ describe('Email Trash and destruction', () => {
     expect(await h.inspect.changes()).toEqual(changes);
   });
 
-  it('excludes a destroyed tombstone from later Thread counters', async () => {
+  it('does not reuse a Thread supported only by a destroyed tombstone', async () => {
     const h = await createSeededEmailHarness();
     await destroyEmail(h.deps, {
       accountId: h.accountId,
@@ -206,11 +272,100 @@ describe('Email Trash and destruction', () => {
       receivedAt: h.clock.now(),
     });
 
-    expect((await h.inspect.email(reply.emailId))?.threadId).toBe(h.threadId);
+    const replyThreadId = (await h.inspect.email(reply.emailId))!.threadId;
+    expect(replyThreadId).not.toBe(h.threadId);
     expect(await h.inspect.thread(h.threadId)).toMatchObject({
+      emailCount: 0,
+      unreadCount: 0,
+    });
+    expect(await h.inspect.thread(replyThreadId)).toMatchObject({
       emailCount: 1,
       unreadCount: 1,
     });
+  });
+
+  it('does not reparent or report a destroyed tombstone during a bridge merge', async () => {
+    const h = await createSeededEmailHarness();
+    const makeRaw = (messageId: string, references: string[], body: string): Uint8Array =>
+      new TextEncoder().encode(
+        [
+          'From: Bridge Sender <bridge@example.test>',
+          'To: Simple Sender <sender@example.test>',
+          `Message-ID: <${messageId}>`,
+          ...(references.length === 0
+            ? []
+            : [
+                `In-Reply-To: <${references.at(-1)}>`,
+                `References: ${references.map((value) => `<${value}>`).join(' ')}`,
+              ]),
+          'Date: Thu, 1 Jan 2026 12:00:00 +0000',
+          'Subject: Re: Simple fixture',
+          'Content-Type: text/plain; charset=utf-8',
+          '',
+          body,
+        ].join('\r\n'),
+      );
+    const importRaw = (remoteEmailId: string, raw: Uint8Array, receivedAt: string) =>
+      importEmail(h.deps, {
+        accountId: h.accountId,
+        provider: 'fixture',
+        remoteEmailId,
+        remoteThreadId: null,
+        raw,
+        mailboxIds: [h.inboxId],
+        keywords: [],
+        receivedAt: new Date(receivedAt),
+      });
+    const rootB = await importRaw(
+      'tombstone-bridge-root-b',
+      makeRaw('tombstone-root-b@example.test', [], 'Second root.'),
+      '2026-01-01T01:00:00.000Z',
+    );
+    const replyB = await importRaw(
+      'tombstone-bridge-reply-b',
+      makeRaw('tombstone-reply-b@example.test', ['tombstone-root-b@example.test'], 'Second reply.'),
+      '2026-01-01T02:00:00.000Z',
+    );
+    await destroyEmail(h.deps, {
+      accountId: h.accountId,
+      emailId: rootB.emailId,
+    });
+    const tombstoneBeforeBridge = await h.inspect.email(rootB.emailId);
+
+    await importRaw(
+      'tombstone-bridge',
+      makeRaw(
+        'tombstone-bridge@example.test',
+        ['simple-message@example.test', 'tombstone-reply-b@example.test'],
+        'Bridge.',
+      ),
+      '2026-01-01T03:00:00.000Z',
+    );
+    const bridgeState = await h.inspect.stateVersion();
+
+    expect((await h.inspect.email(replyB.emailId))?.threadId).toBe(h.threadId);
+    expect(await h.inspect.email(rootB.emailId)).toEqual(tombstoneBeforeBridge);
+    expect(await h.inspect.thread(tombstoneBeforeBridge!.threadId)).toMatchObject({
+      emailCount: 0,
+      unreadCount: 0,
+    });
+    const bridgeChanges = (await h.inspect.changes()).filter(
+      ({ stateVersion }) => stateVersion === bridgeState,
+    );
+    expect(
+      bridgeChanges.find(
+        ({ collection, entityId, changeType }) =>
+          collection === 'thread' &&
+          entityId === tombstoneBeforeBridge!.threadId &&
+          changeType === 'updated',
+      )?.changedProperties,
+    ).toEqual(['emailCount', 'unreadCount', 'participantSummary', 'preview']);
+    expect(
+      bridgeChanges.filter(
+        ({ collection, entityId, changeType }) =>
+          collection === 'email' && entityId === rootB.emailId && changeType === 'updated',
+      ),
+    ).toEqual([]);
   });
 
   it('reprojects Thread summary fields after destroying its latest Email', async () => {

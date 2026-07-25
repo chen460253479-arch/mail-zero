@@ -22,9 +22,7 @@ describe('memory blob store', () => {
     expect(firstRead).toEqual(new Uint8Array([1, 2, 3]));
     firstRead[1] = 8;
 
-    await expect(deps.blobStore.get('objects/blob-1')).resolves.toEqual(
-      new Uint8Array([1, 2, 3]),
-    );
+    await expect(deps.blobStore.get('objects/blob-1')).resolves.toEqual(new Uint8Array([1, 2, 3]));
   });
 
   it('returns a Web Crypto SHA-256 digest and byte size', async () => {
@@ -65,8 +63,23 @@ describe('memory blob store', () => {
         objectKey: 'objects/blob-1',
       }),
     ).rejects.toThrow('blob object already exists');
-    await expect(deps.blobStore.get('objects/blob-1')).resolves.toEqual(
-      new Uint8Array([1]),
-    );
+    await expect(deps.blobStore.get('objects/blob-1')).resolves.toEqual(new Uint8Array([1]));
+  });
+
+  it('treats repeated deletion and deletion of a missing object as success', async () => {
+    const deps = createMemoryMailCoreDependencies();
+    const pending = await deps.blobStore.putTemporary({
+      accountId: 'account-1' as MailAccountId,
+      bytes: new Uint8Array([1]),
+      contentType: 'application/octet-stream',
+    });
+    await deps.blobStore.commitTemporary({
+      temporaryKey: pending.temporaryKey,
+      objectKey: 'objects/blob-1',
+    });
+
+    await expect(deps.blobStore.delete('objects/blob-1')).resolves.toBeUndefined();
+    await expect(deps.blobStore.delete('objects/blob-1')).resolves.toBeUndefined();
+    await expect(deps.blobStore.delete('objects/missing')).resolves.toBeUndefined();
   });
 });

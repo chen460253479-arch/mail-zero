@@ -525,6 +525,55 @@ describe('importEmail', () => {
     ).toBe(2);
   });
 
+  it('reports only Thread and Mailbox properties whose aggregate values changed', async () => {
+    const deps = await createSeededImportDependencies();
+    const root = await importEmail(deps.core, {
+      ...deps.input,
+      keywords: ['$seen'],
+    });
+    const rootEmail = (await deps.core.inspect.email(root.emailId))!;
+    const replyRaw = new TextEncoder().encode(
+      [
+        'From: Read Reply <read-reply@example.test>',
+        'To: Multipart Sender <multipart@example.test>',
+        'Message-ID: <read-reply@example.test>',
+        'In-Reply-To: <multipart-message@example.test>',
+        'References: <multipart-message@example.test>',
+        'Date: Fri, 2 Jan 2026 12:00:00 +0000',
+        'Subject: Re: Multipart fixture',
+        'Content-Type: text/plain; charset=utf-8',
+        '',
+        'A read reply without an attachment.',
+      ].join('\r\n'),
+    );
+    await importEmail(deps.core, {
+      ...deps.input,
+      remoteEmailId: 'read-reply-remote',
+      raw: replyRaw,
+      keywords: ['$seen'],
+      receivedAt: new Date('2026-01-02T12:00:00.000Z'),
+    });
+    const state = await deps.core.inspect.stateVersion(deps.input.accountId);
+    const changes = (await deps.core.inspect.changes(deps.input.accountId)).filter(
+      ({ stateVersion }) => stateVersion === state,
+    );
+
+    expect(
+      changes.find(
+        ({ collection, entityId, changeType }) =>
+          collection === 'thread' && entityId === rootEmail.threadId && changeType === 'updated',
+      )?.changedProperties,
+    ).toEqual(['latestReceivedAt', 'emailCount', 'participantSummary', 'preview']);
+    expect(
+      changes.find(
+        ({ collection, entityId, changeType }) =>
+          collection === 'mailbox' &&
+          entityId === deps.input.mailboxIds[0] &&
+          changeType === 'updated',
+      )?.changedProperties,
+    ).toEqual(['totalEmails']);
+  });
+
   it('merges bridged local Threads and reports every changed Email and Thread at one state', async () => {
     const deps = createMemoryMailCoreDependencies();
     const account = await createMailAccount(deps, {

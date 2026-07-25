@@ -14,5 +14,9 @@ export interface BlobStore {
   commitTemporary(input: { temporaryKey: string; objectKey: string }): Promise<BlobCommitReceipt>;
   deleteTemporary(temporaryKey: string): Promise<void>;
   get(objectKey: string): Promise<Uint8Array>;
+  /**
+   * Permanently deletes an object. Implementations must be idempotent: an
+   * already-missing object is a successful deletion, including on retries.
+   */
   delete(objectKey: string): Promise<void>;
 }

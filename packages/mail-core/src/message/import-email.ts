@@ -243,8 +243,12 @@ const decideThread = async (
   threadId: ThreadId;
   changeType: 'created' | 'updated';
   destroyedThreadIds: ThreadId[];
+  retainedThreadIds: ThreadId[];
   movedEmailIds: EmailId[];
 }> => {
+  const threadingEmails = existingEmails.filter(
+    ({ destroyedAt, mailboxIds }) => destroyedAt === null && mailboxIds.length > 0,
+  );
   const normalizedSubject = normalizeSubject(parsed.subject);
   const referenceIds = Array.from(
     new Set([...parsed.inReplyTo, ...parsed.references].map(normalizeMessageId)),
@@ -252,7 +256,7 @@ const decideThread = async (
   const referenceIdSet = new Set(referenceIds);
   const threads = await tx.threads.listByAccount(input.accountId);
   const threadById = new Map(threads.map((thread) => [thread.id, thread]));
-  const candidates = existingEmails.flatMap((email) => {
+  const candidates = threadingEmails.flatMap((email) => {
     if (email.messageId === null) {
       return [];
     }
@@ -281,6 +285,7 @@ const decideThread = async (
       threadId,
       changeType: 'created',
       destroyedThreadIds: [],
+      retainedThreadIds: [],
       movedEmailIds: [],
     };
   }
@@ -290,25 +295,38 @@ const decideThread = async (
       threadId: decision.threadId,
       changeType: 'updated',
       destroyedThreadIds: [],
+      retainedThreadIds: [],
       movedEmailIds: [],
     };
   }
 
   const movedEmailIds: EmailId[] = [];
+  const destroyedThreadIds: ThreadId[] = [];
+  const retainedThreadIds: ThreadId[] = [];
   for (const loserThreadId of decision.loserThreadIds) {
-    for (const email of existingEmails.filter(({ threadId }) => threadId === loserThreadId)) {
+    for (const email of threadingEmails.filter(({ threadId }) => threadId === loserThreadId)) {
       await tx.emails.update(input.accountId, email.id, {
         threadId: decision.winnerThreadId,
         updatedAt: now,
       });
       movedEmailIds.push(email.id);
     }
-    await tx.threads.delete(input.accountId, loserThreadId);
+    const ownsRetainedEmail = existingEmails.some(
+      ({ threadId, destroyedAt, mailboxIds }) =>
+        threadId === loserThreadId && (destroyedAt !== null || mailboxIds.length === 0),
+    );
+    if (ownsRetainedEmail) {
+      retainedThreadIds.push(loserThreadId);
+    } else {
+      await tx.threads.delete(input.accountId, loserThreadId);
+      destroyedThreadIds.push(loserThreadId);
+    }
   }
   return {
     threadId: decision.winnerThreadId,
     changeType: 'updated',
-    destroyedThreadIds: decision.loserThreadIds,
+    destroyedThreadIds,
+    retainedThreadIds,
     movedEmailIds,
   };
 };
@@ -318,35 +336,57 @@ const updateThreadAggregate = async (
   input: ImportEmailInput,
   threadId: ThreadId,
   now: Date,
-): Promise<void> => {
+): Promise<string[]> => {
+  const thread = await tx.threads.findById(input.accountId, threadId);
+  if (thread === null) {
+    throw new MailCoreError('THREAD_NOT_FOUND', { entityId: threadId });
+  }
   const emails = (await tx.emails.listByThread(input.accountId, threadId)).filter(
     ({ destroyedAt, mailboxIds }) => destroyedAt === null && mailboxIds.length > 0,
   );
-  const latest = emails.reduce((current, email) =>
-    email.receivedAt > current.receivedAt ? email : current,
+  const latest = emails.reduce<EmailRecord | null>(
+    (current, email) =>
+      current === null || email.receivedAt > current.receivedAt ? email : current,
+    null,
   );
-  await tx.threads.update(input.accountId, threadId, {
-    latestReceivedAt: latest.receivedAt,
+  const next = {
+    latestReceivedAt: latest?.receivedAt ?? thread.latestReceivedAt,
     emailCount: emails.length,
     unreadCount: emails.filter(isUnread).length,
     hasAttachment: emails.some(({ hasAttachment }) => hasAttachment),
     participantSummary:
-      participantSummaryFrom({
-        from: latest.from,
-        to: latest.to,
-        cc: latest.cc,
-      }) ?? null,
-    preview: latest.preview,
+      latest === null
+        ? null
+        : (participantSummaryFrom({
+            from: latest.from,
+            to: latest.to,
+            cc: latest.cc,
+          }) ?? null),
+    preview: latest?.preview ?? null,
+  };
+  const changedProperties = [
+    ...(thread.latestReceivedAt.getTime() === next.latestReceivedAt.getTime()
+      ? []
+      : ['latestReceivedAt']),
+    ...(thread.emailCount === next.emailCount ? [] : ['emailCount']),
+    ...(thread.unreadCount === next.unreadCount ? [] : ['unreadCount']),
+    ...(thread.hasAttachment === next.hasAttachment ? [] : ['hasAttachment']),
+    ...(thread.participantSummary === next.participantSummary ? [] : ['participantSummary']),
+    ...(thread.preview === next.preview ? [] : ['preview']),
+  ];
+  await tx.threads.update(input.accountId, threadId, {
+    ...next,
     updatedAt: now,
   });
+  return changedProperties;
 };
 
 const updateMailboxAggregates = async (
   tx: MailTransaction,
   input: ImportEmailInput,
   now: Date,
-): Promise<MailboxId[]> => {
-  const changedMailboxIds: MailboxId[] = [];
+): Promise<{ mailboxId: MailboxId; changedProperties: string[] }[]> => {
+  const changes: { mailboxId: MailboxId; changedProperties: string[] }[] = [];
   const emails = await tx.emails.listByAccount(input.accountId);
   for (const mailbox of await tx.mailboxes.listByAccount(input.accountId)) {
     const mailboxEmails = emails.filter(({ mailboxIds }) => mailboxIds.includes(mailbox.id));
@@ -355,12 +395,13 @@ const updateMailboxAggregates = async (
     const totalThreads = new Set(mailboxEmails.map(({ threadId }) => threadId)).size;
     const unreadThreads = new Set(mailboxEmails.filter(isUnread).map(({ threadId }) => threadId))
       .size;
-    if (
-      mailbox.totalEmails === totalEmails &&
-      mailbox.unreadEmails === unreadEmails &&
-      mailbox.totalThreads === totalThreads &&
-      mailbox.unreadThreads === unreadThreads
-    ) {
+    const changedProperties = [
+      ...(mailbox.totalEmails === totalEmails ? [] : ['totalEmails']),
+      ...(mailbox.unreadEmails === unreadEmails ? [] : ['unreadEmails']),
+      ...(mailbox.totalThreads === totalThreads ? [] : ['totalThreads']),
+      ...(mailbox.unreadThreads === unreadThreads ? [] : ['unreadThreads']),
+    ];
+    if (changedProperties.length === 0) {
       continue;
     }
     await tx.mailboxes.update(input.accountId, mailbox.id, {
@@ -370,9 +411,9 @@ const updateMailboxAggregates = async (
       unreadThreads,
       updatedAt: now,
     });
-    changedMailboxIds.push(mailbox.id);
+    changes.push({ mailboxId: mailbox.id, changedProperties });
   }
-  return changedMailboxIds;
+  return changes;
 };
 
 const buildEmailParts = (
@@ -403,9 +444,12 @@ const recordImportChanges = async (
     threadId: ThreadId;
     changeType: 'created' | 'updated';
     destroyedThreadIds: ThreadId[];
+    retainedThreadIds: ThreadId[];
     movedEmailIds: EmailId[];
   },
-  mailboxIds: MailboxId[],
+  threadChangedProperties: string[],
+  retainedThreadChanges: { threadId: ThreadId; changedProperties: string[] }[],
+  mailboxChanges: { mailboxId: MailboxId; changedProperties: string[] }[],
   now: Date,
 ): Promise<void> => {
   const stateVersion = await tx.nextStateVersion(input.accountId);
@@ -435,17 +479,7 @@ const recordImportChanges = async (
     collection: 'thread',
     entityId: thread.threadId,
     changeType: thread.changeType,
-    changedProperties:
-      thread.changeType === 'created'
-        ? null
-        : [
-            'latestReceivedAt',
-            'emailCount',
-            'unreadCount',
-            'hasAttachment',
-            'participantSummary',
-            'preview',
-          ],
+    changedProperties: thread.changeType === 'created' ? null : threadChangedProperties,
     createdAt: now,
   });
   for (const threadId of thread.destroyedThreadIds) {
@@ -459,14 +493,25 @@ const recordImportChanges = async (
       createdAt: now,
     });
   }
-  for (const mailboxId of mailboxIds) {
+  for (const retainedThread of retainedThreadChanges) {
+    await tx.changes.recordChange({
+      accountId: input.accountId,
+      stateVersion,
+      collection: 'thread',
+      entityId: retainedThread.threadId,
+      changeType: 'updated',
+      changedProperties: retainedThread.changedProperties,
+      createdAt: now,
+    });
+  }
+  for (const mailbox of mailboxChanges) {
     await tx.changes.recordChange({
       accountId: input.accountId,
       stateVersion,
       collection: 'mailbox',
-      entityId: mailboxId,
+      entityId: mailbox.mailboxId,
       changeType: 'updated',
-      changedProperties: ['totalEmails', 'unreadEmails', 'totalThreads', 'unreadThreads'],
+      changedProperties: mailbox.changedProperties,
       createdAt: now,
     });
   }
@@ -601,8 +646,21 @@ export async function importEmail(
         firstSeenAt: now,
         lastSeenAt: now,
       });
-      await updateThreadAggregate(tx, input, thread.threadId, now);
-      const changedMailboxIds = await updateMailboxAggregates(tx, input, now);
+      const threadChangedProperties = await updateThreadAggregate(tx, input, thread.threadId, now);
+      const retainedThreadChanges: {
+        threadId: ThreadId;
+        changedProperties: string[];
+      }[] = [];
+      for (const retainedThreadId of thread.retainedThreadIds) {
+        const changedProperties = await updateThreadAggregate(tx, input, retainedThreadId, now);
+        if (changedProperties.length > 0) {
+          retainedThreadChanges.push({
+            threadId: retainedThreadId,
+            changedProperties,
+          });
+        }
+      }
+      const mailboxChanges = await updateMailboxAggregates(tx, input, now);
 
       for (const { blobId, prepared: pending, record } of newBlobs) {
         const receipt = await commitPreparedBlob(dependencies.blobStore, pending, record.objectKey);
@@ -613,7 +671,16 @@ export async function importEmail(
           readyAt: now,
         });
       }
-      await recordImportChanges(tx, input, emailId, thread, changedMailboxIds, now);
+      await recordImportChanges(
+        tx,
+        input,
+        emailId,
+        thread,
+        threadChangedProperties,
+        retainedThreadChanges,
+        mailboxChanges,
+        now,
+      );
       importOperationCompleted = true;
       return { created: true, emailId };
     });
