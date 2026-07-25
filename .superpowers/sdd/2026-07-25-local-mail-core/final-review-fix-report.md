@@ -239,5 +239,16 @@ The first scoped re-review closed original findings 1, 2, 3, 5, and 6 but return
 
 Both residuals were reproduced RED, fixed, and verified GREEN in pure core and real
 PostgreSQL as described above. A second scoped re-review by the original
-`/root/final_branch_review` is pending. Commit is prohibited until it reports zero
-Critical/Important findings and all three final verdicts pass.
+`/root/final_branch_review` confirmed the frozen staged tree
+`1acb645b121bd02826e7b1ac4d1c93719237f6f2` and returned:
+
+- all six original Important findings: **ADDRESSED**;
+- the first re-review's two residual Important findings: **ADDRESSED**;
+- new Critical findings: **0**;
+- new Important findings: **0**;
+- `SPEC COMPLIANCE: PASS`;
+- `CODE QUALITY: APPROVED`;
+- `READY TO INTEGRATE: YES`.
+
+That exact reviewed tree was committed as
+`a9dadd940a27c307ba007240d54c11dbd2cd01be` without intervening code changes.
