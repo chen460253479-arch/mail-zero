@@ -7,6 +7,7 @@ import {
   draftReplyHeaders,
   insertDraftRevisionBlobs,
   loadDraftAttachments,
+  normalizeDraftContent,
   prepareDraftRevision,
   requireDraftQuota,
   requireDraftReferences,
@@ -121,9 +122,11 @@ export async function updateDraft(
   dependencies: MailCoreDependencies,
   input: UpdateDraftInput,
 ): Promise<DraftResult> {
+  const content = normalizeDraftContent(dependencies, input.content);
+  const normalizedInput: UpdateDraftInput = { ...input, content };
   const preflight = await dependencies.unitOfWork.run(async (tx) => ({
-    email: await requireMutableDraft(tx, input),
-    references: await requireDraftReferences(tx, input.accountId, input.content),
+    email: await requireMutableDraft(tx, normalizedInput),
+    references: await requireDraftReferences(tx, input.accountId, content),
   }));
   requireImmutableReplyTarget(preflight.email, preflight.references);
   const messageId = preflight.email.messageId;
@@ -139,14 +142,14 @@ export async function updateDraft(
     messageId,
     date: preflight.email.receivedAt,
     identity: preflight.references.identity,
-    content: input.content,
+    content,
     ...replyHeaders,
     attachments,
   });
   const prepared = await prepareDraftRevision(dependencies, {
     accountId: input.accountId,
     raw,
-    content: input.content,
+    content,
   });
   const now = dependencies.clock.now();
   const committedObjectKeys: string[] = [];
@@ -154,11 +157,11 @@ export async function updateDraft(
   try {
     return await dependencies.unitOfWork.run(async (tx) => {
       await tx.lockAccount(input.accountId);
-      const current = await requireMutableDraft(tx, input);
+      const current = await requireMutableDraft(tx, normalizedInput);
       const references: DraftReferences = await requireDraftReferences(
         tx,
         input.accountId,
-        input.content,
+        content,
       );
       requireStableReferences(preflight.references, references);
       requireImmutableReplyTarget(current, references);
@@ -183,7 +186,7 @@ export async function updateDraft(
       });
       await insertDraftRevisionBlobs(tx, revision);
       const nextContent = draftEmailContent(dependencies, {
-        content: input.content,
+        content,
         references,
         revision,
         raw,
@@ -198,7 +201,7 @@ export async function updateDraft(
         input.accountId,
         input.emailId,
         createEmailSearchDocument({
-          subject: input.content.subject,
+          subject: content.subject,
           addresses: [
             ...updated.sender,
             ...updated.from,
@@ -207,9 +210,8 @@ export async function updateDraft(
             ...updated.cc,
             ...updated.bcc,
           ],
-          textBody: input.content.textBody,
-          htmlBody: input.content.htmlBody,
-          sanitizeHtml: dependencies.sanitizeHtml,
+          textBody: content.textBody,
+          htmlBody: content.htmlBody,
         }),
       );
       await commitDraftRevisionBlobs(
@@ -223,7 +225,7 @@ export async function updateDraft(
       const normalizedSubjectChanged = await updateOwnedThreadSubject(
         tx,
         current,
-        input.content.subject,
+        content.subject,
         now,
       );
       const aggregateThreadChange = await updateThreadCounters(

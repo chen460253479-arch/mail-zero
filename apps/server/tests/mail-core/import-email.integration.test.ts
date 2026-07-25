@@ -12,6 +12,60 @@ const raw = new Uint8Array(
 );
 
 describe('PostgreSQL import integration', () => {
+  it('uses the deterministic Email ID tie-break for equal-time Thread projections', () =>
+    withMailTestDatabase(async ({ db, unitOfWork }) => {
+      const harness = await createPostgresMailTestHarness(db, unitOfWork, 'thread-tie-break');
+      const receivedAt = new Date('2026-01-01T10:00:00.000Z');
+      const makeRaw = (messageId: string, body: string, inReplyTo: string | null) =>
+        new TextEncoder().encode(
+          [
+            'From: sender@example.test',
+            'To: recipient@example.test',
+            `Message-ID: <${messageId}>`,
+            ...(inReplyTo === null ? [] : [`In-Reply-To: <${inReplyTo}>`]),
+            'Date: Thu, 1 Jan 2026 10:00:00 +0000',
+            'Subject: Equal PostgreSQL time',
+            'Content-Type: text/plain; charset=utf-8',
+            '',
+            body,
+          ].join('\r\n'),
+        );
+      const first = await importEmail(harness.dependencies, {
+        accountId: harness.accountId,
+        provider: 'fixture-provider',
+        remoteEmailId: 'thread-tie-first',
+        remoteThreadId: null,
+        raw: makeRaw('thread-tie-first@example.test', 'first projection', null),
+        mailboxIds: [harness.inbox.id],
+        keywords: [],
+        receivedAt,
+      });
+      const second = await importEmail(harness.dependencies, {
+        accountId: harness.accountId,
+        provider: 'fixture-provider',
+        remoteEmailId: 'thread-tie-second',
+        remoteThreadId: null,
+        raw: makeRaw(
+          'thread-tie-second@example.test',
+          'second projection',
+          'thread-tie-first@example.test',
+        ),
+        mailboxIds: [harness.inbox.id],
+        keywords: [],
+        receivedAt,
+      });
+
+      await unitOfWork.run(async (tx) => {
+        const firstEmail = (await tx.emails.findById(harness.accountId, first.emailId))!;
+        const secondEmail = (await tx.emails.findById(harness.accountId, second.emailId))!;
+        expect(secondEmail.threadId).toBe(firstEmail.threadId);
+        expect(secondEmail.id.localeCompare(firstEmail.id)).toBeGreaterThan(0);
+        expect(await tx.threads.findById(harness.accountId, firstEmail.threadId)).toMatchObject({
+          preview: 'second projection',
+        });
+      });
+    }));
+
   it('deduplicates concurrent remote import and publishes its body projection atomically', () =>
     withMailTestDatabase(async ({ db, unitOfWork }) => {
       const harness = await createPostgresMailTestHarness(db, unitOfWork);

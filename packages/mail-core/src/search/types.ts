@@ -9,6 +9,8 @@ export type EmailQueryFilter = {
   after?: Date;
   before?: Date;
   address?: string;
+  from?: string;
+  to?: string;
   hasAttachment?: boolean;
   text?: string;
 };

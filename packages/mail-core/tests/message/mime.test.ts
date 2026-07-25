@@ -60,6 +60,45 @@ describe('parseRawEmail', () => {
     expect(parsed.htmlBody).toContain('<p>Hello</p>');
     expect(parsed.htmlBody).not.toContain('<img');
     expect(
+      parsed.parts.map(({ partPath, parentPath, contentType, kind }) => ({
+        partPath,
+        parentPath,
+        contentType,
+        kind,
+      })),
+    ).toEqual([
+      {
+        partPath: '1',
+        parentPath: null,
+        contentType: 'multipart/mixed',
+        kind: 'body',
+      },
+      {
+        partPath: '1.1',
+        parentPath: '1',
+        contentType: 'multipart/related',
+        kind: 'body',
+      },
+      {
+        partPath: '1.1.1',
+        parentPath: '1.1',
+        contentType: 'text/html',
+        kind: 'body',
+      },
+      {
+        partPath: '1.1.2',
+        parentPath: '1.1',
+        contentType: 'image/png',
+        kind: 'inline',
+      },
+      {
+        partPath: '1.2',
+        parentPath: '1',
+        contentType: 'application/octet-stream',
+        kind: 'attachment',
+      },
+    ]);
+    expect(
       parsed.attachments.map(({ contentId, contentType, disposition, filename, sizeBytes }) => ({
         contentId,
         contentType,
@@ -102,5 +141,38 @@ describe('parseRawEmail', () => {
         related: true,
       }),
     ]);
+  });
+
+  it('retains each body leaf from its own MIME node instead of duplicating the aggregate body', async () => {
+    const raw = new TextEncoder().encode(
+      [
+        'From: sender@example.test',
+        'To: recipient@example.test',
+        'Subject: Multiple body leaves',
+        'MIME-Version: 1.0',
+        'Content-Type: multipart/mixed; boundary="body-parts"',
+        '',
+        '--body-parts',
+        'Content-Type: text/plain; charset=utf-8',
+        '',
+        'First body.',
+        '--body-parts',
+        'Content-Type: text/plain; charset=utf-8',
+        '',
+        'Second body.',
+        '--body-parts--',
+        '',
+      ].join('\r\n'),
+    );
+
+    const parsed = await parseRawEmail(raw, {
+      sanitizeHtml: (html) => html,
+    });
+    const decoder = new TextDecoder();
+    expect(
+      parsed.parts
+        .filter(({ contentType }) => contentType === 'text/plain')
+        .map(({ bytes }) => decoder.decode(bytes)),
+    ).toEqual(['First body.', 'Second body.']);
   });
 });

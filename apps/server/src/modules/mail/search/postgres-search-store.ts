@@ -123,6 +123,28 @@ const predicatesFor = (input: SearchEmailInput): SQL[] => {
               AND lower(normalize(btrim(${emailAddress.address}), NFC)) = ${filter.address}
           )`,
         ]),
+    ...(filter.from === undefined
+      ? []
+      : [
+          sql`EXISTS (
+            SELECT 1 FROM ${emailAddress}
+            WHERE ${emailAddress.mailAccountId} = ${input.accountId}
+              AND ${emailAddress.emailId} = ${email.id}
+              AND ${emailAddress.kind} IN ('sender', 'from')
+              AND lower(normalize(btrim(${emailAddress.address}), NFC)) = ${filter.from}
+          )`,
+        ]),
+    ...(filter.to === undefined
+      ? []
+      : [
+          sql`EXISTS (
+            SELECT 1 FROM ${emailAddress}
+            WHERE ${emailAddress.mailAccountId} = ${input.accountId}
+              AND ${emailAddress.emailId} = ${email.id}
+              AND ${emailAddress.kind} = 'to'
+              AND lower(normalize(btrim(${emailAddress.address}), NFC)) = ${filter.to}
+          )`,
+        ]),
     ...(filter.hasAttachment === undefined
       ? []
       : [sql`${email.hasAttachment} = ${filter.hasAttachment}`]),

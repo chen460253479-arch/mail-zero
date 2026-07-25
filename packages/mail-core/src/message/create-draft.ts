@@ -29,6 +29,7 @@ import { createEmailSearchDocument } from './search-document';
 import { renderDraft } from './render-draft';
 import { normalizeSubject } from '../thread';
 import { recordChanges } from '../changes';
+import { z } from 'zod';
 
 export type DraftReferences = {
   identity: IdentityRecord;
@@ -166,7 +167,7 @@ export async function loadDraftAttachments(
 ): Promise<DraftAttachment[]> {
   const attachments: DraftAttachment[] = [];
   for (const record of records) {
-    await verifyPreparedBlob(
+    const bytes = await verifyPreparedBlob(
       dependencies.blobStore,
       {
         accountId: record.accountId,
@@ -176,15 +177,6 @@ export async function loadDraftAttachments(
       record.objectKey,
       true,
     );
-    let bytes: Uint8Array;
-    try {
-      bytes = await dependencies.blobStore.get({
-        accountId: record.accountId,
-        objectKey: record.objectKey,
-      });
-    } catch {
-      throw new MailCoreError('BLOB_INTEGRITY', { entityId: record.id });
-    }
     attachments.push({
       id: record.id,
       contentType: record.contentType,
@@ -388,23 +380,107 @@ export function draftReplyHeaders(reply: EmailRecord | null): {
   };
 }
 
+const draftAddressSchema = z.string().email();
+
+export const normalizeDraftContent = (
+  dependencies: Pick<MailCoreDependencies, 'sanitizeHtml'>,
+  content: DraftContent,
+): DraftContent => ({
+  ...content,
+  to: content.to.map(normalizeDraftAddress),
+  cc: content.cc.map(normalizeDraftAddress),
+  bcc: content.bcc.map(normalizeDraftAddress),
+  htmlBody:
+    content.htmlBody.length === 0 ? '' : dependencies.sanitizeHtml(content.htmlBody).trimEnd(),
+});
+
+const normalizeDraftAddress = (address: DraftContent['to'][number]) => {
+  const email = address.email.trim().normalize('NFC').toLocaleLowerCase('und');
+  if (
+    !draftAddressSchema.safeParse(email).success ||
+    (address.name !== undefined && /[\r\n]/u.test(address.name))
+  ) {
+    throw new MailCoreError('INVALID_EMAIL');
+  }
+  return { ...address, email };
+};
+
 export function buildDraftParts(
   dependencies: MailCoreDependencies,
   attachments: BlobRecord[],
+  content: DraftContent,
+  revision: DraftRevisionBlobs,
 ): EmailPartRecord[] {
-  return attachments.map((attachment, index) => ({
-    id: dependencies.idFactory.next<'EmailPart'>(),
-    parentPartId: null,
-    partPath: (index + 1).toString(),
-    contentType: attachment.contentType,
+  const parts: EmailPartRecord[] = [];
+  const addPart = (
+    parentPartId: string | null,
+    partPath: string,
+    part: Omit<EmailPartRecord, 'id' | 'parentPartId' | 'partPath'>,
+  ): string => {
+    const id = dependencies.idFactory.next<'EmailPart'>();
+    parts.push({ id, parentPartId, partPath, ...part });
+    return id;
+  };
+  const structural = (contentType: string) => ({
+    contentType,
     charset: null,
-    disposition: 'attachment',
-    filename: attachment.id,
+    disposition: null,
+    filename: null,
     contentId: null,
-    blobId: attachment.id,
-    sizeBytes: attachment.sizeBytes,
-    kind: 'attachment',
-  }));
+    blobId: null,
+    sizeBytes: 0n,
+    kind: 'body' as const,
+  });
+  const body = (
+    parentPartId: string | null,
+    partPath: string,
+    contentType: 'text/plain' | 'text/html',
+    blob: DraftRevisionBlob | null,
+  ) =>
+    addPart(parentPartId, partPath, {
+      contentType,
+      charset: 'utf-8',
+      disposition: null,
+      filename: null,
+      contentId: null,
+      blobId: blob?.record.id ?? null,
+      sizeBytes: blob?.record.sizeBytes ?? 0n,
+      kind: 'body',
+    });
+  const hasHtml = content.htmlBody.length > 0;
+  const hasAttachments = attachments.length > 0;
+  let attachmentParent: string | null = null;
+  let attachmentPrefix = '';
+  if (hasAttachments) {
+    attachmentParent = addPart(null, '1', structural('multipart/mixed'));
+    attachmentPrefix = '1.';
+  }
+  if (hasHtml) {
+    const alternativePath = hasAttachments ? '1.1' : '1';
+    const alternative = addPart(
+      hasAttachments ? attachmentParent : null,
+      alternativePath,
+      structural('multipart/alternative'),
+    );
+    body(alternative, `${alternativePath}.1`, 'text/plain', revision.text);
+    body(alternative, `${alternativePath}.2`, 'text/html', revision.html);
+  } else {
+    body(attachmentParent, hasAttachments ? '1.1' : '1', 'text/plain', revision.text);
+  }
+  attachments.forEach((attachment, index) => {
+    const position = 2 + index;
+    addPart(attachmentParent, `${attachmentPrefix}${position}`, {
+      contentType: attachment.contentType,
+      charset: null,
+      disposition: 'attachment',
+      filename: attachment.id,
+      contentId: null,
+      blobId: attachment.id,
+      sizeBytes: attachment.sizeBytes,
+      kind: 'attachment',
+    });
+  });
+  return parts;
 }
 
 export function draftEmailContent(
@@ -476,7 +552,12 @@ export function draftEmailContent(
     bcc: structuredClone(input.content.bcc),
     parserVersion: 1,
     parseWarnings: [],
-    parts: buildDraftParts(dependencies, input.references.attachments),
+    parts: buildDraftParts(
+      dependencies,
+      input.references.attachments,
+      input.content,
+      input.revision,
+    ),
   };
 }
 
@@ -504,11 +585,13 @@ export async function createDraft(
   dependencies: MailCoreDependencies,
   input: CreateDraftInput,
 ): Promise<DraftResult> {
+  const content = normalizeDraftContent(dependencies, input);
+  const normalizedInput: CreateDraftInput = { ...content, accountId: input.accountId };
   const now = dependencies.clock.now();
   const emailId = dependencies.idFactory.next<'Email'>() as EmailId;
   const messageId = `<${emailId}@local.zero>`;
   const preflight = await dependencies.unitOfWork.run((tx) =>
-    requireDraftReferences(tx, input.accountId, input),
+    requireDraftReferences(tx, input.accountId, normalizedInput),
   );
   const attachments = await loadDraftAttachments(dependencies, preflight.attachments);
   const replyHeaders = draftReplyHeaders(preflight.reply);
@@ -518,21 +601,21 @@ export async function createDraft(
     messageId,
     date: now,
     identity: preflight.identity,
-    content: input,
+    content: normalizedInput,
     ...replyHeaders,
     attachments,
   });
   const prepared = await prepareDraftRevision(dependencies, {
     accountId: input.accountId,
     raw,
-    content: input,
+    content: normalizedInput,
   });
   const committedObjectKeys: string[] = [];
   let operationCompleted = false;
   try {
     return await dependencies.unitOfWork.run(async (tx) => {
       await tx.lockAccount(input.accountId);
-      const references = await requireDraftReferences(tx, input.accountId, input);
+      const references = await requireDraftReferences(tx, input.accountId, normalizedInput);
       requireStableReferences(preflight, references);
       const revision = await allocateDraftRevisionBlobs(
         dependencies,
@@ -552,12 +635,14 @@ export async function createDraft(
       const threadId =
         references.reply?.threadId ?? (dependencies.idFactory.next<'Thread'>() as ThreadId);
       if (newThread) {
-        await tx.threads.insert(buildThread(threadId, input.accountId, references, input, now));
+        await tx.threads.insert(
+          buildThread(threadId, input.accountId, references, normalizedInput, now),
+        );
       } else if ((await tx.threads.findById(input.accountId, threadId)) === null) {
         throw new MailCoreError('THREAD_NOT_FOUND', { entityId: threadId });
       }
       const content = draftEmailContent(dependencies, {
-        content: input,
+        content: normalizedInput,
         references,
         revision,
         raw,
@@ -586,7 +671,7 @@ export async function createDraft(
         input.accountId,
         emailId,
         createEmailSearchDocument({
-          subject: input.subject,
+          subject: normalizedInput.subject,
           addresses: [
             ...stored.sender,
             ...stored.from,
@@ -595,9 +680,8 @@ export async function createDraft(
             ...stored.cc,
             ...stored.bcc,
           ],
-          textBody: input.textBody,
-          htmlBody: input.htmlBody,
-          sanitizeHtml: dependencies.sanitizeHtml,
+          textBody: normalizedInput.textBody,
+          htmlBody: normalizedInput.htmlBody,
         }),
       );
       await commitDraftRevisionBlobs(

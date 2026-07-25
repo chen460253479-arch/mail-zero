@@ -40,6 +40,7 @@ export const createPostgresMailTestHarness = async (
   const dependencies: MailCoreDependencies = {
     unitOfWork,
     blobStore,
+    blobReadAuditSink: { record: async () => undefined },
     searchStore: new PostgresSearchStore(db),
     clock: { now: () => new Date(now) },
     idFactory: {

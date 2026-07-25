@@ -1,4 +1,4 @@
-import PostalMime, { type Address, type Attachment, type Mailbox } from 'postal-mime';
+import PostalMime, { decodeWords, type Address, type Mailbox } from 'postal-mime';
 
 import type { ParsedEmail, ParsedPart, ParseRawEmailDependencies } from './types';
 import { MailCoreError, type MailAddress } from '../types';
@@ -31,17 +31,14 @@ const splitMessageIds = (value: string | undefined): string[] => {
   );
 };
 
-const toBytes = (content: Attachment['content']): Uint8Array => {
-  if (typeof content === 'string') {
-    return new TextEncoder().encode(content);
-  }
+const toBytes = (content: ArrayBuffer | Uint8Array): Uint8Array => {
   return content instanceof Uint8Array
     ? Uint8Array.from(content)
     : new Uint8Array(content.slice(0));
 };
 
 const classifyAttachment = (
-  attachment: Pick<Attachment, 'disposition' | 'related'>,
+  attachment: Pick<ParsedPart, 'disposition' | 'related'>,
 ): ParsedPart['kind'] =>
   attachment.disposition === 'attachment'
     ? 'attachment'
@@ -49,18 +46,74 @@ const classifyAttachment = (
       ? 'inline'
       : 'attachment';
 
-const normalizeAttachment = (attachment: Attachment): ParsedPart => {
-  const bytes = toBytes(attachment.content);
-  return {
-    contentType: attachment.mimeType,
-    disposition: attachment.disposition,
-    related: attachment.related === true,
-    kind: classifyAttachment(attachment),
-    filename: attachment.filename,
-    contentId: attachment.contentId ?? null,
-    bytes,
-    sizeBytes: BigInt(bytes.byteLength),
+type MimeNodeView = {
+  childNodes: MimeNodeView[];
+  content: ArrayBuffer | Uint8Array | null;
+  contentId?: string;
+  contentType: {
+    multipart?: string | false;
+    parsed: { value: string; params: Record<string, string | undefined> };
   };
+  contentDisposition?: {
+    parsed?: { value?: string | false; params?: Record<string, string | undefined> };
+  };
+  getTextContent(): string;
+};
+
+const extractParts = (root: MimeNodeView, sanitizeHtml: (html: string) => string): ParsedPart[] => {
+  const walk = (
+    node: MimeNodeView,
+    partPath: string,
+    parentPath: string | null,
+    related: boolean,
+  ): ParsedPart[] => {
+    const contentType = node.contentType.parsed.value.toLocaleLowerCase('und');
+    const dispositionValue = node.contentDisposition?.parsed?.value;
+    const disposition =
+      dispositionValue === 'inline' || dispositionValue === 'attachment' ? dispositionValue : null;
+    const isMultipart =
+      node.contentType.multipart !== undefined && node.contentType.multipart !== false;
+    const isBody =
+      isMultipart ||
+      (disposition !== 'attachment' &&
+        (contentType === 'text/plain' || contentType === 'text/html'));
+    const bodyText = isBody
+      ? (contentType === 'text/html'
+          ? sanitizeHtml(node.getTextContent())
+          : node.getTextContent()
+        ).trimEnd()
+      : '';
+    const bytes = isMultipart
+      ? new Uint8Array()
+      : isBody
+        ? new TextEncoder().encode(bodyText)
+        : node.content === null
+          ? new Uint8Array()
+          : toBytes(node.content);
+    const filenameValue =
+      node.contentDisposition?.parsed?.params?.filename ?? node.contentType.parsed.params.name;
+    const part: ParsedPart = {
+      parentPath,
+      partPath,
+      contentType,
+      charset: node.contentType.parsed.params.charset ?? null,
+      disposition,
+      related,
+      kind: isBody ? 'body' : classifyAttachment({ disposition, related }),
+      filename: filenameValue === undefined ? null : decodeWords(filenameValue),
+      contentId: node.contentId ?? null,
+      bytes,
+      sizeBytes: BigInt(bytes.byteLength),
+    };
+    const childRelated = related || node.contentType.multipart === 'related';
+    return [
+      part,
+      ...node.childNodes.flatMap((child, index) =>
+        walk(child, `${partPath}.${index + 1}`, partPath, childRelated),
+      ),
+    ];
+  };
+  return walk(root, '1', null, false);
 };
 
 const toDate = (value: string | undefined): Date | null => {
@@ -76,12 +129,29 @@ export async function parseRawEmail(
   dependencies: ParseRawEmailDependencies,
 ): Promise<ParsedEmail> {
   try {
-    const parsed = await new PostalMime({
+    const parser = new PostalMime({
       attachmentEncoding: 'arraybuffer',
-    }).parse(Uint8Array.from(raw));
-    const attachments = parsed.attachments.map(normalizeAttachment);
-    const htmlBody =
-      parsed.html === undefined ? '' : dependencies.sanitizeHtml(parsed.html).trimEnd();
+    });
+    const parsed = await parser.parse(Uint8Array.from(raw));
+    const sanitizedHtml = new Map<string, string>();
+    const sanitizeHtml = (html: string): string => {
+      const existing = sanitizedHtml.get(html);
+      if (existing !== undefined) {
+        return existing;
+      }
+      const sanitized = dependencies.sanitizeHtml(html);
+      sanitizedHtml.set(html, sanitized);
+      return sanitized;
+    };
+    const htmlBody = parsed.html === undefined ? '' : sanitizeHtml(parsed.html).trimEnd();
+    const textBody = parsed.text?.trimEnd() ?? '';
+    // PostalMime intentionally keeps the parsed node tree internal. The adapter
+    // is pinned to its runtime shape here so persistence can retain MIME paths
+    // and parent relationships instead of flattening every part.
+    const parts = extractParts((parser as unknown as { root: MimeNodeView }).root, sanitizeHtml);
+    const attachments = parts.filter(
+      (part): part is ParsedPart & { kind: 'inline' | 'attachment' } => part.kind !== 'body',
+    );
 
     return {
       messageId: splitMessageIds(parsed.messageId)[0] ?? null,
@@ -95,8 +165,9 @@ export async function parseRawEmail(
       to: normalizeAddresses(parsed.to),
       cc: normalizeAddresses(parsed.cc),
       bcc: normalizeAddresses(parsed.bcc),
-      textBody: parsed.text?.trimEnd() ?? '',
+      textBody,
       htmlBody,
+      parts,
       attachments,
       hasAttachment: attachments.some(({ kind }) => kind === 'attachment'),
     };

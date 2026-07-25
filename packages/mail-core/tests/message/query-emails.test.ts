@@ -55,8 +55,10 @@ describe('queryEmails', () => {
     [
       'normalized address',
       { address: '  SENDER@EXAMPLE.TEST  ' },
-      ['email-1', 'email-2', 'email-3'],
+      ['email-1', 'email-2', 'email-3', 'email-4'],
     ],
+    ['normalized from', { from: '  SENDER@EXAMPLE.TEST  ' }, ['email-1', 'email-2']],
+    ['normalized to', { to: '  SENDER@EXAMPLE.TEST  ' }, ['email-4']],
     ['attachment', { hasAttachment: true }, ['email-1', 'email-2', 'email-3']],
     ['text', { text: '  RELEASE  ' }, ['email-1', 'email-2', 'email-3']],
   ] as const)('applies the %s filter through SearchStore', async (_label, filter, expected) => {
@@ -74,6 +76,8 @@ describe('queryEmails', () => {
     expect(result.appliedFilter.address).toBe(
       'address' in filter ? 'sender@example.test' : undefined,
     );
+    expect(result.appliedFilter.from).toBe('from' in filter ? 'sender@example.test' : undefined);
+    expect(result.appliedFilter.to).toBe('to' in filter ? 'sender@example.test' : undefined);
     expect(result.appliedFilter.text).toBe('text' in filter ? 'release' : undefined);
   });
 

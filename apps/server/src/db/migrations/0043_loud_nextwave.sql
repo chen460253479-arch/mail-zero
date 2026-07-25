@@ -1,0 +1,1 @@
+CREATE INDEX "blob_account_status_content_created_idx" ON "mail0_blob" USING btree ("mail_account_id","status","content_type","created_at","id");

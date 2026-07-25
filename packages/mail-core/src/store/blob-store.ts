@@ -5,6 +5,17 @@ export type BlobCommitReceipt = {
   created: true;
 };
 
+export type BlobStoreEntry = {
+  key: string;
+  uploadedAt: Date;
+  sizeBytes: bigint;
+};
+
+export type BlobStoreListPage = {
+  entries: BlobStoreEntry[];
+  cursor: string | null;
+};
+
 export interface BlobStore {
   putTemporary(input: {
     accountId: MailAccountId;
@@ -23,4 +34,14 @@ export interface BlobStore {
    * already-missing object is a successful deletion, including on retries.
    */
   delete(input: { accountId: MailAccountId; objectKey: string }): Promise<void>;
+  /**
+   * Enumerates only keys owned by the supplied account. Cursors are opaque and
+   * may only be reused with the same account and kind.
+   */
+  list(input: {
+    accountId: MailAccountId;
+    kind: 'object' | 'temporary';
+    cursor: string | null;
+    limit: number;
+  }): Promise<BlobStoreListPage>;
 }

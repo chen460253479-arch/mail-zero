@@ -8,6 +8,7 @@ import { MailCoreError, type BlobStore, type MailAccountId } from '@zero/mail-co
 type StoredObject = {
   bytes: Uint8Array;
   contentType?: string;
+  uploaded: Date;
 };
 
 const copyBytes = (bytes: Uint8Array): Uint8Array => Uint8Array.from(bytes);
@@ -34,6 +35,7 @@ class FakeR2Bucket implements R2BucketLike {
       this.objects.set(key, {
         bytes: copyBytes(bytes),
         contentType: options?.httpMetadata?.contentType,
+        uploaded: new Date('2026-01-01T00:00:00.000Z'),
       });
       return { key };
     },
@@ -57,6 +59,25 @@ class FakeR2Bucket implements R2BucketLike {
     const failure = this.deleteAcknowledgementFailure;
     this.deleteAcknowledgementFailure = null;
     if (failure !== null) throw failure;
+  });
+
+  readonly list = vi.fn(async (options?: { prefix?: string; cursor?: string; limit?: number }) => {
+    const matching = [...this.objects.entries()]
+      .filter(([key]) => options?.prefix === undefined || key.startsWith(options.prefix))
+      .sort(([left], [right]) => left.localeCompare(right));
+    const offset = options?.cursor === undefined ? 0 : Number(options.cursor);
+    const pageSize = Math.min(options?.limit ?? 1000, 1);
+    const page = matching.slice(offset, offset + pageSize);
+    const nextOffset = offset + page.length;
+    return {
+      objects: page.map(([key, object]) => ({
+        key,
+        uploaded: object.uploaded,
+        size: object.bytes.byteLength,
+      })),
+      truncated: nextOffset < matching.length,
+      cursor: nextOffset < matching.length ? String(nextOffset) : undefined,
+    };
   });
 
   failNext(message: string): void {
@@ -154,6 +175,43 @@ describe('R2BlobStore', () => {
     ).resolves.toEqual({ objectKey, created: true });
     await expect(store.get({ accountId, objectKey })).resolves.toEqual(bytes);
     expect(bucket.objects.get(objectKey)?.contentType).toBe('text/plain');
+  });
+
+  it('maps R2 list pagination to account-scoped BlobStore pages', async () => {
+    const bucket = new FakeR2Bucket();
+    const store = new R2BlobStore(bucket);
+    const first = await store.putTemporary({
+      accountId,
+      bytes: new TextEncoder().encode('first'),
+      contentType: 'text/plain',
+    });
+    const second = await store.putTemporary({
+      accountId,
+      bytes: new TextEncoder().encode('second'),
+      contentType: 'text/plain',
+    });
+
+    const firstPage = await store.list({
+      accountId,
+      kind: 'temporary',
+      cursor: null,
+      limit: 100,
+    });
+    const secondPage = await store.list({
+      accountId,
+      kind: 'temporary',
+      cursor: firstPage.cursor,
+      limit: 100,
+    });
+
+    expect(firstPage.entries).toHaveLength(1);
+    expect(firstPage.cursor).not.toBeNull();
+    expect(secondPage.entries).toHaveLength(1);
+    expect(secondPage.cursor).toBeNull();
+    expect([...firstPage.entries, ...secondPage.entries].map(({ key }) => key).sort()).toEqual(
+      [first.temporaryKey, second.temporaryKey].sort(),
+    );
+    expect(bucket.list).toHaveBeenCalledTimes(2);
   });
 
   it('reports a missing temporary object without leaking its key', async () => {

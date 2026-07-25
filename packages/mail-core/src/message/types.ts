@@ -5,10 +5,13 @@ export type ParseRawEmailDependencies = {
 };
 
 export type ParsedPart = {
+  parentPath: string | null;
+  partPath: string;
   contentType: string;
+  charset: string | null;
   disposition: 'inline' | 'attachment' | null;
   related: boolean;
-  kind: 'inline' | 'attachment';
+  kind: 'body' | 'inline' | 'attachment';
   filename: string | null;
   contentId: string | null;
   bytes: Uint8Array;
@@ -29,6 +32,7 @@ export type ParsedEmail = {
   bcc: MailAddress[];
   textBody: string;
   htmlBody: string;
+  parts: ParsedPart[];
   attachments: ParsedPart[];
   hasAttachment: boolean;
 };

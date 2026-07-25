@@ -48,7 +48,7 @@ export async function garbageCollectBlobs(
     throw new MailCoreError('INVALID_GC_REQUEST');
   }
 
-  const result = await dependencies.unitOfWork.run(async (tx) => {
+  const candidates = await dependencies.unitOfWork.run(async (tx) => {
     await tx.lockAccount(input.accountId);
     const referenced = referencedBlobIds(await tx.emails.listByAccount(input.accountId));
     for (const submission of await tx.submissions.listByAccount(input.accountId)) {
@@ -57,7 +57,7 @@ export async function garbageCollectBlobs(
       }
     }
     const accountBlobs = await tx.blobs.listByAccount(input.accountId);
-    const candidates: BlobRecord[] = accountBlobs
+    const candidatesToMark: BlobRecord[] = accountBlobs
       .filter(
         (blob) =>
           (blob.status === 'ready' || blob.status === 'deleting') &&
@@ -71,43 +71,43 @@ export async function garbageCollectBlobs(
         return byCreatedAt === 0 ? left.id.localeCompare(right.id) : byCreatedAt;
       })
       .slice(0, input.limit);
-    const remainingByObjectKey = new Map<string, number>();
-    for (const blob of accountBlobs) {
-      remainingByObjectKey.set(blob.objectKey, (remainingByObjectKey.get(blob.objectKey) ?? 0) + 1);
-    }
-    for (const candidate of candidates) {
+    for (const candidate of candidatesToMark) {
       await tx.blobs.update(input.accountId, candidate.id, {
         status: 'deleting',
       });
     }
+    return candidatesToMark;
+  });
 
-    const collectedBlobIds: BlobId[] = [];
-    for (let index = 0; index < candidates.length; index += 1) {
-      const candidate = candidates[index]!;
-      const remaining = (remainingByObjectKey.get(candidate.objectKey) ?? 1) - 1;
-      remainingByObjectKey.set(candidate.objectKey, remaining);
-      try {
-        if (remaining === 0) {
-          await dependencies.blobStore.delete({
-            accountId: input.accountId,
-            objectKey: candidate.objectKey,
-          });
-        }
-      } catch {
-        for (const retryable of candidates.slice(index)) {
-          await tx.blobs.update(input.accountId, retryable.id, {
-            status: 'ready',
-          });
-        }
-        return { collectedBlobIds, deleteFailed: true as const };
+  const collectedBlobIds: BlobId[] = [];
+  for (const candidate of candidates) {
+    try {
+      await dependencies.blobStore.delete({
+        accountId: input.accountId,
+        objectKey: candidate.objectKey,
+      });
+    } catch {
+      throw new MailCoreError('BLOB_STORE_FAILURE');
+    }
+    const finalized = await dependencies.unitOfWork.run(async (tx) => {
+      await tx.lockAccount(input.accountId);
+      const current = await tx.blobs.findById(input.accountId, candidate.id);
+      if (current === null) {
+        return false;
       }
-      await tx.blobs.delete(input.accountId, candidate.id);
+      if (
+        current.status !== 'deleting' ||
+        current.objectKey !== candidate.objectKey ||
+        current.objectKey !== contentAddressedObjectKey(input.accountId, current.sha256)
+      ) {
+        throw new MailCoreError('BLOB_INTEGRITY');
+      }
+      await tx.blobs.delete(input.accountId, current.id);
+      return true;
+    });
+    if (finalized) {
       collectedBlobIds.push(candidate.id);
     }
-    return { collectedBlobIds, deleteFailed: false as const };
-  });
-  if (result.deleteFailed) {
-    throw new MailCoreError('BLOB_STORE_FAILURE');
   }
-  return { collectedBlobIds: result.collectedBlobIds };
+  return { collectedBlobIds };
 }

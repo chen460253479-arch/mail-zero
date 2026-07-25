@@ -35,6 +35,7 @@ export async function createMailbox(
   const now = dependencies.clock.now();
 
   return dependencies.unitOfWork.run(async (tx) => {
+    await tx.lockAccount(input.accountId);
     if ((await tx.accounts.findById(input.accountId)) === null) {
       throw new MailCoreError('ACCOUNT_NOT_FOUND', {
         entityId: input.accountId,

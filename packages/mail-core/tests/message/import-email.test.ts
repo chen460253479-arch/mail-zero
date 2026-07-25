@@ -28,6 +28,50 @@ const relatedRaw = new Uint8Array(
 );
 
 describe('importEmail', () => {
+  it('uses the lifecycle tie-break when equal-time imports update a Thread projection', async () => {
+    const deps = await createSeededImportDependencies();
+    const receivedAt = new Date('2026-01-01T10:00:00.000Z');
+    const raw = (messageId: string, body: string, inReplyTo: string | null) =>
+      new TextEncoder().encode(
+        [
+          'From: sender@example.test',
+          'To: recipient@example.test',
+          `Message-ID: <${messageId}>`,
+          ...(inReplyTo === null ? [] : [`In-Reply-To: <${inReplyTo}>`]),
+          'Date: Thu, 1 Jan 2026 10:00:00 +0000',
+          'Subject: Equal time thread',
+          'Content-Type: text/plain; charset=utf-8',
+          '',
+          body,
+        ].join('\r\n'),
+      );
+    const first = await importEmail(deps.core, {
+      ...deps.input,
+      remoteEmailId: 'equal-time-first',
+      raw: raw('equal-time-first@example.test', 'first projection', null),
+      receivedAt,
+    });
+    const second = await importEmail(deps.core, {
+      ...deps.input,
+      remoteEmailId: 'equal-time-second',
+      raw: raw(
+        'equal-time-second@example.test',
+        'second projection',
+        'equal-time-first@example.test',
+      ),
+      receivedAt,
+    });
+    const firstEmail = (await deps.core.inspect.email(first.emailId))!;
+    const secondEmail = (await deps.core.inspect.email(second.emailId))!;
+
+    expect(secondEmail.threadId).toBe(firstEmail.threadId);
+    expect(secondEmail.id.localeCompare(firstEmail.id)).toBeGreaterThan(0);
+    expect(await deps.core.inspect.thread(firstEmail.threadId)).toMatchObject({
+      preview: 'second projection',
+      participantSummary: 'sender@example.test, recipient@example.test',
+    });
+  });
+
   it('publishes a transactional full-body search document without later Blob reads', async () => {
     const deps = await createSeededImportDependencies();
     const marker = 'projection-only-marker';
@@ -102,9 +146,47 @@ describe('importEmail', () => {
           objectKey === `mail/${deps.input.accountId}/sha256/${sha256.slice(0, 2)}/${sha256}`,
       ),
     ).toBe(true);
-    expect(stored?.parts).toHaveLength(2);
-    expect(stored?.parts[0]?.blobId).toBe(stored?.parts[1]?.blobId);
-    const attachmentBlob = blobs.find(({ id }) => id === stored?.parts[0]?.blobId)!;
+    expect(stored?.parts).toHaveLength(5);
+    if (stored === null) {
+      throw new Error('expected imported Email');
+    }
+    const inlinePart = stored.parts.find(({ kind }) => kind === 'inline');
+    const attachmentPart = stored.parts.find(({ kind }) => kind === 'attachment');
+    const htmlPart = stored.parts.find(({ contentType }) => contentType === 'text/html');
+    expect(inlinePart).toBeDefined();
+    expect(attachmentPart).toBeDefined();
+    expect(htmlPart).toBeDefined();
+    if (inlinePart === undefined || attachmentPart === undefined || htmlPart === undefined) {
+      throw new Error('expected MIME leaf parts');
+    }
+    expect(inlinePart.parentPartId).not.toBeNull();
+    expect(attachmentPart.parentPartId).not.toBeNull();
+    expect(inlinePart.blobId).toBe(attachmentPart.blobId);
+    expect(htmlPart.blobId).toBe(stored.htmlBlobId);
+    const rebuilt = await parseRawEmail(multipartRaw, {
+      sanitizeHtml: (html) => html,
+    });
+    const pathByPartId = new Map(stored.parts.map(({ id, partPath }) => [id, partPath]));
+    expect(
+      stored.parts.map(({ parentPartId, partPath, contentType, charset, disposition, kind }) => ({
+        parentPath: parentPartId === null ? null : pathByPartId.get(parentPartId),
+        partPath,
+        contentType,
+        charset,
+        disposition,
+        kind,
+      })),
+    ).toEqual(
+      rebuilt.parts.map(({ parentPath, partPath, contentType, charset, disposition, kind }) => ({
+        parentPath,
+        partPath,
+        contentType,
+        charset,
+        disposition,
+        kind,
+      })),
+    );
+    const attachmentBlob = blobs.find(({ id }) => id === inlinePart.blobId)!;
     await expect(
       deps.core.blobStore.get({
         accountId: deps.input.accountId,
@@ -143,6 +225,61 @@ describe('importEmail', () => {
     );
     expect(importChanges.every(({ stateVersion }) => stateVersion === 2n)).toBe(true);
     expect(await deps.core.inspect.stateVersion(deps.input.accountId)).toBe(2n);
+  });
+
+  it('persists each body leaf with its own decoded bytes instead of the aggregate body Blob', async () => {
+    const deps = await createSeededImportDependencies();
+    const raw = new TextEncoder().encode(
+      [
+        'From: sender@example.test',
+        'To: recipient@example.test',
+        'Subject: Multiple body leaves',
+        'MIME-Version: 1.0',
+        'Content-Type: multipart/mixed; boundary="body-parts"',
+        '',
+        '--body-parts',
+        'Content-Type: text/plain; charset=utf-8',
+        '',
+        'First body.',
+        '--body-parts',
+        'Content-Type: text/plain; charset=utf-8',
+        '',
+        'Second body.',
+        '--body-parts--',
+        '',
+      ].join('\r\n'),
+    );
+
+    const result = await importEmail(deps.core, {
+      ...deps.input,
+      remoteEmailId: 'multiple-body-leaves',
+      raw,
+    });
+    const stored = await deps.core.inspect.email(result.emailId);
+    if (stored === null) {
+      throw new Error('expected imported Email');
+    }
+    const blobs = await deps.core.inspect.blobs(deps.input.accountId);
+    const decoder = new TextDecoder();
+    const bodyBytes = await Promise.all(
+      stored.parts
+        .filter(({ contentType }) => contentType === 'text/plain')
+        .map(async ({ blobId }) => {
+          const blob = blobs.find(({ id }) => id === blobId);
+          if (blob === undefined) {
+            throw new Error('expected body Blob');
+          }
+          return deps.core.blobStore.get({
+            accountId: deps.input.accountId,
+            objectKey: blob.objectKey,
+          });
+        }),
+    );
+
+    expect(bodyBytes.map((bytes) => decoder.decode(bytes))).toEqual([
+      'First body.',
+      'Second body.',
+    ]);
   });
 
   it('returns the existing local ID for the same remote fingerprint without changing state', async () => {
@@ -614,12 +751,14 @@ describe('importEmail', () => {
     const stored = (await deps.core.inspect.email(result.emailId))!;
 
     expect(stored.hasAttachment).toBe(false);
-    expect(stored.parts).toEqual([
-      expect.objectContaining({
-        disposition: null,
-        kind: 'inline',
-      }),
-    ]);
+    expect(stored.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          disposition: null,
+          kind: 'inline',
+        }),
+      ]),
+    );
   });
 
   it('uses normalized references and subjects to place a reply in exactly one local Thread', async () => {

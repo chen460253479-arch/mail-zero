@@ -2,7 +2,9 @@ import { MailCoreError, type BlobCommitReceipt, type BlobStore } from '@zero/mai
 
 import {
   buildObjectKey,
+  buildObjectPrefix,
   buildTemporaryKey,
+  buildTemporaryPrefix,
   bytesEqual,
   calculateSha256,
   copyBytes,
@@ -13,6 +15,12 @@ import {
 export type R2ObjectLike = {
   arrayBuffer(): Promise<ArrayBuffer>;
   httpMetadata?: { contentType?: string };
+};
+
+export type R2ListedObjectLike = {
+  key: string;
+  uploaded: Date;
+  size: number;
 };
 
 export type R2BucketLike = {
@@ -26,6 +34,11 @@ export type R2BucketLike = {
   ): Promise<unknown | null>;
   get(key: string): Promise<R2ObjectLike | null>;
   delete(key: string): Promise<void>;
+  list(options?: { prefix?: string; cursor?: string; limit?: number }): Promise<{
+    objects: R2ListedObjectLike[];
+    truncated: boolean;
+    cursor?: string;
+  }>;
 };
 
 const runBucket = async <Result>(operation: () => Promise<Result>): Promise<Result> => {
@@ -115,5 +128,38 @@ export class R2BlobStore implements BlobStore {
   async delete(input: Parameters<BlobStore['delete']>[0]): Promise<void> {
     requireObjectKeyForAccount(input.accountId, input.objectKey);
     await runBucket(() => this.bucket.delete(input.objectKey));
+  }
+
+  async list(input: Parameters<BlobStore['list']>[0]): ReturnType<BlobStore['list']> {
+    const prefix =
+      input.kind === 'object'
+        ? buildObjectPrefix(input.accountId)
+        : buildTemporaryPrefix(input.accountId);
+    const result = await runBucket(() =>
+      this.bucket.list({
+        prefix,
+        ...(input.cursor === null ? {} : { cursor: input.cursor }),
+        limit: input.limit,
+      }),
+    );
+    const entries = result.objects.map((object) => {
+      if (input.kind === 'object') {
+        requireObjectKeyForAccount(input.accountId, object.key);
+      } else {
+        requireTemporaryKeyForAccount(input.accountId, object.key);
+      }
+      return {
+        key: object.key,
+        uploadedAt: new Date(object.uploaded),
+        sizeBytes: BigInt(object.size),
+      };
+    });
+    if (result.truncated && (result.cursor === undefined || result.cursor.length === 0)) {
+      throw new MailCoreError('BLOB_STORE_FAILURE');
+    }
+    return {
+      entries,
+      cursor: result.truncated ? result.cursor! : null,
+    };
   }
 }

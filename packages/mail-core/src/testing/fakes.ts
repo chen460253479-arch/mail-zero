@@ -10,12 +10,14 @@ import { createMemoryMailInspector, MemoryMailUnitOfWork } from './memory-mail-s
 import type { EmailId, Id, MailAccountId } from '../types';
 import { MemoryBlobStore } from './memory-blob-store';
 import type { CursorSortValue } from '../search';
+import type { BlobReadAuditSink } from '../blob';
 
 export interface CreateMemoryMailCoreDependenciesOptions {
   corruptBlobOnCommit?: 'sha256' | 'size';
   failBlobCommit?: boolean;
   now?: Date;
   sanitizeHtml?: (html: string) => string;
+  blobReadAuditSink?: BlobReadAuditSink;
 }
 
 export class MemoryClock {
@@ -48,6 +50,14 @@ export class MemorySearchStore implements SearchStore {
       ...email.cc,
       ...email.bcc,
     ];
+    const fromFields = (email: EmailRecord) => [...email.sender, ...email.from];
+    const toFields = (email: EmailRecord) => email.to;
+    const matchesAddress = (
+      addresses: ReturnType<typeof addressFields>,
+      expected: string | undefined,
+    ): boolean =>
+      expected === undefined ||
+      addresses.some(({ email: address }) => normalize(address) === expected);
     const state = this.unitOfWork.snapshot();
     const candidates = [...state.emails.values()]
       .filter((email) => email.accountId === input.accountId && email.destroyedAt === null)
@@ -66,10 +76,9 @@ export class MemorySearchStore implements SearchStore {
           (filter.hasKeyword === undefined || email.keywords.includes(filter.hasKeyword)) &&
           (filter.after === undefined || email.receivedAt > filter.after) &&
           (filter.before === undefined || email.receivedAt < filter.before) &&
-          (filter.address === undefined ||
-            addressFields(email).some(
-              ({ email: address }) => normalize(address) === filter.address,
-            )) &&
+          matchesAddress(addressFields(email), filter.address) &&
+          matchesAddress(fromFields(email), filter.from) &&
+          matchesAddress(toFields(email), filter.to) &&
           (filter.hasAttachment === undefined || email.hasAttachment === filter.hasAttachment) &&
           (filter.text === undefined ||
             normalize(
@@ -149,18 +158,20 @@ export const createMemoryMailCoreDependencies = (
   options: CreateMemoryMailCoreDependenciesOptions = {},
 ) => {
   const unitOfWork = new MemoryMailUnitOfWork();
+  const clock = new MemoryClock(options.now);
   const blobStore = new MemoryBlobStore({
     corruptOnCommit: options.corruptBlobOnCommit,
     failCommit: options.failBlobCommit,
+    now: () => clock.now(),
   });
   const searchStore = new MemorySearchStore(unitOfWork);
-  const clock = new MemoryClock(options.now);
   const baseInspector = createMemoryMailInspector(unitOfWork);
   let nextId = 1;
 
   const dependencies: MailCoreDependencies = {
     unitOfWork,
     blobStore,
+    blobReadAuditSink: options.blobReadAuditSink ?? { record: async () => undefined },
     searchStore,
     clock,
     idFactory: {

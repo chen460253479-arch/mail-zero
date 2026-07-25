@@ -1,4 +1,4 @@
-import type { BlobCommitReceipt, BlobStore } from '../store';
+import type { BlobCommitReceipt, BlobStore, BlobStoreListPage } from '../store';
 import type { MailAccountId } from '../types';
 import { MailCoreError } from '../types';
 
@@ -8,6 +8,7 @@ interface StoredBlob {
   contentType: string;
   sha256: string;
   size: bigint;
+  uploadedAt: Date;
 }
 
 const copyBytes = (bytes: Uint8Array): Uint8Array => Uint8Array.from(bytes);
@@ -29,25 +30,30 @@ const sha256 = async (bytes: Uint8Array): Promise<string> => {
 const copyBlob = (blob: StoredBlob): StoredBlob => ({
   ...blob,
   bytes: copyBytes(blob.bytes),
+  uploadedAt: new Date(blob.uploadedAt),
 });
 
 export interface MemoryBlobStoreOptions {
   corruptOnCommit?: 'sha256' | 'size';
   failCommit?: boolean;
+  now?: () => Date;
 }
 
 export class MemoryBlobStore implements BlobStore {
   private readonly temporary = new Map<string, StoredBlob>();
   private readonly objects = new Map<string, StoredBlob>();
   private readonly failingDeletes = new Set<string>();
+  private readonly failingTemporaryDeletes = new Set<string>();
   private nextTemporaryKey = 1;
   private readonly corruptOnCommit: 'sha256' | 'size' | undefined;
   private failCommit: boolean;
   private failCommitAfterPromotionCountdown = 0;
+  private readonly now: () => Date;
 
   constructor(options: MemoryBlobStoreOptions = {}) {
     this.corruptOnCommit = options.corruptOnCommit;
     this.failCommit = options.failCommit ?? false;
+    this.now = options.now ?? (() => new Date());
   }
 
   async putTemporary(input: {
@@ -66,6 +72,7 @@ export class MemoryBlobStore implements BlobStore {
       contentType: input.contentType,
       sha256: digest,
       size,
+      uploadedAt: this.now(),
     });
     return { temporaryKey, sha256: digest, size };
   }
@@ -107,7 +114,7 @@ export class MemoryBlobStore implements BlobStore {
         created: true,
       };
     }
-    const committed = copyBlob(pending);
+    const committed = { ...copyBlob(pending), uploadedAt: this.now() };
     if (this.corruptOnCommit === 'sha256') {
       committed.bytes[0] = (committed.bytes[0] ?? 0) ^ 0xff;
     } else if (this.corruptOnCommit === 'size') {
@@ -131,6 +138,9 @@ export class MemoryBlobStore implements BlobStore {
     if (pending !== undefined && pending.accountId !== input.accountId) {
       throw new MailCoreError('INVALID_BLOB_KEY');
     }
+    if (this.failingTemporaryDeletes.delete(input.temporaryKey)) {
+      throw new Error('temporary blob delete failed');
+    }
     this.temporary.delete(input.temporaryKey);
   }
 
@@ -153,8 +163,43 @@ export class MemoryBlobStore implements BlobStore {
     this.objects.delete(input.objectKey);
   }
 
+  async list(input: {
+    accountId: MailAccountId;
+    kind: 'object' | 'temporary';
+    cursor: string | null;
+    limit: number;
+  }): Promise<BlobStoreListPage> {
+    const source = input.kind === 'object' ? this.objects : this.temporary;
+    const entries = [...source.entries()]
+      .filter(([, blob]) => blob.accountId === input.accountId)
+      .sort(([left], [right]) => left.localeCompare(right));
+    const offset = input.cursor === null ? 0 : Number(input.cursor);
+    if (
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      !Number.isInteger(input.limit) ||
+      input.limit < 1
+    ) {
+      throw new MailCoreError('BLOB_STORE_FAILURE');
+    }
+    const page = entries.slice(offset, offset + input.limit);
+    const nextOffset = offset + page.length;
+    return {
+      entries: page.map(([key, blob]) => ({
+        key,
+        uploadedAt: new Date(blob.uploadedAt),
+        sizeBytes: blob.size,
+      })),
+      cursor: nextOffset < entries.length ? String(nextOffset) : null,
+    };
+  }
+
   failNextDelete(objectKey: string): void {
     this.failingDeletes.add(objectKey);
+  }
+
+  failNextTemporaryDelete(temporaryKey: string): void {
+    this.failingTemporaryDeletes.add(temporaryKey);
   }
 
   setFailCommit(fail: boolean): void {

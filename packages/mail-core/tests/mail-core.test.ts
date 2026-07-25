@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { createMemoryMailCoreDependencies } from '../src/testing/fakes';
+import { createMailCore, createMailCoreMaintenance } from '../src';
 import { createQueryHarness } from './helpers/query-harness';
 import type { EmailId, ThreadId } from '../src';
-import { createMailCore } from '../src';
 
 describe('createMailCore', () => {
   it('binds the complete public command surface without exposing maintenance mutation', () => {
@@ -25,8 +25,10 @@ describe('createMailCore', () => {
         'getEmail',
         'getThread',
         'importEmail',
+        'listMailboxes',
         'queryEmails',
         'queryThreads',
+        'readBlob',
         'updateDraft',
         'updateEmail',
         'updateIdentity',
@@ -34,6 +36,15 @@ describe('createMailCore', () => {
       ].sort(),
     );
     expect(core).not.toHaveProperty('garbageCollectBlobs');
+    expect(core).not.toHaveProperty('reconcileBlobStorage');
+  });
+
+  it('binds destructive storage operations only on the maintenance surface', () => {
+    const maintenance = createMailCoreMaintenance(createMemoryMailCoreDependencies());
+
+    expect(Object.keys(maintenance).sort()).toEqual(
+      ['garbageCollectBlobs', 'reconcileBlobStorage'].sort(),
+    );
   });
 
   it('serves account-scoped getEmail/getThread reads with stable not-found errors and no mutation', async () => {

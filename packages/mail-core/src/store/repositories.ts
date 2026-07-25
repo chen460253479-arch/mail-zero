@@ -251,11 +251,21 @@ export interface MailboxRepository {
 
 export interface BlobRepository {
   findById(accountId: MailAccountId, id: BlobId): Promise<BlobRecord | null>;
+  findByObjectKeyExcluding(
+    accountId: MailAccountId,
+    objectKey: string,
+    exclusion: Pick<BlobRecord, 'status' | 'contentType'>,
+  ): Promise<BlobRecord | null>;
   findByDigest(
     accountId: MailAccountId,
     sha256: string,
     sizeBytes: bigint,
   ): Promise<BlobRecord | null>;
+  listDeletingByContentType(
+    accountId: MailAccountId,
+    contentType: string,
+    limit: number,
+  ): Promise<BlobRecord[]>;
   listByAccount(accountId: MailAccountId): Promise<BlobRecord[]>;
   insert(record: BlobRecord): Promise<BlobRecord>;
   update(

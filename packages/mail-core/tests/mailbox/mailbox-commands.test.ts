@@ -1,10 +1,104 @@
 import { describe, expect, it } from 'vitest';
 
-import { createMailAccount, createMailbox, destroyMailbox, updateMailbox } from '../../src';
+import {
+  createMailAccount,
+  createMailbox,
+  destroyMailbox,
+  listMailboxes,
+  updateMailbox,
+  type MailAccountId,
+} from '../../src';
 import { createMemoryMailCoreDependencies } from '../../src/testing/fakes';
 import type { MailCoreDependencies, MailTransaction } from '../../src';
 
 describe('Mailbox commands', () => {
+  it('lists the account Mailboxes through the public query API in stable order', async () => {
+    const deps = createMemoryMailCoreDependencies();
+    const account = await createMailAccount(deps, {
+      userId: 'list-user',
+      connectionId: 'list-connection',
+      timezone: 'UTC',
+      storageQuotaBytes: null,
+    });
+    const custom = await createMailbox(deps, {
+      accountId: account.id,
+      name: 'Listed custom folder',
+      kind: 'folder',
+      role: null,
+      parentId: null,
+    });
+
+    const first = await listMailboxes(deps, { accountId: account.id });
+    const second = await listMailboxes(deps, { accountId: account.id });
+
+    expect(first).toEqual(second);
+    expect(first).toHaveLength(9);
+    expect(first.map(({ id }) => id)).toContain(custom.id);
+    expect(first.map(({ id }) => id)).toEqual(
+      [...first]
+        .sort((left, right) => left.sortOrder - right.sortOrder || left.id.localeCompare(right.id))
+        .map(({ id }) => id),
+    );
+    await expect(
+      listMailboxes(deps, { accountId: 'missing-account' as MailAccountId }),
+    ).rejects.toMatchObject({ code: 'ACCOUNT_NOT_FOUND' });
+  });
+
+  it('locks the account before validating a new Mailbox parent or name', async () => {
+    const deps = createMemoryMailCoreDependencies();
+    const account = await createMailAccount(deps, {
+      userId: 'create-lock-user',
+      connectionId: 'create-lock-connection',
+      timezone: 'UTC',
+      storageQuotaBytes: null,
+    });
+    const trace: string[] = [];
+    const tracedDependencies: MailCoreDependencies = {
+      ...deps,
+      unitOfWork: {
+        run: (operation) =>
+          deps.unitOfWork.run((tx) => {
+            const traced: MailTransaction = {
+              ...tx,
+              lockAccount: async (accountId) => {
+                trace.push('lock');
+                await tx.lockAccount(accountId);
+              },
+              accounts: {
+                ...tx.accounts,
+                findById: async (...args) => {
+                  trace.push('find-account');
+                  return tx.accounts.findById(...args);
+                },
+              },
+              mailboxes: {
+                ...tx.mailboxes,
+                findByNormalizedName: async (...args) => {
+                  trace.push('check-name');
+                  return tx.mailboxes.findByNormalizedName(...args);
+                },
+                insert: async (...args) => {
+                  trace.push('insert-mailbox');
+                  return tx.mailboxes.insert(...args);
+                },
+              },
+            };
+            return operation(traced);
+          }),
+      },
+    };
+
+    await createMailbox(tracedDependencies, {
+      accountId: account.id,
+      name: 'Serialized create',
+      kind: 'folder',
+      role: null,
+      parentId: null,
+    });
+
+    expect(trace).toEqual(['lock', 'find-account', 'check-name', 'insert-mailbox']);
+  });
+
   it('enforces role, name, parent, child, content, and system invariants', async () => {
     const deps = createMemoryMailCoreDependencies();
     const account = await createMailAccount(deps, {

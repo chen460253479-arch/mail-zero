@@ -98,4 +98,59 @@ describe('memory blob store', () => {
       deps.blobStore.delete({ accountId, objectKey: 'objects/missing' }),
     ).resolves.toBeUndefined();
   });
+
+  it('enumerates account-scoped committed and temporary uploads with stable pagination', async () => {
+    const deps = createMemoryMailCoreDependencies();
+    const otherAccountId = 'account-2' as MailAccountId;
+    const first = await deps.blobStore.putTemporary({
+      accountId,
+      bytes: new Uint8Array([1]),
+      contentType: 'application/octet-stream',
+    });
+    const second = await deps.blobStore.putTemporary({
+      accountId,
+      bytes: new Uint8Array([2]),
+      contentType: 'application/octet-stream',
+    });
+    await deps.blobStore.putTemporary({
+      accountId: otherAccountId,
+      bytes: new Uint8Array([3]),
+      contentType: 'application/octet-stream',
+    });
+    await deps.blobStore.commitTemporary({
+      accountId,
+      temporaryKey: first.temporaryKey,
+      objectKey: `mail/${accountId}/sha256/${first.sha256.slice(0, 2)}/${first.sha256}`,
+    });
+
+    const temporaryPage = await deps.blobStore.list({
+      accountId,
+      kind: 'temporary',
+      cursor: null,
+      limit: 1,
+    });
+    expect(temporaryPage.entries).toEqual([
+      expect.objectContaining({
+        key: second.temporaryKey,
+        uploadedAt: deps.clock.now(),
+      }),
+    ]);
+    expect(temporaryPage.cursor).toBeNull();
+    await expect(
+      deps.blobStore.list({
+        accountId,
+        kind: 'object',
+        cursor: null,
+        limit: 1,
+      }),
+    ).resolves.toEqual({
+      entries: [
+        expect.objectContaining({
+          key: `mail/${accountId}/sha256/${first.sha256.slice(0, 2)}/${first.sha256}`,
+          uploadedAt: deps.clock.now(),
+        }),
+      ],
+      cursor: null,
+    });
+  });
 });

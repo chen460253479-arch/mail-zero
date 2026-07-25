@@ -9,11 +9,12 @@ import {
   updateEmail,
 } from './message';
 import { createIdentity, createMailAccount, destroyIdentity, updateIdentity } from './account';
-import { createMailbox, destroyMailbox, updateMailbox } from './mailbox';
+import { createMailbox, destroyMailbox, listMailboxes, updateMailbox } from './mailbox';
 import { cancelSubmission, createSubmission } from './submission';
 import type { MailCoreDependencies } from './store';
 import { getThread, queryThreads } from './thread';
 import { getChanges } from './changes';
+import { readBlob } from './blob';
 
 type BoundCommand<Command extends (...arguments_: never[]) => unknown> = (
   input: Parameters<Command>[1],
@@ -27,6 +28,7 @@ export type MailCore = {
   createMailbox: BoundCommand<typeof createMailbox>;
   updateMailbox: BoundCommand<typeof updateMailbox>;
   destroyMailbox: BoundCommand<typeof destroyMailbox>;
+  listMailboxes: BoundCommand<typeof listMailboxes>;
   importEmail: BoundCommand<typeof importEmail>;
   getEmail: BoundCommand<typeof getEmail>;
   queryEmails: BoundCommand<typeof queryEmails>;
@@ -40,6 +42,7 @@ export type MailCore = {
   getThread: BoundCommand<typeof getThread>;
   queryThreads: BoundCommand<typeof queryThreads>;
   getChanges: BoundCommand<typeof getChanges>;
+  readBlob: BoundCommand<typeof readBlob>;
 };
 
 export const createMailCore = (dependencies: MailCoreDependencies): MailCore => ({
@@ -50,6 +53,7 @@ export const createMailCore = (dependencies: MailCoreDependencies): MailCore => 
   createMailbox: (input) => createMailbox(dependencies, input),
   updateMailbox: (input) => updateMailbox(dependencies, input),
   destroyMailbox: (input) => destroyMailbox(dependencies, input),
+  listMailboxes: (input) => listMailboxes(dependencies, input),
   importEmail: (input) => importEmail(dependencies, input),
   getEmail: (input) => getEmail(dependencies, input),
   queryEmails: (input) => queryEmails(dependencies, input),
@@ -63,4 +67,5 @@ export const createMailCore = (dependencies: MailCoreDependencies): MailCore => 
   getThread: (input) => getThread(dependencies, input),
   queryThreads: (input) => queryThreads(dependencies, input),
   getChanges: (input) => getChanges(dependencies, input),
+  readBlob: (input) => readBlob(dependencies, input),
 });

@@ -254,6 +254,7 @@ describe('PostgreSQL mail search', () => {
           sentAt: at(2),
           sizeBytes: 20n,
           sender: [{ email: 'other@example.test' }],
+          to: [{ email: 'target@example.test' }],
           keywords: ['$seen'],
         }),
         record('email-c', {
@@ -310,7 +311,9 @@ describe('PostgreSQL mail search', () => {
         ['keyword', { hasKeyword: '$flagged' }, ['email-c']],
         ['after', { after: at(1) }, ['email-b', 'email-c']],
         ['before', { before: at(2) }, ['email-a']],
-        ['address', { address: ' TARGET@EXAMPLE.TEST ' }, ['email-a', 'email-c']],
+        ['address', { address: ' TARGET@EXAMPLE.TEST ' }, ['email-a', 'email-b', 'email-c']],
+        ['from', { from: ' TARGET@EXAMPLE.TEST ' }, ['email-a', 'email-c']],
+        ['to', { to: ' TARGET@EXAMPLE.TEST ' }, ['email-b']],
         ['attachment', { hasAttachment: true }, ['email-a']],
         ['text', { text: 'body email-b' }, ['email-b']],
       ] as const) {

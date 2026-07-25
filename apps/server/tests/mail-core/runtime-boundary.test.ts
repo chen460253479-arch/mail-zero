@@ -3,7 +3,11 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { MemoryBlobStore, createMailCoreRuntime } from '../../src/modules/mail';
+import {
+  MemoryBlobStore,
+  createMailCoreMaintenanceRuntime,
+  createMailCoreRuntime,
+} from '../../src/modules/mail';
 import type { Id } from '@zero/mail-core';
 import type { DB } from '../../src/db';
 
@@ -30,6 +34,7 @@ describe('mail runtime boundary', () => {
     const runtime = createMailCoreRuntime({
       db: createConstructionOnlyDatabase(),
       blobStore: new MemoryBlobStore(),
+      blobReadAuditSink: { record: async () => undefined },
       clock: { now: () => new Date('2026-01-01T00:00:00.000Z') },
       idFactory: {
         next<Kind extends string>() {
@@ -57,13 +62,37 @@ describe('mail runtime boundary', () => {
         'getEmail',
         'getThread',
         'importEmail',
+        'listMailboxes',
         'queryEmails',
         'queryThreads',
+        'readBlob',
         'updateDraft',
         'updateEmail',
         'updateIdentity',
         'updateMailbox',
       ].sort(),
+    );
+  });
+
+  it('constructs destructive operations on a separate maintenance facade', () => {
+    let nextId = 1;
+    const maintenance = createMailCoreMaintenanceRuntime({
+      db: createConstructionOnlyDatabase(),
+      blobStore: new MemoryBlobStore(),
+      blobReadAuditSink: { record: async () => undefined },
+      clock: { now: () => new Date('2026-01-01T00:00:00.000Z') },
+      idFactory: {
+        next<Kind extends string>() {
+          const id = `maintenance-${nextId.toString().padStart(4, '0')}`;
+          nextId += 1;
+          return id as Id<Kind>;
+        },
+      },
+      sanitizeHtml: (html) => html,
+    });
+
+    expect(Object.keys(maintenance).sort()).toEqual(
+      ['garbageCollectBlobs', 'reconcileBlobStorage'].sort(),
     );
   });
 

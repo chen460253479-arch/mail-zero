@@ -19,6 +19,9 @@ export const buildObjectKey = (accountId: MailAccountId, sha256: string): string
   return `mail/${safeAccountId}/sha256/${safeSha256.slice(0, 2)}/${safeSha256}`;
 };
 
+export const buildObjectPrefix = (accountId: MailAccountId): string =>
+  `mail/${requireMailAccountId(accountId)}/sha256/`;
+
 export const parseObjectKey = (key: string): { accountId: MailAccountId; sha256: string } => {
   const match = /^mail\/([^/]+)\/sha256\/([^/]+)\/([^/]+)$/u.exec(key);
   if (match === null) return invalidKey();
@@ -33,6 +36,9 @@ export const buildTemporaryKey = (accountId: MailAccountId): string => {
   const safeAccountId = requireMailAccountId(accountId);
   return `mail/${safeAccountId}/temporary/${crypto.randomUUID()}`;
 };
+
+export const buildTemporaryPrefix = (accountId: MailAccountId): string =>
+  `mail/${requireMailAccountId(accountId)}/temporary/`;
 
 export const parseTemporaryKey = (key: string): { accountId: MailAccountId } => {
   const match = /^mail\/([^/]+)\/temporary\/([^/]+)$/u.exec(key);

@@ -1,7 +1,9 @@
 export * from './account';
+export * from './blob';
 export * from './changes';
 export * from './mailbox';
 export { createMailCore, type MailCore } from './mail-core';
+export { createMailCoreMaintenance, type MailCoreMaintenance } from './mail-core-maintenance';
 export * from './message';
 export * from './search';
 export * from './store';

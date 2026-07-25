@@ -2,7 +2,9 @@ import { MailCoreError, type BlobCommitReceipt, type BlobStore } from '@zero/mai
 
 import {
   buildObjectKey,
+  buildObjectPrefix,
   buildTemporaryKey,
+  buildTemporaryPrefix,
   bytesEqual,
   calculateSha256,
   copyBytes,
@@ -14,6 +16,7 @@ type StoredBlob = {
   bytes: Uint8Array;
   contentType: string;
   sha256: string;
+  uploadedAt: Date;
 };
 
 export class MemoryBlobStore implements BlobStore {
@@ -30,6 +33,7 @@ export class MemoryBlobStore implements BlobStore {
       bytes,
       contentType: input.contentType,
       sha256,
+      uploadedAt: new Date(),
     });
     return { temporaryKey, sha256, size: BigInt(bytes.byteLength) };
   }
@@ -57,6 +61,7 @@ export class MemoryBlobStore implements BlobStore {
       this.objects.set(input.objectKey, {
         ...pending,
         bytes: copyBytes(pending.bytes),
+        uploadedAt: new Date(),
       });
     }
     this.temporary.delete(input.temporaryKey);
@@ -80,5 +85,35 @@ export class MemoryBlobStore implements BlobStore {
   async delete(input: Parameters<BlobStore['delete']>[0]): Promise<void> {
     requireObjectKeyForAccount(input.accountId, input.objectKey);
     this.objects.delete(input.objectKey);
+  }
+
+  async list(input: Parameters<BlobStore['list']>[0]): ReturnType<BlobStore['list']> {
+    const prefix =
+      input.kind === 'object'
+        ? buildObjectPrefix(input.accountId)
+        : buildTemporaryPrefix(input.accountId);
+    const source = input.kind === 'object' ? this.objects : this.temporary;
+    const entries = [...source.entries()]
+      .filter(([key]) => key.startsWith(prefix))
+      .sort(([left], [right]) => left.localeCompare(right));
+    const offset = input.cursor === null ? 0 : Number(input.cursor);
+    if (
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      !Number.isInteger(input.limit) ||
+      input.limit < 1
+    ) {
+      throw new MailCoreError('BLOB_STORE_FAILURE');
+    }
+    const page = entries.slice(offset, offset + input.limit);
+    const nextOffset = offset + page.length;
+    return {
+      entries: page.map(([key, blob]) => ({
+        key,
+        uploadedAt: new Date(blob.uploadedAt),
+        sizeBytes: BigInt(blob.bytes.byteLength),
+      })),
+      cursor: nextOffset < entries.length ? String(nextOffset) : null,
+    };
   }
 }

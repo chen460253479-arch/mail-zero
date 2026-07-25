@@ -366,7 +366,12 @@ const updateThreadAggregate = async (
   );
   const latest = emails.reduce<EmailRecord | null>(
     (current, email) =>
-      current === null || email.receivedAt > current.receivedAt ? email : current,
+      current === null ||
+      email.receivedAt > current.receivedAt ||
+      (email.receivedAt.getTime() === current.receivedAt.getTime() &&
+        email.id.localeCompare(current.id) > 0)
+        ? email
+        : current,
     null,
   );
   const next = {
@@ -439,22 +444,29 @@ const updateMailboxAggregates = async (
 const buildEmailParts = (
   dependencies: MailCoreDependencies,
   parsed: ParsedEmail,
-  attachmentBlobs: PreparedBlob[],
+  partBlobs: (PreparedBlob | null)[],
   blobIdByDigest: Map<string, BlobId>,
-): EmailPartRecord[] =>
-  parsed.attachments.map((attachment, index) => ({
-    id: dependencies.idFactory.next<'EmailPart'>(),
-    parentPartId: null,
-    partPath: (index + 1).toString(),
-    contentType: attachment.contentType,
-    charset: null,
-    disposition: attachment.disposition,
-    filename: attachment.filename,
-    contentId: attachment.contentId,
-    blobId: blobIdByDigest.get(digestKey(attachmentBlobs[index]!))!,
-    sizeBytes: attachment.sizeBytes,
-    kind: attachment.kind,
-  }));
+): EmailPartRecord[] => {
+  const idByPath = new Map(
+    parsed.parts.map((part) => [part.partPath, dependencies.idFactory.next<'EmailPart'>()]),
+  );
+  return parsed.parts.map((part, index) => {
+    const prepared = partBlobs[index] ?? null;
+    return {
+      id: idByPath.get(part.partPath)!,
+      parentPartId: part.parentPath === null ? null : idByPath.get(part.parentPath)!,
+      partPath: part.partPath,
+      contentType: part.contentType,
+      charset: part.charset,
+      disposition: part.disposition,
+      filename: part.filename,
+      contentId: part.contentId,
+      blobId: prepared === null ? null : blobIdByDigest.get(digestKey(prepared))!,
+      sizeBytes: part.sizeBytes,
+      kind: part.kind,
+    };
+  });
+};
 
 const recordImportChanges = async (
   tx: MailTransaction,
@@ -559,7 +571,7 @@ export async function importEmail(
     sanitizeHtml: dependencies.sanitizeHtml,
   });
   const prepared: PreparedBlob[] = [];
-  const attachmentBlobs: PreparedBlob[] = [];
+  const partBlobs: (PreparedBlob | null)[] = [];
   const committedObjectKeys: string[] = [];
   let rawBlob: PreparedBlob | null = null;
   let textBlob: PreparedBlob | null = null;
@@ -588,14 +600,18 @@ export async function importEmail(
       });
       prepared.push(htmlBlob);
     }
-    for (const attachment of parsed.attachments) {
-      const attachmentBlob = await prepareBlob(dependencies.blobStore, {
+    for (const part of parsed.parts) {
+      if (part.bytes.byteLength === 0) {
+        partBlobs.push(null);
+        continue;
+      }
+      const partBlob = await prepareBlob(dependencies.blobStore, {
         accountId: input.accountId,
-        bytes: attachment.bytes,
-        contentType: attachment.contentType,
+        bytes: part.bytes,
+        contentType: part.contentType,
       });
-      prepared.push(attachmentBlob);
-      attachmentBlobs.push(attachmentBlob);
+      prepared.push(partBlob);
+      partBlobs.push(partBlob);
     }
 
     const result = await dependencies.unitOfWork.run(async (tx): Promise<ImportEmailResult> => {
@@ -653,7 +669,7 @@ export async function importEmail(
         htmlBlobId: htmlBlob === null ? null : blobIdByDigest.get(digestKey(htmlBlob))!,
         parserVersion: 1,
         parseWarnings: [],
-        parts: buildEmailParts(dependencies, parsed, attachmentBlobs, blobIdByDigest),
+        parts: buildEmailParts(dependencies, parsed, partBlobs, blobIdByDigest),
         mailboxIds: validation.mailboxIds,
         restoreMailboxIds: [],
         keywords: validation.keywords,

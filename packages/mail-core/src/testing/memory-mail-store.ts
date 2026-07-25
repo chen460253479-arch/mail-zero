@@ -222,6 +222,16 @@ const createRepositories = (
     async findById(accountId, id) {
       return findScoped(state.blobs, accountId, id);
     },
+    async findByObjectKeyExcluding(accountId, objectKey, exclusion) {
+      const record = [...state.blobs.values()].find(
+        (candidate) =>
+          candidate.accountId === accountId &&
+          candidate.objectKey === objectKey &&
+          (candidate.status !== exclusion.status ||
+            candidate.contentType !== exclusion.contentType),
+      );
+      return record === undefined ? null : copy(record);
+    },
     async findByDigest(accountId, sha256, sizeBytes) {
       const record = [...state.blobs.values()].find(
         (candidate) =>
@@ -230,6 +240,21 @@ const createRepositories = (
           candidate.sizeBytes === sizeBytes,
       );
       return record === undefined ? null : copy(record);
+    },
+    async listDeletingByContentType(accountId, contentType, limit) {
+      return [...state.blobs.values()]
+        .filter(
+          (candidate) =>
+            candidate.accountId === accountId &&
+            candidate.status === 'deleting' &&
+            candidate.contentType === contentType,
+        )
+        .sort(
+          (left, right) =>
+            left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id),
+        )
+        .slice(0, limit)
+        .map(copy);
     },
     async listByAccount(accountId) {
       return listScoped(state.blobs, accountId);
@@ -508,6 +533,7 @@ export class MemoryMailUnitOfWork implements MailUnitOfWork {
   private readonly changeQueries: QueryChangesInput[] = [];
   private tail: Promise<void> = Promise.resolve();
   private commitAcknowledgementsBeforeFailure: number | null = null;
+  private commitsBeforeRollbackFailure: number | null = null;
 
   async run<Result>(operation: (tx: MailTransaction) => Promise<Result>): Promise<Result> {
     const previous = this.tail;
@@ -567,6 +593,13 @@ export class MemoryMailUnitOfWork implements MailUnitOfWork {
     };
 
     const result = await operation(transaction);
+    if (this.commitsBeforeRollbackFailure !== null) {
+      this.commitsBeforeRollbackFailure -= 1;
+      if (this.commitsBeforeRollbackFailure === 0) {
+        this.commitsBeforeRollbackFailure = null;
+        throw new Error('transaction commit failed before publish');
+      }
+    }
     this.state = transactionState;
     if (this.commitAcknowledgementsBeforeFailure !== null) {
       this.commitAcknowledgementsBeforeFailure -= 1;
@@ -580,6 +613,10 @@ export class MemoryMailUnitOfWork implements MailUnitOfWork {
 
   failCommitAcknowledgementAfter(completedOperations: number): void {
     this.commitAcknowledgementsBeforeFailure = completedOperations;
+  }
+
+  failCommitBeforePublishAfter(completedOperations: number): void {
+    this.commitsBeforeRollbackFailure = completedOperations;
   }
 
   snapshot(): MemoryMailState {

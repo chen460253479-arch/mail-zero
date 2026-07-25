@@ -179,7 +179,7 @@ export const createQueryHarness = async () => {
         sizeBytes: 20n,
         mailboxIds: [queryArchiveId],
         keywords: ['$flagged'],
-        to: [{ email: 'other@example.test' }],
+        to: [{ email: 'sender@example.test' }],
       }),
     );
     await tx.emails.insert(

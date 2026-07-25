@@ -13,6 +13,24 @@ import {
 import { createSubmissionHarness } from '../helpers/submission-harness';
 
 describe('EmailSubmission creation', () => {
+  it('defensively rejects a persisted Draft with an injected recipient address', async () => {
+    const h = await createSubmissionHarness();
+    await h.mutate.email(h.draftId, {
+      to: [{ email: 'victim@example.test\r\nBcc: attacker@example.test' }],
+    });
+
+    await expect(
+      createSubmission(h.deps, {
+        accountId: h.accountId,
+        emailId: h.draftId,
+        identityId: h.identityId,
+        idempotencyKey: 'invalid-recipient-defense',
+        sendAt: null,
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_EMAIL' });
+    expect(await h.inspect.submissions()).toEqual([]);
+  });
+
   it('creates immediate and future scheduled submissions with one Created Change each', async () => {
     const immediate = await createSubmissionHarness();
     const immediateVersion = await immediate.inspect.stateVersion();
@@ -192,6 +210,55 @@ describe('EmailSubmission creation', () => {
       }),
     ).resolves.toEqual(rawBefore);
     expect(await h.inspect.blob(attachment.id)).not.toBeNull();
+  });
+
+  it('freezes every attachment occurrence with its EmailPart content type after Blob deduplication', async () => {
+    const h = await createSubmissionHarness();
+    const attachment = await h.seedReadyBlob(
+      new TextEncoder().encode('deduplicated attachment bytes'),
+      'application/pdf',
+    );
+    const draft = await createDraft(h.deps, {
+      ...h.content,
+      subject: 'Shared body and attachment bytes',
+      htmlBody: h.content.textBody,
+      attachmentBlobIds: [attachment.id, attachment.id],
+    });
+    await h.deps.unitOfWork.run((tx) =>
+      tx.blobs.update(h.accountId, attachment.id, {
+        contentType: 'application/octet-stream',
+      }),
+    );
+
+    const submission = await createSubmission(h.deps, {
+      accountId: h.accountId,
+      emailId: draft.id,
+      identityId: h.identityId,
+      idempotencyKey: 'shared-part-content-type',
+      sendAt: null,
+    });
+
+    expect(submission.frozenBlobs.filter(({ kind }) => kind === 'part')).toEqual([
+      expect.objectContaining({
+        blobId: attachment.id,
+        position: 0,
+        contentType: 'application/pdf',
+      }),
+      expect.objectContaining({
+        blobId: attachment.id,
+        position: 1,
+        contentType: 'application/pdf',
+      }),
+    ]);
+    expect(submission.frozenBlobs.find(({ kind }) => kind === 'text')).toMatchObject({
+      blobId: draft.textBlobId,
+      contentType: 'text/plain; charset=utf-8',
+    });
+    expect(submission.frozenBlobs.find(({ kind }) => kind === 'html')).toMatchObject({
+      blobId: draft.htmlBlobId,
+      contentType: 'text/html; charset=utf-8',
+    });
+    expect(draft.htmlBlobId).toBe(draft.textBlobId);
   });
 
   it('requires the exact Identity retained by the frozen Draft revision', async () => {

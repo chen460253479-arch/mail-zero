@@ -8,6 +8,22 @@ import type {
 import type { CreateSubmissionInput } from './types';
 import type { EmailSubmissionId } from '../types';
 import { MailCoreError } from '../types';
+import { z } from 'zod';
+
+const recipientSchema = z.string().email();
+
+const requireValidRecipients = (
+  email: NonNullable<Awaited<ReturnType<MailTransaction['emails']['findById']>>>,
+) => {
+  for (const address of [...email.to, ...email.cc, ...email.bcc]) {
+    if (
+      !recipientSchema.safeParse(address.email).success ||
+      (address.name !== undefined && /[\r\n]/u.test(address.name))
+    ) {
+      throw new MailCoreError('INVALID_EMAIL', { entityId: email.id });
+    }
+  }
+};
 
 const normalizeRequestedSendAt = (sendAt: Date | null): Date | null => {
   if (sendAt === null) {
@@ -59,6 +75,7 @@ const requireFrozenBlob = async (
   blobId: NonNullable<Awaited<ReturnType<MailTransaction['emails']['findById']>>>['blobId'],
   kind: SubmissionBlobReference['kind'],
   position: number,
+  contentType?: string,
 ): Promise<SubmissionBlobReference | null> => {
   if (blobId === null) {
     return null;
@@ -73,7 +90,7 @@ const requireFrozenBlob = async (
     position,
     sha256: blob.sha256,
     sizeBytes: blob.sizeBytes,
-    contentType: blob.contentType,
+    contentType: contentType ?? blob.contentType,
     objectKey: blob.objectKey,
   };
 };
@@ -127,19 +144,38 @@ export async function createSubmission(
     if (email.blobId === null) {
       throw new MailCoreError('BLOB_NOT_FOUND', { entityId: email.id });
     }
+    const frozenParts = email.parts.filter(
+      (part): part is typeof part & { blobId: NonNullable<typeof part.blobId> } =>
+        part.kind !== 'body' && part.blobId !== null,
+    );
     const frozenBlobs = (
       await Promise.all([
-        requireFrozenBlob(tx, input.accountId, email.blobId, 'raw', 0),
-        requireFrozenBlob(tx, input.accountId, email.textBlobId, 'text', 0),
-        requireFrozenBlob(tx, input.accountId, email.htmlBlobId, 'html', 0),
-        ...email.parts.map(({ blobId }, position) =>
-          requireFrozenBlob(tx, input.accountId, blobId, 'part', position),
+        requireFrozenBlob(tx, input.accountId, email.blobId, 'raw', 0, 'message/rfc822'),
+        requireFrozenBlob(
+          tx,
+          input.accountId,
+          email.textBlobId,
+          'text',
+          0,
+          'text/plain; charset=utf-8',
+        ),
+        requireFrozenBlob(
+          tx,
+          input.accountId,
+          email.htmlBlobId,
+          'html',
+          0,
+          'text/html; charset=utf-8',
+        ),
+        ...frozenParts.map((part, position) =>
+          requireFrozenBlob(tx, input.accountId, part.blobId, 'part', position, part.contentType),
         ),
       ])
     ).filter((blob): blob is SubmissionBlobReference => blob !== null);
     if (email.to.length + email.cc.length + email.bcc.length === 0) {
       throw new MailCoreError('INVALID_EMAIL', { entityId: email.id });
     }
+    requireValidRecipients(email);
 
     const submission = await tx.submissions.insert({
       id: dependencies.idFactory.next<'EmailSubmission'>() as EmailSubmissionId,

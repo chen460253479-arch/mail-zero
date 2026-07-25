@@ -1,5 +1,5 @@
 import type { BlobRecord, BlobRepository } from '@zero/mail-core';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, ne, or } from 'drizzle-orm';
 
 import { requireRow, runAdapter, type MailDatabase } from './database';
 import { blob } from '../schema';
@@ -27,6 +27,22 @@ export const createBlobRepository = (db: MailDatabase): BlobRepository => ({
         .limit(1);
       return rows[0] === undefined ? null : mapBlob(rows[0]);
     }),
+  findByObjectKeyExcluding: (accountId, objectKey, exclusion) =>
+    runAdapter(async () => {
+      const rows = await db
+        .select()
+        .from(blob)
+        .where(
+          and(
+            eq(blob.mailAccountId, accountId),
+            eq(blob.objectKey, objectKey),
+            or(ne(blob.status, exclusion.status), ne(blob.contentType, exclusion.contentType)),
+          ),
+        )
+        .orderBy(asc(blob.createdAt), asc(blob.id))
+        .limit(1);
+      return rows[0] === undefined ? null : mapBlob(rows[0]);
+    }),
   findByDigest: (accountId, sha256, sizeBytes) =>
     runAdapter(async () => {
       const rows = await db
@@ -43,6 +59,23 @@ export const createBlobRepository = (db: MailDatabase): BlobRepository => ({
         .limit(1);
       return rows[0] === undefined ? null : mapBlob(rows[0]);
     }),
+  listDeletingByContentType: (accountId, contentType, limit) =>
+    runAdapter(async () =>
+      (
+        await db
+          .select()
+          .from(blob)
+          .where(
+            and(
+              eq(blob.mailAccountId, accountId),
+              eq(blob.status, 'deleting'),
+              eq(blob.contentType, contentType),
+            ),
+          )
+          .orderBy(asc(blob.createdAt), asc(blob.id))
+          .limit(limit)
+      ).map(mapBlob),
+    ),
   listByAccount: (accountId) =>
     runAdapter(async () =>
       (

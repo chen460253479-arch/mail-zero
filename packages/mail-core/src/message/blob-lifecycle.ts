@@ -114,7 +114,7 @@ export async function verifyPreparedBlob(
   prepared: Pick<PreparedBlob, 'accountId' | 'sha256' | 'sizeBytes'>,
   objectKey: string,
   missingIsIntegrityFailure = false,
-): Promise<void> {
+): Promise<Uint8Array> {
   let committed: Uint8Array;
   try {
     committed = await blobStore.get({
@@ -137,6 +137,7 @@ export async function verifyPreparedBlob(
     prepared.sha256,
     prepared.sizeBytes,
   );
+  return committed;
 }
 
 export async function discardTemporaryBlobs(

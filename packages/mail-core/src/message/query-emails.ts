@@ -64,6 +64,16 @@ const normalizeFilter = (filter: EmailQueryFilter | undefined): EmailQueryFilter
     }
     normalized.address = address;
   }
+  for (const property of ['from', 'to'] as const) {
+    if (filter?.[property] === undefined) {
+      continue;
+    }
+    const address = normalizeText(filter[property]);
+    if (address.length === 0) {
+      throw new MailCoreError('INVALID_QUERY');
+    }
+    normalized[property] = address;
+  }
   if (filter?.hasAttachment !== undefined) {
     if (typeof filter.hasAttachment !== 'boolean') {
       throw new MailCoreError('INVALID_QUERY');
@@ -98,6 +108,8 @@ const querySignature = (filter: EmailQueryFilter): string =>
     after: filter.after?.toISOString() ?? null,
     before: filter.before?.toISOString() ?? null,
     address: filter.address ?? null,
+    from: filter.from ?? null,
+    to: filter.to ?? null,
     hasAttachment: filter.hasAttachment ?? null,
     text: filter.text ?? null,
   });

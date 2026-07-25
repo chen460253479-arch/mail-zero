@@ -1,10 +1,102 @@
-import { createMailbox, destroyMailbox, type MailboxRecord } from '@zero/mail-core';
+import {
+  createMailbox,
+  destroyMailbox,
+  type MailCoreDependencies,
+  type MailboxRecord,
+  type MailTransaction,
+} from '@zero/mail-core';
 import { describe, expect, it } from 'vitest';
 
 import { createPostgresMailTestHarness } from './helpers/harness';
 import { withMailTestDatabase } from './helpers/database';
 
 describe('PostgreSQL Mailbox integration', () => {
+  it('serializes child creation behind parent destruction', () =>
+    withMailTestDatabase(async ({ db, unitOfWork }) => {
+      const harness = await createPostgresMailTestHarness(db, unitOfWork, 'mailbox-parent-race');
+      const parent = await createMailbox(harness.dependencies, {
+        accountId: harness.accountId,
+        name: 'Concurrent parent',
+        kind: 'folder',
+        role: null,
+        parentId: null,
+      });
+      let parentValidated!: () => void;
+      let releaseDestroy!: () => void;
+      const validated = new Promise<void>((resolve) => {
+        parentValidated = resolve;
+      });
+      const release = new Promise<void>((resolve) => {
+        releaseDestroy = resolve;
+      });
+      const destroyDependencies: MailCoreDependencies = {
+        ...harness.dependencies,
+        unitOfWork: {
+          run: (operation) =>
+            unitOfWork.run((tx) => {
+              const traced: MailTransaction = {
+                ...tx,
+                mailboxes: {
+                  ...tx.mailboxes,
+                  listByAccount: async (...args) => {
+                    const result = await tx.mailboxes.listByAccount(...args);
+                    parentValidated();
+                    await release;
+                    return result;
+                  },
+                },
+              };
+              return operation(traced);
+            }),
+        },
+      };
+      const destroying = destroyMailbox(destroyDependencies, {
+        accountId: harness.accountId,
+        mailboxId: parent.id,
+      });
+      await validated;
+
+      let createLockAttempted!: () => void;
+      const lockAttempted = new Promise<void>((resolve) => {
+        createLockAttempted = resolve;
+      });
+      const createDependencies: MailCoreDependencies = {
+        ...harness.dependencies,
+        unitOfWork: {
+          run: (operation) =>
+            unitOfWork.run((tx) => {
+              const traced: MailTransaction = {
+                ...tx,
+                lockAccount: async (...args) => {
+                  createLockAttempted();
+                  await tx.lockAccount(...args);
+                },
+              };
+              return operation(traced);
+            }),
+        },
+      };
+      const creating = createMailbox(createDependencies, {
+        accountId: harness.accountId,
+        name: 'Concurrent child',
+        kind: 'folder',
+        role: null,
+        parentId: parent.id,
+      });
+      await lockAttempted;
+      releaseDestroy();
+
+      await expect(destroying).resolves.toBeUndefined();
+      await expect(creating).rejects.toMatchObject({ code: 'MAILBOX_NOT_FOUND' });
+      await unitOfWork.run(async (tx) => {
+        expect(
+          (await tx.mailboxes.listByAccount(harness.accountId)).filter(
+            ({ parentId }) => parentId === parent.id,
+          ),
+        ).toEqual([]);
+      });
+    }));
+
   it('enforces active root/sibling uniqueness and releases names after soft delete', () =>
     withMailTestDatabase(async ({ db, unitOfWork }) => {
       const harness = await createPostgresMailTestHarness(db, unitOfWork);

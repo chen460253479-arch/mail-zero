@@ -1,11 +1,89 @@
 import { describe, expect, it } from 'vitest';
 
-import { createDraft, destroyDraft, updateDraft } from '../../src';
+import { createDraft, destroyDraft, updateDraft, type BlobStore } from '../../src';
 import { createDraftHarness } from '../helpers/draft-harness';
 
 const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 
 describe('Draft Email', () => {
+  it('sanitizes persisted Draft HTML and rejects recipient header injection before Blob writes', async () => {
+    const h = await createDraftHarness();
+    const dependencies = {
+      ...h.deps,
+      sanitizeHtml: (html: string) => html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/giu, ''),
+    };
+    const draft = await createDraft(dependencies, {
+      ...h.content,
+      htmlBody: '<p>safe</p><script>alert(1)</script>',
+    });
+    const htmlBlob = (await h.inspect.blob(draft.htmlBlobId!))!;
+    await expect(
+      h.deps.blobStore.get({
+        accountId: h.accountId,
+        objectKey: htmlBlob.objectKey,
+      }),
+    ).resolves.toEqual(new TextEncoder().encode('<p>safe</p>'));
+    expect(decode(await h.inspect.rawBytes(draft.id))).not.toContain('<script');
+
+    const objectsBefore = h.deps.blobStore.snapshot();
+    const temporaryBefore = h.deps.blobStore.temporarySnapshot();
+    await expect(
+      createDraft(dependencies, {
+        ...h.content,
+        to: [{ email: 'victim@example.test>\r\nBcc: attacker@example.test' }],
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_EMAIL' });
+    expect(h.deps.blobStore.snapshot()).toEqual(objectsBefore);
+    expect(h.deps.blobStore.temporarySnapshot()).toEqual(temporaryBefore);
+    await expect(
+      updateDraft(dependencies, {
+        accountId: h.accountId,
+        emailId: draft.id,
+        expectedRevision: 1,
+        content: {
+          ...h.content,
+          cc: [{ email: 'victim@example.test\r\nBcc: attacker@example.test' }],
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_EMAIL' });
+    expect(h.deps.blobStore.snapshot()).toEqual(objectsBefore);
+    expect(h.deps.blobStore.temporarySnapshot()).toEqual(temporaryBefore);
+  });
+
+  it('uses the single integrity-checked attachment read to render MIME', async () => {
+    const h = await createDraftHarness();
+    const attachment = await h.seedReadyBlob(new Uint8Array([1, 2, 3, 4]), 'image/png');
+    const delegate = h.deps.blobStore;
+    let attachmentReads = 0;
+    const blobStore: BlobStore = {
+      putTemporary: (input) => delegate.putTemporary(input),
+      commitTemporary: (input) => delegate.commitTemporary(input),
+      deleteTemporary: (input) => delegate.deleteTemporary(input),
+      delete: (input) => delegate.delete(input),
+      list: (input) => delegate.list(input),
+      get: async (input) => {
+        if (input.objectKey === attachment.objectKey) {
+          attachmentReads += 1;
+        }
+        if (input.objectKey === attachment.objectKey && attachmentReads === 2) {
+          throw new Error('temporary object-store outage');
+        }
+        return delegate.get(input);
+      },
+    };
+
+    await expect(
+      createDraft(
+        { ...h.deps, blobStore },
+        {
+          ...h.content,
+          attachmentBlobIds: [attachment.id],
+        },
+      ),
+    ).resolves.toMatchObject({ hasAttachment: true });
+    expect(attachmentReads).toBe(1);
+  });
+
   it('creates revision 1 in Drafts with one atomic Email, Thread, and Mailbox change', async () => {
     // Catches missing Draft lifecycle projection, counters, or split state allocation.
     const h = await createDraftHarness();

@@ -80,7 +80,7 @@ describe('garbageCollectBlobs', () => {
     expect(h.inspect.objectExists(old.objectKey)).toBe(false);
   });
 
-  it('restores ready metadata after object deletion failure so a later run retries', async () => {
+  it('persists deleting metadata after object deletion failure so a later run retries', async () => {
     const h = await createSeededEmailHarness();
     const orphan = await h.inspect.seedOrphanBlob({ ageMs: 2 * DAY });
     h.inspect.failNextBlobDelete(orphan.id);
@@ -93,7 +93,7 @@ describe('garbageCollectBlobs', () => {
     await expect(garbageCollectBlobs(h.deps, input)).rejects.toMatchObject({
       code: 'BLOB_STORE_FAILURE',
     });
-    expect(await h.inspect.blob(orphan.id)).toMatchObject({ status: 'ready' });
+    expect(await h.inspect.blob(orphan.id)).toMatchObject({ status: 'deleting' });
     expect(h.inspect.objectExists(orphan.objectKey)).toBe(true);
 
     await expect(garbageCollectBlobs(h.deps, input)).resolves.toEqual({
@@ -102,7 +102,24 @@ describe('garbageCollectBlobs', () => {
     expect(await h.inspect.blob(orphan.id)).toBeNull();
   });
 
-  it('serializes collection with a same-content import so collected bytes cannot be reused', async () => {
+  it('does not delete external bytes when the deleting marker cannot commit', async () => {
+    const h = await createSeededEmailHarness();
+    const orphan = await h.inspect.seedOrphanBlob({ ageMs: 2 * DAY });
+    h.deps.unitOfWork.failCommitBeforePublishAfter(1);
+
+    await expect(
+      garbageCollectBlobs(h.deps, {
+        accountId: h.accountId,
+        olderThan: new Date(h.clock.now().getTime() - DAY),
+        limit: 100,
+      }),
+    ).rejects.toThrow('transaction commit failed before publish');
+
+    expect(await h.inspect.blob(orphan.id)).toMatchObject({ status: 'ready' });
+    expect(h.inspect.objectExists(orphan.objectKey)).toBe(true);
+  });
+
+  it('rejects same-content reuse while deletion is pending and allows a retry after finalization', async () => {
     const h = await createSeededEmailHarness();
     const rawBlob = await h.inspect.rawBlob(h.emailId);
     await destroyEmail(h.deps, {
@@ -116,7 +133,6 @@ describe('garbageCollectBlobs', () => {
       limit: 100,
     };
     const originalDelete = h.deps.blobStore.delete.bind(h.deps.blobStore);
-    let deleteCalls = 0;
     let releaseFirstDelete!: () => void;
     const firstDeleteMayFinish = new Promise<void>((resolve) => {
       releaseFirstDelete = resolve;
@@ -125,42 +141,19 @@ describe('garbageCollectBlobs', () => {
     const firstDeleteStarted = new Promise<void>((resolve) => {
       markFirstDeleteStarted = resolve;
     });
-    let markConcurrentDeleteStarted!: () => void;
-    const concurrentDeleteStarted = new Promise<void>((resolve) => {
-      markConcurrentDeleteStarted = resolve;
-    });
-    h.deps.blobStore.failNextDelete(rawBlob.objectKey);
     h.deps.blobStore.delete = async (deleteInput) => {
       if (deleteInput.objectKey === rawBlob.objectKey) {
-        deleteCalls += 1;
-        if (deleteCalls === 1) {
-          markFirstDeleteStarted();
-          await firstDeleteMayFinish;
-        } else {
-          markConcurrentDeleteStarted();
-        }
+        markFirstDeleteStarted();
+        await firstDeleteMayFinish;
       }
       await originalDelete(deleteInput);
     };
 
-    const firstCollection = garbageCollectBlobs(h.deps, input).then(
-      (value) => ({ status: 'fulfilled' as const, value }),
-      (reason: unknown) => ({ status: 'rejected' as const, reason }),
-    );
+    const firstCollection = garbageCollectBlobs(h.deps, input);
     await firstDeleteStarted;
-    const secondCollection = garbageCollectBlobs(h.deps, input).then(
-      (value) => ({ status: 'fulfilled' as const, value }),
-      (reason: unknown) => ({ status: 'rejected' as const, reason }),
-    );
-    const concurrentDeleteWasReached = await Promise.race([
-      concurrentDeleteStarted.then(() => true),
-      new Promise<false>((resolve) => setImmediate(() => resolve(false))),
-    ]);
 
-    let imported;
-    if (concurrentDeleteWasReached) {
-      await secondCollection;
-      imported = await importEmail(h.deps, {
+    await expect(
+      importEmail(h.deps, {
         accountId: h.accountId,
         provider: 'fixture',
         remoteEmailId: 'gc-race-reimport',
@@ -169,26 +162,21 @@ describe('garbageCollectBlobs', () => {
         mailboxIds: [h.inboxId],
         keywords: [],
         receivedAt: h.clock.now(),
-      });
-      releaseFirstDelete();
-      await firstCollection;
-    } else {
-      const pendingImport = importEmail(h.deps, {
-        accountId: h.accountId,
-        provider: 'fixture',
-        remoteEmailId: 'gc-race-reimport',
-        remoteThreadId: null,
-        raw: h.raw,
-        mailboxIds: [h.inboxId],
-        keywords: [],
-        receivedAt: h.clock.now(),
-      });
-      releaseFirstDelete();
-      await firstCollection;
-      await secondCollection;
-      imported = await pendingImport;
-    }
+      }),
+    ).rejects.toMatchObject({ code: 'BLOB_INTEGRITY' });
 
+    releaseFirstDelete();
+    await firstCollection;
+    const imported = await importEmail(h.deps, {
+      accountId: h.accountId,
+      provider: 'fixture',
+      remoteEmailId: 'gc-race-reimport-retry',
+      remoteThreadId: null,
+      raw: h.raw,
+      mailboxIds: [h.inboxId],
+      keywords: [],
+      receivedAt: h.clock.now(),
+    });
     await expect(h.deps.inspect.rawBytes(imported.emailId)).resolves.toEqual(h.raw);
   });
 
@@ -209,8 +197,47 @@ describe('garbageCollectBlobs', () => {
     expect(failure).toMatchObject({ code: 'BLOB_STORE_FAILURE' });
     expect(String(failure)).not.toContain('secret=private');
     expect(JSON.stringify(failure)).not.toContain('secret=private');
-    expect(await h.inspect.blob(orphan.id)).toMatchObject({ status: 'ready' });
+    expect(await h.inspect.blob(orphan.id)).toMatchObject({ status: 'deleting' });
     expect(h.inspect.objectExists(orphan.objectKey)).toBe(true);
+  });
+
+  it('does not hold a database transaction open during physical object deletion', async () => {
+    const h = await createSeededEmailHarness();
+    const orphan = await h.inspect.seedOrphanBlob({ ageMs: 2 * DAY });
+    const originalDelete = h.deps.blobStore.delete.bind(h.deps.blobStore);
+    let markDeleteStarted!: () => void;
+    const deleteStarted = new Promise<void>((resolve) => {
+      markDeleteStarted = resolve;
+    });
+    let releaseDelete!: () => void;
+    const deleteMayFinish = new Promise<void>((resolve) => {
+      releaseDelete = resolve;
+    });
+    h.deps.blobStore.delete = async (input) => {
+      markDeleteStarted();
+      await deleteMayFinish;
+      await originalDelete(input);
+    };
+
+    const collection = garbageCollectBlobs(h.deps, {
+      accountId: h.accountId,
+      olderThan: new Date(h.clock.now().getTime() - DAY),
+      limit: 100,
+    });
+    await deleteStarted;
+
+    const transactionProgressed = await Promise.race([
+      h.deps.unitOfWork
+        .run(async (tx) => (await tx.accounts.findById(h.accountId)) !== null)
+        .then(() => true),
+      new Promise<false>((resolve) => setImmediate(() => resolve(false))),
+    ]);
+    expect(transactionProgressed).toBe(true);
+
+    releaseDelete();
+    await expect(collection).resolves.toEqual({
+      collectedBlobIds: [orphan.id],
+    });
   });
 
   it('collects content only after permanent destruction removes every reference', async () => {

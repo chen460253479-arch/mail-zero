@@ -20,3 +20,7 @@ export type DestroyMailboxInput = {
   accountId: MailAccountId;
   mailboxId: MailboxId;
 };
+
+export type ListMailboxesInput = {
+  accountId: MailAccountId;
+};
