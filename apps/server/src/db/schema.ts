@@ -144,6 +144,7 @@ export const connection = createTable(
   },
   (t) => [
     unique().on(t.userId, t.normalizedEmail),
+    unique('connection_id_user_id_uidx').on(t.id, t.userId),
     index('connection_user_id_idx').on(t.userId),
     index('connection_expires_at_idx').on(t.expiresAt),
     index('connection_provider_id_idx').on(t.providerId),

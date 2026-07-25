@@ -1,4 +1,4 @@
-import { bigint, check, index, text, timestamp, unique } from 'drizzle-orm/pg-core';
+import { bigint, check, text, timestamp, unique, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 import { createMailTable } from '../table';
@@ -30,6 +30,6 @@ export const blob = createMailTable(
           OR (${t.status} = 'deleting' AND ${t.readyAt} IS NOT NULL)`,
     ),
     unique('blob_id_account_uidx').on(t.id, t.mailAccountId),
-    index('blob_account_sha_size_idx').on(t.mailAccountId, t.sha256, t.sizeBytes),
+    uniqueIndex('blob_account_sha_size_uidx').on(t.mailAccountId, t.sha256, t.sizeBytes),
   ],
 );

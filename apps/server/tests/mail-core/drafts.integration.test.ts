@@ -89,7 +89,7 @@ describe('PostgreSQL Draft integration', () => {
           identityId: identity.id,
           draftRevision: 2,
         });
-        expect(updatedDraft!.textBlobId).not.toBe(draft.textBlobId);
+        expect(updatedDraft!.textBlobId).toBe(draft.textBlobId);
         expect(await tx.blobs.findById(harness.accountId, draft.textBlobId!)).toEqual(
           initialTextBlob,
         );

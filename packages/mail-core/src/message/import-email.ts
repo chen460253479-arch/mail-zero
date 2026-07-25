@@ -105,13 +105,27 @@ const referencedBlobIds = (emails: EmailRecord[]): Set<BlobId> =>
     ]),
   );
 
-const currentReferencedBlobBytes = async (
+const quotaReferencedBlobIds = async (
   tx: MailTransaction,
   accountId: ImportEmailInput['accountId'],
   emails: EmailRecord[],
+): Promise<Set<BlobId>> => {
+  const referenced = referencedBlobIds(emails);
+  for (const submission of await tx.submissions.listByAccount(accountId)) {
+    for (const frozen of submission.frozenBlobs) {
+      referenced.add(frozen.blobId);
+    }
+  }
+  return referenced;
+};
+
+const currentReferencedBlobBytes = async (
+  tx: MailTransaction,
+  accountId: ImportEmailInput['accountId'],
+  referencedBlobIds: Set<BlobId>,
 ): Promise<bigint> => {
   let total = 0n;
-  for (const blobId of referencedBlobIds(emails)) {
+  for (const blobId of referencedBlobIds) {
     const blob = await tx.blobs.findById(accountId, blobId);
     if (blob !== null && (blob.status === 'ready' || blob.status === 'pending')) {
       total += blob.sizeBytes;
@@ -140,7 +154,7 @@ const resolveBlobs = async (
 
   const blobIdByDigest = new Map<string, BlobId>();
   const newBlobs: ResolvedBlob[] = [];
-  const existingReferencedIds = referencedBlobIds(existingEmails);
+  const existingReferencedIds = await quotaReferencedBlobIds(tx, input.accountId, existingEmails);
   let newlyReferencedExistingBytes = 0n;
   for (const candidate of prepared) {
     const key = digestKey(candidate);
@@ -186,7 +200,11 @@ const resolveBlobs = async (
     });
   }
 
-  const existingBytes = await currentReferencedBlobBytes(tx, input.accountId, existingEmails);
+  const existingBytes = await currentReferencedBlobBytes(
+    tx,
+    input.accountId,
+    existingReferencedIds,
+  );
   const newBytes = newBlobs.reduce((total, { prepared: blob }) => total + blob.sizeBytes, 0n);
   if (
     account.storageQuotaBytes !== null &&

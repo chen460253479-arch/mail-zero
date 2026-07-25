@@ -29,15 +29,31 @@ export async function destroyDraft(
     await tx.emails.update(input.accountId, input.emailId, {
       destroyedAt: now,
       updatedAt: now,
+      identityId: null,
       mailboxIds: [],
       restoreMailboxIds: [],
       keywords: [],
       blobId: null,
       replyToEmailId: null,
+      messageId: null,
+      inReplyTo: [],
+      references: [],
+      subject: '',
+      preview: '',
+      sizeBytes: 0n,
+      hasAttachment: false,
+      sender: [],
+      from: [],
+      replyTo: [],
+      to: [],
+      cc: [],
+      bcc: [],
       textBlobId: null,
       htmlBlobId: null,
+      parseWarnings: [],
       parts: [],
     });
+    await tx.emails.deleteSearchDocument(input.accountId, input.emailId);
     const threadChange = await updateThreadCounters(tx, input.accountId, email.threadId, now);
     const mailboxChanges = await updateMailboxCounters(tx, input.accountId, now);
     const stateVersion = await recordChanges(tx, {

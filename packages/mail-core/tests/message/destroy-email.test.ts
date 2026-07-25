@@ -177,14 +177,30 @@ describe('Email Trash and destruction', () => {
     expect(await h.inspect.visibleEmail(h.emailId)).toBeNull();
     expect(await h.inspect.email(h.emailId)).toMatchObject({
       destroyedAt: h.clock.now(),
+      identityId: null,
       mailboxIds: [],
       restoreMailboxIds: [],
       keywords: [],
       blobId: null,
+      messageId: null,
+      inReplyTo: [],
+      references: [],
+      subject: '',
+      preview: '',
+      sizeBytes: 0n,
+      hasAttachment: false,
+      sender: [],
+      from: [],
+      replyTo: [],
+      to: [],
+      cc: [],
+      bcc: [],
       textBlobId: null,
       htmlBlobId: null,
+      parseWarnings: [],
       parts: [],
     });
+    expect(await h.deps.inspect.searchDocument(h.emailId)).toBeNull();
     expect(await h.inspect.blob(rawBlob.id)).not.toBeNull();
     expect(await h.inspect.mailbox(h.inboxId)).toMatchObject({
       totalEmails: 0,

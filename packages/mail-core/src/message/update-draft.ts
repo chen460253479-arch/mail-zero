@@ -149,7 +149,6 @@ export async function updateDraft(
     content: input.content,
   });
   const now = dependencies.clock.now();
-  const revision = allocateDraftRevisionBlobs(dependencies, input.accountId, prepared, now);
   const committedObjectKeys: string[] = [];
   let operationCompleted = false;
   try {
@@ -169,6 +168,13 @@ export async function updateDraft(
       ) {
         throw new MailCoreError('DRAFT_REVISION_CONFLICT', { entityId: input.emailId });
       }
+      const revision = await allocateDraftRevisionBlobs(
+        dependencies,
+        tx,
+        input.accountId,
+        prepared,
+        now,
+      );
       await requireDraftQuota(tx, {
         accountId: input.accountId,
         excludeEmailId: input.emailId,

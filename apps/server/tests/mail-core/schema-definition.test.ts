@@ -20,12 +20,56 @@ describe('local mail schema', () => {
         'emailPart',
         'mailIdentity',
         'emailSubmission',
+        'submissionBlob',
         'submissionAttempt',
         'remoteEmail',
         'mailChange',
         'emailSearch',
       ]),
     );
+  });
+
+  it('freezes Submission Blob references with account-composite foreign keys', () => {
+    const config = getTableConfig(schema.submissionBlob);
+    expect(config.foreignKeys.map((foreignKey) => foreignKey.getName())).toEqual(
+      expect.arrayContaining([
+        'submission_blob_submission_account_fk',
+        'submission_blob_blob_account_fk',
+      ]),
+    );
+    expect(config.uniqueConstraints.map((constraint) => constraint.getName())).toContain(
+      'submission_blob_account_submission_kind_position_uidx',
+    );
+  });
+
+  it('enforces account ownership, one default Identity, and one Blob digest row', () => {
+    expect(
+      getTableConfig(schema.connection).uniqueConstraints.map((constraint) => constraint.getName()),
+    ).toContain('connection_id_user_id_uidx');
+
+    const accountConfig = getTableConfig(schema.mailAccount);
+    const ownership = accountConfig.foreignKeys.find(
+      (foreignKey) => foreignKey.getName() === 'mail_account_connection_user_fk',
+    );
+    expect(ownership?.reference().columns.map(({ name }) => name)).toEqual([
+      'connection_id',
+      'user_id',
+    ]);
+    expect(ownership?.reference().foreignColumns.map(({ name }) => name)).toEqual([
+      'id',
+      'user_id',
+    ]);
+
+    const identityDefault = getTableConfig(schema.mailIdentity).indexes.find(
+      ({ config }) => config.name === 'mail_identity_account_default_active_uidx',
+    );
+    expect(identityDefault?.config.unique).toBe(true);
+    expect(identityDefault?.config.where).toBeDefined();
+
+    const blobDigest = getTableConfig(schema.blob).indexes.find(
+      ({ config }) => config.name === 'blob_account_sha_size_uidx',
+    );
+    expect(blobDigest?.config.unique).toBe(true);
   });
 
   it('persists Task 11 identity, reply, revision, retention, and search projection fields', () => {

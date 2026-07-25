@@ -1,4 +1,5 @@
 import {
+  bigint,
   check,
   foreignKey,
   index,
@@ -13,6 +14,7 @@ import { sql } from 'drizzle-orm';
 import { mailAccount, mailIdentity } from './accounts';
 import { createMailTable } from '../table';
 import { email } from './emails';
+import { blob } from './blobs';
 
 export const emailSubmission = createMailTable(
   'email_submission',
@@ -60,6 +62,45 @@ export const emailSubmission = createMailTable(
     }).onDelete('restrict'),
     index('email_submission_account_status_send_idx').on(t.mailAccountId, t.status, t.sendAt),
     uniqueIndex('email_submission_account_idempotency_uidx').on(t.mailAccountId, t.idempotencyKey),
+  ],
+);
+
+export const submissionBlob = createMailTable(
+  'submission_blob',
+  {
+    mailAccountId: text('mail_account_id')
+      .notNull()
+      .references(() => mailAccount.id, { onDelete: 'cascade' }),
+    submissionId: text('submission_id').notNull(),
+    blobId: text('blob_id').notNull(),
+    kind: text('kind').$type<'raw' | 'text' | 'html' | 'part'>().notNull(),
+    position: integer('position').notNull(),
+    sha256: text('sha256').notNull(),
+    sizeBytes: bigint('size_bytes', { mode: 'bigint' }).notNull(),
+    contentType: text('content_type').notNull(),
+    objectKey: text('object_key').notNull(),
+  },
+  (t) => [
+    check('submission_blob_kind_check', sql`${t.kind} IN ('raw', 'text', 'html', 'part')`),
+    check('submission_blob_position_nonnegative_check', sql`${t.position} >= 0`),
+    check('submission_blob_size_nonnegative_check', sql`${t.sizeBytes} >= 0`),
+    unique('submission_blob_account_submission_kind_position_uidx').on(
+      t.mailAccountId,
+      t.submissionId,
+      t.kind,
+      t.position,
+    ),
+    foreignKey({
+      name: 'submission_blob_submission_account_fk',
+      columns: [t.submissionId, t.mailAccountId],
+      foreignColumns: [emailSubmission.id, emailSubmission.mailAccountId],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'submission_blob_blob_account_fk',
+      columns: [t.blobId, t.mailAccountId],
+      foreignColumns: [blob.id, blob.mailAccountId],
+    }).onDelete('restrict'),
+    index('submission_blob_account_blob_idx').on(t.mailAccountId, t.blobId),
   ],
 );
 

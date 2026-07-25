@@ -2,6 +2,7 @@ import {
   bigint,
   boolean,
   check,
+  foreignKey,
   index,
   text,
   timestamp,
@@ -17,9 +18,7 @@ export const mailAccount = createMailTable(
   'mail_account',
   {
     id: text('id').primaryKey(),
-    connectionId: text('connection_id')
-      .notNull()
-      .references(() => connection.id, { onDelete: 'cascade' }),
+    connectionId: text('connection_id').notNull(),
     userId: text('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
@@ -48,6 +47,11 @@ export const mailAccount = createMailTable(
     ),
     uniqueIndex('mail_account_connection_id_uidx').on(t.connectionId),
     index('mail_account_user_id_idx').on(t.userId),
+    foreignKey({
+      name: 'mail_account_connection_user_fk',
+      columns: [t.connectionId, t.userId],
+      foreignColumns: [connection.id, connection.userId],
+    }).onDelete('cascade'),
   ],
 );
 
@@ -66,5 +70,10 @@ export const mailIdentity = createMailTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
-  (t) => [unique('mail_identity_id_account_uidx').on(t.id, t.mailAccountId)],
+  (t) => [
+    unique('mail_identity_id_account_uidx').on(t.id, t.mailAccountId),
+    uniqueIndex('mail_identity_account_default_active_uidx')
+      .on(t.mailAccountId)
+      .where(sql`${t.isDefault} = true AND ${t.deletedAt} IS NULL`),
+  ],
 );

@@ -24,6 +24,7 @@ export async function createIdentity(
   const now = dependencies.clock.now();
 
   return dependencies.unitOfWork.run(async (tx) => {
+    await tx.lockAccount(input.accountId);
     if ((await tx.accounts.findById(input.accountId)) === null) {
       throw new MailCoreError('ACCOUNT_NOT_FOUND', {
         entityId: input.accountId,
@@ -93,6 +94,7 @@ export async function updateIdentity(
   const now = dependencies.clock.now();
 
   return dependencies.unitOfWork.run(async (tx) => {
+    await tx.lockAccount(input.accountId);
     const identity = await tx.identities.findById(input.accountId, input.identityId);
     if (identity === null) {
       throw new MailCoreError('IDENTITY_NOT_FOUND', {
@@ -185,13 +187,13 @@ export async function destroyIdentity(
           (candidate) => candidate.id !== identity.id,
         )
       : undefined;
+    await tx.identities.delete(input.accountId, identity.id);
     if (replacement !== undefined) {
       await tx.identities.update(input.accountId, replacement.id, {
         isDefault: true,
         updatedAt: now,
       });
     }
-    await tx.identities.delete(input.accountId, identity.id);
     const stateVersion = await tx.nextStateVersion(input.accountId);
     if (replacement !== undefined) {
       await tx.changes.recordChange({

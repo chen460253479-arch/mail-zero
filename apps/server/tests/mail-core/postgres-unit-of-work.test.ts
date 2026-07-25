@@ -2,6 +2,7 @@ import type { MailAccountId, MailTransaction } from '@zero/mail-core';
 import { describe, expect, it } from 'vitest';
 
 import { PostgresMailUnitOfWork } from '../../src/modules/mail/postgres/postgres-unit-of-work';
+import { runAdapter } from '../../src/modules/mail/postgres/repositories/database';
 import type { DB } from '../../src/db';
 
 const accountId = 'unit-of-work-error-account' as MailAccountId;
@@ -12,6 +13,20 @@ const dbWithTransaction = (transaction: unknown): DB =>
   }) as unknown as DB;
 
 describe('PostgresMailUnitOfWork error boundary', () => {
+  it('unwraps a nested driver cause before mapping a safe constraint error', async () => {
+    await expect(
+      runAdapter(() =>
+        Promise.reject({
+          cause: { constraint_name: 'mail_account_connection_user_fk' },
+        }),
+      ),
+    ).rejects.toMatchObject({
+      code: 'CROSS_ACCOUNT_REFERENCE',
+      message: 'CROSS_ACCOUNT_REFERENCE',
+      details: {},
+    });
+  });
+
   it.each([
     [
       'lockAccount',

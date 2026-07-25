@@ -10,6 +10,7 @@ export async function updateMailbox(
   const now = dependencies.clock.now();
 
   return dependencies.unitOfWork.run(async (tx) => {
+    await tx.lockAccount(input.accountId);
     const mailbox = await tx.mailboxes.findById(input.accountId, input.mailboxId);
     if (mailbox === null) {
       throw new MailCoreError('MAILBOX_NOT_FOUND', {

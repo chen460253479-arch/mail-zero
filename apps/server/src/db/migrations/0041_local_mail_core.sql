@@ -202,6 +202,19 @@ CREATE TABLE "mail0_email_submission" (
 	CONSTRAINT "email_submission_id_account_uidx" UNIQUE("id","mail_account_id")
 );
 --> statement-breakpoint
+CREATE TABLE "mail0_submission_blob" (
+	"mail_account_id" text NOT NULL,
+	"submission_id" text NOT NULL,
+	"blob_id" text NOT NULL,
+	"kind" text NOT NULL,
+	"position" integer NOT NULL,
+	"sha256" text NOT NULL,
+	"size_bytes" bigint NOT NULL,
+	"content_type" text NOT NULL,
+	"object_key" text NOT NULL,
+	CONSTRAINT "submission_blob_account_submission_kind_position_uidx" UNIQUE("mail_account_id","submission_id","kind","position")
+);
+--> statement-breakpoint
 CREATE TABLE "mail0_submission_attempt" (
 	"id" text PRIMARY KEY NOT NULL,
 	"mail_account_id" text NOT NULL,
@@ -259,13 +272,17 @@ ALTER TABLE "mail0_thread" ADD CONSTRAINT "thread_counters_nonnegative_check" CH
 ALTER TABLE "mail0_thread" ADD CONSTRAINT "thread_unread_within_total_check" CHECK ("unread_count" <= "email_count");--> statement-breakpoint
 ALTER TABLE "mail0_email_submission" ADD CONSTRAINT "email_submission_status_check" CHECK ("status" IN ('scheduled', 'queued', 'sending', 'retry_wait', 'sent', 'failed', 'canceled'));--> statement-breakpoint
 ALTER TABLE "mail0_email_submission" ADD CONSTRAINT "email_submission_counters_nonnegative_check" CHECK ("draft_revision" >= 0 AND "attempt_count" >= 0);--> statement-breakpoint
+ALTER TABLE "mail0_submission_blob" ADD CONSTRAINT "submission_blob_kind_check" CHECK ("kind" IN ('raw', 'text', 'html', 'part'));--> statement-breakpoint
+ALTER TABLE "mail0_submission_blob" ADD CONSTRAINT "submission_blob_position_nonnegative_check" CHECK ("position" >= 0);--> statement-breakpoint
+ALTER TABLE "mail0_submission_blob" ADD CONSTRAINT "submission_blob_size_nonnegative_check" CHECK ("size_bytes" >= 0);--> statement-breakpoint
 ALTER TABLE "mail0_submission_attempt" ADD CONSTRAINT "submission_attempt_outcome_check" CHECK ("outcome" IS NULL OR "outcome" IN ('sent', 'transient_failure', 'permanent_failure'));--> statement-breakpoint
 ALTER TABLE "mail0_submission_attempt" ADD CONSTRAINT "submission_attempt_number_positive_check" CHECK ("attempt_number" > 0);--> statement-breakpoint
 ALTER TABLE "mail0_submission_attempt" ADD CONSTRAINT "submission_attempt_lifecycle_check" CHECK (("finished_at" IS NULL AND "outcome" IS NULL) OR ("finished_at" IS NOT NULL AND "outcome" IS NOT NULL));--> statement-breakpoint
 ALTER TABLE "mail0_mail_change" ADD CONSTRAINT "mail_change_collection_check" CHECK ("collection" IN ('mailbox', 'email', 'thread', 'identity', 'email_submission'));--> statement-breakpoint
 ALTER TABLE "mail0_mail_change" ADD CONSTRAINT "mail_change_type_check" CHECK ("change_type" IN ('created', 'updated', 'destroyed'));--> statement-breakpoint
 ALTER TABLE "mail0_mail_change" ADD CONSTRAINT "mail_change_state_positive_check" CHECK ("state_version" > 0);--> statement-breakpoint
-ALTER TABLE "mail0_mail_account" ADD CONSTRAINT "mail0_mail_account_connection_id_mail0_connection_id_fk" FOREIGN KEY ("connection_id") REFERENCES "public"."mail0_connection"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "connection_id_user_id_uidx" ON "mail0_connection" USING btree ("id","user_id");--> statement-breakpoint
+ALTER TABLE "mail0_mail_account" ADD CONSTRAINT "mail_account_connection_user_fk" FOREIGN KEY ("connection_id","user_id") REFERENCES "public"."mail0_connection"("id","user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail0_mail_account" ADD CONSTRAINT "mail0_mail_account_user_id_mail0_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."mail0_user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail0_mail_identity" ADD CONSTRAINT "mail0_mail_identity_mail_account_id_mail0_mail_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "public"."mail0_mail_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail0_blob" ADD CONSTRAINT "mail0_blob_mail_account_id_mail0_mail_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "public"."mail0_mail_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -302,12 +319,16 @@ ALTER TABLE "mail0_mailbox" ADD CONSTRAINT "mailbox_parent_account_fk" FOREIGN K
 ALTER TABLE "mail0_email_submission" ADD CONSTRAINT "mail0_email_submission_mail_account_id_mail0_mail_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "public"."mail0_mail_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail0_email_submission" ADD CONSTRAINT "email_submission_email_account_fk" FOREIGN KEY ("email_id","mail_account_id") REFERENCES "public"."mail0_email"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail0_email_submission" ADD CONSTRAINT "email_submission_identity_account_fk" FOREIGN KEY ("identity_id","mail_account_id") REFERENCES "public"."mail0_mail_identity"("id","mail_account_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mail0_submission_blob" ADD CONSTRAINT "mail0_submission_blob_mail_account_id_mail0_mail_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "public"."mail0_mail_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mail0_submission_blob" ADD CONSTRAINT "submission_blob_submission_account_fk" FOREIGN KEY ("submission_id","mail_account_id") REFERENCES "public"."mail0_email_submission"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mail0_submission_blob" ADD CONSTRAINT "submission_blob_blob_account_fk" FOREIGN KEY ("blob_id","mail_account_id") REFERENCES "public"."mail0_blob"("id","mail_account_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail0_submission_attempt" ADD CONSTRAINT "mail0_submission_attempt_mail_account_id_mail0_mail_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "public"."mail0_mail_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail0_submission_attempt" ADD CONSTRAINT "submission_attempt_submission_account_fk" FOREIGN KEY ("submission_id","mail_account_id") REFERENCES "public"."mail0_email_submission"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail0_thread" ADD CONSTRAINT "mail0_thread_mail_account_id_mail0_mail_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "public"."mail0_mail_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "mail_account_connection_id_uidx" ON "mail0_mail_account" USING btree ("connection_id");--> statement-breakpoint
 CREATE INDEX "mail_account_user_id_idx" ON "mail0_mail_account" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "blob_account_sha_size_idx" ON "mail0_blob" USING btree ("mail_account_id","sha256","size_bytes");--> statement-breakpoint
+CREATE UNIQUE INDEX "mail_identity_account_default_active_uidx" ON "mail0_mail_identity" USING btree ("mail_account_id") WHERE "is_default" = true AND "deleted_at" IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "blob_account_sha_size_uidx" ON "mail0_blob" USING btree ("mail_account_id","sha256","size_bytes");--> statement-breakpoint
 CREATE INDEX "mail_change_account_state_collection_entity_idx" ON "mail0_mail_change" USING btree ("mail_account_id","state_version","collection","entity_id");--> statement-breakpoint
 CREATE INDEX "email_account_received_id_idx" ON "mail0_email" USING btree ("mail_account_id","received_at" DESC NULLS LAST,"id" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "email_account_thread_received_id_idx" ON "mail0_email" USING btree ("mail_account_id","thread_id","received_at","id");--> statement-breakpoint
@@ -321,3 +342,5 @@ CREATE UNIQUE INDEX "mailbox_active_sibling_name_uidx" ON "mail0_mailbox" USING 
 CREATE UNIQUE INDEX "mailbox_active_root_name_uidx" ON "mail0_mailbox" USING btree ("mail_account_id","normalized_name") WHERE "mail0_mailbox"."parent_id" IS NULL AND "mail0_mailbox"."deleted_at" IS NULL;--> statement-breakpoint
 CREATE INDEX "email_submission_account_status_send_idx" ON "mail0_email_submission" USING btree ("mail_account_id","status","send_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "email_submission_account_idempotency_uidx" ON "mail0_email_submission" USING btree ("mail_account_id","idempotency_key");
+--> statement-breakpoint
+CREATE INDEX "submission_blob_account_blob_idx" ON "mail0_submission_blob" USING btree ("mail_account_id","blob_id");

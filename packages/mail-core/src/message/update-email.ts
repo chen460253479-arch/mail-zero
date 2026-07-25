@@ -325,6 +325,18 @@ export async function updateEmail(
     patch.addKeywords.forEach((keyword) => keywords.add(keyword));
     const nextMailboxIds = sortStrings(mailboxIds);
     const nextKeywords = sortStrings(keywords);
+    const drafts = await tx.mailboxes.findByRole(input.accountId, 'drafts');
+    if (drafts === null) {
+      throw new MailCoreError('MAILBOX_NOT_FOUND');
+    }
+    const hasDraftKeyword = nextKeywords.includes('$draft');
+    const hasDraftMailbox = nextMailboxIds.includes(drafts.id);
+    if (
+      (email.lifecycle === 'draft' && (!hasDraftKeyword || !hasDraftMailbox)) ||
+      (email.lifecycle !== 'draft' && (hasDraftKeyword || hasDraftMailbox))
+    ) {
+      throw new MailCoreError('INVALID_PATCH', { entityId: email.id });
+    }
     const trash = await tx.mailboxes.findByRole(input.accountId, 'trash');
     if (trash === null) {
       throw new MailCoreError('MAILBOX_NOT_FOUND');

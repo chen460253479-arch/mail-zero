@@ -4,7 +4,11 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import {
+  createDraft,
+  createIdentity,
   createMailAccount,
+  createSubmission,
+  destroyDraft,
   importEmail,
   MailCoreError,
   parseRawEmail,
@@ -282,6 +286,76 @@ describe('importEmail', () => {
     expect(await deps.core.inspect.stateVersion(deps.input.accountId)).toBe(1n);
     expect(deps.core.blobStore.snapshot()).toEqual(new Map());
     expect(deps.core.blobStore.temporarySnapshot()).toEqual(new Map());
+  });
+
+  it('counts frozen Submission Blobs after its Draft is destroyed', async () => {
+    const deps = createMemoryMailCoreDependencies();
+    const account = await createMailAccount(deps, {
+      userId: 'frozen-quota-user',
+      connectionId: 'frozen-quota-connection',
+      timezone: 'UTC',
+      storageQuotaBytes: null,
+    });
+    const inbox = (await deps.inspect.mailboxes(account.id)).find(({ role }) => role === 'inbox')!;
+    const identity = await createIdentity(deps, {
+      accountId: account.id,
+      name: 'Frozen quota sender',
+      email: 'frozen-quota@example.test',
+      replyTo: null,
+      makeDefault: true,
+    });
+    const draft = await createDraft(deps, {
+      accountId: account.id,
+      identityId: identity.id,
+      replyToEmailId: null,
+      to: [{ email: 'recipient@example.test' }],
+      cc: [],
+      bcc: [],
+      subject: 'Frozen quota payload',
+      textBody: 'body retained only by the Submission snapshot',
+      htmlBody: '',
+      attachmentBlobIds: [],
+    });
+    const submission = await createSubmission(deps, {
+      accountId: account.id,
+      emailId: draft.id,
+      identityId: identity.id,
+      idempotencyKey: 'frozen-quota-submission',
+      sendAt: null,
+    });
+    await destroyDraft(deps, { accountId: account.id, emailId: draft.id });
+    expect(submission.frozenBlobs.length).toBeGreaterThan(0);
+
+    const parsed = await parseRawEmail(simpleRaw, { sanitizeHtml: (html) => html });
+    const importOnlyQuota =
+      BigInt(simpleRaw.byteLength) + BigInt(new TextEncoder().encode(parsed.textBody).byteLength);
+    await deps.unitOfWork.run((tx) =>
+      tx.accounts.update(account.id, {
+        storageQuotaBytes: importOnlyQuota,
+        updatedAt: deps.clock.now(),
+      }),
+    );
+    const emailsBefore = await deps.inspect.emails(account.id);
+    const blobsBefore = await deps.inspect.blobs(account.id);
+    const stateBefore = await deps.inspect.stateVersion(account.id);
+
+    await expect(
+      importEmail(deps, {
+        accountId: account.id,
+        provider: 'fixture',
+        remoteEmailId: 'frozen-quota-import',
+        remoteThreadId: null,
+        raw: simpleRaw,
+        mailboxIds: [inbox.id],
+        keywords: [],
+        receivedAt: deps.clock.now(),
+      }),
+    ).rejects.toMatchObject({ code: 'OVER_QUOTA' });
+
+    expect(await deps.inspect.emails(account.id)).toEqual(emailsBefore);
+    expect(await deps.inspect.blobs(account.id)).toEqual(blobsBefore);
+    expect(await deps.inspect.stateVersion(account.id)).toBe(stateBefore);
+    expect(deps.blobStore.temporarySnapshot()).toEqual(new Map());
   });
 
   it('charges a reused ready Blob when the import makes previously orphaned content referenced', async () => {

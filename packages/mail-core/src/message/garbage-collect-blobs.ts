@@ -51,6 +51,11 @@ export async function garbageCollectBlobs(
   const result = await dependencies.unitOfWork.run(async (tx) => {
     await tx.lockAccount(input.accountId);
     const referenced = referencedBlobIds(await tx.emails.listByAccount(input.accountId));
+    for (const submission of await tx.submissions.listByAccount(input.accountId)) {
+      for (const frozen of submission.frozenBlobs) {
+        referenced.add(frozen.blobId);
+      }
+    }
     const accountBlobs = await tx.blobs.listByAccount(input.accountId);
     const candidates: BlobRecord[] = accountBlobs
       .filter(

@@ -12,7 +12,7 @@ import type {
   ThreadId,
 } from '../types';
 import type { SubmissionAttemptOutcome, SubmissionStatus } from '../submission/types';
-import type { ChangeCollection, ChangeType, MailChange } from '../changes/types';
+import type { ChangeCollection, MailChange } from '../changes/types';
 
 export type AccountStatus = 'active' | 'suspended' | 'deleting';
 export type EmailLifecycle = 'draft' | 'received' | 'sent';
@@ -169,6 +169,18 @@ export interface IdentityRecord {
   updatedAt: Date;
 }
 
+export type SubmissionBlobKind = 'raw' | 'text' | 'html' | 'part';
+
+export interface SubmissionBlobReference {
+  blobId: BlobId;
+  kind: SubmissionBlobKind;
+  position: number;
+  sha256: string;
+  sizeBytes: bigint;
+  contentType: string;
+  objectKey: string;
+}
+
 export interface SubmissionRecord {
   id: EmailSubmissionId;
   accountId: MailAccountId;
@@ -178,6 +190,7 @@ export interface SubmissionRecord {
   sendAt: Date;
   idempotencyKey: string;
   draftRevision: number;
+  frozenBlobs: SubmissionBlobReference[];
   attemptCount: number;
   nextAttemptAt: Date | null;
   providerMessageId: string | null;
@@ -301,6 +314,7 @@ export interface EmailRepository {
     emailId: EmailId,
     document: EmailSearchDocument,
   ): Promise<void>;
+  deleteSearchDocument(accountId: MailAccountId, emailId: EmailId): Promise<void>;
   delete(accountId: MailAccountId, id: EmailId): Promise<void>;
 }
 
@@ -324,11 +338,21 @@ export interface SubmissionRepository {
     idempotencyKey: string,
   ): Promise<SubmissionRecord | null>;
   listByIdentity(accountId: MailAccountId, identityId: IdentityId): Promise<SubmissionRecord[]>;
+  listByAccount(accountId: MailAccountId): Promise<SubmissionRecord[]>;
   insert(record: SubmissionRecord): Promise<SubmissionRecord>;
   update(
     accountId: MailAccountId,
     id: EmailSubmissionId,
-    patch: MutableFields<SubmissionRecord, 'id' | 'accountId'>,
+    patch: MutableFields<
+      SubmissionRecord,
+      | 'id'
+      | 'accountId'
+      | 'emailId'
+      | 'identityId'
+      | 'idempotencyKey'
+      | 'draftRevision'
+      | 'frozenBlobs'
+    >,
   ): Promise<SubmissionRecord>;
   recordAttempt(record: SubmissionAttemptRecord): Promise<void>;
   updateAttempt(

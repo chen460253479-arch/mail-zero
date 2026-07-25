@@ -47,18 +47,26 @@ describe('garbageCollectBlobs', () => {
     expect(h.inspect.objectExists(atCutoff.objectKey)).toBe(true);
   });
 
-  it('keeps shared content bytes while another Blob metadata record still owns the key', async () => {
+  it('rejects duplicate metadata for the same account digest and size', async () => {
     const h = await createSeededEmailHarness();
     const old = await h.inspect.seedOrphanBlob({ ageMs: 2 * DAY });
-    const recentId = h.deps.idFactory.next<'Blob'>() as BlobId;
-    await h.deps.unitOfWork.run((tx) =>
-      tx.blobs.insert({
-        ...old,
-        id: recentId,
-        createdAt: h.clock.now(),
-        readyAt: h.clock.now(),
-      }),
-    );
+    const duplicateId = h.deps.idFactory.next<'Blob'>();
+
+    await expect(
+      h.deps.unitOfWork.run((tx) =>
+        tx.blobs.insert({
+          ...old,
+          id: duplicateId,
+          createdAt: h.clock.now(),
+          readyAt: h.clock.now(),
+        }),
+      ),
+    ).rejects.toMatchObject({
+      code: 'BLOB_INTEGRITY',
+    });
+
+    expect(await h.inspect.blob(duplicateId)).toBeNull();
+    expect(h.inspect.objectExists(old.objectKey)).toBe(true);
 
     await expect(
       garbageCollectBlobs(h.deps, {
@@ -69,8 +77,7 @@ describe('garbageCollectBlobs', () => {
     ).resolves.toEqual({ collectedBlobIds: [old.id] });
 
     expect(await h.inspect.blob(old.id)).toBeNull();
-    expect(await h.inspect.blob(recentId)).not.toBeNull();
-    expect(h.inspect.objectExists(old.objectKey)).toBe(true);
+    expect(h.inspect.objectExists(old.objectKey)).toBe(false);
   });
 
   it('restores ready metadata after object deletion failure so a later run retries', async () => {

@@ -102,6 +102,24 @@ describe('Draft Email', () => {
     }
   });
 
+  it('reuses identical Blob metadata across Draft revisions and charges quota once', async () => {
+    const h = await createDraftHarness();
+    const draft = await createDraft(h.deps, h.content);
+    const before = await h.inspect.blobs();
+
+    const updated = await updateDraft(h.deps, {
+      accountId: h.accountId,
+      emailId: draft.id,
+      expectedRevision: 1,
+      content: h.content,
+    });
+
+    expect(updated.blobId).not.toBe(draft.blobId);
+    expect(updated.textBlobId).toBe(draft.textBlobId);
+    expect(updated.htmlBlobId).toBe(draft.htmlBlobId);
+    expect(await h.inspect.blobs()).toHaveLength(before.length + 1);
+  });
+
   it('rejects a stale revision without preparing or publishing another revision', async () => {
     // Catches last-writer-wins mutation after a concurrent Draft update.
     const h = await createDraftHarness();
@@ -366,7 +384,7 @@ describe('Draft Email', () => {
     const h = await createDraftHarness();
     const draft = await createDraft(h.deps, h.content);
     const objectsBefore = h.deps.blobStore.snapshot();
-    h.deps.blobStore.failCommitAfterPromotions(2);
+    h.deps.blobStore.failCommitAfterPromotions(1);
 
     await expect(
       updateDraft(h.deps, {
@@ -430,6 +448,9 @@ describe('Draft Email', () => {
       mailboxIds: [],
       keywords: [],
       blobId: null,
+      messageId: null,
+      inReplyTo: [],
+      references: [],
       textBlobId: null,
       htmlBlobId: null,
       parts: [],

@@ -6,6 +6,7 @@ import {
   createSubmission,
   destroyDraft,
   destroyIdentity,
+  garbageCollectBlobs,
   transitionSubmission,
   updateDraft,
 } from '../../src';
@@ -108,8 +109,9 @@ describe('EmailSubmission creation', () => {
     });
     const afterDraftVersion = await h.inspect.stateVersion();
     const afterDraftChangeCount = (await h.inspect.changes()).length;
-    await expect(createSubmission(h.deps, input)).rejects.toMatchObject({
-      code: 'IDEMPOTENCY_CONFLICT',
+    await expect(createSubmission(h.deps, input)).resolves.toMatchObject({
+      emailId: h.draftId,
+      draftRevision: 1,
     });
     expect(await h.inspect.stateVersion()).toBe(afterDraftVersion);
     expect((await h.inspect.changes()).length).toBe(afterDraftChangeCount);
@@ -136,6 +138,60 @@ describe('EmailSubmission creation', () => {
       emailId: h.draftId,
       draftRevision: 1,
     });
+  });
+
+  it('keeps the exact frozen Raw and attachment Blob snapshot after Draft replacement and GC', async () => {
+    const h = await createSubmissionHarness();
+    const attachment = await h.seedReadyBlob(
+      new TextEncoder().encode('frozen attachment'),
+      'text/plain',
+    );
+    const draft = await createDraft(h.deps, {
+      ...h.content,
+      subject: 'Frozen payload',
+      attachmentBlobIds: [attachment.id],
+    });
+    const rawBefore = await h.inspect.rawBytes(draft.id);
+    const submission = await createSubmission(h.deps, {
+      accountId: h.accountId,
+      emailId: draft.id,
+      identityId: h.identityId,
+      idempotencyKey: 'frozen-payload',
+      sendAt: null,
+    });
+
+    expect(submission.frozenBlobs).toEqual([
+      expect.objectContaining({ kind: 'raw', position: 0, blobId: draft.blobId }),
+      expect.objectContaining({ kind: 'text', position: 0, blobId: draft.textBlobId }),
+      expect.objectContaining({ kind: 'html', position: 0, blobId: draft.htmlBlobId }),
+      expect.objectContaining({ kind: 'part', position: 0, blobId: attachment.id }),
+    ]);
+
+    await updateDraft(h.deps, {
+      accountId: h.accountId,
+      emailId: draft.id,
+      expectedRevision: 1,
+      content: { ...h.content, subject: 'Replacement payload' },
+    });
+    await destroyDraft(h.deps, { accountId: h.accountId, emailId: draft.id });
+    h.deps.clock.set(new Date('2026-01-03T00:00:00.000Z'));
+    await garbageCollectBlobs(h.deps, {
+      accountId: h.accountId,
+      olderThan: new Date('2026-01-02T00:00:00.000Z'),
+      limit: 100,
+    });
+
+    const frozen = (await h.inspect.submission(submission.id))!.frozenBlobs;
+    const frozenRaw = frozen.find(({ kind }) => kind === 'raw')!;
+    const rawRecord = await h.inspect.blob(frozenRaw.blobId);
+    expect(rawRecord).not.toBeNull();
+    await expect(
+      h.deps.blobStore.get({
+        accountId: h.accountId,
+        objectKey: rawRecord!.objectKey,
+      }),
+    ).resolves.toEqual(rawBefore);
+    expect(await h.inspect.blob(attachment.id)).not.toBeNull();
   });
 
   it('requires the exact Identity retained by the frozen Draft revision', async () => {
@@ -637,10 +693,13 @@ describe('EmailSubmission attempt history', () => {
         error: new Error('oauth access_token=secret'),
       } as never,
     });
-    const persisted = JSON.stringify({
-      submission: await h.inspect.submission(h.submissionId!),
-      attempts: await h.inspect.attempts(h.submissionId!),
-    });
+    const persisted = JSON.stringify(
+      {
+        submission: await h.inspect.submission(h.submissionId!),
+        attempts: await h.inspect.attempts(h.submissionId!),
+      },
+      (_key, value) => (typeof value === 'bigint' ? value.toString() : value),
+    );
     expect(persisted).not.toContain(safeResponse);
     expect(persisted).not.toMatch(/secret|hunter2|password|api_key|MIME-Version/i);
   });

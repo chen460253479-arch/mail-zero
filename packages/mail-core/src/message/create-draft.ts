@@ -46,6 +46,7 @@ export type PreparedDraftRevision = {
 export type DraftRevisionBlob = {
   prepared: PreparedBlob;
   record: BlobRecord;
+  isNew: boolean;
 };
 
 export type DraftRevisionBlobs = {
@@ -239,15 +240,32 @@ export async function prepareDraftRevision(
   }
 }
 
-export function allocateDraftRevisionBlobs(
+export async function allocateDraftRevisionBlobs(
   dependencies: MailCoreDependencies,
+  tx: MailTransaction,
   accountId: MailAccountId,
   prepared: PreparedDraftRevision,
   now: Date,
-): DraftRevisionBlobs {
-  const allocate = (pending: PreparedBlob): DraftRevisionBlob => {
+): Promise<DraftRevisionBlobs> {
+  const resolved = new Map<string, DraftRevisionBlob>();
+  const allocate = async (pending: PreparedBlob): Promise<DraftRevisionBlob> => {
+    const key = `${pending.sha256}:${pending.sizeBytes}`;
+    const alreadyResolved = resolved.get(key);
+    if (alreadyResolved !== undefined) {
+      return alreadyResolved;
+    }
+    const existing = await tx.blobs.findByDigest(accountId, pending.sha256, pending.sizeBytes);
+    if (existing !== null) {
+      if (existing.status !== 'ready' || existing.readyAt === null || existing.deletedAt !== null) {
+        throw new MailCoreError('BLOB_INTEGRITY', { entityId: existing.id });
+      }
+      await verifyPreparedBlob(dependencies.blobStore, pending, existing.objectKey, true);
+      const reused = { prepared: pending, record: existing, isNew: false };
+      resolved.set(key, reused);
+      return reused;
+    }
     const id = dependencies.idFactory.next<'Blob'>() as BlobId;
-    return {
+    const created: DraftRevisionBlob = {
       prepared: pending,
       record: {
         id,
@@ -261,16 +279,19 @@ export function allocateDraftRevisionBlobs(
         readyAt: null,
         deletedAt: null,
       },
+      isNew: true,
     };
+    resolved.set(key, created);
+    return created;
   };
-  const raw = allocate(prepared.raw);
-  const text = prepared.text === null ? null : allocate(prepared.text);
-  const html = prepared.html === null ? null : allocate(prepared.html);
+  const raw = await allocate(prepared.raw);
+  const text = prepared.text === null ? null : await allocate(prepared.text);
+  const html = prepared.html === null ? null : await allocate(prepared.html);
   return {
     raw,
     text,
     html,
-    all: [raw, ...(text === null ? [] : [text]), ...(html === null ? [] : [html])],
+    all: [...resolved.values()],
   };
 }
 
@@ -295,9 +316,16 @@ export async function requireDraftQuota(
   );
   const referenced = referencedBlobIds(emails);
   input.attachments.forEach(({ id }) => referenced.add(id));
-  let total = input.revisionBlobs.all.reduce((sum, { record }) => sum + record.sizeBytes, 0n);
+  for (const submission of await tx.submissions.listByAccount(input.accountId)) {
+    submission.frozenBlobs.forEach(({ blobId }) => referenced.add(blobId));
+  }
+  input.revisionBlobs.all.forEach(({ record }) => referenced.add(record.id));
+  const newRecords = new Map(
+    input.revisionBlobs.all.filter(({ isNew }) => isNew).map(({ record }) => [record.id, record]),
+  );
+  let total = 0n;
   for (const blobId of referenced) {
-    const blob = await tx.blobs.findById(input.accountId, blobId);
+    const blob = newRecords.get(blobId) ?? (await tx.blobs.findById(input.accountId, blobId));
     if (blob === null || (blob.status !== 'ready' && blob.status !== 'pending')) {
       throw new MailCoreError('BLOB_INTEGRITY', { entityId: blobId });
     }
@@ -312,7 +340,8 @@ export async function insertDraftRevisionBlobs(
   tx: MailTransaction,
   revision: DraftRevisionBlobs,
 ): Promise<void> {
-  for (const { record } of revision.all) {
+  for (const { record, isNew } of revision.all) {
+    if (!isNew) continue;
     await tx.blobs.insert(record);
   }
 }
@@ -325,7 +354,8 @@ export async function commitDraftRevisionBlobs(
   readyAt: Date,
   committedObjectKeys: string[],
 ): Promise<void> {
-  for (const { prepared, record } of revision.all) {
+  for (const { prepared, record, isNew } of revision.all) {
+    if (!isNew) continue;
     const objectAlreadyOwned = (await tx.blobs.listByAccount(accountId)).some(
       (blob) =>
         blob.id !== record.id &&
@@ -497,7 +527,6 @@ export async function createDraft(
     raw,
     content: input,
   });
-  const revision = allocateDraftRevisionBlobs(dependencies, input.accountId, prepared, now);
   const committedObjectKeys: string[] = [];
   let operationCompleted = false;
   try {
@@ -505,6 +534,13 @@ export async function createDraft(
       await tx.lockAccount(input.accountId);
       const references = await requireDraftReferences(tx, input.accountId, input);
       requireStableReferences(preflight, references);
+      const revision = await allocateDraftRevisionBlobs(
+        dependencies,
+        tx,
+        input.accountId,
+        prepared,
+        now,
+      );
       await requireDraftQuota(tx, {
         accountId: input.accountId,
         excludeEmailId: null,

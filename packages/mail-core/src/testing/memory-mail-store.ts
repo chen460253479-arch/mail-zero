@@ -235,6 +235,15 @@ const createRepositories = (
       return listScoped(state.blobs, accountId);
     },
     async insert(record) {
+      const duplicate = [...state.blobs.values()].find(
+        (candidate) =>
+          candidate.accountId === record.accountId &&
+          candidate.sha256 === record.sha256 &&
+          candidate.sizeBytes === record.sizeBytes,
+      );
+      if (duplicate !== undefined) {
+        throw new MailCoreError('BLOB_INTEGRITY', { entityId: duplicate.id });
+      }
       const stored = copy(record);
       state.blobs.set(entityKey(record.accountId, record.id), stored);
       return copy(stored);
@@ -341,6 +350,9 @@ const createRepositories = (
       }
       state.emailSearchDocuments.set(entityKey(accountId, emailId), copy(document));
     },
+    async deleteSearchDocument(accountId, emailId) {
+      state.emailSearchDocuments.delete(entityKey(accountId, emailId));
+    },
     async delete(accountId, id) {
       state.emails.delete(entityKey(accountId, id));
       state.emailSearchDocuments.delete(entityKey(accountId, id));
@@ -392,6 +404,9 @@ const createRepositories = (
       return listScoped(state.submissions, accountId).filter(
         (submission) => submission.identityId === identityId,
       );
+    },
+    async listByAccount(accountId) {
+      return listScoped(state.submissions, accountId);
     },
     async insert(record) {
       const stored = copy(record);
@@ -596,6 +611,7 @@ export interface MemoryMailInspector {
   thread(id: ThreadId): Promise<ThreadRecord | null>;
   emails(accountId?: MailAccountId): Promise<EmailRecord[]>;
   email(id: EmailId): Promise<EmailRecord | null>;
+  searchDocument(id: EmailId): Promise<EmailSearchDocument | null>;
   identities(accountId?: MailAccountId): Promise<IdentityRecord[]>;
   identity(id: IdentityId): Promise<IdentityRecord | null>;
   submissions(accountId?: MailAccountId): Promise<SubmissionRecord[]>;
@@ -656,6 +672,12 @@ export const createMemoryMailInspector = (
   },
   async email(id) {
     return findById(unitOfWork.snapshot().emails.values(), id);
+  },
+  async searchDocument(id) {
+    const entry = [...unitOfWork.snapshot().emailSearchDocuments.entries()].find(([key]) =>
+      key.endsWith(`\u0000${id}`),
+    );
+    return entry === undefined ? null : copy(entry[1]);
   },
   async identities(accountId) {
     return filterByAccount(unitOfWork.snapshot().identities.values(), accountId);

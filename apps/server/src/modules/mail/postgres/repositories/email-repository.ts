@@ -490,6 +490,12 @@ export const createEmailRepository = (db: MailDatabase): EmailRepository => {
             set: { document: vector },
           });
       }),
+    deleteSearchDocument: (accountId, emailId) =>
+      runAdapter(async () => {
+        await db
+          .delete(emailSearch)
+          .where(and(eq(emailSearch.mailAccountId, accountId), eq(emailSearch.emailId, emailId)));
+      }),
     delete: (accountId, id) =>
       runAdapter(async () => {
         await db.delete(email).where(and(eq(email.mailAccountId, accountId), eq(email.id, id)));

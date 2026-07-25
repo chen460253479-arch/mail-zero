@@ -1,4 +1,10 @@
-import type { SubmissionRecord, MailCoreDependencies, MailTransaction } from '../store';
+import type {
+  BlobRecord,
+  SubmissionBlobReference,
+  SubmissionRecord,
+  MailCoreDependencies,
+  MailTransaction,
+} from '../store';
 import type { CreateSubmissionInput } from './types';
 import type { EmailSubmissionId } from '../types';
 import { MailCoreError } from '../types';
@@ -17,7 +23,6 @@ const normalizeRequestedSendAt = (sendAt: Date | null): Date | null => {
 const isExactRetry = (
   existing: SubmissionRecord,
   input: CreateSubmissionInput,
-  draftRevision: number,
   requestedSendAt: Date | null,
 ): boolean => {
   const sameSchedule =
@@ -25,10 +30,7 @@ const isExactRetry = (
       ? existing.sendAt.getTime() === existing.createdAt.getTime()
       : existing.sendAt.getTime() === requestedSendAt.getTime();
   return (
-    existing.emailId === input.emailId &&
-    existing.identityId === input.identityId &&
-    existing.draftRevision === draftRevision &&
-    sameSchedule
+    existing.emailId === input.emailId && existing.identityId === input.identityId && sameSchedule
   );
 };
 
@@ -49,6 +51,31 @@ const throwMissingOrCrossAccount = async (
   throw new MailCoreError(kind === 'email' ? 'EMAIL_NOT_FOUND' : 'IDENTITY_NOT_FOUND', {
     entityId: kind === 'email' ? input.emailId : input.identityId,
   });
+};
+
+const requireFrozenBlob = async (
+  tx: MailTransaction,
+  accountId: CreateSubmissionInput['accountId'],
+  blobId: NonNullable<Awaited<ReturnType<MailTransaction['emails']['findById']>>>['blobId'],
+  kind: SubmissionBlobReference['kind'],
+  position: number,
+): Promise<SubmissionBlobReference | null> => {
+  if (blobId === null) {
+    return null;
+  }
+  const blob: BlobRecord | null = await tx.blobs.findById(accountId, blobId);
+  if (blob === null || blob.status !== 'ready' || blob.deletedAt !== null) {
+    throw new MailCoreError('BLOB_NOT_FOUND', { entityId: blobId });
+  }
+  return {
+    blobId: blob.id,
+    kind,
+    position,
+    sha256: blob.sha256,
+    sizeBytes: blob.sizeBytes,
+    contentType: blob.contentType,
+    objectKey: blob.objectKey,
+  };
 };
 
 export async function createSubmission(
@@ -78,7 +105,7 @@ export async function createSubmission(
       input.idempotencyKey,
     );
     if (existing !== null) {
-      if (isExactRetry(existing, input, email.draftRevision, requestedSendAt)) {
+      if (isExactRetry(existing, input, requestedSendAt)) {
         return existing;
       }
       throw new MailCoreError('IDEMPOTENCY_CONFLICT', { entityId: existing.id });
@@ -100,10 +127,16 @@ export async function createSubmission(
     if (email.blobId === null) {
       throw new MailCoreError('BLOB_NOT_FOUND', { entityId: email.id });
     }
-    const rawBlob = await tx.blobs.findById(input.accountId, email.blobId);
-    if (rawBlob === null || rawBlob.status !== 'ready') {
-      throw new MailCoreError('BLOB_NOT_FOUND', { entityId: email.blobId });
-    }
+    const frozenBlobs = (
+      await Promise.all([
+        requireFrozenBlob(tx, input.accountId, email.blobId, 'raw', 0),
+        requireFrozenBlob(tx, input.accountId, email.textBlobId, 'text', 0),
+        requireFrozenBlob(tx, input.accountId, email.htmlBlobId, 'html', 0),
+        ...email.parts.map(({ blobId }, position) =>
+          requireFrozenBlob(tx, input.accountId, blobId, 'part', position),
+        ),
+      ])
+    ).filter((blob): blob is SubmissionBlobReference => blob !== null);
     if (email.to.length + email.cc.length + email.bcc.length === 0) {
       throw new MailCoreError('INVALID_EMAIL', { entityId: email.id });
     }
@@ -117,6 +150,7 @@ export async function createSubmission(
       sendAt,
       idempotencyKey: input.idempotencyKey,
       draftRevision: email.draftRevision,
+      frozenBlobs,
       attemptCount: 0,
       nextAttemptAt: null,
       providerMessageId: null,

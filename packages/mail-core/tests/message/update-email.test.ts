@@ -1,6 +1,12 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
-import { createMailAccount, updateEmail, type UpdateEmailInput } from '../../src';
+import {
+  createDraft,
+  createIdentity,
+  createMailAccount,
+  updateEmail,
+  type UpdateEmailInput,
+} from '../../src';
 import { createSeededEmailHarness } from '../helpers/email-harness';
 
 describe('updateEmail', () => {
@@ -120,5 +126,65 @@ describe('updateEmail', () => {
     ).rejects.toMatchObject({ code: 'CROSS_ACCOUNT_REFERENCE' });
 
     expect(await h.inspect.stateVersion()).toBe(beforeState);
+  });
+
+  it('reserves $draft and Drafts membership for Draft lifecycle commands', async () => {
+    const h = await createSeededEmailHarness();
+    const drafts = (await h.deps.inspect.mailboxes(h.accountId)).find(
+      ({ role }) => role === 'drafts',
+    )!;
+    const identity = await createIdentity(h.deps, {
+      accountId: h.accountId,
+      name: 'Draft owner',
+      email: 'draft-owner@example.test',
+      replyTo: null,
+      makeDefault: true,
+    });
+    const draft = await createDraft(h.deps, {
+      accountId: h.accountId,
+      identityId: identity.id,
+      replyToEmailId: null,
+      to: [{ email: 'recipient@example.test' }],
+      cc: [],
+      bcc: [],
+      subject: 'Protected Draft',
+      textBody: 'Draft body',
+      htmlBody: '',
+      attachmentBlobIds: [],
+    });
+
+    for (const runInvalidPatch of [
+      () =>
+        updateEmail(h.deps, {
+          accountId: h.accountId,
+          emailId: draft.id,
+          removeKeywords: ['$draft'],
+        }),
+      () =>
+        updateEmail(h.deps, {
+          accountId: h.accountId,
+          emailId: draft.id,
+          removeMailboxIds: [drafts.id],
+          addMailboxIds: [h.archiveId],
+        }),
+      () =>
+        updateEmail(h.deps, {
+          accountId: h.accountId,
+          emailId: h.emailId,
+          addKeywords: ['$draft'],
+        }),
+      () =>
+        updateEmail(h.deps, {
+          accountId: h.accountId,
+          emailId: h.emailId,
+          addMailboxIds: [drafts.id],
+        }),
+    ]) {
+      const beforeState = await h.inspect.stateVersion();
+      const beforeChanges = await h.inspect.changes();
+      await expect(runInvalidPatch()).rejects.toMatchObject({ code: 'INVALID_PATCH' });
+      expect(await h.inspect.stateVersion()).toBe(beforeState);
+      expect(await h.inspect.changes()).toEqual(beforeChanges);
+    }
   });
 });
