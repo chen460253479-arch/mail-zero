@@ -1,5 +1,7 @@
 export const mailCoreErrorCodes = [
   'INVALID_KEYWORD',
+  'INVALID_PATCH',
+  'INVALID_GC_REQUEST',
   'ACCOUNT_NOT_FOUND',
   'MAILBOX_NOT_FOUND',
   'EMAIL_NOT_FOUND',

@@ -319,7 +319,9 @@ const updateThreadAggregate = async (
   threadId: ThreadId,
   now: Date,
 ): Promise<void> => {
-  const emails = await tx.emails.listByThread(input.accountId, threadId);
+  const emails = (await tx.emails.listByThread(input.accountId, threadId)).filter(
+    ({ destroyedAt, mailboxIds }) => destroyedAt === null && mailboxIds.length > 0,
+  );
   const latest = emails.reduce((current, email) =>
     email.receivedAt > current.receivedAt ? email : current,
   );

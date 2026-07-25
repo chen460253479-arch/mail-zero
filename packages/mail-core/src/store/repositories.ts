@@ -11,6 +11,7 @@ import type {
   MailboxRole,
   ThreadId,
 } from '../types';
+import type { ChangeCollection, ChangeType, MailChange } from '../changes/types';
 
 export type AccountStatus = 'active' | 'suspended' | 'deleting';
 export type EmailLifecycle = 'draft' | 'received' | 'sent';
@@ -24,8 +25,7 @@ export type SubmissionStatus =
   | 'failed'
   | 'canceled';
 export type SubmissionAttemptOutcome = 'sent' | 'transient_failure' | 'permanent_failure';
-export type ChangeCollection = 'mailbox' | 'email' | 'thread' | 'identity' | 'email_submission';
-export type ChangeType = 'created' | 'updated' | 'destroyed';
+export type { ChangeCollection, ChangeType } from '../changes/types';
 
 export interface MailAccountRecord {
   id: MailAccountId;
@@ -200,15 +200,7 @@ export interface SubmissionAttemptRecord {
   retryAt: Date | null;
 }
 
-export interface MailChangeRecord {
-  accountId: MailAccountId;
-  stateVersion: bigint;
-  collection: ChangeCollection;
-  entityId: string;
-  changeType: ChangeType;
-  changedProperties: string[] | null;
-  createdAt: Date;
-}
+export type MailChangeRecord = MailChange;
 
 type MutableFields<RecordType, Immutable extends keyof RecordType> = Partial<
   Omit<RecordType, Immutable>
