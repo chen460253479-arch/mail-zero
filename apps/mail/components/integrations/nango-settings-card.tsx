@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { getNangoValidationErrorMessage } from '@/lib/nango-validation-error';
 import { SettingsCard } from '@/components/settings/settings-card';
 import { ConfirmIntegrationDelete } from './confirm-delete';
 import { useTRPC } from '@/providers/query-provider';
@@ -47,12 +48,18 @@ export function NangoSettingsCard({
   const submit = async () => {
     try {
       await save.mutateAsync({ baseUrl, secretKey: secretKey || undefined });
-      setSecretKey('');
+    } catch (error) {
+      toast.error(getNangoValidationErrorMessage(error));
+      return;
+    }
+
+    setSecretKey('');
+    toast.success('Nango configuration validated and saved');
+    try {
       await onChanged();
       await integrations.refetch();
-      toast.success('Nango configuration validated and saved');
     } catch {
-      toast.error('Nango validation failed; the existing configuration was kept');
+      toast.warning('Nango configuration was saved, but the page could not be refreshed');
     }
   };
 

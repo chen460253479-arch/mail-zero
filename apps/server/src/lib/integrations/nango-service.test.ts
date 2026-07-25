@@ -6,8 +6,8 @@ import type {
   SystemIntegrationRepository,
 } from './repository';
 import { NangoIntegrationError, NangoIntegrationService } from './nango-service';
+import { NangoClientError, type NangoClient } from '../nango/client';
 import { encryptCredential } from '../credentials/encryption';
-import type { NangoClient } from '../nango/client';
 
 const encryptionKey = Buffer.alloc(32, 9).toString('base64');
 const now = new Date('2026-07-24T08:00:00.000Z');
@@ -151,7 +151,45 @@ describe('Nango integration service', () => {
     expect(state.saveActive).not.toHaveBeenCalled();
   });
 
-  it('requires a credential-readable connection before the first save', async () => {
+  it.each([
+    ['INVALID_API_KEY', 401, 'list_integrations', 'NANGO_API_KEY_INVALID'],
+    ['INSUFFICIENT_PERMISSIONS', 403, 'list_connections', 'NANGO_INSUFFICIENT_PERMISSIONS'],
+    ['ENDPOINT_NOT_FOUND', 404, 'list_integrations', 'NANGO_ENDPOINT_NOT_FOUND'],
+    ['ENDPOINT_NOT_FOUND', 404, 'get_connection', 'NANGO_CONNECTION_NOT_FOUND'],
+    ['INVALID_CREDENTIALS', 424, 'get_connection', 'NANGO_CONNECTION_INVALID'],
+    ['INVALID_RESPONSE', 200, 'get_connection', 'NANGO_INVALID_RESPONSE'],
+    ['REQUEST_FAILED', null, 'list_integrations', 'NANGO_UNREACHABLE'],
+    ['REQUEST_FAILED', 500, 'list_integrations', 'NANGO_REQUEST_FAILED'],
+  ] as const)(
+    'preserves safe Nango failure details for %s',
+    async (clientCode, status, operation, integrationCode) => {
+      const client = createClient();
+      client.listIntegrations.mockRejectedValue(
+        new NangoClientError(clientCode, status, operation),
+      );
+      const service = new NangoIntegrationService({
+        repository: state.repository,
+        encryptionKey,
+        createClient: () => client,
+        now: () => now,
+      });
+
+      await expect(
+        service.validateAndSave({
+          baseUrl: 'https://api.nango.dev',
+          secretKey: 'secret',
+          updatedBy: 'admin-1',
+        }),
+      ).rejects.toMatchObject({
+        code: integrationCode,
+        operation,
+        status,
+      });
+      expect(state.saveActive).not.toHaveBeenCalled();
+    },
+  );
+
+  it('saves the global configuration when Nango has no connections', async () => {
     const client = createClient();
     client.listConnections.mockResolvedValue([]);
     const service = new NangoIntegrationService({
@@ -167,7 +205,11 @@ describe('Nango integration service', () => {
         secretKey: 'secret',
         updatedBy: 'admin-1',
       }),
-    ).rejects.toEqual(new NangoIntegrationError('NANGO_TEST_CONNECTION_REQUIRED'));
+    ).resolves.toMatchObject({ configured: true, status: 'active' });
+    expect(client.listIntegrations).toHaveBeenCalledOnce();
+    expect(client.listConnections).toHaveBeenCalledOnce();
+    expect(client.getConnection).not.toHaveBeenCalled();
+    expect(state.saveActive).toHaveBeenCalledOnce();
   });
 
   it('forbids changing the Base URL while Nango bindings exist', async () => {
@@ -231,6 +273,7 @@ describe('Nango integration service', () => {
       updatedBy: 'admin-1',
     });
 
+    expect(client.listConnections).toHaveBeenCalledOnce();
     expect(client.getConnection).toHaveBeenCalledTimes(2);
     expect(state.saveActive).toHaveBeenCalledOnce();
   });

@@ -34,6 +34,17 @@ describe('NangoClient', () => {
     expect(fetchMock.mock.calls[0]?.[0]).not.toContain('nango-secret');
   });
 
+  it('does not rebind the injected Worker fetch receiver', async () => {
+    const workerFetch = function (this: unknown): Promise<Response> {
+      if (this !== undefined) {
+        throw new TypeError('Illegal invocation: incorrect this reference');
+      }
+      return Promise.resolve(Response.json({ data: [] }));
+    } as typeof fetch;
+
+    await expect(createClient(workerFetch).listIntegrations()).resolves.toEqual([]);
+  });
+
   it('lists connections without credential fields', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({
@@ -62,6 +73,33 @@ describe('NangoClient', () => {
     expect(connections.map(({ connection_id }) => connection_id)).toEqual(['mailbox-1']);
   });
 
+  it('lists all connection summaries when no integration filter is provided', async () => {
+    const otherConnection = {
+      ...connectionSummary,
+      connection_id: 'mailbox-2',
+      provider_config_key: 'outlook-primary',
+    };
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ connections: [connectionSummary, otherConnection] }));
+
+    const connections = await createClient(fetchMock).listConnections();
+
+    expect(connections).toEqual([connectionSummary, otherConnection]);
+  });
+
+  it('starts connection pagination from Nango page zero', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ connections: [connectionSummary] }));
+
+    await createClient(fetchMock).listConnections('gmail-primary');
+
+    expect(fetchMock).toHaveBeenCalledWith('https://api.nango.dev/connections?limit=100&page=0', {
+      headers: { Authorization: 'Bearer nango-secret' },
+    });
+  });
+
   it('finds integration connections beyond the first API page', async () => {
     const firstPage = Array.from({ length: 100 }, (_, index) => ({
       ...connectionSummary,
@@ -78,7 +116,7 @@ describe('NangoClient', () => {
     expect(connections).toEqual([connectionSummary]);
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'https://api.nango.dev/connections?limit=100&page=2',
+      'https://api.nango.dev/connections?limit=100&page=1',
       { headers: { Authorization: 'Bearer nango-secret' } },
     );
   });
@@ -114,7 +152,52 @@ describe('NangoClient', () => {
     ).rejects.toMatchObject({
       code: 'INVALID_CREDENTIALS',
       status: 424,
+      operation: 'get_connection',
     } satisfies Partial<NangoClientError>);
+  });
+
+  it.each([
+    [401, 'INVALID_API_KEY'],
+    [403, 'INSUFFICIENT_PERMISSIONS'],
+    [404, 'ENDPOINT_NOT_FOUND'],
+    [500, 'REQUEST_FAILED'],
+  ] as const)('maps HTTP %i without exposing the response body', async (status, code) => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response('sensitive upstream response', { status }));
+
+    await expect(createClient(fetchMock).listIntegrations()).rejects.toMatchObject({
+      code,
+      status,
+      operation: 'list_integrations',
+      message: expect.not.stringContaining('sensitive upstream response'),
+    });
+  });
+
+  it('identifies the failed operation when Nango is unreachable', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockRejectedValue(new Error('socket failed'));
+
+    await expect(createClient(fetchMock).listConnections('gmail-primary')).rejects.toMatchObject({
+      code: 'REQUEST_FAILED',
+      status: null,
+      operation: 'list_connections',
+      message: expect.not.stringContaining('socket failed'),
+    });
+  });
+
+  it('identifies invalid connection responses without exposing credentials', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ credentials: { access_token: 'must-not-leak' } }));
+
+    await expect(
+      createClient(fetchMock).getConnection('mailbox-1', 'gmail-primary'),
+    ).rejects.toMatchObject({
+      code: 'INVALID_RESPONSE',
+      status: 200,
+      operation: 'get_connection',
+      message: expect.not.stringContaining('must-not-leak'),
+    });
   });
 
   it('redacts the response body from thrown errors', async () => {

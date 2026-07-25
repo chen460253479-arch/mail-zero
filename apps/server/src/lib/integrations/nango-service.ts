@@ -4,20 +4,27 @@ import {
   type SafeIntegration,
   type SystemIntegrationRepository,
 } from './repository';
+import { NangoClientError, type NangoClient, type NangoOperation } from '../nango/client';
 import { decryptCredential, encryptCredential } from '../credentials/encryption';
 import { gmailNangoProviders } from '../mail-channel/gmail-metadata';
 import type { NangoIntegration } from '../nango/types';
-import type { NangoClient } from '../nango/client';
 
 type NangoClientLike = Pick<NangoClient, 'listIntegrations' | 'listConnections' | 'getConnection'>;
 
 type NangoIntegrationErrorCode =
   | 'INTEGRATION_IN_USE'
+  | 'NANGO_API_KEY_INVALID'
+  | 'NANGO_CONNECTION_INVALID'
+  | 'NANGO_CONNECTION_NOT_FOUND'
+  | 'NANGO_ENDPOINT_NOT_FOUND'
   | 'NANGO_INTEGRATION_UNAVAILABLE'
+  | 'NANGO_INSUFFICIENT_PERMISSIONS'
+  | 'NANGO_INVALID_RESPONSE'
   | 'NANGO_NOT_CONFIGURED'
   | 'NANGO_PERMISSION_VALIDATION_FAILED'
+  | 'NANGO_REQUEST_FAILED'
   | 'NANGO_SECRET_REQUIRED'
-  | 'NANGO_TEST_CONNECTION_REQUIRED';
+  | 'NANGO_UNREACHABLE';
 
 type NangoSecret = {
   secretKey: string;
@@ -64,11 +71,40 @@ const mapWithConcurrency = async <T>(
 };
 
 export class NangoIntegrationError extends Error {
-  constructor(public readonly code: NangoIntegrationErrorCode) {
-    super(code);
+  constructor(
+    public readonly code: NangoIntegrationErrorCode,
+    public readonly operation?: NangoOperation,
+    public readonly status?: number | null,
+  ) {
+    super(operation ? `${code}|${operation}|${status ?? ''}` : code);
     this.name = 'NangoIntegrationError';
   }
 }
+
+const mapNangoClientError = (error: unknown): NangoIntegrationError => {
+  if (!(error instanceof NangoClientError)) {
+    return new NangoIntegrationError('NANGO_PERMISSION_VALIDATION_FAILED');
+  }
+
+  const code: NangoIntegrationErrorCode =
+    error.code === 'INVALID_API_KEY'
+      ? 'NANGO_API_KEY_INVALID'
+      : error.code === 'INSUFFICIENT_PERMISSIONS'
+        ? 'NANGO_INSUFFICIENT_PERMISSIONS'
+        : error.code === 'ENDPOINT_NOT_FOUND'
+          ? error.operation === 'get_connection'
+            ? 'NANGO_CONNECTION_NOT_FOUND'
+            : 'NANGO_ENDPOINT_NOT_FOUND'
+          : error.code === 'INVALID_CREDENTIALS'
+            ? 'NANGO_CONNECTION_INVALID'
+            : error.code === 'INVALID_RESPONSE'
+              ? 'NANGO_INVALID_RESPONSE'
+              : error.status === null
+                ? 'NANGO_UNREACHABLE'
+                : 'NANGO_REQUEST_FAILED';
+
+  return new NangoIntegrationError(code, error.operation, error.status);
+};
 
 export class NangoIntegrationService {
   constructor(private readonly dependencies: NangoIntegrationServiceDependencies) {}
@@ -145,8 +181,8 @@ export class NangoIntegrationService {
       return (await client.listIntegrations()).filter(({ provider }) =>
         gmailNangoProviders.includes(provider),
       );
-    } catch {
-      throw new NangoIntegrationError('NANGO_PERMISSION_VALIDATION_FAILED');
+    } catch (error) {
+      throw mapNangoClientError(error);
     }
   }
 
@@ -190,24 +226,15 @@ export class NangoIntegrationService {
     references: Array<{ integrationId: string; connectionId: string }>,
   ): Promise<void> {
     try {
-      const integrations = await client.listIntegrations();
+      await client.listIntegrations();
+      await client.listConnections();
       if (references.length > 0) {
         await mapWithConcurrency(uniqueReferences(references), 5, async (reference) => {
           await client.getConnection(reference.connectionId, reference.integrationId);
         });
-        return;
       }
-
-      for (const integration of integrations) {
-        const [connection] = await client.listConnections(integration.unique_key);
-        if (!connection) continue;
-        await client.getConnection(connection.connection_id, integration.unique_key);
-        return;
-      }
-    } catch {
-      throw new NangoIntegrationError('NANGO_PERMISSION_VALIDATION_FAILED');
+    } catch (error) {
+      throw mapNangoClientError(error);
     }
-
-    throw new NangoIntegrationError('NANGO_TEST_CONNECTION_REQUIRED');
   }
 }

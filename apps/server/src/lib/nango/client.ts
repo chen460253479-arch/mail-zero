@@ -18,15 +18,24 @@ const connectionListSchema = z.union([
   z.object({ connections: z.array(nangoConnectionSummarySchema) }),
 ]);
 
-type NangoErrorCode = 'INVALID_CREDENTIALS' | 'REQUEST_FAILED' | 'INVALID_RESPONSE';
+type NangoErrorCode =
+  | 'ENDPOINT_NOT_FOUND'
+  | 'INSUFFICIENT_PERMISSIONS'
+  | 'INVALID_API_KEY'
+  | 'INVALID_CREDENTIALS'
+  | 'INVALID_RESPONSE'
+  | 'REQUEST_FAILED';
+
+export type NangoOperation = 'get_connection' | 'list_connections' | 'list_integrations';
 
 export class NangoClientError extends Error {
   constructor(
     public readonly code: NangoErrorCode,
     public readonly status: number | null,
+    public readonly operation: NangoOperation,
     options?: ErrorOptions,
   ) {
-    super(`Nango request failed (${code})`, options);
+    super(`Nango ${operation} failed (${code}${status === null ? '' : `, ${status}`})`, options);
     this.name = 'NangoClientError';
   }
 }
@@ -45,19 +54,21 @@ export class NangoClient {
   }
 
   async listIntegrations(): Promise<NangoIntegration[]> {
-    const payload = await this.request('/integrations');
-    return this.parse(integrationListSchema, payload).data;
+    const operation = 'list_integrations';
+    const payload = await this.request('/integrations', operation);
+    return this.parse(integrationListSchema, payload, operation).data;
   }
 
-  async listConnections(integrationId: string): Promise<NangoConnectionSummary[]> {
+  async listConnections(integrationId?: string): Promise<NangoConnectionSummary[]> {
+    const operation = 'list_connections';
     const pageSize = 100;
     const connections: NangoConnectionSummary[] = [];
     const seen = new Set<string>();
 
-    for (let page = 1; ; page++) {
+    for (let page = 0; ; page++) {
       const query = new URLSearchParams({ limit: String(pageSize), page: String(page) });
-      const payload = await this.request(`/connections?${query.toString()}`);
-      const result = this.parse(connectionListSchema, payload);
+      const payload = await this.request(`/connections?${query.toString()}`, operation);
+      const result = this.parse(connectionListSchema, payload, operation);
       const pageConnections = 'data' in result ? result.data : result.connections;
       let added = 0;
 
@@ -72,7 +83,9 @@ export class NangoClient {
       if (pageConnections.length < pageSize || added === 0) break;
     }
 
-    return connections.filter(({ provider_config_key }) => provider_config_key === integrationId);
+    return integrationId
+      ? connections.filter(({ provider_config_key }) => provider_config_key === integrationId)
+      : connections;
   }
 
   async getConnection(connectionId: string, integrationId: string): Promise<NangoConnection> {
@@ -82,35 +95,50 @@ export class NangoClient {
 
     const query = new URLSearchParams({ provider_config_key: integrationId });
     const path = `/connections/${encodeURIComponent(connectionId)}?${query.toString()}`;
-    return this.parse(nangoConnectionSchema, await this.request(path));
+    const operation = 'get_connection';
+    return this.parse(nangoConnectionSchema, await this.request(path, operation), operation);
   }
 
-  private async request(path: string): Promise<unknown> {
+  private async request(path: string, operation: NangoOperation): Promise<unknown> {
     let response: Response;
     try {
-      response = await this.config.fetch(`${this.baseUrl}${path}`, {
+      const fetchImpl = this.config.fetch;
+      response = await fetchImpl(`${this.baseUrl}${path}`, {
         headers: { Authorization: `Bearer ${this.config.secretKey}` },
       });
     } catch (error) {
-      throw new NangoClientError('REQUEST_FAILED', null, { cause: error });
+      throw new NangoClientError('REQUEST_FAILED', null, operation, { cause: error });
     }
 
     if (!response.ok) {
-      const code = response.status === 424 ? 'INVALID_CREDENTIALS' : 'REQUEST_FAILED';
-      throw new NangoClientError(code, response.status);
+      const code: NangoErrorCode =
+        response.status === 401
+          ? 'INVALID_API_KEY'
+          : response.status === 403
+            ? 'INSUFFICIENT_PERMISSIONS'
+            : response.status === 404
+              ? 'ENDPOINT_NOT_FOUND'
+              : response.status === 424
+                ? 'INVALID_CREDENTIALS'
+                : 'REQUEST_FAILED';
+      throw new NangoClientError(code, response.status, operation);
     }
 
     try {
       return await response.json();
     } catch (error) {
-      throw new NangoClientError('INVALID_RESPONSE', response.status, { cause: error });
+      throw new NangoClientError('INVALID_RESPONSE', response.status, operation, { cause: error });
     }
   }
 
-  private parse<T extends z.ZodTypeAny>(schema: T, payload: unknown): z.output<T> {
+  private parse<T extends z.ZodTypeAny>(
+    schema: T,
+    payload: unknown,
+    operation: NangoOperation,
+  ): z.output<T> {
     const result = schema.safeParse(payload);
     if (!result.success) {
-      throw new NangoClientError('INVALID_RESPONSE', 200, { cause: result.error });
+      throw new NangoClientError('INVALID_RESPONSE', 200, operation, { cause: result.error });
     }
     return result.data;
   }

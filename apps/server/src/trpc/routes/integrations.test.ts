@@ -39,4 +39,17 @@ describe('administrator integrations router', () => {
       }),
     );
   });
+
+  it('preserves safe Nango operation details for the administrator client', () => {
+    expect(() =>
+      mapIntegrationError(
+        new NangoIntegrationError('NANGO_INSUFFICIENT_PERMISSIONS', 'list_integrations', 403),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'PRECONDITION_FAILED',
+        message: 'NANGO_INSUFFICIENT_PERMISSIONS|list_integrations|403',
+      }),
+    );
+  });
 });

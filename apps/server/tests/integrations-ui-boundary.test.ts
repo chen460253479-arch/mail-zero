@@ -1,6 +1,6 @@
+import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
 
 const root = resolve(process.cwd(), '../..');
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
@@ -22,5 +22,12 @@ describe('administrator integrations UI boundary', () => {
       const source = read(file);
       expect(source).not.toMatch(/encryptedSecret|encryptedPayload|accessToken|refreshToken/);
     }
+  });
+
+  it('does not report post-save refresh failures as Nango validation failures', () => {
+    const source = read('apps/mail/components/integrations/nango-settings-card.tsx');
+    expect(source.indexOf('getNangoValidationErrorMessage(error)')).toBeLessThan(
+      source.indexOf('await onChanged()'),
+    );
   });
 });
