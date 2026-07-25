@@ -122,6 +122,7 @@ export interface EmailRecord extends EmailContentRecord {
   threadId: ThreadId;
   blobId: BlobId | null;
   messageId: string | null;
+  replyToEmailId: EmailId | null;
   inReplyTo: string[];
   references: string[];
   subject: string;

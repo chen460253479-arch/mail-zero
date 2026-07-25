@@ -608,6 +608,7 @@ export async function importEmail(
         threadId: thread.threadId,
         blobId: rawBlobId,
         messageId: parsed.messageId,
+        replyToEmailId: null,
         inReplyTo: parsed.inReplyTo,
         references: parsed.references,
         subject: parsed.subject,

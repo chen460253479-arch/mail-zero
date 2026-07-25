@@ -34,6 +34,7 @@ export class MemoryBlobStore implements BlobStore {
   private nextTemporaryKey = 1;
   private readonly corruptOnCommit: 'sha256' | 'size' | undefined;
   private failCommit: boolean;
+  private failCommitAfterPromotion = false;
 
   constructor(options: MemoryBlobStoreOptions = {}) {
     this.corruptOnCommit = options.corruptOnCommit;
@@ -88,6 +89,10 @@ export class MemoryBlobStore implements BlobStore {
     }
     this.objects.set(input.objectKey, committed);
     this.temporary.delete(input.temporaryKey);
+    if (this.failCommitAfterPromotion) {
+      this.failCommitAfterPromotion = false;
+      throw new Error('blob commit acknowledgement lost');
+    }
     return {
       objectKey: input.objectKey,
       created: true,
@@ -119,6 +124,10 @@ export class MemoryBlobStore implements BlobStore {
 
   setFailCommit(fail: boolean): void {
     this.failCommit = fail;
+  }
+
+  failNextCommitAfterPromotion(): void {
+    this.failCommitAfterPromotion = true;
   }
 
   snapshot(): ReadonlyMap<string, Uint8Array> {

@@ -634,6 +634,7 @@ export const createMemoryMailInspector = (
         threadId: `seed-thread-${suffix}` as ThreadId,
         blobId: null,
         messageId: null,
+        replyToEmailId: null,
         inReplyTo: [],
         references: [],
         subject: '',
