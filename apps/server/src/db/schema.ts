@@ -403,3 +403,5 @@ export const emailTemplate = createTable(
     unique('mail0_email_template_user_id_name_unique').on(t.userId, t.name),
   ],
 );
+
+export * from '../modules/mail/postgres/schema';

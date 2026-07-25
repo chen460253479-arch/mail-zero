@@ -1,0 +1,45 @@
+import { sql } from 'drizzle-orm';
+import { bigint, boolean, index, text, timestamp, unique, uniqueIndex } from 'drizzle-orm/pg-core';
+
+import { connection, user } from '../../../../db/schema';
+import { createMailTable } from '../table';
+
+export const mailAccount = createMailTable(
+  'mail_account',
+  {
+    id: text('id').primaryKey(),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connection.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    status: text('status').$type<'active' | 'suspended' | 'deleting'>().notNull().default('active'),
+    stateVersion: bigint('state_version', { mode: 'bigint' }).notNull().default(sql`0`),
+    timezone: text('timezone').notNull().default('UTC'),
+    storageQuotaBytes: bigint('storage_quota_bytes', { mode: 'bigint' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('mail_account_connection_id_uidx').on(t.connectionId),
+    index('mail_account_user_id_idx').on(t.userId),
+  ],
+);
+
+export const mailIdentity = createMailTable(
+  'mail_identity',
+  {
+    id: text('id').primaryKey(),
+    mailAccountId: text('mail_account_id')
+      .notNull()
+      .references(() => mailAccount.id, { onDelete: 'cascade' }),
+    name: text('name'),
+    email: text('email').notNull(),
+    replyTo: text('reply_to'),
+    isDefault: boolean('is_default').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('mail_identity_id_account_uidx').on(t.id, t.mailAccountId)],
+);
