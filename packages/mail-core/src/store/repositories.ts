@@ -1,0 +1,387 @@
+import type {
+  BlobId,
+  EmailId,
+  EmailSubmissionId,
+  IdentityId,
+  Keyword,
+  MailAccountId,
+  MailAddress,
+  MailboxId,
+  MailboxKind,
+  MailboxRole,
+  ThreadId,
+} from '../types';
+
+export type AccountStatus = 'active' | 'suspended' | 'deleting';
+export type EmailLifecycle = 'draft' | 'received' | 'sent';
+export type BlobStatus = 'pending' | 'ready' | 'deleting';
+export type SubmissionStatus =
+  | 'scheduled'
+  | 'queued'
+  | 'sending'
+  | 'retry_wait'
+  | 'sent'
+  | 'failed'
+  | 'canceled';
+export type SubmissionAttemptOutcome =
+  | 'sent'
+  | 'transient_failure'
+  | 'permanent_failure';
+export type ChangeCollection =
+  | 'mailbox'
+  | 'email'
+  | 'thread'
+  | 'identity'
+  | 'email_submission';
+export type ChangeType = 'created' | 'updated' | 'destroyed';
+
+export interface MailAccountRecord {
+  id: MailAccountId;
+  userId: string;
+  connectionId: string;
+  status: AccountStatus;
+  stateVersion: bigint;
+  timezone: string;
+  storageQuotaBytes: bigint | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type InsertMailAccount = Pick<
+  MailAccountRecord,
+  'id' | 'userId' | 'connectionId'
+> &
+  Partial<
+    Pick<
+      MailAccountRecord,
+      | 'status'
+      | 'stateVersion'
+      | 'timezone'
+      | 'storageQuotaBytes'
+      | 'createdAt'
+      | 'updatedAt'
+    >
+  >;
+
+export interface MailboxRecord {
+  id: MailboxId;
+  accountId: MailAccountId;
+  parentId: MailboxId | null;
+  name: string;
+  normalizedName: string;
+  kind: MailboxKind;
+  role: MailboxRole | null;
+  color: string | null;
+  sortOrder: number;
+  isSubscribed: boolean;
+  totalEmails: number;
+  unreadEmails: number;
+  totalThreads: number;
+  unreadThreads: number;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: Date | null;
+}
+
+export interface BlobRecord {
+  id: BlobId;
+  accountId: MailAccountId;
+  sha256: string;
+  sizeBytes: bigint;
+  contentType: string;
+  objectKey: string;
+  status: BlobStatus;
+  createdAt: Date;
+  readyAt: Date | null;
+  deletedAt: Date | null;
+}
+
+export interface ThreadRecord {
+  id: ThreadId;
+  accountId: MailAccountId;
+  normalizedSubject: string;
+  latestReceivedAt: Date;
+  emailCount: number;
+  unreadCount: number;
+  hasAttachment: boolean;
+  participantSummary: string | null;
+  preview: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface EmailPartRecord {
+  id: string;
+  parentPartId: string | null;
+  partPath: string;
+  contentType: string;
+  charset: string | null;
+  disposition: 'inline' | 'attachment' | null;
+  filename: string | null;
+  contentId: string | null;
+  blobId: BlobId | null;
+  sizeBytes: bigint;
+  kind: 'body' | 'inline' | 'attachment';
+}
+
+export interface EmailRecord {
+  id: EmailId;
+  accountId: MailAccountId;
+  threadId: ThreadId;
+  blobId: BlobId | null;
+  messageId: string | null;
+  inReplyTo: string[];
+  references: string[];
+  subject: string;
+  preview: string;
+  sentAt: Date | null;
+  receivedAt: Date;
+  sizeBytes: bigint;
+  hasAttachment: boolean;
+  lifecycle: EmailLifecycle;
+  draftRevision: number;
+  createdAt: Date;
+  updatedAt: Date;
+  destroyedAt: Date | null;
+  sender: MailAddress[];
+  from: MailAddress[];
+  replyTo: MailAddress[];
+  to: MailAddress[];
+  cc: MailAddress[];
+  bcc: MailAddress[];
+  textBlobId: BlobId | null;
+  htmlBlobId: BlobId | null;
+  parserVersion: number;
+  parseWarnings: string[];
+  parts: EmailPartRecord[];
+  mailboxIds: MailboxId[];
+  restoreMailboxIds: MailboxId[];
+  keywords: Keyword[];
+}
+
+export interface RemoteEmailRecord {
+  accountId: MailAccountId;
+  provider: string;
+  remoteEmailId: string;
+  remoteThreadId: string | null;
+  emailId: EmailId;
+  contentFingerprint: string;
+  firstSeenAt: Date;
+  lastSeenAt: Date;
+}
+
+export interface IdentityRecord {
+  id: IdentityId;
+  accountId: MailAccountId;
+  name: string | null;
+  email: string;
+  replyTo: string | null;
+  isDefault: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SubmissionRecord {
+  id: EmailSubmissionId;
+  accountId: MailAccountId;
+  emailId: EmailId;
+  identityId: IdentityId;
+  status: SubmissionStatus;
+  sendAt: Date;
+  idempotencyKey: string;
+  draftRevision: number;
+  attemptCount: number;
+  nextAttemptAt: Date | null;
+  providerMessageId: string | null;
+  lastErrorCode: string | null;
+  lastErrorMessage: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  sentAt: Date | null;
+}
+
+export interface SubmissionAttemptRecord {
+  id: string;
+  accountId: MailAccountId;
+  submissionId: EmailSubmissionId;
+  attemptNumber: number;
+  startedAt: Date;
+  finishedAt: Date | null;
+  outcome: SubmissionAttemptOutcome | null;
+  providerCode: string | null;
+  safeResponse: string | null;
+  retryAt: Date | null;
+}
+
+export interface MailChangeRecord {
+  accountId: MailAccountId;
+  stateVersion: bigint;
+  collection: ChangeCollection;
+  entityId: string;
+  changeType: ChangeType;
+  changedProperties: string[] | null;
+  createdAt: Date;
+}
+
+type MutableFields<RecordType, Immutable extends keyof RecordType> = Partial<
+  Omit<RecordType, Immutable>
+>;
+
+export interface AccountRepository {
+  findById(id: MailAccountId): Promise<MailAccountRecord | null>;
+  findByConnectionId(connectionId: string): Promise<MailAccountRecord | null>;
+  insert(input: InsertMailAccount): Promise<MailAccountRecord>;
+  update(
+    id: MailAccountId,
+    patch: MutableFields<MailAccountRecord, 'id'>,
+  ): Promise<MailAccountRecord>;
+}
+
+export interface MailboxRepository {
+  findById(
+    accountId: MailAccountId,
+    id: MailboxId,
+  ): Promise<MailboxRecord | null>;
+  findByRole(
+    accountId: MailAccountId,
+    role: MailboxRole,
+  ): Promise<MailboxRecord | null>;
+  findByNormalizedName(
+    accountId: MailAccountId,
+    parentId: MailboxId | null,
+    normalizedName: string,
+  ): Promise<MailboxRecord | null>;
+  listByAccount(accountId: MailAccountId): Promise<MailboxRecord[]>;
+  insert(record: MailboxRecord): Promise<MailboxRecord>;
+  update(
+    accountId: MailAccountId,
+    id: MailboxId,
+    patch: MutableFields<MailboxRecord, 'id' | 'accountId'>,
+  ): Promise<MailboxRecord>;
+  delete(accountId: MailAccountId, id: MailboxId): Promise<void>;
+}
+
+export interface BlobRepository {
+  findById(accountId: MailAccountId, id: BlobId): Promise<BlobRecord | null>;
+  findByDigest(
+    accountId: MailAccountId,
+    sha256: string,
+    sizeBytes: bigint,
+  ): Promise<BlobRecord | null>;
+  listByAccount(accountId: MailAccountId): Promise<BlobRecord[]>;
+  insert(record: BlobRecord): Promise<BlobRecord>;
+  update(
+    accountId: MailAccountId,
+    id: BlobId,
+    patch: MutableFields<BlobRecord, 'id' | 'accountId'>,
+  ): Promise<BlobRecord>;
+  delete(accountId: MailAccountId, id: BlobId): Promise<void>;
+}
+
+export interface ThreadRepository {
+  findById(
+    accountId: MailAccountId,
+    id: ThreadId,
+  ): Promise<ThreadRecord | null>;
+  listByAccount(accountId: MailAccountId): Promise<ThreadRecord[]>;
+  insert(record: ThreadRecord): Promise<ThreadRecord>;
+  update(
+    accountId: MailAccountId,
+    id: ThreadId,
+    patch: MutableFields<ThreadRecord, 'id' | 'accountId'>,
+  ): Promise<ThreadRecord>;
+  delete(accountId: MailAccountId, id: ThreadId): Promise<void>;
+}
+
+export interface FindRemoteEmailInput {
+  accountId: MailAccountId;
+  provider: string;
+  remoteEmailId: string;
+}
+
+export interface EmailRepository {
+  findById(accountId: MailAccountId, id: EmailId): Promise<EmailRecord | null>;
+  findByRemoteId(input: FindRemoteEmailInput): Promise<RemoteEmailRecord | null>;
+  listByAccount(accountId: MailAccountId): Promise<EmailRecord[]>;
+  listByThread(
+    accountId: MailAccountId,
+    threadId: ThreadId,
+  ): Promise<EmailRecord[]>;
+  insert(record: EmailRecord): Promise<EmailRecord>;
+  update(
+    accountId: MailAccountId,
+    id: EmailId,
+    patch: MutableFields<EmailRecord, 'id' | 'accountId'>,
+  ): Promise<EmailRecord>;
+  linkRemote(record: RemoteEmailRecord): Promise<RemoteEmailRecord>;
+  replaceMailboxes(
+    accountId: MailAccountId,
+    emailId: EmailId,
+    mailboxIds: MailboxId[],
+  ): Promise<void>;
+  replaceKeywords(
+    accountId: MailAccountId,
+    emailId: EmailId,
+    keywords: Keyword[],
+  ): Promise<void>;
+  replaceRestoreMailboxes(
+    accountId: MailAccountId,
+    emailId: EmailId,
+    mailboxIds: MailboxId[],
+  ): Promise<void>;
+  delete(accountId: MailAccountId, id: EmailId): Promise<void>;
+}
+
+export interface IdentityRepository {
+  findById(
+    accountId: MailAccountId,
+    id: IdentityId,
+  ): Promise<IdentityRecord | null>;
+  listByAccount(accountId: MailAccountId): Promise<IdentityRecord[]>;
+  insert(record: IdentityRecord): Promise<IdentityRecord>;
+  update(
+    accountId: MailAccountId,
+    id: IdentityId,
+    patch: MutableFields<IdentityRecord, 'id' | 'accountId'>,
+  ): Promise<IdentityRecord>;
+  delete(accountId: MailAccountId, id: IdentityId): Promise<void>;
+}
+
+export interface SubmissionRepository {
+  findById(
+    accountId: MailAccountId,
+    id: EmailSubmissionId,
+  ): Promise<SubmissionRecord | null>;
+  findByIdempotencyKey(
+    accountId: MailAccountId,
+    idempotencyKey: string,
+  ): Promise<SubmissionRecord | null>;
+  listByIdentity(
+    accountId: MailAccountId,
+    identityId: IdentityId,
+  ): Promise<SubmissionRecord[]>;
+  insert(record: SubmissionRecord): Promise<SubmissionRecord>;
+  update(
+    accountId: MailAccountId,
+    id: EmailSubmissionId,
+    patch: MutableFields<SubmissionRecord, 'id' | 'accountId'>,
+  ): Promise<SubmissionRecord>;
+  recordAttempt(record: SubmissionAttemptRecord): Promise<void>;
+  listAttempts(
+    accountId: MailAccountId,
+    submissionId: EmailSubmissionId,
+  ): Promise<SubmissionAttemptRecord[]>;
+}
+
+export interface QueryChangesInput {
+  accountId: MailAccountId;
+  collection?: ChangeCollection;
+  afterState?: bigint;
+  throughState?: bigint;
+  limit?: number;
+}
+
+export interface ChangeRepository {
+  recordChange(record: MailChangeRecord): Promise<void>;
+  queryChanges(input: QueryChangesInput): Promise<MailChangeRecord[]>;
+}
