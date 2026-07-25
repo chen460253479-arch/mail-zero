@@ -2,24 +2,13 @@ import type { CreateIdentityInput, DestroyIdentityInput, UpdateIdentityInput } f
 import type { IdentityRecord, MailCoreDependencies } from '../store';
 import type { IdentityId } from '../types';
 import { MailCoreError } from '../types';
+import { z } from 'zod';
 
-const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+const identityEmailSchema = z.string().email();
 
 const normalizeEmail = (email: string): string => {
   const normalized = email.trim().normalize('NFC').toLocaleLowerCase('und');
-  const [localPart, domain, extraPart] = normalized.split('@');
-  if (
-    !validEmail.test(normalized) ||
-    localPart === undefined ||
-    domain === undefined ||
-    extraPart !== undefined ||
-    localPart.startsWith('.') ||
-    localPart.endsWith('.') ||
-    localPart.includes('..') ||
-    domain.startsWith('.') ||
-    domain.endsWith('.') ||
-    domain.includes('..')
-  ) {
+  if (!identityEmailSchema.safeParse(normalized).success) {
     throw new MailCoreError('INVALID_EMAIL');
   }
   return normalized;

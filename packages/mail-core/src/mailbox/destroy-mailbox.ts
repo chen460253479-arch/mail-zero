@@ -15,6 +15,11 @@ export async function destroyMailbox(
         entityId: input.mailboxId,
       });
     }
+    if (mailbox.kind === 'system') {
+      throw new MailCoreError('MAILBOX_ROLE_CONFLICT', {
+        entityId: input.mailboxId,
+      });
+    }
     if (
       (await tx.mailboxes.listByAccount(input.accountId)).some(
         (candidate) => candidate.parentId === mailbox.id,

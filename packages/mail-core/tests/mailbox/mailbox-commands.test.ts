@@ -77,13 +77,42 @@ describe('Mailbox commands', () => {
         mailboxId: parent.id,
       }),
     ).rejects.toMatchObject({ code: 'MAILBOX_HAS_CHILD' });
-    await deps.inspect.seedMailboxEmail(inbox.id);
+    const mailboxWithEmail = await createMailbox(deps, {
+      accountId: account.id,
+      name: 'With email',
+      kind: 'folder',
+      role: null,
+      parentId: null,
+    });
+    await deps.inspect.seedMailboxEmail(mailboxWithEmail.id);
     await expect(
       destroyMailbox(deps, {
         accountId: account.id,
-        mailboxId: inbox.id,
+        mailboxId: mailboxWithEmail.id,
       }),
     ).rejects.toMatchObject({ code: 'MAILBOX_HAS_EMAIL' });
+  });
+
+  it('rejects destroying an empty system Mailbox', async () => {
+    const deps = createMemoryMailCoreDependencies();
+    const account = await createMailAccount(deps, {
+      userId: 'user-1',
+      connectionId: 'connection-1',
+      timezone: 'UTC',
+      storageQuotaBytes: null,
+    });
+    const archive = (await deps.inspect.mailboxes(account.id)).find(
+      ({ role }) => role === 'archive',
+    )!;
+
+    await expect(
+      destroyMailbox(deps, {
+        accountId: account.id,
+        mailboxId: archive.id,
+      }),
+    ).rejects.toMatchObject({ code: 'MAILBOX_ROLE_CONFLICT' });
+    expect(await deps.inspect.mailbox(archive.id)).not.toBeNull();
+    expect(await deps.inspect.stateVersion(account.id)).toBe(1n);
   });
 
   it('renames and reparents custom folders and labels within one account', async () => {

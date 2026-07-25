@@ -133,6 +133,48 @@ describe('MailAccount commands', () => {
     });
   });
 
+  it('rejects malformed Identity addresses while retaining common plus tags', async () => {
+    const deps = createMemoryMailCoreDependencies();
+    const account = await createMailAccount(deps, {
+      userId: 'user-1',
+      connectionId: 'connection-1',
+      timezone: 'UTC',
+      storageQuotaBytes: null,
+    });
+
+    await expect(
+      createIdentity(deps, {
+        accountId: account.id,
+        name: 'Malformed primary',
+        email: 'foo<bar@example.com',
+        replyTo: null,
+        makeDefault: false,
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_EMAIL' });
+    await expect(
+      createIdentity(deps, {
+        accountId: account.id,
+        name: 'Malformed reply-to',
+        email: 'valid@example.test',
+        replyTo: 'user@bad_domain.example',
+        makeDefault: false,
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_EMAIL' });
+
+    await expect(
+      createIdentity(deps, {
+        accountId: account.id,
+        name: 'Plus tag',
+        email: ' USER+Receipts@Example.TEST ',
+        replyTo: ' REPLY+LIST@Example.TEST ',
+        makeDefault: false,
+      }),
+    ).resolves.toMatchObject({
+      email: 'user+receipts@example.test',
+      replyTo: 'reply+list@example.test',
+    });
+  });
+
   it('sets a new default atomically and does not allocate state for a no-op', async () => {
     const deps = createMemoryMailCoreDependencies();
     const account = await createMailAccount(deps, {
