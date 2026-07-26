@@ -6,14 +6,14 @@
 
 ## 1. 目标
 
-本项目修复本地邮箱内核完成后发现的数据库可重复性、约束、索引、多账户作用域
+本项目修复本地邮箱内核完成后发现的数据库初始化安全、约束、索引、多账户作用域
 和插件连接模型问题，使 Zero 在开始 Gmail 入栈同步前具备稳定、可扩展的数据库
 基础。
 
 修复完成后必须满足：
 
 - 全新开发数据库可以通过 `db:push` 或唯一基线迁移初始化。
-- 同一数据库可以连续执行 `db:push`，且第二次及后续执行不产生结构变更。
+- `db:push` 在发现已有 Zero 业务结构时必须先提示，由用户选择取消或清空重建。
 - Drizzle 或 PostgreSQL 报错时，数据库命令必须返回非零退出码。
 - `mail` 数据模型保持服务商无关，并继续以本地 Email、Mailbox、Thread、
   Keyword、Draft、Trash、Submission 和 Changes 为权威状态。
@@ -82,41 +82,52 @@ SMTP/MX、短期 Message DB 和事务邮件模型不进入本项目。
 
 项目拆分为三个顺序执行、独立验收的批次。三个批次全部完成才算方案 A 完成。
 
-### 4.1 批次一：数据库可重复性、约束与索引
+### 4.1 批次一：安全初始化、约束与索引
 
-#### 4.1.1 `db:push` 可重复性
+#### 4.1.1 受保护的 `db:push`
 
-首先增加临时 PostgreSQL 数据库回归测试：
+Zero 将项目级 `db:push` 定位为开发期初始化/重建命令，不再把 Drizzle 原生
+`push` 当作已有数据库的增量迁移机制。
 
-1. 在空数据库执行第一次 `db:push`。
-2. 保存全部业务 Schema、列、约束和索引目录快照。
-3. 在同一数据库连续执行第二次和第三次 `db:push`。
-4. 每次执行后重新读取目录，断言结构不变。
-5. 注入一个确定的 PostgreSQL/Drizzle 失败，断言命令返回非零退出码。
+执行流程：
+
+1. 解析并显示目标数据库的主机、端口和数据库名，不显示用户名、密码或其他
+   凭据。
+2. 检查 `auth`、`app`、`integration`、`mail` 四个业务 Schema 是否已经存在
+   Zero 表。
+3. 如果不存在 Zero 表，直接调用 Drizzle `push` 初始化。
+4. 如果已经存在 Zero 表，显示各 Schema 的表数量和将被删除的范围。
+5. 交互终端要求用户选择取消或清空重建；默认选择必须是取消。
+6. 用户取消时不执行任何 DDL，并以成功的“未变更”结果结束。
+7. 用户确认时删除并重建四个业务 Schema，同时清理对应的
+   `drizzle.__drizzle_migrations` 开发基线记录，然后从声明模型重新初始化。
+8. 非交互环境禁止等待输入或自动删除；必须同时提供显式重建参数和确认参数才
+   能执行，例如 `--reset --yes`，否则返回非零退出码。
+9. `NODE_ENV=production` 时无条件拒绝清空重建参数；生产数据库只能使用经过
+   审核的 `db:migrate`。
 
 生产修复包括：
 
 - 所有主键、唯一约束、检查约束和外键使用不超过 PostgreSQL 63 字节限制的
   显式稳定名称。
-- 修复 `email_part` 自引用外键与候选唯一键在 Drizzle 目录比较中的结构漂移，
-  但继续由数据库保证父 Part 与子 Part 同属一个 Account 和 Email。
+- `email_part` 自引用外键继续保证父 Part 与子 Part 同属一个 Account 和
+  Email；不为了支持已有数据库的重复 `push` 改写这一正确语义。
 - `writing_style_matrix` 等当前由工具自动命名的主键改用显式名称。
 - `authorization_binding`、`channel_mapping`、`connection` 等自动生成的长唯一
   约束改用短名称。
-- 项目 `db:push` 命令增加错误传播包装：子进程非零、Drizzle 错误块或
-  PostgreSQL 错误均视为失败；成功后执行目录一致性验证。
-
-若 Drizzle 对合法的复合自引用外键仍持续产生虚假变更，保留数据库约束语义，
-通过等价的显式 SQL 基线和项目级目录验证解决工具问题，不允许删除账户/邮件
-隔离约束来迎合工具。
+- 项目 `db:push` 命令负责传播错误：子进程非零、Drizzle 错误块或 PostgreSQL
+  错误均视为失败，不得报告初始化成功。
+- 清空动作只允许作用于上述业务 Schema 和 Drizzle 开发基线元数据，不执行
+  `DROP DATABASE`，不删除其他 Schema、扩展或数据库对象。
 
 #### 4.1.2 主键和逻辑身份
 
-- `integration.remote_email` 使用
-  `(mail_account_id, provider, remote_email_id)` 作为正式复合主键，而不是只有
-  普通唯一索引。
-- `mail.submission_blob` 使用
-  `(mail_account_id, submission_id, kind, position)` 作为正式复合主键。
+- `integration.remote_email` 现有
+  `(mail_account_id, provider, remote_email_id)` 唯一索引已经提供可靠逻辑
+  身份，本项目不因形式上没有主键而强制改型。
+- `mail.submission_blob` 现有
+  `(mail_account_id, submission_id, kind, position)` 唯一约束已经提供可靠
+  逻辑身份，本项目不因形式上没有主键而强制改型。
 - 不为纯关系表无意义地增加随机代理键。
 - 所有实体表继续保留稳定本地 ID；Provider ID 不能成为 `mail.email`、
   `mail.thread` 或 `mail.mailbox` 的主键。
@@ -286,6 +297,9 @@ Connection 删除继续级联清理 Authorization Binding、本地 Mail Account 
 ## 6. 错误处理
 
 - 数据库初始化或推送出现任何 PostgreSQL 错误时立即失败并返回非零退出码。
+- 已有 Zero 结构的数据库在用户确认前不得执行删除、修改或重建。
+- 非交互环境缺少 `--reset --yes` 时必须拒绝清空；生产环境即使提供该参数也
+  必须拒绝。
 - 约束冲突必须保留 PostgreSQL 原始诊断供日志使用，对外转换为安全的领域错误。
 - 插件不支持某种认证类型时，在连接创建阶段拒绝，不能写入半有效连接。
 - 外键删除失败必须由维护命令报告具体引用表，不自动关闭约束或级联删除范围。
@@ -306,7 +320,11 @@ Connection 删除继续级联清理 Authorization Binding、本地 Mail Account 
 
 每个测试使用独立临时 Database，结束后关闭连接并删除 Database：
 
-- 连续三次 `db:push` 目录不变。
+- 空数据库执行 `db:push` 后得到完整目标结构。
+- 已有 Zero 结构时默认进入取消路径，数据库目录和数据保持不变。
+- 交互确认重建后旧结构和测试数据被清除，并得到完整目标结构。
+- 非交互环境缺少显式参数时拒绝清空。
+- `NODE_ENV=production` 时拒绝清空。
 - `db:push` 与 `db:migrate` 的 Schema、表、列、默认值、约束、索引和外键
   等价。
 - 强制失败返回非零退出码。
@@ -338,7 +356,8 @@ pnpm --filter=@zero/mail-core typecheck
 针对本轮文件的 Server TypeScript/ESLint 检查
 显式 PostgreSQL 规模测试
 pnpm db:generate
-临时库连续三次 pnpm --dir apps/server db:push
+临时空库执行 pnpm --dir apps/server db:push
+临时已有库分别验证取消和确认重建
 临时库 pnpm --dir apps/server db:migrate
 pnpm build
 git diff --check
@@ -374,7 +393,8 @@ git diff --check
 只有同时满足以下条件才能声明本项目完成：
 
 - 三个修复批次全部具有红灯、绿灯和回归证据。
-- 重复 `db:push` 不再失败或产生漂移，错误退出码可靠。
+- `db:push` 能区分空库和已有库，取消、确认重建、非交互拒绝和生产拒绝行为
+  全部正确，错误退出码可靠。
 - 所有确认的高风险外键和查询路径具有有效索引。
 - Summary、Note 和 Connection 的账户/连接作用域测试通过。
 - 插件连接模型可以表达 OAuth 与 Basic/IMAP/SMTP。
