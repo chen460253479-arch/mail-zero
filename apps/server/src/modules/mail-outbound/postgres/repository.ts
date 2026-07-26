@@ -113,6 +113,7 @@ export interface MailOutboundRepository {
   findById(deliveryId: string): Promise<OutboundDeliveryRecord | null>;
   findBySubmission(accountId: string, submissionId: string): Promise<OutboundDeliveryRecord | null>;
   listDue(input: { now: Date; limit: number }): Promise<string[]>;
+  listDueUncertain(input: { now: Date; limit: number }): Promise<string[]>;
   claimById(input: ClaimDeliveryInput): Promise<ClaimedDelivery | null>;
   recoverExpiredLeases(input: { now: Date; limit: number }): Promise<string[]>;
   loadMessage(input: LeaseIdentity): Promise<OutboundMessageSnapshot>;
@@ -222,7 +223,7 @@ const clearLease = {
   leaseExpiresAt: null,
 } as const;
 
-const dueStatuses: OutboundDeliveryStatus[] = ['scheduled', 'ready', 'retry_wait', 'uncertain'];
+const dueStatuses: OutboundDeliveryStatus[] = ['scheduled', 'ready', 'retry_wait'];
 
 export const createMailOutboundRepository = (
   db: MailDatabase,
@@ -296,6 +297,20 @@ export const createMailOutboundRepository = (
               inArray(outboundDelivery.status, dueStatuses),
               lte(outboundDelivery.availableAt, now),
             ),
+          )
+          .orderBy(asc(outboundDelivery.availableAt), asc(outboundDelivery.id))
+          .limit(limit)
+      ).map(({ id }) => id);
+    }),
+  listDueUncertain: ({ now, limit }) =>
+    runOutboundAdapter(async () => {
+      requirePositiveLimit(limit);
+      return (
+        await db
+          .select({ id: outboundDelivery.id })
+          .from(outboundDelivery)
+          .where(
+            and(eq(outboundDelivery.status, 'uncertain'), lte(outboundDelivery.availableAt, now)),
           )
           .orderBy(asc(outboundDelivery.availableAt), asc(outboundDelivery.id))
           .limit(limit)

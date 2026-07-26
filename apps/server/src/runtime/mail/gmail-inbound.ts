@@ -7,31 +7,18 @@ import {
   processMailIngressCommand,
   type MailIngressRuntime,
 } from '../../modules/mail-sync/runtime/create-mail-sync';
-import {
-  authorizationBinding,
-  connection,
-  inboundSync,
-  mailAccount,
-  mailbox,
-} from '../../db/schema';
-import { readGmailOAuthRuntimeConfig } from '../../modules/mail-accounts/application/connect-gmail-oauth';
 import { createPostgresMailSyncRepository } from '../../modules/mail-sync/postgres/sync-repository';
 import { bootstrapLocalMailAccount } from '../../modules/mail-sync/application/bootstrap-account';
-import { createNangoCredentialRepository } from '../../modules/mail-accounts/credentials/nango';
-import { resolveConnectionCredential } from '../../modules/mail-accounts/credentials/resolve';
 import { PostgresMailUnitOfWork } from '../../modules/mail/postgres/postgres-unit-of-work';
-import { createGoogleGmailApiExecutor } from '../../mail-channel/gmail/shared/google-api';
 import type { MailIngressCommand } from '../../modules/mail-sync/application/commands';
-import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import type { IngressScope } from '../../modules/mail-sync/domain/ingress-adapter';
 import { activateInboundSync } from '../../modules/mail-sync/application/activate';
-import { NangoIntegrationService } from '../../integrations/nango/service';
-import { createCredentialAwareGmailExecutor } from './gmail-api-executor';
+import { connection, inboundSync, mailAccount, mailbox } from '../../db/schema';
+import { createGmailCredentialContext } from './gmail-credential-context';
 import { defaultMailChannelRegistry } from '../../mail-channel/registry';
 import { createMailCoreRuntime, R2BlobStore } from '../../modules/mail';
 import { createGmailPlugin } from '../../mail-channel/gmail/plugin';
 import { preprocessEmailHtml } from '../../lib/email-processor';
-import { NangoClient } from '../../integrations/nango/client';
 import { createDb, type DB } from '../../db';
 import type { ZeroEnv } from '../../env';
 
@@ -41,87 +28,17 @@ const INBOX_SCOPE: IngressScope = {
   initialSync: 'none',
 };
 
-const getAuthErrorCode = (error: unknown): string => {
-  const candidate = error as {
-    code?: string | number;
-    response?: { status?: string | number };
-  };
-  return String(candidate.code ?? candidate.response?.status ?? '');
-};
-
-const findConnection = async (db: DB, connectionId: string) => {
-  const [record] = await db
-    .select({ connection, authorization: authorizationBinding })
-    .from(connection)
-    .leftJoin(authorizationBinding, eq(authorizationBinding.connectionId, connection.id))
-    .where(eq(connection.id, connectionId))
-    .limit(1);
-  if (record === undefined) throw new Error('Mailbox connection was not found');
-  return record;
-};
-
-const createNangoResolver = async (db: DB, runtimeEnv: ZeroEnv) => {
-  const service = new NangoIntegrationService({
-    repository: createSystemIntegrationRepository(db),
-    encryptionKey: runtimeEnv.CREDENTIAL_ENCRYPTION_KEY,
-    createClient: (config) => new NangoClient({ ...config, fetch }),
-    now: () => new Date(),
-  });
-  const config = await service.getRuntimeConfig();
-  return {
-    client: new NangoClient({ ...config, fetch }),
-    repository: createNangoCredentialRepository(db),
-  };
-};
-
 const createAdapterFactory = (db: DB, runtimeEnv: ZeroEnv) => ({
   create: async (connectionId: string) => {
-    const record = await findConnection(db, connectionId);
-    if (record.connection.channelId !== 'gmail') {
-      throw new Error(`Connection channel ${record.connection.channelId} is not Gmail`);
-    }
-    const nango =
-      record.authorization?.authSource === 'nango'
-        ? await createNangoResolver(db, runtimeEnv)
-        : undefined;
-    const zeroOAuth =
-      record.authorization?.authSource === 'zero_oauth'
-        ? await readGmailOAuthRuntimeConfig({
-            repository: createSystemIntegrationRepository(db),
-            encryptionKey: runtimeEnv.CREDENTIAL_ENCRYPTION_KEY,
-            redirectUri: `${runtimeEnv.VITE_PUBLIC_BACKEND_URL.replace(/\/+$/u, '')}/api/integrations/gmail/connect/callback`,
-          })
-        : undefined;
-    const resolveCredential = async (forceRefresh: boolean) =>
-      await resolveConnectionCredential(
-        record,
-        runtimeEnv.CREDENTIAL_ENCRYPTION_KEY,
-        nango ? { nango: { ...nango, forceRefresh } } : {},
-      );
-    const executor = createCredentialAwareGmailExecutor({
-      resolveCredential,
-      createClient: (credential) => createGoogleGmailApiExecutor(credential, zeroOAuth),
-      invalidateCredential: async () => {
-        if (nango && record.authorization?.id) {
-          await nango.repository.invalidate(record.authorization.id);
-        }
-      },
-      markReconnectRequired: async () => {
-        await db
-          .update(connection)
-          .set({ status: 'reconnect_required', updatedAt: new Date() })
-          .where(eq(connection.id, connectionId));
-      },
-      isUnauthorized: (error) => getAuthErrorCode(error) === '401',
-    });
+    const context = await createGmailCredentialContext(db, runtimeEnv, connectionId);
     return await createGmailPlugin({
-      createExecutor: async () => executor,
+      createExecutor: async () => context.executor,
       resolveIdentity: async () => {
         throw new Error('Identity resolution is not available in the inbound runtime');
       },
     }).inbound!.createAdapter({
       connectionId,
-      credential: await resolveCredential(false),
+      credential: await context.resolveCredential(false),
     });
   },
 });

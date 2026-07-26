@@ -96,6 +96,10 @@
             "binding": "MAIL_INGRESS_QUEUE",
           },
           {
+            "queue": "mail-outbound-queue",
+            "binding": "MAIL_OUTBOUND_QUEUE",
+          },
+          {
             "queue": "send-email-queue",
             "binding": "send_email_queue",
           },
@@ -106,6 +110,11 @@
           },
           {
             "queue": "mail-ingress-queue",
+            "max_batch_size": 10,
+            "max_retries": 5,
+          },
+          {
+            "queue": "mail-outbound-queue",
             "max_batch_size": 10,
             "max_retries": 5,
           },
@@ -327,6 +336,10 @@
             "binding": "MAIL_INGRESS_QUEUE",
           },
           {
+            "queue": "mail-outbound-queue-staging",
+            "binding": "MAIL_OUTBOUND_QUEUE",
+          },
+          {
             "queue": "send-email-queue-staging",
             "binding": "send_email_queue",
           },
@@ -337,6 +350,11 @@
           },
           {
             "queue": "mail-ingress-queue-staging",
+            "max_batch_size": 10,
+            "max_retries": 5,
+          },
+          {
+            "queue": "mail-outbound-queue-staging",
             "max_batch_size": 10,
             "max_retries": 5,
           },
@@ -559,6 +577,10 @@
             "binding": "MAIL_INGRESS_QUEUE",
           },
           {
+            "queue": "mail-outbound-queue-prod",
+            "binding": "MAIL_OUTBOUND_QUEUE",
+          },
+          {
             "queue": "send-email-queue-prod",
             "binding": "send_email_queue",
           },
@@ -569,6 +591,11 @@
           },
           {
             "queue": "mail-ingress-queue-prod",
+            "max_batch_size": 10,
+            "max_retries": 5,
+          },
+          {
+            "queue": "mail-outbound-queue-prod",
             "max_batch_size": 10,
             "max_retries": 5,
           },

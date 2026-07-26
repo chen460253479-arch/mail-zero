@@ -25,6 +25,7 @@ export type ZeroEnv = {
   gmail_sub_age: KVNamespace;
   subscribe_queue: Queue;
   MAIL_INGRESS_QUEUE: Queue;
+  MAIL_OUTBOUND_QUEUE: Queue;
   AI: Ai;
   gmail_history_id: KVNamespace;
   gmail_processing_threads: KVNamespace;

@@ -31,7 +31,9 @@ import { assertAuthorizationCanBeAttached } from './modules/mail-accounts/applic
 import { enqueueDueMailIngressWork, runMailIngressCommand } from './runtime/mail/gmail-inbound';
 import { SyncThreadsCoordinatorWorkflow } from './workflows/sync-threads-coordinator-workflow';
 import { normalizeMailboxEmail } from './modules/mail-accounts/application/mailbox-identity';
+import { enqueueDueMailOutboundWork, runMailOutboundCommand } from './runtime/mail/outbound';
 import { createZeroOAuthSnapshot } from './modules/mail-accounts/credentials/zero-oauth';
+import { MailOutboundError, parseMailOutboundCommand } from './modules/mail-outbound';
 import { encryptCredential } from './infrastructure/security/credential-encryption';
 import { parseMailIngressCommand } from './modules/mail-sync/application/commands';
 import { WorkerEntrypoint, DurableObject, RpcTarget } from 'cloudflare:workers';
@@ -1273,6 +1275,29 @@ export default class Entry extends WorkerEntrypoint<ZeroEnv> {
         );
         return;
       }
+      case batch.queue.startsWith('mail-outbound-queue'): {
+        const messages = batch.messages as Message<unknown>[];
+        await Promise.all(
+          messages.map(async (message) => {
+            try {
+              const command = parseMailOutboundCommand(message.body);
+              await runMailOutboundCommand(this.env, command);
+              message.ack();
+            } catch (error) {
+              console.error('[MAIL_OUTBOUND_QUEUE] command failed', error);
+              if (
+                error instanceof TypeError ||
+                (error instanceof MailOutboundError && error.disposition === 'permanent')
+              ) {
+                message.ack();
+              } else {
+                message.retry({ delaySeconds: 60 });
+              }
+            }
+          }),
+        );
+        return;
+      }
       case batch.queue.startsWith('subscribe-queue'): {
         console.log('batch', batch);
         const messages = batch.messages as Message<{
@@ -1415,6 +1440,8 @@ export default class Entry extends WorkerEntrypoint<ZeroEnv> {
     await this.processScheduledEmails();
 
     await enqueueDueMailIngressWork(this.env);
+
+    await enqueueDueMailOutboundWork(this.env);
 
     await this.processExpiredSubscriptions();
   }

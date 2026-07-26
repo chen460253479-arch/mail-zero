@@ -229,6 +229,12 @@ describe('PostgreSQL outbound repository', () => {
         leaseToken: null,
         uncertainSince: expiredAt,
       });
+      await expect(
+        unitOfWork.run((tx) => tx.outbound.listDue({ now: expiredAt, limit: 10 })),
+      ).resolves.not.toContain('delivery-a');
+      await expect(
+        unitOfWork.run((tx) => tx.outbound.listDueUncertain({ now: expiredAt, limit: 10 })),
+      ).resolves.toEqual(['delivery-a']);
       const attempts = await db
         .select()
         .from(sendAttempt)

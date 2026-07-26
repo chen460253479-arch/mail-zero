@@ -1,5 +1,5 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, extname, relative, resolve, sep } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -10,6 +10,7 @@ const canonicalRoots = [
   'modules/mail',
   'modules/mail-accounts',
   'modules/mail-sync',
+  'modules/mail-outbound',
   'mail-channel',
   'integrations',
   'infrastructure/security',
@@ -38,7 +39,9 @@ const resolveLocalImport = (file: string, specifier: string): string | null => {
   return normalizePath(relative(srcRoot, resolve(dirname(file), specifier)));
 };
 
-const importsBelow = (root: string): Array<{ file: string; specifier: string; target: string | null }> =>
+const importsBelow = (
+  root: string,
+): Array<{ file: string; specifier: string; target: string | null }> =>
   collectTypeScriptFiles(resolve(srcRoot, root)).flatMap((file) =>
     readImports(file).map((specifier) => ({
       file: normalizePath(relative(srcRoot, file)),
@@ -95,6 +98,25 @@ describe('mail server architecture', () => {
       .filter(({ target }) => target?.includes('mail-channel/gmail'));
 
     expect(violations).toEqual([]);
+  });
+
+  it('keeps canonical outbound independent from legacy queues, KV, and providers', () => {
+    const violations = importsBelow('modules/mail-outbound').filter(
+      ({ specifier, target }) =>
+        specifier === 'cloudflare:workers' ||
+        target?.includes('mail-channel/gmail') ||
+        target?.includes('lib/driver') ||
+        target?.includes('pipelines'),
+    );
+    const legacyBindingMentions = collectTypeScriptFiles(resolve(srcRoot, 'modules/mail-outbound'))
+      .filter((file) => {
+        const source = readFileSync(file, 'utf8');
+        return source.includes('KVNamespace') || source.includes('send_email_queue');
+      })
+      .map((file) => normalizePath(relative(srcRoot, file)));
+
+    expect(violations).toEqual([]);
+    expect(legacyBindingMentions).toEqual([]);
   });
 
   it('keeps routes and tRPC independent from provider SDKs and the raw Nango client', () => {
