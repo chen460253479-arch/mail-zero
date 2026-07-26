@@ -182,12 +182,12 @@ describe('local mail schema', () => {
     expect(
       getTableConfig(schema.authorizationBinding).indexes.map(({ config }) => config.name),
     ).not.toContain('authorization_connection_id_idx');
-    expect(
-      getTableConfig(schema.summary).indexes.map(({ config }) => config.name),
-    ).not.toContain('summary_connection_id_idx');
-    expect(
-      getTableConfig(schema.summary).indexes.map(({ config }) => config.name),
-    ).not.toContain('summary_saved_idx');
+    expect(getTableConfig(schema.summary).indexes.map(({ config }) => config.name)).not.toContain(
+      'summary_connection_id_idx',
+    );
+    expect(getTableConfig(schema.summary).indexes.map(({ config }) => config.name)).not.toContain(
+      'summary_saved_idx',
+    );
     expect(getTableConfig(schema.note).indexes.map(({ config }) => config.name)).not.toContain(
       'note_user_id_idx',
     );
@@ -281,7 +281,8 @@ describe('local mail schema', () => {
         'mailIdentity',
         'emailSubmission',
         'submissionBlob',
-        'submissionAttempt',
+        'outboundDelivery',
+        'sendAttempt',
         'remoteEmail',
         'mailChange',
         'emailSearch',
@@ -416,15 +417,16 @@ describe('local mail schema', () => {
     [
       'Submission',
       schema.emailSubmission,
-      ['email_submission_status_check', 'email_submission_counters_nonnegative_check'],
+      ['email_submission_status_check', 'email_submission_draft_revision_nonnegative_check'],
     ],
     [
       'Attempt',
-      schema.submissionAttempt,
+      schema.sendAttempt,
       [
-        'submission_attempt_outcome_check',
-        'submission_attempt_number_positive_check',
-        'submission_attempt_lifecycle_check',
+        'send_attempt_kind_chk',
+        'send_attempt_outcome_chk',
+        'send_attempt_number_positive_chk',
+        'send_attempt_lifecycle_chk',
       ],
     ],
     [

@@ -159,7 +159,7 @@ export async function updateIdentity(
   });
 }
 
-const nonterminalSubmissionStatuses = new Set(['scheduled', 'queued', 'sending', 'retry_wait']);
+const nonterminalSubmissionStatuses = new Set(['scheduled', 'queued']);
 
 export async function destroyIdentity(
   dependencies: MailCoreDependencies,

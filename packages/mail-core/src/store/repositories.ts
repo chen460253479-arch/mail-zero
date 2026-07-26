@@ -12,13 +12,13 @@ import type {
   ThreadId,
 } from '../types';
 import type { EmailAggregateProjection, ReconcileMailAggregatesResult } from '../mailbox';
-import type { SubmissionAttemptOutcome, SubmissionStatus } from '../submission/types';
 import type { ChangeCollection, MailChange } from '../changes/types';
+import type { SubmissionStatus } from '../submission/types';
 
 export type AccountStatus = 'active' | 'suspended' | 'deleting';
 export type EmailLifecycle = 'draft' | 'received' | 'sent';
 export type BlobStatus = 'pending' | 'ready' | 'deleting';
-export type { SubmissionAttemptOutcome, SubmissionStatus } from '../submission/types';
+export type { SubmissionStatus } from '../submission/types';
 export type { ChangeCollection, ChangeType } from '../changes/types';
 
 export interface MailAccountRecord {
@@ -201,27 +201,12 @@ export interface SubmissionRecord {
   idempotencyKey: string;
   draftRevision: number;
   frozenBlobs: SubmissionBlobReference[];
-  attemptCount: number;
-  nextAttemptAt: Date | null;
   providerMessageId: string | null;
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
   createdAt: Date;
   updatedAt: Date;
   sentAt: Date | null;
-}
-
-export interface SubmissionAttemptRecord {
-  id: string;
-  accountId: MailAccountId;
-  submissionId: EmailSubmissionId;
-  attemptNumber: number;
-  startedAt: Date;
-  finishedAt: Date | null;
-  outcome: SubmissionAttemptOutcome | null;
-  providerCode: string | null;
-  safeResponse: string | null;
-  retryAt: Date | null;
 }
 
 export type MailChangeRecord = MailChange;
@@ -414,20 +399,6 @@ export interface SubmissionRepository {
       | 'frozenBlobs'
     >,
   ): Promise<SubmissionRecord>;
-  recordAttempt(record: SubmissionAttemptRecord): Promise<void>;
-  updateAttempt(
-    accountId: MailAccountId,
-    submissionId: EmailSubmissionId,
-    attemptNumber: number,
-    patch: MutableFields<
-      SubmissionAttemptRecord,
-      'id' | 'accountId' | 'submissionId' | 'attemptNumber' | 'startedAt'
-    >,
-  ): Promise<SubmissionAttemptRecord>;
-  listAttempts(
-    accountId: MailAccountId,
-    submissionId: EmailSubmissionId,
-  ): Promise<SubmissionAttemptRecord[]>;
 }
 
 export interface QueryChangesInput {

@@ -162,8 +162,6 @@ describe('PostgreSQL account-scoped constraints', () => {
           idempotencyKey: 'constraint-foreign-submission',
           draftRevision: 0,
           frozenBlobs: [],
-          attemptCount: 0,
-          nextAttemptAt: null,
           providerMessageId: null,
           lastErrorCode: null,
           lastErrorMessage: null,
@@ -210,8 +208,6 @@ describe('PostgreSQL account-scoped constraints', () => {
         idempotencyKey: `constraint-primary-${nextEmail}`,
         draftRevision: 0,
         frozenBlobs: [],
-        attemptCount: 0,
-        nextAttemptAt: null,
         providerMessageId: null,
         lastErrorCode: null,
         lastErrorMessage: null,
@@ -244,22 +240,6 @@ describe('PostgreSQL account-scoped constraints', () => {
       );
       await expectCrossAccount(
         unitOfWork.run((tx) => tx.submissions.insert(submission({ identityId: foreignIdentity }))),
-      );
-      await expectCrossAccount(
-        unitOfWork.run((tx) =>
-          tx.submissions.recordAttempt({
-            id: 'constraint-primary-attempt',
-            accountId: primary.accountId,
-            submissionId: foreignSubmission,
-            attemptNumber: 1,
-            startedAt: now,
-            finishedAt: null,
-            outcome: null,
-            providerCode: null,
-            safeResponse: null,
-            retryAt: null,
-          }),
-        ),
       );
       await expectCrossAccount(
         unitOfWork.run((tx) =>

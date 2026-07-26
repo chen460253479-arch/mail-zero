@@ -46,8 +46,6 @@ describe('EmailSubmission creation', () => {
     expect(queued).toMatchObject({
       status: 'queued',
       draftRevision: 1,
-      attemptCount: 0,
-      nextAttemptAt: null,
     });
     expect(await immediate.inspect.stateVersion()).toBe(immediateVersion + 1n);
     expect((await immediate.inspect.changes()).slice(immediateChanges)).toEqual([
@@ -389,63 +387,59 @@ describe('EmailSubmission creation', () => {
   });
 });
 
-describe('EmailSubmission state machine', () => {
+describe('EmailSubmission business projection', () => {
   it.each([
     ['scheduled', 'queued'],
     ['scheduled', 'canceled'],
-    ['queued', 'sending'],
     ['queued', 'canceled'],
-    ['retry_wait', 'queued'],
-    ['retry_wait', 'canceled'],
   ] as const)('allows %s -> %s and records one exact Updated Change', async (from, to) => {
     const h = await createSubmissionHarness({ initialStatus: from });
-    const submissionId = h.submissionId!;
     if (from === 'scheduled') {
       h.deps.clock.set(new Date('2026-01-01T00:01:00.000Z'));
-    } else if (from === 'retry_wait' && to === 'queued') {
-      const submission = await h.inspect.submission(submissionId);
-      h.deps.clock.set(submission!.nextAttemptAt!);
     }
     const version = await h.inspect.stateVersion();
-    const changes = (await h.inspect.changes()).length;
+    const changeCount = (await h.inspect.changes()).length;
     const result =
       to === 'canceled'
         ? await cancelSubmission(h.deps, {
             accountId: h.accountId,
-            submissionId,
+            submissionId: h.submissionId!,
           })
         : await transitionSubmission(h.deps, {
             accountId: h.accountId,
-            submissionId,
+            submissionId: h.submissionId!,
             to,
             outcome: null,
           });
 
     expect(result.status).toBe(to);
     expect(await h.inspect.stateVersion()).toBe(version + 1n);
-    expect((await h.inspect.changes()).slice(changes)).toEqual([
+    expect((await h.inspect.changes()).slice(changeCount)).toEqual([
       expect.objectContaining({
         collection: 'email_submission',
-        entityId: submissionId,
+        entityId: h.submissionId,
         changeType: 'updated',
-        changedProperties:
-          from === 'queued' && to === 'sending'
-            ? ['status', 'attemptCount']
-            : from === 'retry_wait' && to === 'queued'
-              ? ['status', 'nextAttemptAt']
-              : from === 'retry_wait' && to === 'canceled'
-                ? ['status', 'nextAttemptAt']
-                : ['status'],
+        changedProperties: ['status'],
       }),
     ]);
+  });
+
+  it('rejects releasing a scheduled submission before it is due', async () => {
+    const h = await createSubmissionHarness({ initialStatus: 'scheduled' });
+    await expect(
+      transitionSubmission(h.deps, {
+        accountId: h.accountId,
+        submissionId: h.submissionId!,
+        to: 'queued',
+        outcome: null,
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_SUBMISSION_TRANSITION' });
   });
 
   it.each(['sent', 'failed', 'canceled'] as const)(
-    'rejects every transition from terminal state %s without a Change',
+    'rejects transitions from terminal state %s',
     async (status) => {
       const h = await createSubmissionHarness({ initialStatus: status });
-      const version = await h.inspect.stateVersion();
-      const changes = (await h.inspect.changes()).length;
       await expect(
         transitionSubmission(h.deps, {
           accountId: h.accountId,
@@ -454,290 +448,53 @@ describe('EmailSubmission state machine', () => {
           outcome: null,
         }),
       ).rejects.toMatchObject({ code: 'INVALID_SUBMISSION_TRANSITION' });
-      expect(await h.inspect.stateVersion()).toBe(version);
-      expect((await h.inspect.changes()).length).toBe(changes);
     },
   );
 
-  it.each([
-    ['scheduled', 'sending'],
-    ['queued', 'sent'],
-    ['retry_wait', 'sent'],
-  ] as const)('rejects representative disallowed %s -> %s', async (from, to) => {
-    const h = await createSubmissionHarness({ initialStatus: from });
+  it('accepts only terminal provider projections from a queued Submission', async () => {
+    const sentHarness = await createSubmissionHarness({ initialStatus: 'queued' });
     await expect(
-      transitionSubmission(h.deps, {
-        accountId: h.accountId,
-        submissionId: h.submissionId!,
-        to,
-        outcome: to === 'sent' ? { type: 'sent' } : null,
+      transitionSubmission(sentHarness.deps, {
+        accountId: sentHarness.accountId,
+        submissionId: sentHarness.submissionId!,
+        to: 'sent',
+        outcome: { type: 'sent', providerMessageId: 'provider-123' },
       }),
-    ).rejects.toMatchObject({ code: 'INVALID_SUBMISSION_TRANSITION' });
-  });
+    ).resolves.toMatchObject({
+      status: 'sent',
+      providerMessageId: 'provider-123',
+    });
 
-  it('enforces scheduled and retry due times atomically', async () => {
-    for (const status of ['scheduled', 'retry_wait'] as const) {
-      const h = await createSubmissionHarness({ initialStatus: status });
-      const version = await h.inspect.stateVersion();
-      const changes = (await h.inspect.changes()).length;
-      await expect(
-        transitionSubmission(h.deps, {
-          accountId: h.accountId,
-          submissionId: h.submissionId!,
-          to: 'queued',
-          outcome: null,
-        }),
-      ).rejects.toMatchObject({ code: 'INVALID_SUBMISSION_TRANSITION' });
-      expect(await h.inspect.stateVersion()).toBe(version);
-      expect((await h.inspect.changes()).length).toBe(changes);
-    }
-  });
-
-  it('evaluates due gates and Attempt timestamps after acquiring the account lock', async () => {
-    const scheduled = await createSubmissionHarness({ initialStatus: 'scheduled' });
-    const dueAt = (await scheduled.inspect.submission(scheduled.submissionId!))!.sendAt;
-    let releaseLock!: () => void;
-    let lockAcquired!: () => void;
-    const locked = new Promise<void>((resolve) => {
-      lockAcquired = resolve;
-    });
-    const release = new Promise<void>((resolve) => {
-      releaseLock = resolve;
-    });
-    const blocker = scheduled.deps.unitOfWork.run(async () => {
-      lockAcquired();
-      await release;
-    });
-    await locked;
-    const pending = transitionSubmission(scheduled.deps, {
-      accountId: scheduled.accountId,
-      submissionId: scheduled.submissionId!,
-      to: 'queued',
-      outcome: null,
-    });
-    scheduled.deps.clock.set(dueAt);
-    releaseLock();
-    await blocker;
-    await expect(pending).resolves.toMatchObject({ status: 'queued' });
-
-    const startedAt = new Date(dueAt.getTime() + 1_000);
-    const secondBlockerLocked = new Promise<void>((resolve) => {
-      lockAcquired = resolve;
-    });
-    const secondRelease = new Promise<void>((resolve) => {
-      releaseLock = resolve;
-    });
-    const secondBlocker = scheduled.deps.unitOfWork.run(async () => {
-      lockAcquired();
-      await secondRelease;
-    });
-    await secondBlockerLocked;
-    const sending = transitionSubmission(scheduled.deps, {
-      accountId: scheduled.accountId,
-      submissionId: scheduled.submissionId!,
-      to: 'sending',
-      outcome: null,
-    });
-    scheduled.deps.clock.set(startedAt);
-    releaseLock();
-    await secondBlocker;
-    await sending;
-    expect(await scheduled.inspect.attempts(scheduled.submissionId!)).toEqual([
-      expect.objectContaining({ startedAt }),
-    ]);
-  });
-
-  it.each(['sending', 'sent', 'failed', 'canceled'] as const)(
-    'cancelSubmission rejects %s',
-    async (status) => {
-      const h = await createSubmissionHarness({ initialStatus: status });
-      await expect(
-        cancelSubmission(h.deps, {
-          accountId: h.accountId,
-          submissionId: h.submissionId!,
-        }),
-      ).rejects.toMatchObject({ code: 'INVALID_SUBMISSION_TRANSITION' });
-    },
-  );
-
-  it.each([
-    ['sent', { type: 'sent' } as const],
-    ['retry_wait', { type: 'failure', retryable: true } as const],
-    ['failed', { type: 'failure', retryable: false } as const],
-  ] as const)('allows sending -> %s with a matching outcome', async (to, outcome) => {
-    const h = await createSubmissionHarness({ initialStatus: 'sending' });
-    const result = await transitionSubmission(h.deps, {
-      accountId: h.accountId,
-      submissionId: h.submissionId!,
-      to,
-      outcome,
-    });
-    expect(result.status).toBe(to);
-    expect(await h.inspect.attempts(h.submissionId!)).toEqual([
-      expect.objectContaining({
-        attemptNumber: 1,
-        outcome:
-          to === 'sent' ? 'sent' : to === 'retry_wait' ? 'transient_failure' : 'permanent_failure',
-      }),
-    ]);
-  });
-
-  it.each([
-    ['sent', null],
-    ['sent', { type: 'failure', retryable: false }],
-    ['retry_wait', { type: 'sent' }],
-    ['retry_wait', { type: 'failure', retryable: false }],
-    ['failed', { type: 'sent' }],
-    ['failed', { type: 'failure', retryable: true }],
-  ] as const)('rejects sending -> %s with a mismatched outcome', async (to, outcome) => {
-    const h = await createSubmissionHarness({ initialStatus: 'sending' });
+    const failedHarness = await createSubmissionHarness({ initialStatus: 'queued' });
     await expect(
-      transitionSubmission(h.deps, {
-        accountId: h.accountId,
-        submissionId: h.submissionId!,
-        to,
-        outcome,
+      transitionSubmission(failedHarness.deps, {
+        accountId: failedHarness.accountId,
+        submissionId: failedHarness.submissionId!,
+        to: 'failed',
+        outcome: {
+          type: 'failure',
+          retryable: false,
+          providerCode: 'PERMANENT_FAILURE',
+          safeResponse: 'policy_rejected',
+        },
       }),
-    ).rejects.toMatchObject({ code: 'INVALID_SUBMISSION_TRANSITION' });
-    expect((await h.inspect.attempts(h.submissionId!))[0]).toMatchObject({
-      finishedAt: null,
-      outcome: null,
+    ).resolves.toMatchObject({
+      status: 'failed',
+      lastErrorCode: 'PERMANENT_FAILURE',
+      lastErrorMessage: 'policy_rejected',
     });
   });
 
-  it('rejects completion without exactly one open Attempt', async () => {
-    const h = await createSubmissionHarness({ initialStatus: 'sending' });
-    const current = (await h.inspect.attempts(h.submissionId!))[0]!;
-    await h.deps.unitOfWork.run((tx) =>
-      tx.submissions.updateAttempt(h.accountId, h.submissionId!, current.attemptNumber, {
-        finishedAt: h.deps.clock.now(),
-        outcome: 'permanent_failure',
-      }),
-    );
+  it('does not let Mail Core persist a retryable delivery failure', async () => {
+    const h = await createSubmissionHarness({ initialStatus: 'queued' });
     await expect(
       transitionSubmission(h.deps, {
         accountId: h.accountId,
         submissionId: h.submissionId!,
         to: 'failed',
-        outcome: { type: 'failure', retryable: false },
-      }),
-    ).rejects.toMatchObject({ code: 'INVALID_SUBMISSION_TRANSITION' });
-  });
-});
-
-describe('EmailSubmission attempt history', () => {
-  it('keeps completed attempts immutable across a retry and later success', async () => {
-    const h = await createSubmissionHarness({ initialStatus: 'sending' });
-    const submissionId = h.submissionId!;
-    const first = await transitionSubmission(h.deps, {
-      accountId: h.accountId,
-      submissionId,
-      to: 'retry_wait',
-      outcome: {
-        type: 'failure',
-        retryable: true,
-        providerCode: 'RATE_LIMIT',
-        safeResponse: 'rate_limited',
-      },
-    });
-    const firstAttempt = (await h.inspect.attempts(submissionId))[0]!;
-    expect(first.nextAttemptAt?.toISOString()).toBe('2026-01-01T00:00:30.000Z');
-    h.deps.clock.set(first.nextAttemptAt!);
-    await transitionSubmission(h.deps, {
-      accountId: h.accountId,
-      submissionId,
-      to: 'queued',
-      outcome: null,
-    });
-    await transitionSubmission(h.deps, {
-      accountId: h.accountId,
-      submissionId,
-      to: 'sending',
-      outcome: null,
-    });
-    h.deps.clock.set(new Date('2026-01-01T00:00:31.000Z'));
-    const sent = await transitionSubmission(h.deps, {
-      accountId: h.accountId,
-      submissionId,
-      to: 'sent',
-      outcome: {
-        type: 'sent',
-        providerMessageId: 'provider-123',
-        providerCode: '250',
-        safeResponse: 'accepted',
-      },
-    });
-
-    expect(sent).toMatchObject({
-      status: 'sent',
-      attemptCount: 2,
-      providerMessageId: 'provider-123',
-      lastErrorCode: null,
-      lastErrorMessage: null,
-      nextAttemptAt: null,
-    });
-    expect(await h.inspect.attempts(submissionId)).toEqual([
-      firstAttempt,
-      expect.objectContaining({
-        attemptNumber: 2,
-        outcome: 'sent',
-        providerCode: '250',
-        safeResponse: 'accepted',
-        retryAt: null,
-      }),
-    ]);
-  });
-
-  it('forces attempt six to permanent failure and never records retryAt', async () => {
-    const h = await createSubmissionHarness({ initialStatus: 'sending' });
-    const submissionId = h.submissionId!;
-    for (let attempt = 1; attempt <= 5; attempt += 1) {
-      const retry = await transitionSubmission(h.deps, {
-        accountId: h.accountId,
-        submissionId,
-        to: 'retry_wait',
-        outcome: { type: 'failure', retryable: true },
-      });
-      h.deps.clock.set(retry.nextAttemptAt!);
-      await transitionSubmission(h.deps, {
-        accountId: h.accountId,
-        submissionId,
-        to: 'queued',
-        outcome: null,
-      });
-      await transitionSubmission(h.deps, {
-        accountId: h.accountId,
-        submissionId,
-        to: 'sending',
-        outcome: null,
-      });
-    }
-    await expect(
-      transitionSubmission(h.deps, {
-        accountId: h.accountId,
-        submissionId,
-        to: 'retry_wait',
         outcome: { type: 'failure', retryable: true },
       }),
     ).rejects.toMatchObject({ code: 'INVALID_SUBMISSION_TRANSITION' });
-    const failed = await transitionSubmission(h.deps, {
-      accountId: h.accountId,
-      submissionId,
-      to: 'failed',
-      outcome: { type: 'failure', retryable: true },
-    });
-    expect(failed).toMatchObject({
-      status: 'failed',
-      attemptCount: 6,
-      nextAttemptAt: null,
-    });
-    const attempts = await h.inspect.attempts(submissionId);
-    expect(attempts).toHaveLength(6);
-    expect(attempts[5]).toMatchObject({
-      attemptNumber: 6,
-      outcome: 'permanent_failure',
-      retryAt: null,
-    });
   });
 
   it.each([
@@ -746,8 +503,8 @@ describe('EmailSubmission attempt history', () => {
     'api_key=hunter2',
     'https://objects.test/private/signed-object',
     'MIME-Version: 1.0\r\n\r\nsecret body',
-  ])('discards unsafe or non-allowlisted response metadata: %s', async (safeResponse) => {
-    const h = await createSubmissionHarness({ initialStatus: 'sending' });
+  ])('discards unsafe provider metadata: %s', async (safeResponse) => {
+    const h = await createSubmissionHarness({ initialStatus: 'queued' });
     await transitionSubmission(h.deps, {
       accountId: h.accountId,
       submissionId: h.submissionId!,
@@ -757,15 +514,10 @@ describe('EmailSubmission attempt history', () => {
         retryable: false,
         providerCode: ' 550 invalid\r\nAuthorization: Bearer secret ',
         safeResponse,
-        error: new Error('oauth access_token=secret'),
       } as never,
     });
-    const persisted = JSON.stringify(
-      {
-        submission: await h.inspect.submission(h.submissionId!),
-        attempts: await h.inspect.attempts(h.submissionId!),
-      },
-      (_key, value) => (typeof value === 'bigint' ? value.toString() : value),
+    const persisted = JSON.stringify(await h.inspect.submission(h.submissionId!), (_key, value) =>
+      typeof value === 'bigint' ? value.toString() : value,
     );
     expect(persisted).not.toContain(safeResponse);
     expect(persisted).not.toMatch(/secret|hunter2|password|api_key|MIME-Version/i);

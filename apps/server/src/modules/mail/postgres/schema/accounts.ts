@@ -45,6 +45,7 @@ export const mailAccount = createMailTable(
       'mail_account_quota_nonnegative_check',
       sql`${t.storageQuotaBytes} IS NULL OR ${t.storageQuotaBytes} >= 0`,
     ),
+    unique('mail_account_id_connection_uidx').on(t.id, t.connectionId),
     uniqueIndex('mail_account_connection_id_uidx').on(t.connectionId),
     index('mail_account_user_id_idx').on(t.userId),
     foreignKey({

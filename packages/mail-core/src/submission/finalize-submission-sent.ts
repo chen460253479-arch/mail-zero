@@ -181,7 +181,6 @@ export async function finalizeSubmissionSentInTransaction(
   });
   const updatedSubmission = await tx.submissions.update(input.accountId, submission.id, {
     status: 'sent',
-    nextAttemptAt: null,
     providerMessageId: input.remoteMessageId,
     lastErrorCode: null,
     lastErrorMessage: null,
@@ -203,7 +202,6 @@ export async function finalizeSubmissionSentInTransaction(
         changeType: 'updated',
         changedProperties: [
           'status',
-          'nextAttemptAt',
           'providerMessageId',
           'lastErrorCode',
           'lastErrorMessage',

@@ -184,8 +184,6 @@ export async function createSubmissionInTransaction(
     idempotencyKey: input.idempotencyKey,
     draftRevision: email.draftRevision,
     frozenBlobs,
-    attemptCount: 0,
-    nextAttemptAt: null,
     providerMessageId: null,
     lastErrorCode: null,
     lastErrorMessage: null,

@@ -3,7 +3,7 @@ import {
   createIdentity,
   createSubmission,
   destroyIdentity,
-  transitionSubmission,
+  finalizeSubmissionSent,
 } from '@zero/mail-core';
 import { describe, expect, it } from 'vitest';
 
@@ -11,7 +11,7 @@ import { createPostgresMailTestHarness } from './helpers/harness';
 import { withMailTestDatabase } from './helpers/database';
 
 describe('PostgreSQL Submission integration', () => {
-  it('enforces idempotency, Identity use, and exactly one open Attempt finalization', () =>
+  it('enforces idempotency, Identity use, and atomic sent finalization', () =>
     withMailTestDatabase(async ({ db, unitOfWork }) => {
       const harness = await createPostgresMailTestHarness(db, unitOfWork);
       const identity = await createIdentity(harness.dependencies, {
@@ -55,38 +55,30 @@ describe('PostgreSQL Submission integration', () => {
         }),
       ).rejects.toMatchObject({ code: 'IDENTITY_IN_USE' });
 
-      await transitionSubmission(harness.dependencies, {
-        accountId: harness.accountId,
-        submissionId: first.id,
-        to: 'sending',
-        outcome: null,
-      });
       const completions = await Promise.allSettled([
-        transitionSubmission(harness.dependencies, {
+        finalizeSubmissionSent(harness.dependencies, {
           accountId: harness.accountId,
           submissionId: first.id,
-          to: 'sent',
-          outcome: {
-            type: 'sent',
-            providerMessageId: 'provider-message-1',
-            safeResponse: 'accepted',
-          },
+          provider: 'gmail',
+          remoteMessageId: 'provider-message-1',
+          remoteThreadId: 'provider-thread-1',
+          acceptedAt: harness.dependencies.clock.now(),
         }),
-        transitionSubmission(harness.dependencies, {
+        finalizeSubmissionSent(harness.dependencies, {
           accountId: harness.accountId,
           submissionId: first.id,
-          to: 'sent',
-          outcome: {
-            type: 'sent',
-            providerMessageId: 'provider-message-2',
-            safeResponse: 'accepted',
-          },
+          provider: 'gmail',
+          remoteMessageId: 'provider-message-2',
+          remoteThreadId: 'provider-thread-2',
+          acceptedAt: harness.dependencies.clock.now(),
         }),
       ]);
       expect(completions.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
       expect(completions.find(({ status }) => status === 'rejected')).toMatchObject({
         reason: { code: 'INVALID_SUBMISSION_TRANSITION' },
       });
+      const acceptedRemoteMessageId = completions.find((result) => result.status === 'fulfilled')!
+        .value.submission.providerMessageId;
       await createIdentity(harness.dependencies, {
         accountId: harness.accountId,
         name: 'Replacement Sender',
@@ -105,14 +97,8 @@ describe('PostgreSQL Submission integration', () => {
         expect(await tx.submissions.findById(harness.accountId, first.id)).toMatchObject({
           identityId: identity.id,
           status: 'sent',
+          providerMessageId: acceptedRemoteMessageId,
         });
-        expect(await tx.submissions.listAttempts(harness.accountId, first.id)).toEqual([
-          expect.objectContaining({
-            attemptNumber: 1,
-            outcome: 'sent',
-            finishedAt: harness.dependencies.clock.now(),
-          }),
-        ]);
       });
     }));
 });

@@ -1,14 +1,12 @@
 import type {
-  SubmissionAttemptRecord,
   SubmissionBlobReference,
   SubmissionRecord,
   SubmissionRepository,
 } from '@zero/mail-core';
-import { and, asc, eq, isNull } from 'drizzle-orm';
-import { MailCoreError } from '@zero/mail-core';
+import { and, asc, eq } from 'drizzle-orm';
 
-import { emailSubmission, submissionAttempt, submissionBlob } from '../schema';
 import { requireRow, runAdapter, type MailDatabase } from './database';
+import { emailSubmission, submissionBlob } from '../schema';
 
 const mapSubmission = (
   row: typeof emailSubmission.$inferSelect,
@@ -23,8 +21,6 @@ const mapSubmission = (
   idempotencyKey: row.idempotencyKey,
   draftRevision: row.draftRevision,
   frozenBlobs,
-  attemptCount: row.attemptCount,
-  nextAttemptAt: row.nextAttemptAt,
   providerMessageId: row.providerMessageId,
   lastErrorCode: row.lastErrorCode,
   lastErrorMessage: row.lastErrorMessage,
@@ -70,19 +66,6 @@ const hydrateSubmission = async (
   row: typeof emailSubmission.$inferSelect,
 ): Promise<SubmissionRecord> =>
   mapSubmission(row, await loadFrozenBlobs(db, row.mailAccountId, row.id));
-
-const mapAttempt = (row: typeof submissionAttempt.$inferSelect): SubmissionAttemptRecord => ({
-  id: row.id,
-  accountId: row.mailAccountId as SubmissionAttemptRecord['accountId'],
-  submissionId: row.submissionId as SubmissionAttemptRecord['submissionId'],
-  attemptNumber: row.attemptNumber,
-  startedAt: row.startedAt,
-  finishedAt: row.finishedAt,
-  outcome: row.outcome,
-  providerCode: row.providerCode,
-  safeResponse: row.safeResponse,
-  retryAt: row.retryAt,
-});
 
 export const createSubmissionRepository = (db: MailDatabase): SubmissionRepository => ({
   findById: (accountId, id) =>
@@ -165,47 +148,4 @@ export const createSubmissionRepository = (db: MailDatabase): SubmissionReposito
         .returning();
       return hydrateSubmission(db, requireRow(rows, 'EMAIL_SUBMISSION_NOT_FOUND', id));
     }),
-  recordAttempt: (record) =>
-    runAdapter(async () => {
-      await db.insert(submissionAttempt).values({
-        ...record,
-        mailAccountId: record.accountId,
-      });
-    }),
-  updateAttempt: (accountId, submissionId, attemptNumber, patch) =>
-    runAdapter(async () => {
-      const rows = await db
-        .update(submissionAttempt)
-        .set(patch)
-        .where(
-          and(
-            eq(submissionAttempt.mailAccountId, accountId),
-            eq(submissionAttempt.submissionId, submissionId),
-            eq(submissionAttempt.attemptNumber, attemptNumber),
-            isNull(submissionAttempt.finishedAt),
-          ),
-        )
-        .returning();
-      if (rows[0] === undefined) {
-        throw new MailCoreError('INVALID_SUBMISSION_TRANSITION', {
-          entityId: submissionId,
-        });
-      }
-      return mapAttempt(rows[0]);
-    }),
-  listAttempts: (accountId, submissionId) =>
-    runAdapter(async () =>
-      (
-        await db
-          .select()
-          .from(submissionAttempt)
-          .where(
-            and(
-              eq(submissionAttempt.mailAccountId, accountId),
-              eq(submissionAttempt.submissionId, submissionId),
-            ),
-          )
-          .orderBy(asc(submissionAttempt.attemptNumber))
-      ).map(mapAttempt),
-    ),
 });

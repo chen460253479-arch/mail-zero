@@ -1,5 +1,5 @@
 {
-  "id": "71f5b13c-e075-4deb-8b4c-c9d74cfd5257",
+  "id": "723d3f29-37cc-481d-b5f3-9508bda6aa75",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -2243,7 +2243,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "mail_account_id_connection_uidx": {
+          "name": "mail_account_id_connection_uidx",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "connection_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "mail_account_status_check": {
@@ -4835,19 +4844,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "attempt_count": {
-          "name": "attempt_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "next_attempt_at": {
-          "name": "next_attempt_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "provider_message_id": {
           "name": "provider_message_id",
           "type": "text",
@@ -5102,146 +5098,11 @@
       "checkConstraints": {
         "email_submission_status_check": {
           "name": "email_submission_status_check",
-          "value": "\"mail\".\"submission\".\"status\" IN ('scheduled', 'queued', 'sending', 'retry_wait', 'sent', 'failed', 'canceled')"
+          "value": "\"mail\".\"submission\".\"status\" IN ('scheduled', 'queued', 'sent', 'failed', 'canceled')"
         },
-        "email_submission_counters_nonnegative_check": {
-          "name": "email_submission_counters_nonnegative_check",
-          "value": "\"mail\".\"submission\".\"draft_revision\" >= 0 AND \"mail\".\"submission\".\"attempt_count\" >= 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "integration.send_attempt": {
-      "name": "send_attempt",
-      "schema": "integration",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "mail_account_id": {
-          "name": "mail_account_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "submission_id": {
-          "name": "submission_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "attempt_number": {
-          "name": "attempt_number",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "started_at": {
-          "name": "started_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "finished_at": {
-          "name": "finished_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "outcome": {
-          "name": "outcome",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "provider_code": {
-          "name": "provider_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "safe_response": {
-          "name": "safe_response",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "retry_at": {
-          "name": "retry_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "send_attempt_mail_account_id_account_id_fk": {
-          "name": "send_attempt_mail_account_id_account_id_fk",
-          "tableFrom": "send_attempt",
-          "tableTo": "account",
-          "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "submission_attempt_submission_account_fk": {
-          "name": "submission_attempt_submission_account_fk",
-          "tableFrom": "send_attempt",
-          "tableTo": "submission",
-          "schemaTo": "mail",
-          "columnsFrom": [
-            "submission_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "submission_attempt_id_account_uidx": {
-          "name": "submission_attempt_id_account_uidx",
-          "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "mail_account_id"
-          ]
-        },
-        "submission_attempt_account_submission_number_uidx": {
-          "name": "submission_attempt_account_submission_number_uidx",
-          "nullsNotDistinct": false,
-          "columns": [
-            "mail_account_id",
-            "submission_id",
-            "attempt_number"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "submission_attempt_outcome_check": {
-          "name": "submission_attempt_outcome_check",
-          "value": "\"integration\".\"send_attempt\".\"outcome\" IS NULL OR \"integration\".\"send_attempt\".\"outcome\" IN ('sent', 'transient_failure', 'permanent_failure')"
-        },
-        "submission_attempt_number_positive_check": {
-          "name": "submission_attempt_number_positive_check",
-          "value": "\"integration\".\"send_attempt\".\"attempt_number\" > 0"
-        },
-        "submission_attempt_lifecycle_check": {
-          "name": "submission_attempt_lifecycle_check",
-          "value": "(\"integration\".\"send_attempt\".\"finished_at\" IS NULL AND \"integration\".\"send_attempt\".\"outcome\" IS NULL)\n          OR (\"integration\".\"send_attempt\".\"finished_at\" IS NOT NULL AND \"integration\".\"send_attempt\".\"outcome\" IS NOT NULL)"
+        "email_submission_draft_revision_nonnegative_check": {
+          "name": "email_submission_draft_revision_nonnegative_check",
+          "value": "\"mail\".\"submission\".\"draft_revision\" >= 0"
         }
       },
       "isRLSEnabled": false
@@ -6297,6 +6158,458 @@
         "inbound_sync_item_imported_state_chk": {
           "name": "inbound_sync_item_imported_state_chk",
           "value": "(\"integration\".\"inbound_sync_item\".\"status\" = 'imported') = (\n        \"integration\".\"inbound_sync_item\".\"local_email_id\" IS NOT NULL AND \"integration\".\"inbound_sync_item\".\"imported_at\" IS NOT NULL\n      )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "integration.outbound_delivery": {
+      "name": "outbound_delivery",
+      "schema": "integration",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "mail_account_id": {
+          "name": "mail_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "submission_id": {
+          "name": "submission_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "connection_id": {
+          "name": "connection_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "available_at": {
+          "name": "available_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lease_owner": {
+          "name": "lease_owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attempt_count": {
+          "name": "attempt_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "reconciliation_count": {
+          "name": "reconciliation_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "uncertain_since": {
+          "name": "uncertain_since",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_kind": {
+          "name": "last_error_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_code": {
+          "name": "last_error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_message": {
+          "name": "last_error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "outbound_delivery_due_idx": {
+          "name": "outbound_delivery_due_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "available_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"integration\".\"outbound_delivery\".\"status\" IN ('scheduled', 'ready', 'retry_wait', 'uncertain')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "outbound_delivery_expired_lease_idx": {
+          "name": "outbound_delivery_expired_lease_idx",
+          "columns": [
+            {
+              "expression": "lease_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"integration\".\"outbound_delivery\".\"status\" = 'leased'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "outbound_delivery_account_connection_fk": {
+          "name": "outbound_delivery_account_connection_fk",
+          "tableFrom": "outbound_delivery",
+          "tableTo": "account",
+          "schemaTo": "mail",
+          "columnsFrom": [
+            "mail_account_id",
+            "connection_id"
+          ],
+          "columnsTo": [
+            "id",
+            "connection_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "outbound_delivery_submission_account_fk": {
+          "name": "outbound_delivery_submission_account_fk",
+          "tableFrom": "outbound_delivery",
+          "tableTo": "submission",
+          "schemaTo": "mail",
+          "columnsFrom": [
+            "submission_id",
+            "mail_account_id"
+          ],
+          "columnsTo": [
+            "id",
+            "mail_account_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "outbound_delivery_id_account_uidx": {
+          "name": "outbound_delivery_id_account_uidx",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "mail_account_id"
+          ]
+        },
+        "outbound_delivery_account_submission_uidx": {
+          "name": "outbound_delivery_account_submission_uidx",
+          "nullsNotDistinct": false,
+          "columns": [
+            "mail_account_id",
+            "submission_id"
+          ]
+        },
+        "outbound_delivery_id_account_submission_uidx": {
+          "name": "outbound_delivery_id_account_submission_uidx",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "mail_account_id",
+            "submission_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "outbound_delivery_status_chk": {
+          "name": "outbound_delivery_status_chk",
+          "value": "\"integration\".\"outbound_delivery\".\"status\" IN ('scheduled', 'ready', 'leased', 'retry_wait', 'uncertain', 'completed', 'failed', 'canceled')"
+        },
+        "outbound_delivery_counters_chk": {
+          "name": "outbound_delivery_counters_chk",
+          "value": "\"integration\".\"outbound_delivery\".\"attempt_count\" >= 0 AND \"integration\".\"outbound_delivery\".\"reconciliation_count\" >= 0"
+        },
+        "outbound_delivery_lease_lifecycle_chk": {
+          "name": "outbound_delivery_lease_lifecycle_chk",
+          "value": "(\n        \"integration\".\"outbound_delivery\".\"status\" = 'leased'\n        AND \"integration\".\"outbound_delivery\".\"lease_owner\" IS NOT NULL\n        AND \"integration\".\"outbound_delivery\".\"lease_token\" IS NOT NULL\n        AND \"integration\".\"outbound_delivery\".\"lease_expires_at\" IS NOT NULL\n      ) OR (\n        \"integration\".\"outbound_delivery\".\"status\" <> 'leased'\n        AND \"integration\".\"outbound_delivery\".\"lease_owner\" IS NULL\n        AND \"integration\".\"outbound_delivery\".\"lease_token\" IS NULL\n        AND \"integration\".\"outbound_delivery\".\"lease_expires_at\" IS NULL\n      )"
+        },
+        "outbound_delivery_uncertain_lifecycle_chk": {
+          "name": "outbound_delivery_uncertain_lifecycle_chk",
+          "value": "(\"integration\".\"outbound_delivery\".\"status\" = 'uncertain' AND \"integration\".\"outbound_delivery\".\"uncertain_since\" IS NOT NULL)\n        OR (\"integration\".\"outbound_delivery\".\"status\" <> 'uncertain')"
+        },
+        "outbound_delivery_completed_lifecycle_chk": {
+          "name": "outbound_delivery_completed_lifecycle_chk",
+          "value": "(\"integration\".\"outbound_delivery\".\"status\" = 'completed' AND \"integration\".\"outbound_delivery\".\"completed_at\" IS NOT NULL)\n        OR (\"integration\".\"outbound_delivery\".\"status\" <> 'completed' AND \"integration\".\"outbound_delivery\".\"completed_at\" IS NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "integration.send_attempt": {
+      "name": "send_attempt",
+      "schema": "integration",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "mail_account_id": {
+          "name": "mail_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "delivery_id": {
+          "name": "delivery_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "submission_id": {
+          "name": "submission_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attempt_number": {
+          "name": "attempt_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_code": {
+          "name": "provider_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "safe_response": {
+          "name": "safe_response",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "retry_at": {
+          "name": "retry_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "remote_message_id": {
+          "name": "remote_message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "remote_thread_id": {
+          "name": "remote_thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "send_attempt_open_delivery_uidx": {
+          "name": "send_attempt_open_delivery_uidx",
+          "columns": [
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "delivery_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"integration\".\"send_attempt\".\"finished_at\" IS NULL AND \"integration\".\"send_attempt\".\"kind\" = 'send'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "send_attempt_delivery_account_submission_fk": {
+          "name": "send_attempt_delivery_account_submission_fk",
+          "tableFrom": "send_attempt",
+          "tableTo": "outbound_delivery",
+          "schemaTo": "integration",
+          "columnsFrom": [
+            "delivery_id",
+            "mail_account_id",
+            "submission_id"
+          ],
+          "columnsTo": [
+            "id",
+            "mail_account_id",
+            "submission_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "send_attempt_submission_account_fk": {
+          "name": "send_attempt_submission_account_fk",
+          "tableFrom": "send_attempt",
+          "tableTo": "submission",
+          "schemaTo": "mail",
+          "columnsFrom": [
+            "submission_id",
+            "mail_account_id"
+          ],
+          "columnsTo": [
+            "id",
+            "mail_account_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "send_attempt_id_account_uidx": {
+          "name": "send_attempt_id_account_uidx",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "mail_account_id"
+          ]
+        },
+        "send_attempt_account_delivery_number_uidx": {
+          "name": "send_attempt_account_delivery_number_uidx",
+          "nullsNotDistinct": false,
+          "columns": [
+            "mail_account_id",
+            "delivery_id",
+            "attempt_number"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "send_attempt_kind_chk": {
+          "name": "send_attempt_kind_chk",
+          "value": "\"integration\".\"send_attempt\".\"kind\" IN ('send', 'reconcile')"
+        },
+        "send_attempt_outcome_chk": {
+          "name": "send_attempt_outcome_chk",
+          "value": "\"integration\".\"send_attempt\".\"outcome\" IS NULL OR \"integration\".\"send_attempt\".\"outcome\" IN ('sent', 'transient_failure', 'permanent_failure', 'uncertain', 'not_found')"
+        },
+        "send_attempt_number_positive_chk": {
+          "name": "send_attempt_number_positive_chk",
+          "value": "\"integration\".\"send_attempt\".\"attempt_number\" > 0"
+        },
+        "send_attempt_lifecycle_chk": {
+          "name": "send_attempt_lifecycle_chk",
+          "value": "(\"integration\".\"send_attempt\".\"finished_at\" IS NULL AND \"integration\".\"send_attempt\".\"outcome\" IS NULL)\n        OR (\"integration\".\"send_attempt\".\"finished_at\" IS NOT NULL AND \"integration\".\"send_attempt\".\"outcome\" IS NOT NULL)"
         }
       },
       "isRLSEnabled": false

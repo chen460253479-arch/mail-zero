@@ -18,7 +18,6 @@ import type {
   MailChangeRecord,
   QueryChangesInput,
   RemoteEmailRecord,
-  SubmissionAttemptRecord,
   SubmissionRecord,
   SubmissionRepository,
   ThreadRecord,
@@ -64,7 +63,6 @@ export interface MemoryMailState {
   remoteEmails: Map<string, RemoteEmailRecord>;
   identities: Map<string, IdentityRecord>;
   submissions: Map<string, SubmissionRecord>;
-  submissionAttempts: Map<string, SubmissionAttemptRecord>;
   changes: Map<string, MailChangeRecord>;
   oldestAvailableStates: Map<MailAccountId, bigint>;
 }
@@ -79,9 +77,6 @@ const remoteKey = (input: FindRemoteEmailInput): string =>
 
 const changeKey = (record: MailChangeRecord): string =>
   [record.accountId, record.stateVersion, record.collection, record.entityId].join('\u0000');
-
-const attemptKey = (record: SubmissionAttemptRecord): string =>
-  `${record.accountId}\u0000${record.submissionId}\u0000${record.attemptNumber}`;
 
 const threadReferenceKey = (record: ThreadReferenceRecord): string =>
   [record.accountId, record.normalizedSubjectHash, record.messageIdHash, record.emailId].join(
@@ -115,7 +110,6 @@ const createEmptyState = (): MemoryMailState => ({
   remoteEmails: new Map(),
   identities: new Map(),
   submissions: new Map(),
-  submissionAttempts: new Map(),
   changes: new Map(),
   oldestAvailableStates: new Map(),
 });
@@ -942,35 +936,6 @@ const createRepositories = (
     async update(accountId, id, patch) {
       return updateScoped(state.submissions, accountId, id, patch, 'EMAIL_SUBMISSION_NOT_FOUND');
     },
-    async recordAttempt(record) {
-      const key = attemptKey(record);
-      if (state.submissionAttempts.has(key)) {
-        throw new MailCoreError('INVALID_SUBMISSION_TRANSITION', {
-          entityId: record.submissionId,
-        });
-      }
-      state.submissionAttempts.set(key, copy(record));
-    },
-    async updateAttempt(accountId, submissionId, attemptNumber, patch) {
-      const key = `${accountId}\u0000${submissionId}\u0000${attemptNumber}`;
-      const current = state.submissionAttempts.get(key);
-      if (current === undefined || current.finishedAt !== null) {
-        throw new MailCoreError('INVALID_SUBMISSION_TRANSITION', {
-          entityId: submissionId,
-        });
-      }
-      const updated = copy({ ...current, ...patch });
-      state.submissionAttempts.set(key, updated);
-      return copy(updated);
-    },
-    async listAttempts(accountId, submissionId) {
-      return [...state.submissionAttempts.values()]
-        .filter(
-          (attempt) => attempt.accountId === accountId && attempt.submissionId === submissionId,
-        )
-        .sort((left, right) => left.attemptNumber - right.attemptNumber)
-        .map(copy);
-    },
   };
 
   const changes: ChangeRepository = {
@@ -1158,7 +1123,6 @@ export interface MemoryMailInspector {
   identity(id: IdentityId): Promise<IdentityRecord | null>;
   submissions(accountId?: MailAccountId): Promise<SubmissionRecord[]>;
   submission(id: EmailSubmissionId): Promise<SubmissionRecord | null>;
-  attempts(submissionId: EmailSubmissionId): Promise<SubmissionAttemptRecord[]>;
   changes(accountId?: MailAccountId): Promise<MailChangeRecord[]>;
   changeQueries(): Promise<QueryChangesInput[]>;
   stateVersion(accountId: MailAccountId): Promise<bigint>;
@@ -1232,12 +1196,6 @@ export const createMemoryMailInspector = (
   },
   async submission(id) {
     return findById(unitOfWork.snapshot().submissions.values(), id);
-  },
-  async attempts(submissionId) {
-    return [...unitOfWork.snapshot().submissionAttempts.values()]
-      .filter((attempt) => attempt.submissionId === submissionId)
-      .sort((left, right) => left.attemptNumber - right.attemptNumber)
-      .map(copy);
   },
   async changes(accountId) {
     return filterByAccount(unitOfWork.snapshot().changes.values(), accountId);

@@ -291,6 +291,7 @@ CREATE TABLE "mail"."account" (
 	"storage_quota_bytes" bigint,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "mail_account_id_connection_uidx" UNIQUE("id","connection_id"),
 	CONSTRAINT "mail_account_status_check" CHECK ("mail"."account"."status" IN ('active', 'suspended', 'deleting')),
 	CONSTRAINT "mail_account_state_nonnegative_check" CHECK ("mail"."account"."state_version" >= 0 AND "mail"."account"."oldest_retained_state" >= 0),
 	CONSTRAINT "mail_account_retention_floor_check" CHECK ("mail"."account"."oldest_retained_state" <= "mail"."account"."state_version"),
@@ -519,8 +520,6 @@ CREATE TABLE "mail"."submission" (
 	"send_at" timestamp with time zone NOT NULL,
 	"idempotency_key" text NOT NULL,
 	"draft_revision" integer NOT NULL,
-	"attempt_count" integer DEFAULT 0 NOT NULL,
-	"next_attempt_at" timestamp with time zone,
 	"provider_message_id" text,
 	"last_error_code" text,
 	"last_error_message" text,
@@ -528,27 +527,8 @@ CREATE TABLE "mail"."submission" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"sent_at" timestamp with time zone,
 	CONSTRAINT "email_submission_id_account_uidx" UNIQUE("id","mail_account_id"),
-	CONSTRAINT "email_submission_status_check" CHECK ("mail"."submission"."status" IN ('scheduled', 'queued', 'sending', 'retry_wait', 'sent', 'failed', 'canceled')),
-	CONSTRAINT "email_submission_counters_nonnegative_check" CHECK ("mail"."submission"."draft_revision" >= 0 AND "mail"."submission"."attempt_count" >= 0)
-);
---> statement-breakpoint
-CREATE TABLE "integration"."send_attempt" (
-	"id" text PRIMARY KEY NOT NULL,
-	"mail_account_id" text NOT NULL,
-	"submission_id" text NOT NULL,
-	"attempt_number" integer NOT NULL,
-	"started_at" timestamp with time zone NOT NULL,
-	"finished_at" timestamp with time zone,
-	"outcome" text,
-	"provider_code" text,
-	"safe_response" text,
-	"retry_at" timestamp with time zone,
-	CONSTRAINT "submission_attempt_id_account_uidx" UNIQUE("id","mail_account_id"),
-	CONSTRAINT "submission_attempt_account_submission_number_uidx" UNIQUE("mail_account_id","submission_id","attempt_number"),
-	CONSTRAINT "submission_attempt_outcome_check" CHECK ("integration"."send_attempt"."outcome" IS NULL OR "integration"."send_attempt"."outcome" IN ('sent', 'transient_failure', 'permanent_failure')),
-	CONSTRAINT "submission_attempt_number_positive_check" CHECK ("integration"."send_attempt"."attempt_number" > 0),
-	CONSTRAINT "submission_attempt_lifecycle_check" CHECK (("integration"."send_attempt"."finished_at" IS NULL AND "integration"."send_attempt"."outcome" IS NULL)
-          OR ("integration"."send_attempt"."finished_at" IS NOT NULL AND "integration"."send_attempt"."outcome" IS NOT NULL))
+	CONSTRAINT "email_submission_status_check" CHECK ("mail"."submission"."status" IN ('scheduled', 'queued', 'sent', 'failed', 'canceled')),
+	CONSTRAINT "email_submission_draft_revision_nonnegative_check" CHECK ("mail"."submission"."draft_revision" >= 0)
 );
 --> statement-breakpoint
 CREATE TABLE "mail"."submission_blob" (
@@ -670,6 +650,72 @@ CREATE TABLE "integration"."inbound_sync_item" (
       ))
 );
 --> statement-breakpoint
+CREATE TABLE "integration"."outbound_delivery" (
+	"id" text PRIMARY KEY NOT NULL,
+	"mail_account_id" text NOT NULL,
+	"submission_id" text NOT NULL,
+	"connection_id" text NOT NULL,
+	"status" text NOT NULL,
+	"available_at" timestamp with time zone NOT NULL,
+	"lease_owner" text,
+	"lease_token" text,
+	"lease_expires_at" timestamp with time zone,
+	"attempt_count" integer DEFAULT 0 NOT NULL,
+	"reconciliation_count" integer DEFAULT 0 NOT NULL,
+	"uncertain_since" timestamp with time zone,
+	"last_error_kind" text,
+	"last_error_code" text,
+	"last_error_message" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"completed_at" timestamp with time zone,
+	CONSTRAINT "outbound_delivery_id_account_uidx" UNIQUE("id","mail_account_id"),
+	CONSTRAINT "outbound_delivery_account_submission_uidx" UNIQUE("mail_account_id","submission_id"),
+	CONSTRAINT "outbound_delivery_id_account_submission_uidx" UNIQUE("id","mail_account_id","submission_id"),
+	CONSTRAINT "outbound_delivery_status_chk" CHECK ("integration"."outbound_delivery"."status" IN ('scheduled', 'ready', 'leased', 'retry_wait', 'uncertain', 'completed', 'failed', 'canceled')),
+	CONSTRAINT "outbound_delivery_counters_chk" CHECK ("integration"."outbound_delivery"."attempt_count" >= 0 AND "integration"."outbound_delivery"."reconciliation_count" >= 0),
+	CONSTRAINT "outbound_delivery_lease_lifecycle_chk" CHECK ((
+        "integration"."outbound_delivery"."status" = 'leased'
+        AND "integration"."outbound_delivery"."lease_owner" IS NOT NULL
+        AND "integration"."outbound_delivery"."lease_token" IS NOT NULL
+        AND "integration"."outbound_delivery"."lease_expires_at" IS NOT NULL
+      ) OR (
+        "integration"."outbound_delivery"."status" <> 'leased'
+        AND "integration"."outbound_delivery"."lease_owner" IS NULL
+        AND "integration"."outbound_delivery"."lease_token" IS NULL
+        AND "integration"."outbound_delivery"."lease_expires_at" IS NULL
+      )),
+	CONSTRAINT "outbound_delivery_uncertain_lifecycle_chk" CHECK (("integration"."outbound_delivery"."status" = 'uncertain' AND "integration"."outbound_delivery"."uncertain_since" IS NOT NULL)
+        OR ("integration"."outbound_delivery"."status" <> 'uncertain')),
+	CONSTRAINT "outbound_delivery_completed_lifecycle_chk" CHECK (("integration"."outbound_delivery"."status" = 'completed' AND "integration"."outbound_delivery"."completed_at" IS NOT NULL)
+        OR ("integration"."outbound_delivery"."status" <> 'completed' AND "integration"."outbound_delivery"."completed_at" IS NULL))
+);
+--> statement-breakpoint
+CREATE TABLE "integration"."send_attempt" (
+	"id" text PRIMARY KEY NOT NULL,
+	"mail_account_id" text NOT NULL,
+	"delivery_id" text NOT NULL,
+	"submission_id" text NOT NULL,
+	"attempt_number" integer NOT NULL,
+	"kind" text NOT NULL,
+	"lease_token" text NOT NULL,
+	"started_at" timestamp with time zone NOT NULL,
+	"finished_at" timestamp with time zone,
+	"outcome" text,
+	"provider_code" text,
+	"safe_response" text,
+	"retry_at" timestamp with time zone,
+	"remote_message_id" text,
+	"remote_thread_id" text,
+	CONSTRAINT "send_attempt_id_account_uidx" UNIQUE("id","mail_account_id"),
+	CONSTRAINT "send_attempt_account_delivery_number_uidx" UNIQUE("mail_account_id","delivery_id","attempt_number"),
+	CONSTRAINT "send_attempt_kind_chk" CHECK ("integration"."send_attempt"."kind" IN ('send', 'reconcile')),
+	CONSTRAINT "send_attempt_outcome_chk" CHECK ("integration"."send_attempt"."outcome" IS NULL OR "integration"."send_attempt"."outcome" IN ('sent', 'transient_failure', 'permanent_failure', 'uncertain', 'not_found')),
+	CONSTRAINT "send_attempt_number_positive_chk" CHECK ("integration"."send_attempt"."attempt_number" > 0),
+	CONSTRAINT "send_attempt_lifecycle_chk" CHECK (("integration"."send_attempt"."finished_at" IS NULL AND "integration"."send_attempt"."outcome" IS NULL)
+        OR ("integration"."send_attempt"."finished_at" IS NOT NULL AND "integration"."send_attempt"."outcome" IS NOT NULL))
+);
+--> statement-breakpoint
 ALTER TABLE "auth"."account" ADD CONSTRAINT "account_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."authorization_binding" ADD CONSTRAINT "authorization_binding_connection_id_connection_id_fk" FOREIGN KEY ("connection_id") REFERENCES "integration"."connection"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."connection" ADD CONSTRAINT "connection_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -723,8 +769,6 @@ ALTER TABLE "mail"."mailbox_thread" ADD CONSTRAINT "mailbox_thread_thread_accoun
 ALTER TABLE "mail"."submission" ADD CONSTRAINT "submission_mail_account_id_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."submission" ADD CONSTRAINT "email_submission_email_account_fk" FOREIGN KEY ("email_id","mail_account_id") REFERENCES "mail"."email"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."submission" ADD CONSTRAINT "email_submission_identity_account_fk" FOREIGN KEY ("identity_id","mail_account_id") REFERENCES "mail"."identity"("id","mail_account_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "integration"."send_attempt" ADD CONSTRAINT "send_attempt_mail_account_id_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "integration"."send_attempt" ADD CONSTRAINT "submission_attempt_submission_account_fk" FOREIGN KEY ("submission_id","mail_account_id") REFERENCES "mail"."submission"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."submission_blob" ADD CONSTRAINT "submission_blob_mail_account_id_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."submission_blob" ADD CONSTRAINT "submission_blob_submission_account_fk" FOREIGN KEY ("submission_id","mail_account_id") REFERENCES "mail"."submission"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."submission_blob" ADD CONSTRAINT "submission_blob_blob_account_fk" FOREIGN KEY ("blob_id","mail_account_id") REFERENCES "mail"."blob"("id","mail_account_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
@@ -735,6 +779,10 @@ ALTER TABLE "mail"."thread_reference" ADD CONSTRAINT "thread_reference_thread_ac
 ALTER TABLE "integration"."inbound_sync" ADD CONSTRAINT "inbound_sync_account_fk" FOREIGN KEY ("account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."inbound_sync_attempt" ADD CONSTRAINT "inbound_sync_attempt_item_fk" FOREIGN KEY ("item_id") REFERENCES "integration"."inbound_sync_item"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."inbound_sync_item" ADD CONSTRAINT "inbound_sync_item_sync_fk" FOREIGN KEY ("sync_id") REFERENCES "integration"."inbound_sync"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "integration"."outbound_delivery" ADD CONSTRAINT "outbound_delivery_account_connection_fk" FOREIGN KEY ("mail_account_id","connection_id") REFERENCES "mail"."account"("id","connection_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "integration"."outbound_delivery" ADD CONSTRAINT "outbound_delivery_submission_account_fk" FOREIGN KEY ("submission_id","mail_account_id") REFERENCES "mail"."submission"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "integration"."send_attempt" ADD CONSTRAINT "send_attempt_delivery_account_submission_fk" FOREIGN KEY ("delivery_id","mail_account_id","submission_id") REFERENCES "integration"."outbound_delivery"("id","mail_account_id","submission_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "integration"."send_attempt" ADD CONSTRAINT "send_attempt_submission_account_fk" FOREIGN KEY ("submission_id","mail_account_id") REFERENCES "mail"."submission"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "account_user_id_idx" ON "auth"."account" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "account_provider_user_id_idx" ON "auth"."account" USING btree ("provider_id","user_id");--> statement-breakpoint
 CREATE INDEX "account_expires_at_idx" ON "auth"."account" USING btree ("access_token_expires_at");--> statement-breakpoint
@@ -812,4 +860,7 @@ CREATE UNIQUE INDEX "inbound_sync_attempt_item_number_uidx" ON "integration"."in
 CREATE UNIQUE INDEX "inbound_sync_item_remote_message_uidx" ON "integration"."inbound_sync_item" USING btree ("sync_id","remote_message_id");--> statement-breakpoint
 CREATE INDEX "inbound_sync_item_pending_idx" ON "integration"."inbound_sync_item" USING btree ("sync_id","next_attempt_at","id") WHERE "integration"."inbound_sync_item"."status" = 'pending';--> statement-breakpoint
 CREATE INDEX "inbound_sync_item_due_pending_idx" ON "integration"."inbound_sync_item" USING btree ("next_attempt_at","sync_id") WHERE "integration"."inbound_sync_item"."status" = 'pending';--> statement-breakpoint
-CREATE INDEX "inbound_sync_item_lease_idx" ON "integration"."inbound_sync_item" USING btree ("lease_expires_at","id") WHERE "integration"."inbound_sync_item"."lease_expires_at" IS NOT NULL;
+CREATE INDEX "inbound_sync_item_lease_idx" ON "integration"."inbound_sync_item" USING btree ("lease_expires_at","id") WHERE "integration"."inbound_sync_item"."lease_expires_at" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "outbound_delivery_due_idx" ON "integration"."outbound_delivery" USING btree ("status","available_at","id") WHERE "integration"."outbound_delivery"."status" IN ('scheduled', 'ready', 'retry_wait', 'uncertain');--> statement-breakpoint
+CREATE INDEX "outbound_delivery_expired_lease_idx" ON "integration"."outbound_delivery" USING btree ("lease_expires_at","id") WHERE "integration"."outbound_delivery"."status" = 'leased';--> statement-breakpoint
+CREATE UNIQUE INDEX "send_attempt_open_delivery_uidx" ON "integration"."send_attempt" USING btree ("mail_account_id","delivery_id") WHERE "integration"."send_attempt"."finished_at" IS NULL AND "integration"."send_attempt"."kind" = 'send';

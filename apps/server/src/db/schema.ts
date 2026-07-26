@@ -470,4 +470,5 @@ export const emailTemplate = createAppTable(
 
 export * from '../modules/mail/postgres/schema';
 export * from '../modules/mail-sync/postgres/schema';
+export * from '../modules/mail-outbound/postgres/schema';
 export { appSchema, authSchema, integrationSchema, mailSchema } from './pg-schemas';

@@ -4,7 +4,6 @@ export {
   finalizeSubmissionSentInTransaction,
   type FinalizeSubmissionSentResult,
 } from './finalize-submission-sent';
-export { calculateRetryAt } from './retry-policy';
 export {
   allowedSubmissionTransitions,
   cancelSubmission,
@@ -16,7 +15,6 @@ export type {
   FinalizeSubmissionSentInput,
   FailedSubmissionOutcome,
   SentSubmissionOutcome,
-  SubmissionAttemptOutcome,
   SubmissionCompletionOutcome,
   SubmissionSafeResponse,
   SubmissionStatus,

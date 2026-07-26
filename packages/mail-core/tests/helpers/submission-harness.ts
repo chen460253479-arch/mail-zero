@@ -49,15 +49,6 @@ export async function createSubmissionHarness(
       });
       return buildResult(base, first.id, second.id, submissionId);
     }
-    await transitionSubmission(base.deps, {
-      accountId: base.accountId,
-      submissionId,
-      to: 'sending',
-      outcome: null,
-    });
-    if (options.initialStatus === 'sending') {
-      return buildResult(base, first.id, second.id, submissionId);
-    }
     if (options.initialStatus === 'sent') {
       await transitionSubmission(base.deps, {
         accountId: base.accountId,
@@ -71,13 +62,6 @@ export async function createSubmissionHarness(
         submissionId,
         to: 'failed',
         outcome: { type: 'failure', retryable: false },
-      });
-    } else {
-      await transitionSubmission(base.deps, {
-        accountId: base.accountId,
-        submissionId,
-        to: 'retry_wait',
-        outcome: { type: 'failure', retryable: true },
       });
     }
   }
@@ -108,7 +92,6 @@ const buildResult = (
     submissions: (accountId: MailAccountId = base.accountId) =>
       base.deps.inspect.submissions(accountId),
     submission: (id: EmailSubmissionId) => base.deps.inspect.submission(id),
-    attempts: (id: EmailSubmissionId) => base.deps.inspect.attempts(id),
   },
   mutate: {
     email: (id: EmailId, patch: Record<string, unknown>, accountId = base.accountId) =>

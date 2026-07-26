@@ -218,7 +218,7 @@ describe('MailAccount commands', () => {
     expect(await deps.inspect.stateVersion(account.id)).toBe(versionAfterChange);
   });
 
-  it.each<SubmissionStatus>(['scheduled', 'queued', 'sending', 'retry_wait'])(
+  it.each<SubmissionStatus>(['scheduled', 'queued'])(
     'rejects destroying an Identity used by a %s Submission',
     async (status) => {
       const deps = createMemoryMailCoreDependencies();
@@ -247,8 +247,6 @@ describe('MailAccount commands', () => {
           idempotencyKey: `key-${status}`,
           draftRevision: 1,
           frozenBlobs: [],
-          attemptCount: 0,
-          nextAttemptAt: null,
           providerMessageId: null,
           lastErrorCode: null,
           lastErrorMessage: null,
@@ -296,8 +294,6 @@ describe('MailAccount commands', () => {
         idempotencyKey: 'key-sent',
         draftRevision: 1,
         frozenBlobs: [],
-        attemptCount: 1,
-        nextAttemptAt: null,
         providerMessageId: 'provider-message',
         lastErrorCode: null,
         lastErrorMessage: null,

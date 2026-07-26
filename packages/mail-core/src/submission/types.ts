@@ -1,15 +1,6 @@
 import type { EmailId, EmailSubmissionId, IdentityId, MailAccountId } from '../types';
 
-export type SubmissionStatus =
-  | 'scheduled'
-  | 'queued'
-  | 'sending'
-  | 'retry_wait'
-  | 'sent'
-  | 'failed'
-  | 'canceled';
-
-export type SubmissionAttemptOutcome = 'sent' | 'transient_failure' | 'permanent_failure';
+export type SubmissionStatus = 'scheduled' | 'queued' | 'sent' | 'failed' | 'canceled';
 
 export const submissionSafeResponses = [
   'accepted',
