@@ -13,8 +13,9 @@ export class MailOutboundError extends Error {
     public readonly code: MailOutboundErrorCode,
     public readonly disposition: MailOutboundErrorDisposition,
     public readonly entityId?: string,
+    options?: ErrorOptions,
   ) {
-    super(code);
+    super(code, options);
     this.name = 'MailOutboundError';
   }
 }

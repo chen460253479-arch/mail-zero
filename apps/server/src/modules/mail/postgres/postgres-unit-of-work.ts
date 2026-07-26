@@ -6,14 +6,51 @@ import {
 } from '@zero/mail-core';
 import { eq, sql } from 'drizzle-orm';
 
+import { runAdapter, type MailDatabase } from './repositories/database';
 import { createPostgresRepositories } from './repositories';
-import { runAdapter } from './repositories/database';
 import { mailAccount } from './schema';
 import type { DB } from '../../../db';
 
-class CallbackFailure {
+export class CallbackFailure {
   constructor(readonly error: unknown) {}
 }
+
+export const createPostgresMailTransaction = (
+  transaction: MailDatabase,
+  allocated: Map<MailAccountId, bigint>,
+): MailTransaction => ({
+  ...createPostgresRepositories(transaction),
+  lockAccount: (accountId) =>
+    runAdapter(async () => {
+      const rows = await transaction
+        .select({ id: mailAccount.id })
+        .from(mailAccount)
+        .where(eq(mailAccount.id, accountId))
+        .for('update')
+        .limit(1);
+      if (rows.length === 0) {
+        throw new MailCoreError('ACCOUNT_NOT_FOUND', { entityId: accountId });
+      }
+    }),
+  nextStateVersion: (accountId) =>
+    runAdapter(async () => {
+      const existing = allocated.get(accountId);
+      if (existing !== undefined) {
+        return existing;
+      }
+      const rows = await transaction
+        .update(mailAccount)
+        .set({ stateVersion: sql`${mailAccount.stateVersion} + 1` })
+        .where(eq(mailAccount.id, accountId))
+        .returning({ stateVersion: mailAccount.stateVersion });
+      const stateVersion = rows[0]?.stateVersion;
+      if (stateVersion === undefined) {
+        throw new MailCoreError('ACCOUNT_NOT_FOUND', { entityId: accountId });
+      }
+      allocated.set(accountId, stateVersion);
+      return stateVersion;
+    }),
+});
 
 export class PostgresMailUnitOfWork implements MailUnitOfWork {
   constructor(private readonly db: DB) {}
@@ -23,41 +60,10 @@ export class PostgresMailUnitOfWork implements MailUnitOfWork {
       try {
         return await this.db.transaction(async (transaction) => {
           const allocated = new Map<MailAccountId, bigint>();
-          const repositories = createPostgresRepositories(transaction);
           try {
-            return (await operation({
-              ...repositories,
-              lockAccount: (accountId) =>
-                runAdapter(async () => {
-                  const rows = await transaction
-                    .select({ id: mailAccount.id })
-                    .from(mailAccount)
-                    .where(eq(mailAccount.id, accountId))
-                    .for('update')
-                    .limit(1);
-                  if (rows.length === 0) {
-                    throw new MailCoreError('ACCOUNT_NOT_FOUND', { entityId: accountId });
-                  }
-                }),
-              nextStateVersion: (accountId) =>
-                runAdapter(async () => {
-                  const existing = allocated.get(accountId);
-                  if (existing !== undefined) {
-                    return existing;
-                  }
-                  const rows = await transaction
-                    .update(mailAccount)
-                    .set({ stateVersion: sql`${mailAccount.stateVersion} + 1` })
-                    .where(eq(mailAccount.id, accountId))
-                    .returning({ stateVersion: mailAccount.stateVersion });
-                  const stateVersion = rows[0]?.stateVersion;
-                  if (stateVersion === undefined) {
-                    throw new MailCoreError('ACCOUNT_NOT_FOUND', { entityId: accountId });
-                  }
-                  allocated.set(accountId, stateVersion);
-                  return stateVersion;
-                }),
-            })) as Result;
+            return (await operation(
+              createPostgresMailTransaction(transaction, allocated),
+            )) as Result;
           } catch (error) {
             throw new CallbackFailure(error);
           }

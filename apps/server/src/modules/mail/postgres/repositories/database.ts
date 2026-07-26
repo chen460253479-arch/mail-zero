@@ -35,8 +35,6 @@ const errorForConstraint = (constraint: string | undefined): MailCoreErrorCode |
     case 'email_submission_account_idempotency_uidx':
     case 'remote_email_account_provider_remote_uidx':
       return 'IDEMPOTENCY_CONFLICT';
-    case 'submission_attempt_account_submission_number_uidx':
-      return 'INVALID_SUBMISSION_TRANSITION';
     case 'blob_account_sha_size_uidx':
       return 'BLOB_INTEGRITY';
     case 'mail_account_connection_user_fk':
@@ -66,7 +64,6 @@ const errorForConstraint = (constraint: string | undefined): MailCoreErrorCode |
     case 'email_submission_identity_account_fk':
     case 'thread_reference_email_account_fk':
     case 'thread_reference_thread_account_fk':
-    case 'submission_attempt_submission_account_fk':
     case 'submission_blob_submission_account_fk':
     case 'submission_blob_blob_account_fk':
       return 'CROSS_ACCOUNT_REFERENCE';
