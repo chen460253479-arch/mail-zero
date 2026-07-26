@@ -148,38 +148,59 @@ export class DbRpcDO extends RpcTarget {
     return await this.mainDo.findAuthorizationByNangoReference(integrationId, connectionId);
   }
 
-  async findManyNotesByThreadId(threadId: string): Promise<(typeof note.$inferSelect)[]> {
-    return await this.mainDo.findManyNotesByThreadId(this.userId, threadId);
+  async findManyNotesByThreadId(
+    connectionId: string,
+    threadId: string,
+  ): Promise<(typeof note.$inferSelect)[]> {
+    return await this.mainDo.findManyNotesByThreadId(this.userId, connectionId, threadId);
   }
 
-  async createNote(payload: Omit<typeof note.$inferInsert, 'userId'>) {
-    return await this.mainDo.createNote(this.userId, payload as typeof note.$inferInsert);
+  async createNote(
+    connectionId: string,
+    payload: Omit<typeof note.$inferInsert, 'userId' | 'connectionId'>,
+  ) {
+    return await this.mainDo.createNote(
+      this.userId,
+      connectionId,
+      payload as typeof note.$inferInsert,
+    );
   }
 
-  async updateNote(noteId: string, payload: Partial<typeof note.$inferInsert>) {
-    return await this.mainDo.updateNote(this.userId, noteId, payload);
+  async updateNote(
+    connectionId: string,
+    noteId: string,
+    payload: Partial<typeof note.$inferInsert>,
+  ) {
+    return await this.mainDo.updateNote(this.userId, connectionId, noteId, payload);
   }
 
   async updateManyNotes(
+    connectionId: string,
     notes: { id: string; order: number; isPinned?: boolean | null }[],
   ): Promise<boolean> {
-    return await this.mainDo.updateManyNotes(this.userId, notes);
+    return await this.mainDo.updateManyNotes(this.userId, connectionId, notes);
   }
 
-  async findManyNotesByIds(noteIds: string[]): Promise<(typeof note.$inferSelect)[]> {
-    return await this.mainDo.findManyNotesByIds(this.userId, noteIds);
+  async findManyNotesByIds(
+    connectionId: string,
+    noteIds: string[],
+  ): Promise<(typeof note.$inferSelect)[]> {
+    return await this.mainDo.findManyNotesByIds(this.userId, connectionId, noteIds);
   }
 
-  async deleteNote(noteId: string) {
-    return await this.mainDo.deleteNote(this.userId, noteId);
+  async deleteNote(connectionId: string, noteId: string) {
+    return await this.mainDo.deleteNote(this.userId, connectionId, noteId);
   }
 
-  async findNoteById(noteId: string): Promise<typeof note.$inferSelect | undefined> {
-    return await this.mainDo.findNoteById(this.userId, noteId);
+  async findNoteById(
+    connectionId: string,
+    noteId: string,
+  ): Promise<typeof note.$inferSelect | undefined> {
+    return await this.mainDo.findNoteById(this.userId, connectionId, noteId);
   }
 
-  async findHighestNoteOrder(): Promise<{ order: number } | undefined> {
-    return await this.mainDo.findHighestNoteOrder(this.userId);
+  async findHighestNoteOrder(connectionId: string): Promise<{ order: number } | undefined> {
+    return await this.mainDo.findHighestNoteOrder(this.userId, connectionId);
   }
 
   async deleteUser() {
@@ -403,20 +424,26 @@ class ZeroDB extends DurableObject<ZeroEnv> {
 
   async findManyNotesByThreadId(
     userId: string,
+    connectionId: string,
     threadId: string,
   ): Promise<(typeof note.$inferSelect)[]> {
     return await this.db.query.note.findMany({
-      where: and(eq(note.userId, userId), eq(note.threadId, threadId)),
+      where: and(
+        eq(note.userId, userId),
+        eq(note.connectionId, connectionId),
+        eq(note.threadId, threadId),
+      ),
       orderBy: [desc(note.isPinned), asc(note.order), desc(note.createdAt)],
     });
   }
 
-  async createNote(userId: string, payload: typeof note.$inferInsert) {
+  async createNote(userId: string, connectionId: string, payload: typeof note.$inferInsert) {
     return await this.db
       .insert(note)
       .values({
         ...payload,
         userId,
+        connectionId,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
@@ -425,6 +452,7 @@ class ZeroDB extends DurableObject<ZeroEnv> {
 
   async updateNote(
     userId: string,
+    connectionId: string,
     noteId: string,
     payload: Partial<typeof note.$inferInsert>,
   ): Promise<typeof note.$inferSelect | undefined> {
@@ -434,13 +462,14 @@ class ZeroDB extends DurableObject<ZeroEnv> {
         ...payload,
         updatedAt: new Date(),
       })
-      .where(and(eq(note.id, noteId), eq(note.userId, userId)))
+      .where(and(eq(note.id, noteId), eq(note.userId, userId), eq(note.connectionId, connectionId)))
       .returning();
     return updated;
   }
 
   async updateManyNotes(
     userId: string,
+    connectionId: string,
     notes: { id: string; order: number; isPinned?: boolean | null }[],
   ): Promise<boolean> {
     return await this.db.transaction(async (tx) => {
@@ -456,7 +485,9 @@ class ZeroDB extends DurableObject<ZeroEnv> {
         await tx
           .update(note)
           .set(updateData)
-          .where(and(eq(note.id, n.id), eq(note.userId, userId)));
+          .where(
+            and(eq(note.id, n.id), eq(note.userId, userId), eq(note.connectionId, connectionId)),
+          );
       }
       return true;
     });
@@ -464,29 +495,42 @@ class ZeroDB extends DurableObject<ZeroEnv> {
 
   async findManyNotesByIds(
     userId: string,
+    connectionId: string,
     noteIds: string[],
   ): Promise<(typeof note.$inferSelect)[]> {
     return await this.db.query.note.findMany({
-      where: and(eq(note.userId, userId), inArray(note.id, noteIds)),
+      where: and(
+        eq(note.userId, userId),
+        eq(note.connectionId, connectionId),
+        inArray(note.id, noteIds),
+      ),
     });
   }
 
-  async deleteNote(userId: string, noteId: string) {
-    return await this.db.delete(note).where(and(eq(note.id, noteId), eq(note.userId, userId)));
+  async deleteNote(userId: string, connectionId: string, noteId: string) {
+    return await this.db
+      .delete(note)
+      .where(
+        and(eq(note.id, noteId), eq(note.userId, userId), eq(note.connectionId, connectionId)),
+      );
   }
 
   async findNoteById(
     userId: string,
+    connectionId: string,
     noteId: string,
   ): Promise<typeof note.$inferSelect | undefined> {
     return await this.db.query.note.findFirst({
-      where: and(eq(note.id, noteId), eq(note.userId, userId)),
+      where: and(eq(note.id, noteId), eq(note.userId, userId), eq(note.connectionId, connectionId)),
     });
   }
 
-  async findHighestNoteOrder(userId: string): Promise<{ order: number } | undefined> {
+  async findHighestNoteOrder(
+    userId: string,
+    connectionId: string,
+  ): Promise<{ order: number } | undefined> {
     return await this.db.query.note.findFirst({
-      where: eq(note.userId, userId),
+      where: and(eq(note.userId, userId), eq(note.connectionId, connectionId)),
       orderBy: desc(note.order),
       columns: { order: true },
     });

@@ -1,15 +1,19 @@
+import { activeConnectionProcedure, router } from '../trpc';
 import { NotesManager } from '../../lib/notes-manager';
-import { privateProcedure, router } from '../trpc';
 import { z } from 'zod';
 
-const notesProcedure = privateProcedure.use(async ({ ctx, next }) => {
+const notesProcedure = activeConnectionProcedure.use(async ({ ctx, next }) => {
   const notesManager = new NotesManager();
   return next({ ctx: { ...ctx, notesManager } });
 });
 
 export const notesRouter = router({
   list: notesProcedure.input(z.object({ threadId: z.string() })).query(async ({ ctx, input }) => {
-    const notes = await ctx.notesManager.getThreadNotes(ctx.sessionUser.id, input.threadId);
+    const notes = await ctx.notesManager.getThreadNotes(
+      ctx.sessionUser.id,
+      ctx.activeConnection.id,
+      input.threadId,
+    );
     return { notes };
   }),
   create: notesProcedure
@@ -25,6 +29,7 @@ export const notesRouter = router({
       const { threadId, color, content, isPinned } = input;
       const note = await ctx.notesManager.createNote(
         ctx.sessionUser.id,
+        ctx.activeConnection.id,
         threadId,
         content,
         color,
@@ -47,13 +52,22 @@ export const notesRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const note = await ctx.notesManager.updateNote(ctx.sessionUser.id, input.noteId, input.data);
+      const note = await ctx.notesManager.updateNote(
+        ctx.sessionUser.id,
+        ctx.activeConnection.id,
+        input.noteId,
+        input.data,
+      );
       return { note };
     }),
   delete: notesProcedure
     .input(z.object({ noteId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const success = await ctx.notesManager.deleteNote(ctx.sessionUser.id, input.noteId);
+      const success = await ctx.notesManager.deleteNote(
+        ctx.sessionUser.id,
+        ctx.activeConnection.id,
+        input.noteId,
+      );
       return { success };
     }),
   reorder: notesProcedure
@@ -80,7 +94,11 @@ export const notesRouter = router({
         notes.map(({ id, order, isPinned }) => ({ id, order, isPinned })),
       );
 
-      const result = await ctx.notesManager.reorderNotes(ctx.sessionUser.id, notes);
+      const result = await ctx.notesManager.reorderNotes(
+        ctx.sessionUser.id,
+        ctx.activeConnection.id,
+        notes,
+      );
       return { success: result };
     }),
 });

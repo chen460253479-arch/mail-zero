@@ -4,13 +4,18 @@ import { note } from '../db/schema';
 export class NotesManager {
   constructor() {}
 
-  async getThreadNotes(userId: string, threadId: string): Promise<(typeof note.$inferSelect)[]> {
+  async getThreadNotes(
+    userId: string,
+    connectionId: string,
+    threadId: string,
+  ): Promise<(typeof note.$inferSelect)[]> {
     const db = await getZeroDB(userId);
-    return await db.findManyNotesByThreadId(threadId);
+    return await db.findManyNotesByThreadId(connectionId, threadId);
   }
 
   async createNote(
     userId: string,
+    connectionId: string,
     threadId: string,
     content: string,
     color: string = 'default',
@@ -18,10 +23,10 @@ export class NotesManager {
   ): Promise<typeof note.$inferSelect> {
     try {
       const db = await getZeroDB(userId);
-      const highestOrder = await db.findHighestNoteOrder();
+      const highestOrder = await db.findHighestNoteOrder(connectionId);
 
       const id = crypto.randomUUID();
-      const result = await db.createNote({
+      const result = await db.createNote(connectionId, {
         id,
         threadId,
         content,
@@ -41,19 +46,23 @@ export class NotesManager {
 
   async updateNote(
     userId: string,
+    connectionId: string,
     noteId: string,
     data: Partial<
-      Omit<typeof note.$inferSelect, 'id' | 'userId' | 'threadId' | 'createdAt' | 'updatedAt'>
+      Omit<
+        typeof note.$inferSelect,
+        'id' | 'userId' | 'connectionId' | 'threadId' | 'createdAt' | 'updatedAt'
+      >
     >,
   ): Promise<typeof note.$inferSelect> {
     const db = await getZeroDB(userId);
-    const existingNote = await db.findNoteById(noteId);
+    const existingNote = await db.findNoteById(connectionId, noteId);
 
     if (!existingNote) {
       throw new Error('Note not found or unauthorized');
     }
 
-    const result = await db.updateNote(noteId, data);
+    const result = await db.updateNote(connectionId, noteId, data);
 
     if (!result) {
       throw new Error('Failed to update note');
@@ -61,10 +70,10 @@ export class NotesManager {
     return result;
   }
 
-  async deleteNote(userId: string, noteId: string) {
+  async deleteNote(userId: string, connectionId: string, noteId: string) {
     const db = await getZeroDB(userId);
     try {
-      await db.deleteNote(noteId);
+      await db.deleteNote(connectionId, noteId);
       return true;
     } catch (error) {
       console.error('Error deleting note:', error);
@@ -74,6 +83,7 @@ export class NotesManager {
 
   async reorderNotes(
     userId: string,
+    connectionId: string,
     notes: { id: string; order: number; isPinned?: boolean | null }[],
   ): Promise<boolean> {
     if (!notes || notes.length === 0) {
@@ -83,7 +93,7 @@ export class NotesManager {
     const noteIds = notes.map((n) => n.id);
 
     const db = await getZeroDB(userId);
-    const userNotes = await db.findManyNotesByIds(noteIds);
+    const userNotes = await db.findManyNotesByIds(connectionId, noteIds);
 
     const foundNoteIds = new Set(userNotes.map((n) => n.id));
 
@@ -93,6 +103,6 @@ export class NotesManager {
       throw new Error('One or more notes not found or unauthorized');
     }
 
-    return await db.updateManyNotes(notes);
+    return await db.updateManyNotes(connectionId, notes);
   }
 }

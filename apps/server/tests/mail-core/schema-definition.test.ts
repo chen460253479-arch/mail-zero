@@ -1,8 +1,8 @@
 import { getTableConfig, IndexedColumn, PgDialect } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 
-import * as schema from '../../src/db/schema';
 import { expectedLocations } from './helpers/schema-contract';
+import * as schema from '../../src/db/schema';
 
 describe('local mail schema', () => {
   it('uses stable PostgreSQL-safe names for every declared constraint', () => {
@@ -30,9 +30,7 @@ describe('local mail schema', () => {
     }
 
     expect(
-      getTableConfig(schema.connection).uniqueConstraints.map((constraint) =>
-        constraint.getName(),
-      ),
+      getTableConfig(schema.connection).uniqueConstraints.map((constraint) => constraint.getName()),
     ).toContain('connection_user_email_uidx');
     expect(
       getTableConfig(schema.authorizationBinding).uniqueConstraints.map((constraint) =>
@@ -172,12 +170,38 @@ describe('local mail schema', () => {
   );
 
   it('does not duplicate primary-key coverage with ordinary indexes', () => {
-    expect(getTableConfig(schema.mailChange).indexes.map(({ config }) => config.name)).not.toContain(
-      'mail_change_account_state_collection_entity_idx',
-    );
+    expect(
+      getTableConfig(schema.mailChange).indexes.map(({ config }) => config.name),
+    ).not.toContain('mail_change_account_state_collection_entity_idx');
     expect(
       getTableConfig(schema.threadReference).indexes.map(({ config }) => config.name),
     ).not.toContain('thread_reference_account_subject_message_idx');
+  });
+
+  it('scopes legacy mail projections by Connection', () => {
+    const summaryConfig = getTableConfig(schema.summary);
+    expect(summaryConfig.columns.find(({ name }) => name === 'message_id')?.primary).toBe(false);
+    expect(
+      summaryConfig.primaryKeys
+        .find(({ name }) => name === 'summary_pk')
+        ?.columns.map(({ name }) => name),
+    ).toEqual(['connection_id', 'message_id']);
+
+    const noteConfig = getTableConfig(schema.note);
+    expect(noteConfig.columns.map(({ name }) => name)).toContain('connection_id');
+    expect(
+      noteConfig.foreignKeys
+        .find((foreignKey) => foreignKey.getName() === 'note_connection_fk')
+        ?.reference()
+        .columns.map(({ name }) => name),
+    ).toEqual(['connection_id']);
+    expect(
+      noteConfig.indexes
+        .find(({ config }) => config.name === 'note_user_connection_thread_idx')
+        ?.config.columns.map((column) =>
+          column instanceof IndexedColumn ? column.name : undefined,
+        ),
+    ).toEqual(['user_id', 'connection_id', 'thread_id']);
   });
 
   it('exports every local mail collection', () => {

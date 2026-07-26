@@ -3344,6 +3344,15 @@ exports[`database structural parity > preserves every field, constraint, index, 
       {
         "defaultValue": undefined,
         "hasRuntimeDefault": false,
+        "name": "connection_id",
+        "notNull": true,
+        "primary": false,
+        "sqlType": "text",
+        "unique": false,
+      },
+      {
+        "defaultValue": undefined,
+        "hasRuntimeDefault": false,
         "name": "thread_id",
         "notNull": true,
         "primary": false,
@@ -3417,6 +3426,17 @@ exports[`database structural parity > preserves every field, constraint, index, 
         "onDelete": "cascade",
         "onUpdate": "no action",
       },
+      {
+        "columns": [
+          "connection_id",
+        ],
+        "foreignColumns": [
+          "id",
+        ],
+        "foreignTableExport": "connection",
+        "onDelete": "cascade",
+        "onUpdate": "no action",
+      },
     ],
     "indexes": [
       {
@@ -3429,7 +3449,7 @@ exports[`database structural parity > preserves every field, constraint, index, 
       },
       {
         "columns": [
-          "thread_id",
+          "connection_id",
         ],
         "method": "btree",
         "unique": false,
@@ -3438,6 +3458,7 @@ exports[`database structural parity > preserves every field, constraint, index, 
       {
         "columns": [
           "user_id",
+          "connection_id",
           "thread_id",
         ],
         "method": "btree",
@@ -4343,7 +4364,7 @@ exports[`database structural parity > preserves every field, constraint, index, 
         "hasRuntimeDefault": false,
         "name": "message_id",
         "notNull": true,
-        "primary": true,
+        "primary": false,
         "sqlType": "text",
         "unique": false,
       },
@@ -4451,7 +4472,12 @@ exports[`database structural parity > preserves every field, constraint, index, 
         "where": undefined,
       },
     ],
-    "primaryKeys": [],
+    "primaryKeys": [
+      [
+        "connection_id",
+        "message_id",
+      ],
+    ],
     "uniqueConstraints": [],
   },
   "systemIntegrationConfig": {

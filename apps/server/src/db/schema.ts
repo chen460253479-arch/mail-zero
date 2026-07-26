@@ -7,6 +7,7 @@ import {
   primaryKey,
   unique,
   index,
+  foreignKey,
 } from 'drizzle-orm/pg-core';
 import { appSchema, authSchema, integrationSchema } from './pg-schemas';
 import type { MailChannelId } from '../lib/mail-channel/types';
@@ -231,7 +232,7 @@ export const integrationOAuthSession = createIntegrationTable(
 export const summary = createAppTable(
   'summary',
   {
-    messageId: text('message_id').primaryKey(),
+    messageId: text('message_id').notNull(),
     content: text('content').notNull(),
     createdAt: timestamp('created_at').notNull(),
     updatedAt: timestamp('updated_at').notNull(),
@@ -243,6 +244,7 @@ export const summary = createAppTable(
     suggestedReply: text('suggested_reply'),
   },
   (t) => [
+    primaryKey({ name: 'summary_pk', columns: [t.connectionId, t.messageId] }),
     index('summary_connection_id_idx').on(t.connectionId),
     index('summary_connection_id_saved_idx').on(t.connectionId, t.saved),
     index('summary_saved_idx').on(t.saved),
@@ -257,6 +259,7 @@ export const note = createAppTable(
     userId: text('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
+    connectionId: text('connection_id').notNull(),
     threadId: text('thread_id').notNull(),
     content: text('content').notNull(),
     color: text('color').notNull().default('default'),
@@ -266,9 +269,14 @@ export const note = createAppTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (t) => [
+    foreignKey({
+      name: 'note_connection_fk',
+      columns: [t.connectionId],
+      foreignColumns: [connection.id],
+    }).onDelete('cascade'),
     index('note_user_id_idx').on(t.userId),
-    index('note_thread_id_idx').on(t.threadId),
-    index('note_user_thread_idx').on(t.userId, t.threadId),
+    index('note_connection_id_idx').on(t.connectionId),
+    index('note_user_connection_thread_idx').on(t.userId, t.connectionId, t.threadId),
     index('note_is_pinned_idx').on(t.isPinned),
   ],
 );
