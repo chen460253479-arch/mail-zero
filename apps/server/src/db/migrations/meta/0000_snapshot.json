@@ -1,5 +1,5 @@
 {
-  "id": "d3f7d8f5-576f-486b-aae1-4ccc587e8bf7",
+  "id": "ed091913-00af-4fdc-b282-72f54090e292",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -5769,6 +5769,18 @@
         "last_reconciled_at": {
           "name": "last_reconciled_at",
           "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_code": {
+          "name": "last_error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_message": {
+          "name": "last_error_message",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },

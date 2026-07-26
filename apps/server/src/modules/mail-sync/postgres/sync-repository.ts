@@ -106,6 +106,8 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
         .set({
           status: 'active',
           subscriptionExpiresAt: input.subscriptionExpiresAt,
+          lastErrorCode: null,
+          lastErrorMessage: null,
           updatedAt: sql`now()`,
         })
         .where(
@@ -211,6 +213,8 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
           .set({
             checkpoint,
             lastDiscoveredAt: sql`now()`,
+            lastErrorCode: null,
+            lastErrorMessage: null,
             updatedAt: sql`now()`,
           })
           .where(and(eq(inboundSync.id, input.syncId), eq(inboundSync.leaseOwner, input.owner)));
@@ -374,6 +378,66 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
           finishedAt: sql`now()`,
         });
       });
+    },
+
+    pauseSync: async (input: {
+      syncId: string;
+      owner: string;
+      errorCode: string;
+      errorMessage: string;
+    }): Promise<void> => {
+      const rows = await db
+        .update(inboundSync)
+        .set({
+          status: 'paused',
+          lastErrorCode: input.errorCode,
+          lastErrorMessage: input.errorMessage,
+          leaseOwner: null,
+          leaseExpiresAt: null,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(inboundSync.id, input.syncId),
+            eq(inboundSync.status, 'active'),
+            eq(inboundSync.leaseOwner, input.owner),
+            gt(inboundSync.leaseExpiresAt, sql`now()`),
+          ),
+        )
+        .returning({ id: inboundSync.id });
+      if (rows.length === 0) {
+        leaseLost();
+      }
+    },
+
+    markAuthError: async (input: {
+      syncId: string;
+      owner: string;
+      errorCode: string;
+      errorMessage: string;
+    }): Promise<void> => {
+      const rows = await db
+        .update(inboundSync)
+        .set({
+          status: 'auth_error',
+          lastErrorCode: input.errorCode,
+          lastErrorMessage: input.errorMessage,
+          leaseOwner: null,
+          leaseExpiresAt: null,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(inboundSync.id, input.syncId),
+            eq(inboundSync.status, 'active'),
+            eq(inboundSync.leaseOwner, input.owner),
+            gt(inboundSync.leaseExpiresAt, sql`now()`),
+          ),
+        )
+        .returning({ id: inboundSync.id });
+      if (rows.length === 0) {
+        leaseLost();
+      }
     },
   };
 };

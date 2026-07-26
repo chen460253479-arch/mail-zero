@@ -34,6 +34,8 @@ export const inboundSync = createIntegrationTable(
     lastSignalAt: timestamp('last_signal_at', { withTimezone: true }),
     lastDiscoveredAt: timestamp('last_discovered_at', { withTimezone: true }),
     lastReconciledAt: timestamp('last_reconciled_at', { withTimezone: true }),
+    lastErrorCode: text('last_error_code'),
+    lastErrorMessage: text('last_error_message'),
     leaseOwner: text('lease_owner'),
     leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

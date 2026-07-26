@@ -313,4 +313,78 @@ describe('PostgreSQL mail sync repository', () => {
       ]);
     });
   });
+
+  it('moves only the leased active stream into paused or authentication error states', async () => {
+    await withMailSyncTestDatabase(async ({ db, sql }) => {
+      await insertMailSyncAccountFixture(sql);
+      const repository = createRepository(db);
+
+      for (const [scopeKey, transition] of [
+        ['inbox-pause', 'pause'] as const,
+        ['inbox-auth', 'auth'] as const,
+      ]) {
+        const sync = await repository.createActivatingSync({
+          accountId: 'account-1',
+          provider: 'gmail',
+          scopeKey,
+          scope,
+        });
+        await repository.storeActivationCheckpoint({
+          syncId: sync.id,
+          checkpoint: { version: 1, historyId: '100' },
+        });
+        await repository.activate({
+          syncId: sync.id,
+          subscriptionExpiresAt: null,
+        });
+        await repository.acquireSyncLease({
+          syncId: sync.id,
+          owner: 'worker-1',
+          leaseForMs: 60_000,
+        });
+
+        await expect(
+          transition === 'pause'
+            ? repository.pauseSync({
+                syncId: sync.id,
+                owner: 'wrong-worker',
+                errorCode: 'GAP',
+                errorMessage: 'gap',
+              })
+            : repository.markAuthError({
+                syncId: sync.id,
+                owner: 'wrong-worker',
+                errorCode: 'AUTH',
+                errorMessage: 'auth',
+              }),
+        ).rejects.toThrow('MAIL_SYNC_LEASE_LOST');
+
+        if (transition === 'pause') {
+          await repository.pauseSync({
+            syncId: sync.id,
+            owner: 'worker-1',
+            errorCode: 'GAP',
+            errorMessage: 'gap',
+          });
+        } else {
+          await repository.markAuthError({
+            syncId: sync.id,
+            owner: 'worker-1',
+            errorCode: 'AUTH',
+            errorMessage: 'auth',
+          });
+        }
+      }
+
+      const states = await sql<{ scope_key: string; status: string; lease_owner: string | null }[]>`
+        SELECT scope_key, status, lease_owner
+        FROM integration.inbound_sync
+        ORDER BY scope_key
+      `;
+      expect(states).toEqual([
+        { scope_key: 'inbox-auth', status: 'auth_error', lease_owner: null },
+        { scope_key: 'inbox-pause', status: 'paused', lease_owner: null },
+      ]);
+    });
+  });
 });

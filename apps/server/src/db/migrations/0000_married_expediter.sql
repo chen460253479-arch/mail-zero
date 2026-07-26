@@ -606,6 +606,8 @@ CREATE TABLE "integration"."inbound_sync" (
 	"last_signal_at" timestamp with time zone,
 	"last_discovered_at" timestamp with time zone,
 	"last_reconciled_at" timestamp with time zone,
+	"last_error_code" text,
+	"last_error_message" text,
 	"lease_owner" text,
 	"lease_expires_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,

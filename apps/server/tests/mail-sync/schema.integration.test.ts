@@ -18,6 +18,16 @@ describe('mail sync database schema', () => {
         'inbound_sync_item',
       ]);
 
+      const syncColumns = await sql<{ column_name: string }[]>`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'integration'
+          AND table_name = 'inbound_sync'
+      `;
+      expect(syncColumns.map(({ column_name }) => column_name)).toEqual(
+        expect.arrayContaining(['last_error_code', 'last_error_message']),
+      );
+
       const indexes = await sql<{ indexname: string }[]>`
         SELECT indexname
         FROM pg_indexes
