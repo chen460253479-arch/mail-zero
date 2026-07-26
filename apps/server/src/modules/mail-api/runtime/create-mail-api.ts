@@ -1,18 +1,19 @@
 import type { Id, MailAccountId, MailAccountRecord, MailCore } from '@zero/mail-core';
 import { ulid } from 'ulid';
 
+import { createMailOutboundRuntimeForEnvironment } from '../../../runtime/mail/outbound';
 import { preprocessEmailHtml } from '../../../lib/email-processor';
 import { createMailCoreRuntime, R2BlobStore } from '../../mail';
+import type { MailOutboundRuntime } from '../../mail-outbound';
 import { MailApiError } from '../errors/mail-api-error';
 import { createDb, type DB } from '../../../db';
+import type { ZeroEnv } from '../../../env';
 
-export type MailApiEnvironment = {
-  HYPERDRIVE: { connectionString: string };
-  THREADS_BUCKET: ConstructorParameters<typeof R2BlobStore>[0];
-};
+export type MailApiEnvironment = ZeroEnv;
 
 export type MailApiRuntime = {
   core: MailCore;
+  outbound: MailOutboundRuntime;
   db: DB;
 };
 
@@ -27,6 +28,7 @@ export type OwnedMailApiRuntime = OpenMailApiRuntime & {
 export function createMailApiRuntime(db: DB, runtimeEnv: MailApiEnvironment): MailApiRuntime {
   return {
     db,
+    outbound: createMailOutboundRuntimeForEnvironment(db, runtimeEnv),
     core: createMailCoreRuntime({
       db,
       blobStore: new R2BlobStore(runtimeEnv.THREADS_BUCKET),

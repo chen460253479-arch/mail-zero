@@ -37,6 +37,7 @@ describe('mailAccountProcedure', () => {
       async (): Promise<OwnedMailApiRuntime> => ({
         account: account(),
         core: {} as MailCore,
+        outbound: {} as OwnedMailApiRuntime['outbound'],
         db: {} as OwnedMailApiRuntime['db'],
         close,
       }),

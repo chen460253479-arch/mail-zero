@@ -19,7 +19,7 @@ import type { ZeroEnv } from '../../env';
 const OUTBOUND_LEASE_MS = 5 * 60_000;
 const OUTBOUND_SCAN_LIMIT = 100;
 
-export const createMailOutboundWorkerRuntime = (
+export const createMailOutboundRuntimeForEnvironment = (
   db: DB,
   runtimeEnv: ZeroEnv,
 ): MailOutboundRuntime => {
@@ -97,7 +97,7 @@ export const runMailOutboundCommand = async (
 ): Promise<void> => {
   const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
   try {
-    await createMailOutboundWorkerRuntime(db, runtimeEnv).process(command);
+    await createMailOutboundRuntimeForEnvironment(db, runtimeEnv).process(command);
   } finally {
     await conn.end();
   }
@@ -108,7 +108,7 @@ export const enqueueDueMailOutboundWork = async (
 ): Promise<{ due: number; expired: number; uncertain: number }> => {
   const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
   try {
-    return await createMailOutboundWorkerRuntime(db, runtimeEnv).enqueueDue();
+    return await createMailOutboundRuntimeForEnvironment(db, runtimeEnv).enqueueDue();
   } finally {
     await conn.end();
   }

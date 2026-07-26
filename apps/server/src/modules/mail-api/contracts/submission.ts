@@ -10,15 +10,7 @@ import {
   stateSchema,
 } from './common';
 
-export const submissionStatusSchema = z.enum([
-  'scheduled',
-  'queued',
-  'sending',
-  'retry_wait',
-  'sent',
-  'failed',
-  'canceled',
-]);
+export const submissionStatusSchema = z.enum(['scheduled', 'queued', 'sent', 'failed', 'canceled']);
 
 export const submissionSchema = z.object({
   id: mailIdSchema,
