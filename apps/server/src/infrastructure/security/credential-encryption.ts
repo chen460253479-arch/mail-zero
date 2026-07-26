@@ -17,13 +17,10 @@ const decodeKey = (value: string): Uint8Array => {
 };
 
 const importKey = async (encodedKey: string): Promise<CryptoKey> =>
-  await crypto.subtle.importKey(
-    'raw',
-    decodeKey(encodedKey),
-    { name: 'AES-GCM' },
-    false,
-    ['encrypt', 'decrypt'],
-  );
+  await crypto.subtle.importKey('raw', decodeKey(encodedKey), { name: 'AES-GCM' }, false, [
+    'encrypt',
+    'decrypt',
+  ]);
 
 export const encryptCredential = async (value: unknown, encodedKey: string): Promise<string> => {
   const iv = crypto.getRandomValues(new Uint8Array(12));

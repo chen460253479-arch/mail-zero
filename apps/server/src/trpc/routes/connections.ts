@@ -13,7 +13,7 @@ import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router 
 import { withNangoRuntime, type NangoRuntime } from '../../modules/mail-accounts/runtime/nango';
 import { resolveFetchedNangoCredential } from '../../modules/mail-accounts/credentials/nango';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
-import { findMailChannel, getMailChannel } from '../../lib/mail-channel/registry';
+import { findMailChannel } from '../../lib/mail-channel/registry';
 import { deleteConnectionLocalData, getZeroDB } from '../../lib/server-utils';
 import { defaultMailChannelRegistry } from '../../mail-channel/registry';
 import { NangoIntegrationError } from '../../integrations/nango/errors';
@@ -140,7 +140,7 @@ export const connectionsRouter = router({
       };
     }),
   getGmailAuthorizationOptions: privateProcedure.query(getGmailAuthorizationOptions),
-  listNangoGmailConnections: privateProcedure.query(async ({ ctx }) => {
+  listNangoGmailConnections: privateProcedure.query(async () => {
     return await withConfiguredNango(async (runtime) => {
       const mapping = await runtime.integrationRepository.getMapping('gmail', 'nango');
       if (!mapping) {

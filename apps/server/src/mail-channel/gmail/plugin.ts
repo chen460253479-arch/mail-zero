@@ -1,6 +1,6 @@
 import { createGmailTransportFromExecutor, type GmailApiExecutor } from './shared/api-transport';
-import type { MailChannelIdentity, MailChannelPlugin, ResolvedCredential } from '../contracts';
 import { createGoogleGmailApiExecutor, resolveGoogleGmailIdentity } from './shared/google-api';
+import type { MailChannelIdentity, MailChannelPlugin, ResolvedCredential } from '../contracts';
 import { createGmailIngressAdapter } from './inbound/adapter';
 import { createGmailApiClient } from './shared/api-client';
 import { gmailNangoProviders } from './metadata';
