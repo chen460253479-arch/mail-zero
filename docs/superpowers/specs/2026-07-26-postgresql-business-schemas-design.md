@@ -287,3 +287,27 @@ Schema 归属与运行时权限是部署层责任：
 - 本地邮箱内核全部自动化测试通过；
 - Server 类型检查、Lint 与构建不因 Schema 调整失败；
 - Gmail 入栈同步尚未开始，且后续集成表有明确归属位置。
+
+## 实施验证记录（2026-07-26）
+
+- 唯一开发基线：`apps/server/src/db/migrations/0000_giant_blindfold.sql`；
+- 基线包含 4 条 `CREATE SCHEMA`、40 条 `CREATE TABLE`，不包含业务
+  `INSERT`，只有一份 `0000_snapshot.json` 和一条迁移日志记录；
+- 表分布为 `auth=8`、`app=7`、`integration=7`、`mail=18`，`public`
+  中没有 Zero 业务表；
+- 结构特征快照在 Schema 与物理表名调整前后保持不变，字段、类型、默认值、
+  主键、唯一约束、检查约束、索引、外键及级联动作未发生结构漂移；
+- 全新临时数据库执行原生 `db:push` 成功，得到上述 40 张表；
+- 另一全新临时数据库执行 `db:migrate` 成功，得到上述 40 张表，并仅记录
+  1 条 Drizzle 基线迁移；
+- 再次执行 `pnpm db:generate` 输出 `No schema changes, nothing to migrate`；
+- `pnpm test:mail-core` 通过：领域包 270 项、Server 邮件内核 86 项，共
+  356 项通过；1 项显式规模测试跳过；
+- 本次数据库及邮件内核目录的定向 ESLint 通过，相关文件无 TypeScript
+  错误；`@zero/mail-core` 类型检查通过；
+- `pnpm build` 成功。构建仍输出既有前端 oxlint 启动、CSS 和 chunk
+  大小警告，但退出码为 0；
+- Server 全目录 ESLint 仍会扫描 `.wrangler/tmp` 生成文件及旧模块，
+  报告 3102 个既有错误；Server 全量 TypeScript 也仍有既有 Cloudflare
+  Env、旧驱动和第三方包错误。本次变更涉及的文件经定向检查均无错误，未越权
+  修改这些既有问题。
