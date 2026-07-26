@@ -21,20 +21,12 @@ export async function destroyMailbox(
         entityId: input.mailboxId,
       });
     }
-    if (
-      (await tx.mailboxes.listByAccount(input.accountId)).some(
-        (candidate) => candidate.parentId === mailbox.id,
-      )
-    ) {
+    if (await tx.mailboxes.hasChild(input.accountId, mailbox.id)) {
       throw new MailCoreError('MAILBOX_HAS_CHILD', {
         entityId: input.mailboxId,
       });
     }
-    if (
-      (await tx.emails.listByAccount(input.accountId)).some((email) =>
-        email.mailboxIds.includes(mailbox.id),
-      )
-    ) {
+    if (await tx.mailboxes.hasEmail(input.accountId, mailbox.id)) {
       throw new MailCoreError('MAILBOX_HAS_EMAIL', {
         entityId: input.mailboxId,
       });

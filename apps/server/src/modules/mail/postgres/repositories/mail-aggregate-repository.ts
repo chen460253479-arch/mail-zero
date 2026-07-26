@@ -1,5 +1,5 @@
 import type { MailAggregateRepository, MailboxId, ThreadId } from '@zero/mail-core';
-import { and, asc, desc, eq, exists, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, inArray, isNull, sql } from 'drizzle-orm';
 import { calculateEmailAggregateDelta } from '@zero/mail-core';
 
 import { email, emailAddress, emailMailbox, mailbox, mailboxThread, thread } from '../schema';
@@ -83,7 +83,14 @@ export const createMailAggregateRepository = (db: MailDatabase): MailAggregateRe
                     inArray(emailAddress.kind, ['from', 'to', 'cc']),
                   ),
                 )
-                .orderBy(asc(emailAddress.kind), asc(emailAddress.position));
+                .orderBy(
+                  sql`CASE ${emailAddress.kind}
+                    WHEN 'from' THEN 0
+                    WHEN 'to' THEN 1
+                    ELSE 2
+                  END`,
+                  asc(emailAddress.position),
+                );
         const participantSummary =
           participants.length === 0
             ? null

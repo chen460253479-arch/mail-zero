@@ -2,8 +2,14 @@
 
 ## 状态
 
-用户已于 2026-07-26 原则性批准本设计。本文件用于固化第一个改进子项目的
-实现边界；生产代码必须在本规格通过书面审查后才能开始修改。
+用户已于 2026-07-26 批准本设计。规模化改进已在
+`codex/local-mail-core` 分支实现；实际交付结果和疏漏分类记录在
+`docs/superpowers/plans/2026-07-25-local-mail-core-omission-audit-report.md`。
+
+实现过程中规模测试进一步确认：Mailbox 过滤应直接读取
+`mail0_mailbox_thread` 投影，而不是由 PostgreSQL 将 Email 相关子查询改写成
+账户级哈希连接。Thread 查询同时显式使用
+`latest_received_at DESC NULLS LAST, id ASC`，与物理索引排序完全一致。
 
 ## 目标
 

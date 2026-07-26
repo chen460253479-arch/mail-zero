@@ -11,6 +11,7 @@ import type {
   IdentityRepository,
   InsertMailAccount,
   MailAccountRecord,
+  MailAggregateMaintenanceRepository,
   MailAggregateRepository,
   MailboxRecord,
   MailboxRepository,
@@ -39,6 +40,7 @@ import type {
 import type { ThreadQueryProjection, ThreadQueryRepository } from '../store/thread-query-store';
 import { calculateEmailAggregateDelta } from '../mailbox/email-aggregate-delta';
 import type { MailTransaction, MailUnitOfWork } from '../store/unit-of-work';
+import type { AggregateMismatch, MailAggregateValues } from '../mailbox';
 import { MailCoreError } from '../types';
 
 export interface MemoryMailState {
@@ -223,6 +225,16 @@ const createRepositories = (
     async existsOutsideAccount(accountId, id) {
       return [...state.mailboxes.values()].some(
         (candidate) => candidate.id === id && candidate.accountId !== accountId,
+      );
+    },
+    async hasChild(accountId, id) {
+      return [...state.mailboxes.values()].some(
+        (candidate) => candidate.accountId === accountId && candidate.parentId === id,
+      );
+    },
+    async hasEmail(accountId, id) {
+      return [...state.emails.values()].some(
+        (candidate) => candidate.accountId === accountId && candidate.mailboxIds.includes(id),
       );
     },
     async listByAccount(accountId) {
@@ -721,6 +733,163 @@ const createRepositories = (
     },
   };
 
+  const mailAggregateMaintenance: MailAggregateMaintenanceRepository = {
+    async reconcile(input) {
+      const mismatches: AggregateMismatch[] = [];
+      const valuesDiffer = (
+        expected: MailAggregateValues,
+        actual: MailAggregateValues | null,
+      ): boolean => actual === null || JSON.stringify(expected) !== JSON.stringify(actual);
+      const visibleEmails = [...state.emails.values()].filter(
+        (record) =>
+          record.accountId === input.accountId &&
+          record.destroyedAt === null &&
+          record.mailboxIds.length > 0,
+      );
+
+      for (const current of listScoped(state.threads, input.accountId)) {
+        const emails = visibleEmails
+          .filter(({ threadId }) => threadId === current.id)
+          .sort(
+            (left, right) =>
+              left.receivedAt.getTime() - right.receivedAt.getTime() ||
+              left.id.localeCompare(right.id),
+          );
+        const latest = emails.at(-1);
+        const expected: MailAggregateValues = {
+          latestReceivedAt: (latest?.receivedAt ?? current.latestReceivedAt).toISOString(),
+          emailCount: emails.length,
+          unreadCount: emails.filter(({ keywords }) => !keywords.includes('$seen')).length,
+          hasAttachment: emails.some(({ hasAttachment }) => hasAttachment),
+          participantSummary: latest === undefined ? null : summaryFrom(latest),
+          preview: latest?.preview ?? null,
+        };
+        const actual: MailAggregateValues = {
+          latestReceivedAt: current.latestReceivedAt.toISOString(),
+          emailCount: current.emailCount,
+          unreadCount: current.unreadCount,
+          hasAttachment: current.hasAttachment,
+          participantSummary: current.participantSummary,
+          preview: current.preview,
+        };
+        if (valuesDiffer(expected, actual)) {
+          mismatches.push({ entityType: 'thread', entityId: current.id, expected, actual });
+          if (input.repair) {
+            state.threads.set(
+              entityKey(input.accountId, current.id),
+              copy({
+                ...current,
+                latestReceivedAt: new Date(expected.latestReceivedAt as string),
+                emailCount: expected.emailCount as number,
+                unreadCount: expected.unreadCount as number,
+                hasAttachment: expected.hasAttachment as boolean,
+                participantSummary: expected.participantSummary as string | null,
+                preview: expected.preview as string | null,
+                updatedAt: input.now,
+              }),
+            );
+          }
+        }
+      }
+
+      const expectedMailboxThreads = new Map<
+        string,
+        {
+          accountId: MailAccountId;
+          mailboxId: MailboxId;
+          threadId: ThreadId;
+          emailCount: number;
+          unreadCount: number;
+        }
+      >();
+      for (const record of visibleEmails) {
+        for (const mailboxId of record.mailboxIds) {
+          const key = [input.accountId, mailboxId, record.threadId].join('\u0000');
+          const aggregate = expectedMailboxThreads.get(key) ?? {
+            accountId: input.accountId,
+            mailboxId,
+            threadId: record.threadId,
+            emailCount: 0,
+            unreadCount: 0,
+          };
+          aggregate.emailCount += 1;
+          if (!record.keywords.includes('$seen')) aggregate.unreadCount += 1;
+          expectedMailboxThreads.set(key, aggregate);
+        }
+      }
+
+      for (const current of listScoped(state.mailboxes, input.accountId)) {
+        const emails = visibleEmails.filter(({ mailboxIds }) => mailboxIds.includes(current.id));
+        const mailboxThreads = [...expectedMailboxThreads.values()].filter(
+          ({ mailboxId }) => mailboxId === current.id,
+        );
+        const expected: MailAggregateValues = {
+          totalEmails: emails.length,
+          unreadEmails: emails.filter(({ keywords }) => !keywords.includes('$seen')).length,
+          totalThreads: mailboxThreads.length,
+          unreadThreads: mailboxThreads.filter(({ unreadCount }) => unreadCount > 0).length,
+        };
+        const actual: MailAggregateValues = {
+          totalEmails: current.totalEmails,
+          unreadEmails: current.unreadEmails,
+          totalThreads: current.totalThreads,
+          unreadThreads: current.unreadThreads,
+        };
+        if (valuesDiffer(expected, actual)) {
+          mismatches.push({ entityType: 'mailbox', entityId: current.id, expected, actual });
+          if (input.repair) {
+            state.mailboxes.set(
+              entityKey(input.accountId, current.id),
+              copy({
+                ...current,
+                totalEmails: expected.totalEmails as number,
+                unreadEmails: expected.unreadEmails as number,
+                totalThreads: expected.totalThreads as number,
+                unreadThreads: expected.unreadThreads as number,
+                updatedAt: input.now,
+              }),
+            );
+          }
+        }
+      }
+
+      const currentMailboxThreads = new Map(
+        [...state.mailboxThreads].filter(([, record]) => record.accountId === input.accountId),
+      );
+      for (const key of new Set([
+        ...expectedMailboxThreads.keys(),
+        ...currentMailboxThreads.keys(),
+      ])) {
+        const expectedRecord = expectedMailboxThreads.get(key);
+        const current = currentMailboxThreads.get(key);
+        const identity = expectedRecord ?? current!;
+        const expected: MailAggregateValues = {
+          emailCount: expectedRecord?.emailCount ?? 0,
+          unreadCount: expectedRecord?.unreadCount ?? 0,
+        };
+        const actual =
+          current === undefined
+            ? null
+            : { emailCount: current.emailCount, unreadCount: current.unreadCount };
+        if (valuesDiffer(expected, actual)) {
+          mismatches.push({
+            entityType: 'mailbox_thread',
+            entityId: `${identity.mailboxId}:${identity.threadId}`,
+            expected,
+            actual,
+          });
+        }
+      }
+      if (input.repair) {
+        for (const key of currentMailboxThreads.keys()) state.mailboxThreads.delete(key);
+        for (const [key, aggregate] of expectedMailboxThreads) {
+          state.mailboxThreads.set(key, copy(aggregate));
+        }
+      }
+      return { mismatches, repaired: input.repair };
+    },
+  };
+
   const identities: IdentityRepository = {
     async findById(accountId, id) {
       return findScoped(state.identities, accountId, id);
@@ -857,6 +1026,7 @@ const createRepositories = (
     threadQueries,
     emails,
     mailAggregates,
+    mailAggregateMaintenance,
     identities,
     submissions,
     changes,

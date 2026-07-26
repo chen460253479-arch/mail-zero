@@ -92,7 +92,7 @@ describe('mail runtime boundary', () => {
     });
 
     expect(Object.keys(maintenance).sort()).toEqual(
-      ['garbageCollectBlobs', 'reconcileBlobStorage'].sort(),
+      ['garbageCollectBlobs', 'reconcileBlobStorage', 'reconcileMailAggregates'].sort(),
     );
   });
 

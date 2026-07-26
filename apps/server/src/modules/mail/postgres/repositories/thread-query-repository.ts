@@ -1,8 +1,8 @@
-import { and, asc, desc, eq, exists, gt, inArray, isNull, lt, or } from 'drizzle-orm';
 import type { ThreadQueryProjection, ThreadQueryRepository, ThreadRecord } from '@zero/mail-core';
+import { and, asc, eq, exists, gt, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 
+import { email, emailMailbox, mailboxThread, thread } from '../schema';
 import { runAdapter, type MailDatabase } from './database';
-import { email, emailMailbox, thread } from '../schema';
 
 type ThreadRow = typeof thread.$inferSelect;
 
@@ -23,27 +23,19 @@ const mapThread = (row: ThreadRow): ThreadRecord => ({
 const hasVisibleMember = (
   db: MailDatabase,
   mailboxId: Parameters<ThreadQueryRepository['query']>[0]['mailboxId'],
-) =>
-  exists(
-    db
-      .select({ id: email.id })
-      .from(email)
-      .innerJoin(
-        emailMailbox,
-        and(
-          eq(emailMailbox.mailAccountId, email.mailAccountId),
-          eq(emailMailbox.emailId, email.id),
-        ),
-      )
-      .where(
-        and(
-          eq(email.mailAccountId, thread.mailAccountId),
-          eq(email.threadId, thread.id),
-          isNull(email.destroyedAt),
-          mailboxId === null ? undefined : eq(emailMailbox.mailboxId, mailboxId),
-        ),
-      ),
-  );
+) => {
+  if (mailboxId === null) {
+    return gt(thread.emailCount, 0);
+  }
+  return sql<boolean>`COALESCE((
+    SELECT ${mailboxThread.emailCount} > 0
+    FROM ${mailboxThread}
+    WHERE ${mailboxThread.mailAccountId} = ${thread.mailAccountId}
+      AND ${mailboxThread.mailboxId} = ${mailboxId}
+      AND ${mailboxThread.threadId} = ${thread.id}
+    LIMIT 1
+  ), false)`;
+};
 
 const projectThreads = async (
   db: MailDatabase,
@@ -140,7 +132,7 @@ export const createThreadQueryRepository = (db: MailDatabase): ThreadQueryReposi
             hasVisibleMember(db, input.mailboxId),
           ),
         )
-        .orderBy(desc(thread.latestReceivedAt), asc(thread.id))
+        .orderBy(sql`${thread.latestReceivedAt} DESC NULLS LAST`, asc(thread.id))
         .limit(input.limit + 1);
       const hasMore = rows.length > input.limit;
       return {

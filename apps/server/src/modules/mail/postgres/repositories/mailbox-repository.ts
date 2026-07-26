@@ -2,7 +2,7 @@ import type { MailboxRecord, MailboxRepository } from '@zero/mail-core';
 import { and, asc, eq, isNull, ne } from 'drizzle-orm';
 
 import { requireRow, runAdapter, type MailDatabase } from './database';
-import { mailbox } from '../schema';
+import { emailMailbox, mailbox } from '../schema';
 
 const mapMailbox = (row: typeof mailbox.$inferSelect): MailboxRecord => ({
   id: row.id as MailboxRecord['id'],
@@ -73,6 +73,24 @@ export const createMailboxRepository = (db: MailDatabase): MailboxRepository => 
         .select({ id: mailbox.id })
         .from(mailbox)
         .where(and(eq(mailbox.id, id), ne(mailbox.mailAccountId, accountId)))
+        .limit(1);
+      return rows.length > 0;
+    }),
+  hasChild: (accountId, id) =>
+    runAdapter(async () => {
+      const rows = await db
+        .select({ id: mailbox.id })
+        .from(mailbox)
+        .where(and(eq(mailbox.mailAccountId, accountId), eq(mailbox.parentId, id)))
+        .limit(1);
+      return rows.length > 0;
+    }),
+  hasEmail: (accountId, id) =>
+    runAdapter(async () => {
+      const rows = await db
+        .select({ emailId: emailMailbox.emailId })
+        .from(emailMailbox)
+        .where(and(eq(emailMailbox.mailAccountId, accountId), eq(emailMailbox.mailboxId, id)))
         .limit(1);
       return rows.length > 0;
     }),

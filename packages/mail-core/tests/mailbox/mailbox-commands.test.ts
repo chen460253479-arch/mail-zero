@@ -409,20 +409,17 @@ describe('Mailbox commands', () => {
                   trace.push('find-mailbox');
                   return tx.mailboxes.findById(...args);
                 },
-                listByAccount: async (...args) => {
-                  trace.push('read-mailbox-references');
-                  return tx.mailboxes.listByAccount(...args);
+                hasChild: async (...args) => {
+                  trace.push('check-mailbox-child');
+                  return tx.mailboxes.hasChild(...args);
+                },
+                hasEmail: async (...args) => {
+                  trace.push('check-mailbox-email');
+                  return tx.mailboxes.hasEmail(...args);
                 },
                 delete: async (...args) => {
                   trace.push('delete-mailbox');
                   return tx.mailboxes.delete(...args);
-                },
-              },
-              emails: {
-                ...tx.emails,
-                listByAccount: async (...args) => {
-                  trace.push('read-email-references');
-                  return tx.emails.listByAccount(...args);
                 },
               },
             };
@@ -440,8 +437,8 @@ describe('Mailbox commands', () => {
     expect(trace).toEqual([
       'lock',
       'find-mailbox',
-      'read-mailbox-references',
-      'read-email-references',
+      'check-mailbox-child',
+      'check-mailbox-email',
       'delete-mailbox',
     ]);
   });

@@ -8,6 +8,14 @@ export {
   type EmailAggregateDelta,
   type EmailAggregateProjection,
 } from './email-aggregate-delta';
+export {
+  reconcileMailAggregates,
+  type AggregateMismatch,
+  type MailAggregateEntityType,
+  type MailAggregateValues,
+  type ReconcileMailAggregatesInput,
+  type ReconcileMailAggregatesResult,
+} from './reconcile-mail-aggregates';
 export type {
   CreateMailboxInput,
   DestroyMailboxInput,

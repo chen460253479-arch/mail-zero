@@ -11,9 +11,9 @@ import type {
   MailboxRole,
   ThreadId,
 } from '../types';
+import type { EmailAggregateProjection, ReconcileMailAggregatesResult } from '../mailbox';
 import type { SubmissionAttemptOutcome, SubmissionStatus } from '../submission/types';
 import type { ChangeCollection, MailChange } from '../changes/types';
-import type { EmailAggregateProjection } from '../mailbox';
 
 export type AccountStatus = 'active' | 'suspended' | 'deleting';
 export type EmailLifecycle = 'draft' | 'received' | 'sent';
@@ -249,6 +249,8 @@ export interface MailboxRepository {
     normalizedName: string,
   ): Promise<MailboxRecord | null>;
   existsOutsideAccount(accountId: MailAccountId, id: MailboxId): Promise<boolean>;
+  hasChild(accountId: MailAccountId, id: MailboxId): Promise<boolean>;
+  hasEmail(accountId: MailAccountId, id: MailboxId): Promise<boolean>;
   listByAccount(accountId: MailAccountId): Promise<MailboxRecord[]>;
   insert(record: MailboxRecord): Promise<MailboxRecord>;
   update(
@@ -320,6 +322,14 @@ export interface MailAggregateRepository {
     threadChanges: { threadId: ThreadId; changedProperties: string[] }[];
     mailboxChanges: { mailboxId: MailboxId; changedProperties: string[] }[];
   }>;
+}
+
+export interface MailAggregateMaintenanceRepository {
+  reconcile(input: {
+    accountId: MailAccountId;
+    repair: boolean;
+    now: Date;
+  }): Promise<ReconcileMailAggregatesResult>;
 }
 
 export interface FindRemoteEmailInput {

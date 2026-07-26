@@ -14,7 +14,11 @@ import { createSeededEmailHarness } from '../helpers/email-harness';
 describe('updateEmail', () => {
   it('does not scan account-wide Email or Mailbox repositories to maintain aggregates', async () => {
     const h = await createSeededEmailHarness();
-    const repositoryCalls = { emailListByAccount: 0, mailboxListByAccount: 0 };
+    const repositoryCalls = {
+      emailListByAccount: 0,
+      mailboxListByAccount: 0,
+      aggregateReconciliations: 0,
+    };
     const unitOfWork: MailUnitOfWork = {
       run<Result>(operation: (transaction: MailTransaction) => Promise<Result>): Promise<Result> {
         return h.deps.unitOfWork.run((tx) =>
@@ -34,6 +38,12 @@ describe('updateEmail', () => {
                 return tx.mailboxes.listByAccount(accountId);
               },
             },
+            mailAggregateMaintenance: {
+              reconcile: (input) => {
+                repositoryCalls.aggregateReconciliations += 1;
+                return tx.mailAggregateMaintenance.reconcile(input);
+              },
+            },
           }),
         );
       },
@@ -51,6 +61,7 @@ describe('updateEmail', () => {
     expect(repositoryCalls).toEqual({
       emailListByAccount: 0,
       mailboxListByAccount: 0,
+      aggregateReconciliations: 0,
     });
   });
 

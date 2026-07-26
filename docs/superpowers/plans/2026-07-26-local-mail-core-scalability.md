@@ -14,6 +14,12 @@
 
 **技术栈：** TypeScript、Vitest、Drizzle ORM、PostgreSQL 17、pnpm。
 
+**执行状态（2026-07-26）：** 八项功能任务均已实现。任务 1–7 已按阶段提交；
+任务 8 完成了聚合审计/修复、显式规模测试、最终全量扫描审查和中文文档更新。
+仓库完整 Server 类型检查仍有既有非 MailCore 基线诊断，本轮以 MailCore 包级
+检查和 Server MailCore 变更零新增诊断为验收边界。完整结果见
+`2026-07-25-local-mail-core-omission-audit-report.md`。
+
 ## 全局约束
 
 - 直接在 `D:\WorkSpace\Zero` 当前 `codex/local-mail-core` 分支开发。
@@ -139,10 +145,7 @@ export interface ThreadQueryRepository {
     hasMore: boolean;
   }>;
 
-  findById(
-    accountId: MailAccountId,
-    threadId: ThreadId,
-  ): Promise<ThreadQueryProjection | null>;
+  findById(accountId: MailAccountId, threadId: ThreadId): Promise<ThreadQueryProjection | null>;
 }
 ```
 
@@ -322,11 +325,7 @@ export interface ThreadReferenceRepository {
     messageIdHashes: string[];
   }): Promise<ThreadReferenceRecord[]>;
   insert(record: ThreadReferenceRecord): Promise<void>;
-  moveThread(
-    accountId: MailAccountId,
-    fromThreadId: ThreadId,
-    toThreadId: ThreadId,
-  ): Promise<void>;
+  moveThread(accountId: MailAccountId, fromThreadId: ThreadId, toThreadId: ThreadId): Promise<void>;
   deleteByEmail(accountId: MailAccountId, emailId: EmailId): Promise<void>;
 }
 ```
@@ -394,8 +393,8 @@ git commit -m "feat(mail-core): persist indexed thread references"
 - 线程合并调用：
 
 ```ts
-emails.moveThread(accountId, fromThreadId, toThreadId)
-threadReferences.moveThread(accountId, fromThreadId, toThreadId)
+emails.moveThread(accountId, fromThreadId, toThreadId);
+threadReferences.moveThread(accountId, fromThreadId, toThreadId);
 ```
 
 - Email 创建后插入自身 Message-ID 索引。
@@ -722,7 +721,8 @@ git commit -m "feat(mail-core): complete scalability hardening"
 
 - 八个任务的定向测试均经历红灯和绿灯。
 - `pnpm test:mail-core` 零失败。
-- MailCore 与 Server TypeScript 检查零错误。
+- MailCore TypeScript 检查零错误，Server MailCore 变更零新增诊断；完整 Server
+  的既有非 MailCore 基线诊断单独记录，不冒充本轮通过。
 - 迁移可在隔离 Schema 中从头应用。
 - 显式 100,000 Email 规模测试通过。
 - Thread 查询不再水合账户全部 Email。

@@ -5,6 +5,7 @@ import type {
   EmailRepository,
   IdentityRepository,
   MailAggregateRepository,
+  MailAggregateMaintenanceRepository,
   MailboxRepository,
   SubmissionRepository,
   ThreadReferenceRepository,
@@ -22,6 +23,7 @@ export interface MailTransaction {
   threadQueries: ThreadQueryRepository;
   emails: EmailRepository;
   mailAggregates: MailAggregateRepository;
+  mailAggregateMaintenance: MailAggregateMaintenanceRepository;
   identities: IdentityRepository;
   submissions: SubmissionRepository;
   changes: ChangeRepository;

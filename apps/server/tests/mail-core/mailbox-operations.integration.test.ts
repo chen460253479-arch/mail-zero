@@ -38,8 +38,8 @@ describe('PostgreSQL Mailbox integration', () => {
                 ...tx,
                 mailboxes: {
                   ...tx.mailboxes,
-                  listByAccount: async (...args) => {
-                    const result = await tx.mailboxes.listByAccount(...args);
+                  hasChild: async (...args) => {
+                    const result = await tx.mailboxes.hasChild(...args);
                     parentValidated();
                     await release;
                     return result;

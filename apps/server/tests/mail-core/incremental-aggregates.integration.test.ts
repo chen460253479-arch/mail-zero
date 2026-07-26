@@ -69,6 +69,8 @@ describe('PostgreSQL incremental mail aggregates', () => {
       });
       const first = email('aggregate-delta-first', at(1), true);
       const second = email('aggregate-delta-second', at(2), false);
+      second.to = [{ name: 'To Recipient', email: 'to@example.test' }];
+      second.cc = [{ name: 'Cc Recipient', email: 'cc@example.test' }];
       const projection = (record: EmailRecord): EmailAggregateProjection => ({
         emailId: record.id,
         threadId: record.threadId,
@@ -102,6 +104,7 @@ describe('PostgreSQL incremental mail aggregates', () => {
           unreadCount: 1,
           latestReceivedAt: at(2),
           preview: second.preview,
+          participantSummary: 'aggregate-delta-second, To Recipient, Cc Recipient',
         });
         expect(await tx.mailboxes.findById(h.accountId, h.inbox.id)).toMatchObject({
           totalEmails: 2,

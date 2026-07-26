@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   queryThreads,
+  type EmailAggregateProjection,
   type EmailId,
   type EmailRecord,
   type MailboxId,
@@ -24,7 +25,7 @@ describe('PostgreSQL Thread query repository', () => {
         accountId: h.accountId,
         normalizedSubject: id,
         latestReceivedAt,
-        emailCount: 99,
+        emailCount: 0,
         unreadCount: 0,
         hasAttachment: false,
         participantSummary: null,
@@ -91,6 +92,23 @@ describe('PostgreSQL Thread query repository', () => {
           makeEmail('email-d-drafts', threadD.id, at(3), [h.drafts.id]),
         ]) {
           await tx.emails.insert(record);
+          if (record.destroyedAt === null && record.mailboxIds.length > 0) {
+            const projection: EmailAggregateProjection = {
+              emailId: record.id,
+              threadId: record.threadId,
+              mailboxIds: record.mailboxIds,
+              visible: true,
+              unread: true,
+              hasAttachment: record.hasAttachment,
+              receivedAt: record.receivedAt,
+            };
+            await tx.mailAggregates.applyEmailDelta({
+              accountId: h.accountId,
+              before: null,
+              after: projection,
+              now: at(9),
+            });
+          }
         }
       });
 

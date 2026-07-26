@@ -803,7 +803,38 @@ Raw MIME 或 Provider 凭据。后续接入独立搜索引擎时，必须另行�
 
 每个后续阶段必须有独立设计、实施计划、迁移策略和验收门槛。
 
-## 18. 参考
+## 18. 已实现的规模化内核机制
+
+2026-07-26 完成第一轮规模化加固后，本地邮箱内核采用以下已落地机制：
+
+- Thread 查询通过数据库无关的 `ThreadQueryRepository` 提供有界投影；
+  PostgreSQL 以 Thread 索引顺序读取请求页，再只批量装配该页的 Email ID 和
+  Mailbox ID。
+- Mailbox 过滤读取 `mail0_mailbox_thread` 派生投影；无 Mailbox 过滤时读取
+  Thread 的可见 Email 计数。查询不再水合账户全部 Email。
+- 本地线程匹配以规范化 Subject 和 Message-ID 的 SHA-256 键查询
+  `mail0_thread_reference`，不再扫描账户全部 Email/Thread。Thread 合并使用
+  有界 `UPDATE ... RETURNING`，并在同一事务迁移引用索引。
+- Thread、Mailbox 和 Mailbox-Thread 统计由 Email 变更前后投影计算增量，只更新
+  受影响组合。`mail0_mailbox_thread` 同时支持 Mailbox 线程计数边界和查询投影。
+- 维护门面提供 `reconcileMailAggregates({ accountId, repair })`。它先取得账户锁，
+  依据 Email、Keyword、Email-Mailbox 事实关系报告差异；只有 `repair: true`
+  才集合式修复派生状态，重复修复收敛为零差异。
+- Email 的规范化主题和地址被物理持久化并建立账户前缀索引，避免在常规查询中
+  对列执行 `lower/normalize/btrim`。
+- Mailbox 删除前的子节点和邮件占用校验使用有界存在性查询，不再加载账户全部
+  Mailbox/Email。
+
+这些机制学习 Stalwart 的紧凑索引、派生状态可重建和有界查询思想，并结合 Sync
+Engine 的关系型 Thread/Message/Category 分离方式，独立转换为 Zero 的
+TypeScript 端口、PostgreSQL 关系表和事务语义。未复制参考项目源码或其物理存储
+表示。
+
+显式规模回归使用 100,000 Email、20,000 Thread、30 Mailbox 的确定性数据集。
+验收覆盖有界 Thread 页、单 Email 聚合增量、账户前缀 Thread 索引及无账户级显式
+Sort。规模测试通过 `MAIL_CORE_SCALE_TEST=1` 单独启用。
+
+## 19. 参考
 
 - RFC 8620：The JSON Meta Application Protocol
 - RFC 8621：The JSON Meta Application Protocol for Mail
