@@ -73,7 +73,7 @@ describe('connection lifecycle', () => {
     ]);
   });
 
-  it('marks the mailbox deleting before destructive cleanup', async () => {
+  it('stops external work before marking the mailbox deleting', async () => {
     const { calls, dependencies } = createDependencies();
 
     await expect(
@@ -83,12 +83,27 @@ describe('connection lifecycle', () => {
       ),
     ).resolves.toEqual({ status: 'deleted' });
     expect(calls).toEqual([
-      'markDeleting',
       'stopMailboxTasks',
+      'markDeleting',
       'removeAuthorizationBinding',
       'cleanupLocalData',
       'deleteMailbox',
     ]);
+  });
+
+  it('does not persist deleting when external task cleanup fails', async () => {
+    const { dependencies, repository } = createDependencies();
+    vi.mocked(dependencies.stopMailboxTasks).mockRejectedValueOnce(
+      new Error('provider task cleanup failed'),
+    );
+
+    await expect(
+      disconnectAuthorization(
+        { connectionId: connection.id, deleteLocalData: true },
+        dependencies,
+      ),
+    ).rejects.toThrow('provider task cleanup failed');
+    expect(repository.markDeleting).not.toHaveBeenCalled();
   });
 
   it('does not delete a Nango connection when removing a local binding', async () => {

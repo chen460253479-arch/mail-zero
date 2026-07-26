@@ -448,7 +448,7 @@ git commit -m "chore(db): rebuild development schema baseline"
 ## 执行结果
 
 - 2026-07-26：Task 1–8 全部完成，并在 `codex/local-mail-core` 分支提交。
-- `pnpm test:mail-core`：MailCore 270 项、Server MailCore 124 项通过；规模测试按显式开关单独通过。
+- `pnpm test:mail-core`：MailCore 270 项、Server MailCore 128 项通过；规模测试按显式开关单独通过。
 - 空库 `db:push`、已有库默认取消、显式清空重建、生产拒绝、唯一基线迁移及
   push/migrate 目录一致性均通过真实 PostgreSQL 测试。
 - 目标查询在默认 PostgreSQL planner 和已分析数据上命中预期索引。

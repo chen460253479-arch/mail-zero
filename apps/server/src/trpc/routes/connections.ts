@@ -12,7 +12,6 @@ import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router 
 import { resolveGmailConnectMode } from '../../lib/integrations/gmail-connection-options';
 import { withNangoRuntime, type NangoRuntime } from '../../lib/credentials/nango-runtime';
 import {
-  channelIdToProviderId,
   findMailChannel,
   getMailChannel,
 } from '../../lib/mail-channel/registry';
@@ -96,9 +95,11 @@ const createLifecycleDependencies = async (
     stopMailboxTasks: async (connection) => {
       const mailbox = await db.findUserConnection(connection.id);
       if (!mailbox) return;
+      const providerId = findMailChannel(mailbox.channelId)?.legacyProviderId;
+      if (!providerId) return;
       await disableBrainFunction({
         id: connection.id,
-        providerId: channelIdToProviderId(mailbox.channelId) as EProviders,
+        providerId: providerId as EProviders,
       });
     },
     cleanupLocalData: (connection) => deleteConnectionLocalData(connection.id),
@@ -298,7 +299,7 @@ export const connectionsRouter = router({
       channelId: connection.channelId,
       status: connection.status,
       authSource: authorization?.authSource ?? null,
-      capabilities: Array.from(getMailChannel(connection.channelId).capabilities),
+      capabilities: Array.from(findMailChannel(connection.channelId)?.capabilities ?? []),
     };
   }),
 });

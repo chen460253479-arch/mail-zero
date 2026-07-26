@@ -42,8 +42,8 @@ export const disconnectAuthorization = async (
   const connection = await getConnection(input.connectionId, dependencies.repository);
 
   if (input.deleteLocalData) {
-    await dependencies.repository.markDeleting(connection.id);
     await dependencies.stopMailboxTasks(connection);
+    await dependencies.repository.markDeleting(connection.id);
     await dependencies.repository.removeAuthorizationBinding(connection.id);
     await dependencies.cleanupLocalData(connection);
     await dependencies.repository.deleteMailbox(connection.id);
@@ -63,8 +63,8 @@ export const deleteRetainedMailboxData = async (
   const connection = await getConnection(connectionId, dependencies.repository);
   if (connection.status !== 'disconnected') throw new Error('Mailbox must be disconnected');
 
-  await dependencies.repository.markDeleting(connection.id);
   await dependencies.stopMailboxTasks(connection);
+  await dependencies.repository.markDeleting(connection.id);
   await dependencies.cleanupLocalData(connection);
   await dependencies.repository.deleteMailbox(connection.id);
   return { status: 'deleted' };

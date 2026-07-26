@@ -5,6 +5,8 @@ import type { Sql } from 'postgres';
 import {
   blob,
   email,
+  emailContent,
+  emailPart,
   emailSubmission,
   mailIdentity,
   mailbox,
@@ -13,12 +15,23 @@ import {
 import { createPostgresMailTestHarness } from './helpers/harness';
 import { withMailTestDatabase } from './helpers/database';
 
+const blobReferenceIndexes = new Set([
+  'email_blob_account_idx',
+  'email_content_text_blob_account_idx',
+  'email_content_html_blob_account_idx',
+  'email_part_blob_account_idx',
+]);
+const submissionIndexes = new Set([
+  'email_submission_account_created_id_idx',
+  'email_submission_account_identity_created_id_idx',
+]);
+
 const seedPlannerFixtures = async (
   connection: Sql,
   accountId: string,
   indexName: string,
 ): Promise<void> => {
-  if (indexName === 'email_blob_account_idx' || indexName === 'blob_account_created_id_idx') {
+  if (blobReferenceIndexes.has(indexName) || indexName === 'blob_account_created_id_idx') {
     await connection`
       INSERT INTO mail.blob (
         id, mail_account_id, sha256, size_bytes, content_type, object_key, status, created_at
@@ -75,8 +88,8 @@ const seedPlannerFixtures = async (
     `;
   }
   if (
-    indexName === 'email_blob_account_idx' ||
-    indexName === 'email_submission_account_created_id_idx' ||
+    blobReferenceIndexes.has(indexName) ||
+    submissionIndexes.has(indexName) ||
     indexName === 'remote_email_email_account_idx'
   ) {
     await connection`
@@ -88,7 +101,7 @@ const seedPlannerFixtures = async (
       )
     `;
   }
-  if (indexName === 'email_blob_account_idx') {
+  if (blobReferenceIndexes.has(indexName)) {
     await connection`
       INSERT INTO mail.email (
         id, mail_account_id, thread_id, blob_id, normalized_subject,
@@ -111,13 +124,56 @@ const seedPlannerFixtures = async (
       FROM generate_series(1, 1000) AS value
     `;
   }
-  if (indexName === 'email_submission_account_created_id_idx') {
+  if (
+    indexName === 'email_content_text_blob_account_idx' ||
+    indexName === 'email_content_html_blob_account_idx'
+  ) {
+    await connection`
+      INSERT INTO mail.email_content (
+        mail_account_id, email_id, parser_version, text_blob_id, html_blob_id, parsed_at
+      )
+      SELECT
+        ${accountId},
+        'plan-email-' || lpad(value::text, 4, '0'),
+        1,
+        'plan-blob-' || lpad(value::text, 4, '0'),
+        'plan-blob-' || lpad(value::text, 4, '0'),
+        now()
+      FROM generate_series(1, 1000) AS value
+    `;
+  }
+  if (indexName === 'email_part_blob_account_idx') {
+    await connection`
+      INSERT INTO mail.email_part (
+        id, mail_account_id, email_id, position, part_path, content_type,
+        blob_id, size_bytes, kind
+      )
+      SELECT
+        'plan-part-' || lpad(value::text, 4, '0'),
+        ${accountId},
+        'plan-email-' || lpad(value::text, 4, '0'),
+        0,
+        '1',
+        'application/octet-stream',
+        'plan-blob-' || lpad(value::text, 4, '0'),
+        1,
+        'attachment'
+      FROM generate_series(1, 1000) AS value
+    `;
+  }
+  if (submissionIndexes.has(indexName)) {
     await connection`
       INSERT INTO mail.identity (
         id, mail_account_id, email, is_default, created_at, updated_at
-      ) VALUES (
-        'plan-submission-identity', ${accountId}, 'submission@example.test', false, now(), now()
       )
+      SELECT
+        'plan-submission-identity-' || lpad(value::text, 2, '0'),
+        ${accountId},
+        'submission-' || value || '@example.test',
+        false,
+        now(),
+        now()
+      FROM generate_series(1, 10) AS value
     `;
     await connection`
       INSERT INTO mail.email (
@@ -137,7 +193,7 @@ const seedPlannerFixtures = async (
         'plan-submission-' || lpad(value::text, 4, '0'),
         ${accountId},
         'plan-submission-email',
-        'plan-submission-identity',
+        'plan-submission-identity-' || lpad((((value - 1) % 10) + 1)::text, 2, '0'),
         'queued',
         now(),
         'plan-idempotency-' || value,
@@ -214,6 +270,36 @@ describe('mail repository supporting indexes', () => {
       `,
     ],
     [
+      'EmailContent text Blob references',
+      'email_content_text_blob_account_idx',
+      (accountId: string) => sql`
+        SELECT ${emailContent.emailId}
+        FROM ${emailContent}
+        WHERE ${emailContent.textBlobId} = 'plan-blob-0500'
+          AND ${emailContent.mailAccountId} = ${accountId}
+      `,
+    ],
+    [
+      'EmailContent HTML Blob references',
+      'email_content_html_blob_account_idx',
+      (accountId: string) => sql`
+        SELECT ${emailContent.emailId}
+        FROM ${emailContent}
+        WHERE ${emailContent.htmlBlobId} = 'plan-blob-0500'
+          AND ${emailContent.mailAccountId} = ${accountId}
+      `,
+    ],
+    [
+      'EmailPart Blob references',
+      'email_part_blob_account_idx',
+      (accountId: string) => sql`
+        SELECT ${emailPart.id}
+        FROM ${emailPart}
+        WHERE ${emailPart.blobId} = 'plan-blob-0500'
+          AND ${emailPart.mailAccountId} = ${accountId}
+      `,
+    ],
+    [
       'active Identity pages',
       'mail_identity_account_created_active_idx',
       (accountId: string) => sql`
@@ -255,6 +341,18 @@ describe('mail repository supporting indexes', () => {
         SELECT ${emailSubmission.id}
         FROM ${emailSubmission}
         WHERE ${emailSubmission.mailAccountId} = ${accountId}
+        ORDER BY ${emailSubmission.createdAt}, ${emailSubmission.id}
+        LIMIT 25
+      `,
+    ],
+    [
+      'Submission Identity pages',
+      'email_submission_account_identity_created_id_idx',
+      (accountId: string) => sql`
+        SELECT ${emailSubmission.id}
+        FROM ${emailSubmission}
+        WHERE ${emailSubmission.mailAccountId} = ${accountId}
+          AND ${emailSubmission.identityId} = 'plan-submission-identity-05'
         ORDER BY ${emailSubmission.createdAt}, ${emailSubmission.id}
         LIMIT 25
       `,
