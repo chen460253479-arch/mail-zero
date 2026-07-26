@@ -1,6 +1,7 @@
 export * from './auth/types';
 export * from './inbound/adapter';
 export * from './metadata';
+export * from './outbound';
 export * from './plugin';
 export * from './shared/api-client';
 export * from './shared/api-transport';

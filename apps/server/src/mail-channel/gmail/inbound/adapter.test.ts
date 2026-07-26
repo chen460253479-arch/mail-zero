@@ -22,6 +22,8 @@ const createClient = (overrides: Partial<GmailApiClient> = {}): GmailApiClient =
     historyId: '100',
     expiration: '1785542400000',
   }),
+  sendRawMessage: async () => ({ id: null, threadId: null }),
+  findSentByMessageId: async () => [],
   ...overrides,
 });
 

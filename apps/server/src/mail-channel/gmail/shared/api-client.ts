@@ -1,4 +1,6 @@
+import { gmailSentMessageIdQuery } from '../outbound/reconciliation';
 import type { GmailHistoryRecord } from '../inbound/history-mapper';
+import { buildGmailSendRequest } from '../outbound/mime-request';
 
 type GmailProfileData = {
   emailAddress?: string | null;
@@ -19,6 +21,28 @@ type GmailRawMessageData = {
 type GmailWatchData = {
   historyId?: string | null;
   expiration?: string | null;
+};
+
+type GmailSendData = {
+  id?: string | null;
+  threadId?: string | null;
+};
+
+type GmailMessageListData = {
+  messages?: Array<{ id?: string | null }> | null;
+  nextPageToken?: string | null;
+};
+
+type GmailMetadataData = {
+  id?: string | null;
+  threadId?: string | null;
+  internalDate?: string | null;
+  payload?: {
+    headers?: Array<{
+      name?: string | null;
+      value?: string | null;
+    }> | null;
+  } | null;
 };
 
 export interface GmailApiTransport {
@@ -42,6 +66,27 @@ export interface GmailApiTransport {
       labelFilterBehavior: 'include';
     };
   }): Promise<{ data: GmailWatchData }>;
+  sendMessage(request: {
+    userId: 'me';
+    requestBody: { raw: string; threadId?: string };
+  }): Promise<{ data: GmailSendData }>;
+  uploadMessage(request: {
+    userId: 'me';
+    requestBody: { threadId?: string };
+    media: { mimeType: 'message/rfc822'; body: Uint8Array };
+  }): Promise<{ data: GmailSendData }>;
+  listMessages(request: {
+    userId: 'me';
+    labelIds: ['SENT'];
+    q: string;
+    pageToken: string | null;
+  }): Promise<{ data: GmailMessageListData }>;
+  getMessageMetadata(request: {
+    userId: 'me';
+    id: string;
+    format: 'metadata';
+    metadataHeaders: ['Message-ID'];
+  }): Promise<{ data: GmailMetadataData }>;
 }
 
 export interface GmailApiClient {
@@ -62,6 +107,17 @@ export interface GmailApiClient {
     historyId: string | null;
     expiration: string | null;
   }>;
+  sendRawMessage(input: {
+    raw: Uint8Array;
+    remoteThreadId: string | null;
+  }): Promise<{ id: string | null; threadId: string | null }>;
+  findSentByMessageId(messageId: string): Promise<
+    Array<{
+      id: string;
+      threadId: string | null;
+      internalDate: string | null;
+    }>
+  >;
 }
 
 export const createGmailApiClient = (transport: GmailApiTransport): GmailApiClient => ({
@@ -109,5 +165,66 @@ export const createGmailApiClient = (transport: GmailApiTransport): GmailApiClie
       historyId: data.historyId ?? null,
       expiration: data.expiration ?? null,
     };
+  },
+  sendRawMessage: async ({ raw, remoteThreadId }) => {
+    const request = buildGmailSendRequest(raw, remoteThreadId);
+    const { data } =
+      request.mode === 'json'
+        ? await transport.sendMessage({
+            userId: 'me',
+            requestBody: request.requestBody,
+          })
+        : await transport.uploadMessage({
+            userId: 'me',
+            requestBody: request.requestBody,
+            media: request.media,
+          });
+    return {
+      id: data.id ?? null,
+      threadId: data.threadId ?? null,
+    };
+  },
+  findSentByMessageId: async (messageId) => {
+    const query = gmailSentMessageIdQuery(messageId);
+    const ids: string[] = [];
+    const seenTokens = new Set<string>();
+    let pageToken: string | null = null;
+    do {
+      const { data } = await transport.listMessages({
+        userId: 'me',
+        labelIds: ['SENT'],
+        q: query,
+        pageToken,
+      });
+      ids.push(
+        ...(data.messages ?? []).flatMap(({ id }) => (id === null || id === undefined ? [] : [id])),
+      );
+      const next = data.nextPageToken ?? null;
+      if (next !== null && seenTokens.has(next)) break;
+      if (next !== null) seenTokens.add(next);
+      pageToken = next;
+    } while (pageToken !== null);
+
+    const matches = await Promise.all(
+      ids.map(async (id) => {
+        const { data } = await transport.getMessageMetadata({
+          userId: 'me',
+          id,
+          format: 'metadata',
+          metadataHeaders: ['Message-ID'],
+        });
+        const header = data.payload?.headers?.find(
+          ({ name }) => name?.toLowerCase() === 'message-id',
+        )?.value;
+        return header?.trim() === messageId
+          ? {
+              id: data.id ?? id,
+              threadId: data.threadId ?? null,
+              internalDate: data.internalDate ?? null,
+            }
+          : null;
+      }),
+    );
+    return matches.filter((match) => match !== null);
   },
 });

@@ -1,6 +1,7 @@
 import { createGmailTransportFromExecutor, type GmailApiExecutor } from './shared/api-transport';
 import { createGoogleGmailApiExecutor, resolveGoogleGmailIdentity } from './shared/google-api';
 import type { MailChannelIdentity, MailChannelPlugin, ResolvedCredential } from '../contracts';
+import { createGmailOutboundAdapter } from './outbound/adapter';
 import { createGmailIngressAdapter } from './inbound/adapter';
 import { createGmailApiClient } from './shared/api-client';
 import { gmailNangoProviders } from './metadata';
@@ -14,6 +15,7 @@ export type GmailPluginDependencies = {
     connectionId?: string;
     credential: ResolvedCredential;
   }): Promise<MailChannelIdentity>;
+  clock?: { now(): Date };
 };
 
 const defaultDependencies: GmailPluginDependencies = {
@@ -36,6 +38,15 @@ export const createGmailPlugin = (
       const executor = await dependencies.createExecutor(input);
       return createGmailIngressAdapter(
         createGmailApiClient(createGmailTransportFromExecutor(executor)),
+      );
+    },
+  },
+  outbound: {
+    createAdapter: async (input) => {
+      const executor = await dependencies.createExecutor(input);
+      return createGmailOutboundAdapter(
+        createGmailApiClient(createGmailTransportFromExecutor(executor)),
+        dependencies.clock ?? { now: () => new Date() },
       );
     },
   },

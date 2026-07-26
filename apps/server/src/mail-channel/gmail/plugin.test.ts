@@ -53,5 +53,11 @@ describe('Gmail channel plugin', () => {
         initialSync: 'none',
       }),
     ).resolves.toEqual({ version: 1, historyId: '100' });
+    await expect(
+      plugin.outbound?.createAdapter({
+        connectionId: 'connection-1',
+        credential,
+      }),
+    ).resolves.toMatchObject({ provider: 'gmail' });
   });
 });

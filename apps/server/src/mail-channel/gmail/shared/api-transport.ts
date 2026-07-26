@@ -19,4 +19,16 @@ export const createGmailTransportFromExecutor = (
     ),
   getMessage: (request) => executor.runGmailApi((client) => client.users.messages.get(request)),
   watch: (request) => executor.runGmailApi((client) => client.users.watch(request)),
+  sendMessage: (request) => executor.runGmailApi((client) => client.users.messages.send(request)),
+  uploadMessage: (request) =>
+    executor.runGmailApi((client) => client.users.messages.send(request as never)),
+  listMessages: ({ pageToken, ...request }) =>
+    executor.runGmailApi((client) =>
+      client.users.messages.list({
+        ...request,
+        ...(pageToken === null ? {} : { pageToken }),
+      }),
+    ),
+  getMessageMetadata: (request) =>
+    executor.runGmailApi((client) => client.users.messages.get(request)),
 });
