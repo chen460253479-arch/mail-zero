@@ -1,31 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { withMailSyncTestDatabase } from './helpers/database';
-
-const insertAccountFixture = async (
-  sql: Parameters<Parameters<typeof withMailSyncTestDatabase>[0]>[0]['sql'],
-) => {
-  await sql`
-    INSERT INTO auth.user_account (
-      id, name, email, email_verified, role, created_at, updated_at
-    ) VALUES (
-      'user-1', 'User', 'user@example.com', true, 'admin', now(), now()
-    )
-  `;
-  await sql`
-    INSERT INTO integration.connection (
-      id, user_id, email, normalized_email, channel_id, status,
-      provider_key, created_at, updated_at
-    ) VALUES (
-      'connection-1', 'user-1', 'user@example.com', 'user@example.com',
-      'gmail', 'connected', 'gmail', now(), now()
-    )
-  `;
-  await sql`
-    INSERT INTO mail.account (id, connection_id, user_id)
-    VALUES ('account-1', 'connection-1', 'user-1')
-  `;
-};
+import { insertMailSyncAccountFixture, withMailSyncTestDatabase } from './helpers/database';
 
 describe('mail sync database schema', () => {
   it('creates the durable inbound synchronization tables and work indexes', async () => {
@@ -63,7 +38,7 @@ describe('mail sync database schema', () => {
 
   it('enforces account ownership, provider state versions, and stream uniqueness', async () => {
     await withMailSyncTestDatabase(async ({ sql }) => {
-      await insertAccountFixture(sql);
+      await insertMailSyncAccountFixture(sql);
 
       await sql`
         INSERT INTO integration.inbound_sync (
@@ -131,7 +106,7 @@ describe('mail sync database schema', () => {
 
   it('deduplicates remote messages and rejects invalid imported item state', async () => {
     await withMailSyncTestDatabase(async ({ sql }) => {
-      await insertAccountFixture(sql);
+      await insertMailSyncAccountFixture(sql);
       await sql`
         INSERT INTO integration.inbound_sync (
           id, account_id, provider, scope_key, scope, checkpoint, status
