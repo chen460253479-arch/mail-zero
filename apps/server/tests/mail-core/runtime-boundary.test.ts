@@ -73,6 +73,7 @@ describe('mail runtime boundary', () => {
         'querySubmissions',
         'queryThreads',
         'readBlob',
+        'setMailboxes',
         'updateDraft',
         'updateEmail',
         'updateIdentity',

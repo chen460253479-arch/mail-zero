@@ -1,4 +1,4 @@
-import type { MailAccountId } from '../types';
+import type { MailAccountId, MailCoreErrorCode } from '../types';
 
 export type ChangeCollection = 'mailbox' | 'email' | 'thread' | 'identity' | 'email_submission';
 
@@ -16,4 +16,11 @@ export interface MailChange {
 
 export type StateVersioned<Value> = Value & {
   stateVersion: bigint;
+};
+
+export type MailCoreSetError = {
+  code: MailCoreErrorCode;
+  details: {
+    entityId?: string;
+  };
 };

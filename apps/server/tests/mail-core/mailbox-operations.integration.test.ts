@@ -1,4 +1,5 @@
 import {
+  createMailCore,
   createMailbox,
   destroyMailbox,
   type MailCoreDependencies,
@@ -11,6 +12,78 @@ import { createPostgresMailTestHarness } from './helpers/harness';
 import { withMailTestDatabase } from './helpers/database';
 
 describe('PostgreSQL Mailbox integration', () => {
+  it('applies one conditional batch state with partial domain failures', () =>
+    withMailTestDatabase(async ({ db, unitOfWork }) => {
+      const harness = await createPostgresMailTestHarness(db, unitOfWork, 'mailbox-set');
+      const updated = await createMailbox(harness.dependencies, {
+        accountId: harness.accountId,
+        name: 'Update me',
+        kind: 'folder',
+        role: null,
+        parentId: null,
+      });
+      const destroyed = await createMailbox(harness.dependencies, {
+        accountId: harness.accountId,
+        name: 'Destroy me',
+        kind: 'folder',
+        role: null,
+        parentId: null,
+      });
+      const oldState = await unitOfWork.run(async (tx) =>
+        (await tx.accounts.findById(harness.accountId))!.stateVersion.toString(),
+      );
+
+      const result = await createMailCore(harness.dependencies).setMailboxes({
+        accountId: harness.accountId,
+        ifInState: oldState,
+        create: {
+          created: {
+            name: 'Created in batch',
+            kind: 'folder',
+            role: null,
+            parentId: null,
+          },
+        },
+        update: {
+          [updated.id]: {
+            color: '#123456',
+            sortOrder: 9,
+            isSubscribed: false,
+          },
+          [harness.inbox.id]: { name: 'Invalid Inbox rename' },
+        },
+        destroy: [destroyed.id],
+      });
+
+      expect(result).toMatchObject({
+        oldState,
+        newState: (BigInt(oldState) + 1n).toString(),
+        destroyed: [destroyed.id],
+        notUpdated: {
+          [harness.inbox.id]: { code: 'MAILBOX_ROLE_CONFLICT' },
+        },
+      });
+      await unitOfWork.run(async (tx) => {
+        expect(await tx.mailboxes.findById(harness.accountId, result.created.created!.id)).toEqual(
+          result.created.created,
+        );
+        expect(await tx.mailboxes.findById(harness.accountId, updated.id)).toMatchObject({
+          color: '#123456',
+          sortOrder: 9,
+          isSubscribed: false,
+        });
+        expect(await tx.mailboxes.findById(harness.accountId, destroyed.id)).toBeNull();
+        const requestChanges = await tx.changes.queryChanges({
+          accountId: harness.accountId,
+          collection: 'mailbox',
+          afterState: BigInt(oldState),
+        });
+        expect(new Set(requestChanges.map(({ stateVersion }) => stateVersion))).toEqual(
+          new Set([BigInt(result.newState)]),
+        );
+      });
+    }));
+
   it('serializes child creation behind parent destruction', () =>
     withMailTestDatabase(async ({ db, unitOfWork }) => {
       const harness = await createPostgresMailTestHarness(db, unitOfWork, 'mailbox-parent-race');

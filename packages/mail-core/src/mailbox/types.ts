@@ -14,6 +14,9 @@ export type UpdateMailboxInput = {
   name?: string;
   parentId?: MailboxId | null;
   role?: MailboxRole | null;
+  color?: string | null;
+  sortOrder?: number;
+  isSubscribed?: boolean;
 };
 
 export type DestroyMailboxInput = {
@@ -24,3 +27,6 @@ export type DestroyMailboxInput = {
 export type ListMailboxesInput = {
   accountId: MailAccountId;
 };
+
+export type CreateMailboxData = Omit<CreateMailboxInput, 'accountId'>;
+export type UpdateMailboxPatch = Omit<UpdateMailboxInput, 'accountId' | 'mailboxId'>;

@@ -36,6 +36,7 @@ describe('createMailCore', () => {
         'querySubmissions',
         'queryThreads',
         'readBlob',
+        'setMailboxes',
         'updateDraft',
         'updateEmail',
         'updateIdentity',
