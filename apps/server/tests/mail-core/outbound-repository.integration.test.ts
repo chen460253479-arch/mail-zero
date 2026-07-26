@@ -238,6 +238,29 @@ describe('PostgreSQL outbound repository', () => {
         outcome: 'uncertain',
         finishedAt: expiredAt,
       });
+      const reconciliation = await unitOfWork.run((tx) =>
+        tx.outbound.claimById({
+          deliveryId: 'delivery-a',
+          owner: 'reconciliation-worker',
+          leaseForMs: 60_000,
+          attemptKind: 'reconcile',
+          now: expiredAt,
+        }),
+      );
+      await unitOfWork.run((tx) =>
+        tx.outbound.scheduleResend({
+          deliveryId: 'delivery-a',
+          leaseToken: reconciliation!.delivery.leaseToken,
+          availableAt: expiredAt,
+          now: expiredAt,
+        }),
+      );
+      await expect(
+        unitOfWork.run((tx) => tx.outbound.findById('delivery-a')),
+      ).resolves.toMatchObject({
+        status: 'ready',
+        leaseToken: null,
+      });
 
       const terminal = await unitOfWork.run((tx) =>
         tx.outbound.claimById({

@@ -85,6 +85,13 @@ export type ScheduleReconciliationInput = LeaseIdentity & {
   outcome: 'not_found' | 'uncertain';
 };
 
+export type ScheduleResendInput = LeaseIdentity & {
+  availableAt: Date;
+  now: Date;
+  outcome?: 'not_found' | 'uncertain';
+  reason?: 'reconciliation_unsupported';
+};
+
 export type FailDeliveryInput = LeaseIdentity & {
   now: Date;
   error: OutboundErrorClassification;
@@ -113,6 +120,7 @@ export interface MailOutboundRepository {
   scheduleRetry(input: ScheduleDeliveryRetryInput): Promise<void>;
   markUncertain(input: MarkDeliveryUncertainInput): Promise<void>;
   scheduleReconciliation(input: ScheduleReconciliationInput): Promise<void>;
+  scheduleResend(input: ScheduleResendInput): Promise<void>;
   markFailed(input: FailDeliveryInput): Promise<void>;
   markCanceled(input: CancelDeliveryInput): Promise<void>;
   markCompleted(input: CompleteDeliveryInput): Promise<void>;
@@ -597,6 +605,26 @@ export const createMailOutboundRepository = (
         finishedAt: input.now,
         outcome: input.outcome,
         retryAt: input.availableAt,
+      });
+    }),
+  scheduleResend: (input) =>
+    runOutboundAdapter(async () => {
+      await transitionLeased(db, input, {
+        status: 'ready',
+        availableAt: input.availableAt,
+        updatedAt: input.now,
+        ...(input.reason === undefined
+          ? {}
+          : {
+              lastErrorKind: 'uncertain' as const,
+              lastErrorMessage: input.reason,
+            }),
+        ...clearLease,
+      });
+      await finishAttemptRows(db, {
+        ...input,
+        finishedAt: input.now,
+        outcome: input.outcome ?? 'not_found',
       });
     }),
   markFailed: (input) =>
