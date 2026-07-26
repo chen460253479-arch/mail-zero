@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { assertAdministrator, IntegrationPermissionError } from './permissions';
 
-describe('integration administrator permission', () => {
+describe('integration administrator permissions', () => {
   it('rejects a non-admin session', () => {
     expect(() => assertAdministrator({ role: 'user' })).toThrowError(
       new IntegrationPermissionError('ADMIN_REQUIRED'),

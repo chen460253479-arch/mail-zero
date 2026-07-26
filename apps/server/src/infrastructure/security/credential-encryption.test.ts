@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { decryptCredential, encryptCredential } from './encryption';
+import { decryptCredential, encryptCredential } from './credential-encryption';
 
 const key = Buffer.alloc(32, 7).toString('base64');
 

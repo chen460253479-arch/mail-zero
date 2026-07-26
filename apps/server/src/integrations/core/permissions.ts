@@ -6,5 +6,7 @@ export class IntegrationPermissionError extends Error {
 }
 
 export const assertAdministrator = (user: { role?: string | null }): void => {
-  if (user.role !== 'admin') throw new IntegrationPermissionError('ADMIN_REQUIRED');
+  if (user.role !== 'admin') {
+    throw new IntegrationPermissionError('ADMIN_REQUIRED');
+  }
 };

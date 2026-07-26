@@ -1,4 +1,4 @@
-import { assertAdministrator } from '../lib/integrations/permissions';
+import { assertAdministrator } from '../integrations/core/permissions';
 import { getActiveConnection, getZeroDB } from '../lib/server-utils';
 import { Ratelimit, type RatelimitConfig } from '@upstash/ratelimit';
 import type { HonoContext, HonoVariables } from '../ctx';

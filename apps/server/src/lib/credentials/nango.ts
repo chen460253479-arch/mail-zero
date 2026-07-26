@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-import { decryptCredential, encryptCredential } from './encryption';
+import {
+  decryptCredential,
+  encryptCredential,
+} from '../../infrastructure/security/credential-encryption';
 import type { ResolvedCredential } from '../mail-channel/types';
 import { authorizationBinding } from '../../db/schema';
 import type { NangoCredential } from '../nango/types';

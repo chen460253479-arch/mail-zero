@@ -23,9 +23,9 @@ export type IntegrationPublicConfigMap = {
 
 export const parsePublicConfig = <K extends IntegrationKey>(
   key: K,
-  value: unknown,
+  publicConfig: unknown,
 ): IntegrationPublicConfigMap[K] =>
-  integrationPublicSchemas[key].parse(value) as IntegrationPublicConfigMap[K];
+  integrationPublicSchemas[key].parse(publicConfig) as IntegrationPublicConfigMap[K];
 
 export const integrationOAuthPurposes = ['validate_config', 'connect_mailbox'] as const;
 export type IntegrationOAuthPurpose = (typeof integrationOAuthPurposes)[number];

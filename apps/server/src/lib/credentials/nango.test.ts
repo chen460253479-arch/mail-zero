@@ -7,7 +7,10 @@ import {
   type NangoCredentialRepository,
   type NangoCredentialState,
 } from './nango';
-import { decryptCredential, encryptCredential } from './encryption';
+import {
+  decryptCredential,
+  encryptCredential,
+} from '../../infrastructure/security/credential-encryption';
 import type { NangoClient } from '../nango/client';
 
 const encryptionKey = Buffer.alloc(32, 4).toString('base64');

@@ -1,7 +1,7 @@
 import { createNangoCredentialSnapshot, resolveFetchedNangoCredential } from '../credentials/nango';
 import type { MailboxChannel, MailChannelId } from '../mail-channel/types';
 import { normalizeMailboxEmail } from '../mail-channel/mailbox-identity';
-import { encryptCredential } from '../credentials/encryption';
+import { encryptCredential } from '../../infrastructure/security/credential-encryption';
 import type { NangoConnectionSummary } from './types';
 import type { NangoClient } from './client';
 

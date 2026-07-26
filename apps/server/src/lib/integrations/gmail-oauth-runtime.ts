@@ -1,5 +1,5 @@
 import { readGmailOAuthRuntimeConfig, type GmailOAuthRuntimeConfig } from './gmail-oauth-service';
-import { createSystemIntegrationRepository } from './repository';
+import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import { createDb } from '../../db';
 
 export const loadGmailOAuthRuntimeConfig = async (input: {

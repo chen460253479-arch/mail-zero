@@ -4,7 +4,7 @@ import {
   GmailOAuthService,
   gmailOAuthRedirectUris,
 } from '../../lib/integrations/gmail-oauth-service';
-import { createSystemIntegrationRepository } from '../../lib/integrations/repository';
+import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import { GoogleGmailOAuthGateway } from '../../lib/integrations/google-gmail-oauth';
 import { NangoIntegrationService } from '../../lib/integrations/nango-service';
 import { mapIntegrationError } from './integration-errors';

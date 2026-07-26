@@ -6,9 +6,9 @@ type EncryptedEnvelope = {
   ciphertext: string;
 };
 
-const decodeKey = (encodedKey: string): Uint8Array => {
+const decodeKey = (value: string): Uint8Array => {
   try {
-    const key = toByteArray(encodedKey);
+    const key = toByteArray(value);
     if (key.byteLength === 32) return key;
   } catch {
     // Report one stable configuration error below.

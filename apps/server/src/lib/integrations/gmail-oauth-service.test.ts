@@ -6,14 +6,17 @@ import type {
   SaveActiveIntegrationInput,
   SystemIntegrationRecord,
   SystemIntegrationRepository,
-} from './repository';
+} from '../../integrations/core/repository';
 import {
   GmailOAuthError,
   GmailOAuthService,
   type GmailOAuthGateway,
   type GmailOAuthMailboxRepository,
 } from './gmail-oauth-service';
-import { decryptCredential, encryptCredential } from '../credentials/encryption';
+import {
+  decryptCredential,
+  encryptCredential,
+} from '../../infrastructure/security/credential-encryption';
 
 const encryptionKey = Buffer.alloc(32, 7).toString('base64');
 const now = new Date('2026-07-24T10:00:00.000Z');

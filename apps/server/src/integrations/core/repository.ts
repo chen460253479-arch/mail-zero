@@ -12,7 +12,7 @@ import {
   type IntegrationPublicConfigMap,
 } from './schemas';
 import { and, count, eq, gt, isNull, lt } from 'drizzle-orm';
-import type { MailChannelId } from '../mail-channel/types';
+import type { MailChannelId } from '../../lib/mail-channel/types';
 import type { DB } from '../../db';
 
 export { parsePublicConfig } from './schemas';

@@ -6,7 +6,7 @@ import {
   NangoBindingError,
   type NangoBindingRepository,
 } from './bind';
-import { decryptCredential } from '../credentials/encryption';
+import { decryptCredential } from '../../infrastructure/security/credential-encryption';
 import type { MailboxChannel } from '../mail-channel/types';
 import type { NangoClient } from './client';
 

@@ -1,7 +1,7 @@
 import {
   createSystemIntegrationRepository,
   type SystemIntegrationRepository,
-} from '../integrations/repository';
+} from '../../integrations/core/repository';
 import { createNangoCredentialRepository, type NangoCredentialResolverOptions } from './nango';
 import { NangoIntegrationService } from '../integrations/nango-service';
 import { NangoClient } from '../nango/client';

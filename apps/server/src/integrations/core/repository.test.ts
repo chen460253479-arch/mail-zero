@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { parsePublicConfig, toSafeIntegration } from './repository';
 
-describe('system integration repository contracts', () => {
+describe('system integration repository', () => {
   it('parses public configuration by integration key', () => {
     expect(parsePublicConfig('nango', { baseUrl: 'https://api.nango.dev' })).toEqual({
       baseUrl: 'https://api.nango.dev',

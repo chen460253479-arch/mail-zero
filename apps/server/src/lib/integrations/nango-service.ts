@@ -3,9 +3,12 @@ import {
   toSafeIntegration,
   type SafeIntegration,
   type SystemIntegrationRepository,
-} from './repository';
+} from '../../integrations/core/repository';
 import { NangoClientError, type NangoClient, type NangoOperation } from '../nango/client';
-import { decryptCredential, encryptCredential } from '../credentials/encryption';
+import {
+  decryptCredential,
+  encryptCredential,
+} from '../../infrastructure/security/credential-encryption';
 import { gmailNangoProviders } from '../mail-channel/gmail-metadata';
 import type { NangoIntegration } from '../nango/types';
 

@@ -15,7 +15,7 @@ import {
   findMailChannel,
   getMailChannel,
 } from '../../lib/mail-channel/registry';
-import { createSystemIntegrationRepository } from '../../lib/integrations/repository';
+import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import { deleteConnectionLocalData, getZeroDB } from '../../lib/server-utils';
 import { NangoIntegrationError } from '../../lib/integrations/nango-service';
 import { resolveFetchedNangoCredential } from '../../lib/credentials/nango';

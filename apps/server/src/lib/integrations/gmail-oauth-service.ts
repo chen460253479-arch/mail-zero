@@ -7,8 +7,11 @@ import {
   type SafeIntegration,
   type SystemIntegrationRecord,
   type SystemIntegrationRepository,
-} from './repository';
-import { decryptCredential, encryptCredential } from '../credentials/encryption';
+} from '../../integrations/core/repository';
+import {
+  decryptCredential,
+  encryptCredential,
+} from '../../infrastructure/security/credential-encryption';
 import { createZeroOAuthSnapshot } from '../credentials/zero-oauth';
 
 export type GmailOAuthRuntimeConfig = {

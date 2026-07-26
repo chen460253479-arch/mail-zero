@@ -42,7 +42,7 @@ import { SyncThreadsWorkflow } from './workflows/sync-threads-workflow';
 import { handleGmailPush } from './lib/mail-channel/gmail/handle-push';
 import { createZeroOAuthSnapshot } from './lib/credentials/zero-oauth';
 import { ShardRegistry, ZeroAgent, ZeroDriver } from './routes/agent';
-import { encryptCredential } from './lib/credentials/encryption';
+import { encryptCredential } from './infrastructure/security/credential-encryption';
 import { ThreadSyncWorker } from './routes/agent/sync-worker';
 import type { MailChannelId } from './lib/mail-channel/types';
 import { oAuthDiscoveryMetadata } from 'better-auth/plugins';
