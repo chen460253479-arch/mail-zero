@@ -2,8 +2,53 @@ import { getTableConfig, IndexedColumn, PgDialect } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 
 import * as schema from '../../src/db/schema';
+import { expectedLocations } from './helpers/schema-contract';
 
 describe('local mail schema', () => {
+  it('uses stable PostgreSQL-safe names for every declared constraint', () => {
+    for (const [exportName, table] of expectedLocations) {
+      const config = getTableConfig(table);
+      const names = [
+        ...config.primaryKeys.map(({ name }) => name),
+        ...config.uniqueConstraints.map((constraint) => constraint.getName()),
+        ...config.foreignKeys.map((foreignKey) => foreignKey.getName()),
+        ...config.checks.map(({ name }) => name),
+      ];
+
+      for (const name of names) {
+        expect(name, `${exportName} has an unnamed constraint`).toEqual(expect.any(String));
+        if (typeof name !== 'string') continue;
+        expect(
+          Buffer.byteLength(name, 'utf8'),
+          `${exportName}.${name} exceeds PostgreSQL's 63-byte identifier limit`,
+        ).toBeLessThanOrEqual(63);
+      }
+      const named = names.filter((name): name is string => typeof name === 'string');
+      expect(new Set(named).size, `${exportName} has duplicate constraint names`).toBe(
+        named.length,
+      );
+    }
+
+    expect(
+      getTableConfig(schema.connection).uniqueConstraints.map((constraint) =>
+        constraint.getName(),
+      ),
+    ).toContain('connection_user_email_uidx');
+    expect(
+      getTableConfig(schema.authorizationBinding).uniqueConstraints.map((constraint) =>
+        constraint.getName(),
+      ),
+    ).toContain('authorization_binding_nango_ref_uidx');
+    expect(
+      getTableConfig(schema.channelIntegrationMapping).uniqueConstraints.map((constraint) =>
+        constraint.getName(),
+      ),
+    ).toContain('channel_mapping_channel_auth_uidx');
+    expect(getTableConfig(schema.writingStyleMatrix).primaryKeys.map(({ name }) => name)).toContain(
+      'writing_style_matrix_pk',
+    );
+  });
+
   it('exports every local mail collection', () => {
     expect(Object.keys(schema)).toEqual(
       expect.arrayContaining([

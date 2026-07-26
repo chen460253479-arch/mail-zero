@@ -145,7 +145,7 @@ export const connection = createIntegrationTable(
     updatedAt: timestamp('updated_at').notNull(),
   },
   (t) => [
-    unique().on(t.userId, t.normalizedEmail),
+    unique('connection_user_email_uidx').on(t.userId, t.normalizedEmail),
     unique('connection_id_user_id_uidx').on(t.id, t.userId),
     index('connection_user_id_idx').on(t.userId),
     index('connection_expires_at_idx').on(t.expiresAt),
@@ -172,7 +172,10 @@ export const authorizationBinding = createIntegrationTable(
     updatedAt: timestamp('updated_at').notNull(),
   },
   (t) => [
-    unique().on(t.nangoProviderConfigKey, t.nangoConnectionId),
+    unique('authorization_binding_nango_ref_uidx').on(
+      t.nangoProviderConfigKey,
+      t.nangoConnectionId,
+    ),
     index('authorization_connection_id_idx').on(t.connectionId),
   ],
 );
@@ -201,7 +204,7 @@ export const channelIntegrationMapping = createIntegrationTable(
     createdAt: timestamp('created_at').notNull(),
     updatedAt: timestamp('updated_at').notNull(),
   },
-  (t) => [unique().on(t.channelId, t.authSource)],
+  (t) => [unique('channel_mapping_channel_auth_uidx').on(t.channelId, t.authSource)],
 );
 
 export const integrationOAuthSession = createIntegrationTable(
@@ -306,6 +309,7 @@ export const writingStyleMatrix = createAppTable(
   (table) => {
     return [
       primaryKey({
+        name: 'writing_style_matrix_pk',
         columns: [table.connectionId],
       }),
       index('writing_style_matrix_style_idx').on(table.style),
