@@ -23,6 +23,21 @@ describe('queryThreads', () => {
     });
   });
 
+  it('does not scan account-wide Email and Thread repositories to produce a page', async () => {
+    const h = await createQueryHarness();
+
+    await queryThreads(h.dependencies, {
+      accountId: h.accountId,
+      limit: 1,
+      cursor: null,
+    });
+
+    expect(h.repositoryCalls).toEqual({
+      emailListByAccount: 0,
+      threadListByAccount: 0,
+    });
+  });
+
   it('filters Threads by mailbox membership of visible member Emails', async () => {
     const h = await createQueryHarness();
 

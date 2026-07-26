@@ -1,4 +1,3 @@
-import type { MailAccountId } from '../types';
 import type {
   AccountRepository,
   BlobRepository,
@@ -9,12 +8,15 @@ import type {
   SubmissionRepository,
   ThreadRepository,
 } from './repositories';
+import type { ThreadQueryRepository } from './thread-query-store';
+import type { MailAccountId } from '../types';
 
 export interface MailTransaction {
   accounts: AccountRepository;
   mailboxes: MailboxRepository;
   blobs: BlobRepository;
   threads: ThreadRepository;
+  threadQueries: ThreadQueryRepository;
   emails: EmailRepository;
   identities: IdentityRepository;
   submissions: SubmissionRepository;

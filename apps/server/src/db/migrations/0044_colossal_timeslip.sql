@@ -1,0 +1,1 @@
+CREATE INDEX "thread_account_latest_id_idx" ON "mail0_thread" USING btree ("mail_account_id","latest_received_at" DESC NULLS LAST,"id");

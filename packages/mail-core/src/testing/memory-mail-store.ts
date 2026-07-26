@@ -33,6 +33,7 @@ import type {
   MailboxRole,
   ThreadId,
 } from '../types';
+import type { ThreadQueryProjection, ThreadQueryRepository } from '../store/thread-query-store';
 import type { MailTransaction, MailUnitOfWork } from '../store/unit-of-work';
 import { MailCoreError } from '../types';
 
@@ -306,6 +307,74 @@ const createRepositories = (
     },
   };
 
+  const projectThread = (
+    accountId: MailAccountId,
+    threadRecord: ThreadRecord,
+  ): ThreadQueryProjection | null => {
+    const emails = [...state.emails.values()]
+      .filter(
+        (email) =>
+          email.accountId === accountId &&
+          email.threadId === threadRecord.id &&
+          email.destroyedAt === null &&
+          email.mailboxIds.length > 0,
+      )
+      .sort(
+        (left, right) =>
+          left.receivedAt.getTime() - right.receivedAt.getTime() || left.id.localeCompare(right.id),
+      );
+    const latest = emails.at(-1);
+    if (latest === undefined) {
+      return null;
+    }
+    return {
+      ...copy(threadRecord),
+      latestReceivedAt: new Date(latest.receivedAt),
+      emailIds: emails.map(({ id }) => id),
+      mailboxIds: [...new Set(emails.flatMap(({ mailboxIds }) => mailboxIds))].sort(),
+    };
+  };
+
+  const threadQueries: ThreadQueryRepository = {
+    async query(input) {
+      const compare = (
+        left: Pick<ThreadQueryProjection, 'id' | 'latestReceivedAt'>,
+        right: { threadId: ThreadId; latestReceivedAt: Date },
+      ): number => {
+        const time = right.latestReceivedAt.getTime() - left.latestReceivedAt.getTime();
+        return time === 0 ? left.id.localeCompare(right.threadId) : time;
+      };
+      const ordered = [...state.threads.values()]
+        .filter(({ accountId }) => accountId === input.accountId)
+        .flatMap((threadRecord) => {
+          const projection = projectThread(input.accountId, threadRecord);
+          return projection === null ? [] : [projection];
+        })
+        .filter(
+          ({ mailboxIds }) => input.mailboxId === null || mailboxIds.includes(input.mailboxId),
+        )
+        .sort((left, right) =>
+          compare(left, {
+            latestReceivedAt: right.latestReceivedAt,
+            threadId: right.id,
+          }),
+        )
+        .filter((thread) => input.after === null || compare(thread, input.after) > 0);
+      return {
+        threads: ordered.slice(0, input.limit).map(copy),
+        hasMore: ordered.length > input.limit,
+      };
+    },
+    async findById(accountId, threadId) {
+      const threadRecord = state.threads.get(entityKey(accountId, threadId));
+      if (threadRecord === undefined) {
+        return null;
+      }
+      const projection = projectThread(accountId, threadRecord);
+      return projection === null ? null : copy(projection);
+    },
+  };
+
   const emails: EmailRepository = {
     async findById(accountId, id) {
       return findScoped(state.emails, accountId, id);
@@ -521,6 +590,7 @@ const createRepositories = (
     mailboxes,
     blobs,
     threads,
+    threadQueries,
     emails,
     identities,
     submissions,

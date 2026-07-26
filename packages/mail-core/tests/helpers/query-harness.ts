@@ -3,6 +3,8 @@ import type {
   EmailId,
   EmailRecord,
   MailAccountId,
+  MailTransaction,
+  MailUnitOfWork,
   MailboxId,
   ThreadId,
   ThreadRecord,
@@ -80,7 +82,38 @@ const emailRecord = (
 });
 
 export const createQueryHarness = async () => {
-  const dependencies = createMemoryMailCoreDependencies();
+  const baseDependencies = createMemoryMailCoreDependencies();
+  const repositoryCalls = {
+    emailListByAccount: 0,
+    threadListByAccount: 0,
+  };
+  const unitOfWork: MailUnitOfWork = {
+    run<Result>(operation: (transaction: MailTransaction) => Promise<Result>): Promise<Result> {
+      return baseDependencies.unitOfWork.run((tx) =>
+        operation({
+          ...tx,
+          emails: {
+            ...tx.emails,
+            listByAccount: (accountId) => {
+              repositoryCalls.emailListByAccount += 1;
+              return tx.emails.listByAccount(accountId);
+            },
+          },
+          threads: {
+            ...tx.threads,
+            listByAccount: (accountId) => {
+              repositoryCalls.threadListByAccount += 1;
+              return tx.threads.listByAccount(accountId);
+            },
+          },
+        }),
+      );
+    },
+  };
+  const dependencies = {
+    ...baseDependencies,
+    unitOfWork,
+  };
   const threadA = 'thread-a' as ThreadId;
   const threadB = 'thread-b' as ThreadId;
   const threadC = 'thread-c' as ThreadId;
@@ -92,7 +125,7 @@ export const createQueryHarness = async () => {
   const destroyedEmail = 'email-5' as EmailId;
   const unfiledEmail = 'email-6' as EmailId;
 
-  await dependencies.unitOfWork.run(async (tx) => {
+  await baseDependencies.unitOfWork.run(async (tx) => {
     await tx.accounts.insert({
       id: queryAccountId,
       userId: 'user-1',
@@ -198,7 +231,7 @@ export const createQueryHarness = async () => {
   });
 
   const insertEmail = async (record: EmailRecord, thread?: ThreadRecord) => {
-    await dependencies.unitOfWork.run(async (tx) => {
+    await baseDependencies.unitOfWork.run(async (tx) => {
       if (thread !== undefined) {
         await tx.threads.insert(thread);
       }
@@ -208,6 +241,7 @@ export const createQueryHarness = async () => {
 
   return {
     dependencies,
+    repositoryCalls,
     accountId: queryAccountId,
     otherAccountId: otherQueryAccountId,
     inboxId: queryInboxId,
@@ -257,7 +291,7 @@ export const createQueryHarness = async () => {
         temporaryKey: pending.temporaryKey,
         objectKey,
       });
-      await dependencies.unitOfWork.run(async (tx) => {
+      await baseDependencies.unitOfWork.run(async (tx) => {
         await tx.blobs.insert({
           id: blobId,
           accountId: queryAccountId,
@@ -286,7 +320,7 @@ export const createQueryHarness = async () => {
       return objectKey;
     },
     insertForeignBrokenBodyEmail: () =>
-      dependencies.unitOfWork.run(async (tx) => {
+      baseDependencies.unitOfWork.run(async (tx) => {
         const blobId = 'blob-foreign-missing' as BlobId;
         await tx.blobs.insert({
           id: blobId,

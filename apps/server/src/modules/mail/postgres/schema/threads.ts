@@ -1,4 +1,4 @@
-import { boolean, check, integer, text, timestamp, unique } from 'drizzle-orm/pg-core';
+import { boolean, check, index, integer, text, timestamp, unique } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 import { createMailTable } from '../table';
@@ -25,5 +25,6 @@ export const thread = createMailTable(
     check('thread_counters_nonnegative_check', sql`${t.emailCount} >= 0 AND ${t.unreadCount} >= 0`),
     check('thread_unread_within_total_check', sql`${t.unreadCount} <= ${t.emailCount}`),
     unique('thread_id_account_uidx').on(t.id, t.mailAccountId),
+    index('thread_account_latest_id_idx').on(t.mailAccountId, t.latestReceivedAt.desc(), t.id),
   ],
 );

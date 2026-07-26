@@ -1,4 +1,10 @@
-import type { EmailRecord, MailCoreDependencies, MailTransaction, ThreadRecord } from '../store';
+import type {
+  EmailRecord,
+  MailCoreDependencies,
+  MailTransaction,
+  ThreadQueryProjection,
+  ThreadRecord,
+} from '../store';
 import { MailCoreError, type MailAccountId, type MailboxId, type ThreadId } from '../types';
 import { decodeCursor, encodeCursor } from '../search';
 
@@ -34,30 +40,10 @@ type ThreadPosition = {
 const signature = (mailboxId: MailboxId | undefined): string =>
   JSON.stringify({ mailboxId: mailboxId ?? null });
 
-const chronological = (left: EmailRecord, right: EmailRecord): number => {
-  const time = left.receivedAt.getTime() - right.receivedAt.getTime();
-  return time === 0 ? left.id.localeCompare(right.id) : time;
-};
-
-const comparePosition = (left: ThreadPosition, right: ThreadPosition): number => {
-  const time = right.latestReceivedAt.getTime() - left.latestReceivedAt.getTime();
-  return time === 0 ? left.threadId.localeCompare(right.threadId) : time;
-};
-
-export const visibleThreadEmails = (emails: EmailRecord[]): EmailRecord[] =>
-  emails
-    .filter(({ destroyedAt, mailboxIds }) => destroyedAt === null && mailboxIds.length > 0)
-    .sort(chronological);
-
-const projectThread = (thread: ThreadRecord, emails: EmailRecord[]): ThreadQueryItem => {
-  const ordered = visibleThreadEmails(emails);
-  const latestReceivedAt = ordered.at(-1)!.receivedAt;
-  return {
-    ...thread,
-    latestReceivedAt,
-    emailIds: ordered.map(({ id }) => id),
-  };
-};
+const publicProjection = ({
+  mailboxIds: _mailboxIds,
+  ...thread
+}: ThreadQueryProjection): ThreadQueryItem => thread;
 
 const requireAccountAndMailbox = async (
   tx: MailTransaction,
@@ -102,47 +88,18 @@ export async function queryThreads(
 
   return dependencies.unitOfWork.run(async (tx) => {
     await requireAccountAndMailbox(tx, input.accountId, input.mailboxId);
-    const allEmails = visibleThreadEmails(await tx.emails.listByAccount(input.accountId));
-    const emailsByThread = new Map<ThreadId, EmailRecord[]>();
-    for (const email of allEmails) {
-      const current = emailsByThread.get(email.threadId) ?? [];
-      current.push(email);
-      emailsByThread.set(email.threadId, current);
-    }
-    const candidates: ThreadQueryItem[] = [];
-    for (const thread of await tx.threads.listByAccount(input.accountId)) {
-      const emails = emailsByThread.get(thread.id);
-      if (
-        emails === undefined ||
-        (input.mailboxId !== undefined &&
-          !emails.some(({ mailboxIds }) => mailboxIds.includes(input.mailboxId!)))
-      ) {
-        continue;
-      }
-      candidates.push(projectThread(thread, emails));
-    }
-    const ordered = candidates
-      .sort((left, right) =>
-        comparePosition(
-          { latestReceivedAt: left.latestReceivedAt, threadId: left.id },
-          { latestReceivedAt: right.latestReceivedAt, threadId: right.id },
-        ),
-      )
-      .filter(
-        (thread) =>
-          cursor === null ||
-          comparePosition(
-            { latestReceivedAt: thread.latestReceivedAt, threadId: thread.id },
-            cursor,
-          ) > 0,
-      );
-    const page = ordered.slice(0, input.limit);
-    const hasMore = ordered.length > input.limit;
+    const result = await tx.threadQueries.query({
+      accountId: input.accountId,
+      mailboxId: input.mailboxId ?? null,
+      after: cursor,
+      limit: input.limit,
+    });
+    const page = result.threads.map(publicProjection);
     const last = page.at(-1);
     return {
       threads: page,
       nextCursor:
-        hasMore && last !== undefined
+        result.hasMore && last !== undefined
           ? encodeCursor({
               version: 1,
               kind: 'thread',
@@ -165,19 +122,13 @@ export async function getThread(
     if ((await tx.accounts.findById(input.accountId)) === null) {
       throw new MailCoreError('ACCOUNT_NOT_FOUND', { entityId: input.accountId });
     }
-    const thread = await tx.threads.findById(input.accountId, input.threadId);
+    const thread = await tx.threadQueries.findById(input.accountId, input.threadId);
     if (thread === null) {
       if (await tx.threads.existsOutsideAccount(input.accountId, input.threadId)) {
         throw new MailCoreError('CROSS_ACCOUNT_REFERENCE', { entityId: input.threadId });
       }
       throw new MailCoreError('THREAD_NOT_FOUND', { entityId: input.threadId });
     }
-    const emails = visibleThreadEmails(
-      await tx.emails.listByThread(input.accountId, input.threadId),
-    );
-    if (emails.length === 0) {
-      throw new MailCoreError('THREAD_NOT_FOUND', { entityId: input.threadId });
-    }
-    return projectThread(thread, emails);
+    return publicProjection(thread);
   });
 }

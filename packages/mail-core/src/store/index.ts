@@ -25,3 +25,8 @@ export type {
   SearchStore,
 } from './search-store';
 export type { MailTransaction, MailUnitOfWork } from './unit-of-work';
+export type {
+  ThreadQueryPosition,
+  ThreadQueryProjection,
+  ThreadQueryRepository,
+} from './thread-query-store';
