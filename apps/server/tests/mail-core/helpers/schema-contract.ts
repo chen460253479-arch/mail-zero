@@ -1,4 +1,5 @@
 import { getTableConfig, IndexedColumn, PgDialect } from 'drizzle-orm/pg-core';
+import type { AnyPgTable } from 'drizzle-orm/pg-core';
 import { SQL } from 'drizzle-orm';
 
 import * as schema from '../../../src/db/schema';
@@ -70,7 +71,9 @@ const serializeDefault = (
 };
 
 export const collectStructuralSchemaShape = () => {
-  const exportByTable = new Map(expectedLocations.map(([name, table]) => [table, name]));
+  const exportByTable = new Map<AnyPgTable, string>(
+    expectedLocations.map(([name, table]) => [table, name]),
+  );
 
   return Object.fromEntries(
     expectedLocations.map(([exportName, table]) => {
