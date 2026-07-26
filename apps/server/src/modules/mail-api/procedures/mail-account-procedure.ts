@@ -32,6 +32,16 @@ const trpcCode = (
   return 'BAD_REQUEST';
 };
 
+export const toMailApiTrpcError = (error: unknown): TRPCError => {
+  if (error instanceof TRPCError) return error;
+  const mapped = error instanceof MailApiError ? error : mapMailCoreError(error);
+  return new TRPCError({
+    code: trpcCode(mapped),
+    message: mapped.code,
+    cause: mapped,
+  });
+};
+
 export const createMailAccountProcedure = (
   openRuntime: OpenOwnedMailApiRuntime = openOwnedMailApiRuntime,
 ) =>
@@ -46,15 +56,14 @@ export const createMailAccountProcedure = (
           ctx.c.env,
         );
       } catch (error) {
-        const mapped = error instanceof MailApiError ? error : mapMailCoreError(error);
-        throw new TRPCError({
-          code: trpcCode(mapped),
-          message: mapped.code,
-          cause: mapped,
-        });
+        throw toMailApiTrpcError(error);
       }
       try {
-        return await next({ ctx: { ...ctx, mailApi: runtime } });
+        try {
+          return await next({ ctx: { ...ctx, mailApi: runtime } });
+        } catch (error) {
+          throw toMailApiTrpcError(error);
+        }
       } finally {
         await runtime.close();
       }

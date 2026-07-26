@@ -1,4 +1,14 @@
 import {
+  createIdentity,
+  createMailAccount,
+  destroyIdentity,
+  getMailAccount,
+  listIdentities,
+  listMailAccounts,
+  setIdentities,
+  updateIdentity,
+} from './account';
+import {
   createDraft,
   destroyDraft,
   destroyEmail,
@@ -9,15 +19,6 @@ import {
   updateDraft,
   updateEmail,
 } from './message';
-import {
-  createIdentity,
-  createMailAccount,
-  destroyIdentity,
-  getMailAccount,
-  listIdentities,
-  listMailAccounts,
-  updateIdentity,
-} from './account';
 import {
   cancelSubmission,
   createSubmission,
@@ -47,6 +48,7 @@ export type MailCore = {
   getAccount: BoundCommand<typeof getMailAccount>;
   createIdentity: BoundCommand<typeof createIdentity>;
   listIdentities: BoundCommand<typeof listIdentities>;
+  setIdentities: BoundCommand<typeof setIdentities>;
   updateIdentity: BoundCommand<typeof updateIdentity>;
   destroyIdentity: BoundCommand<typeof destroyIdentity>;
   createMailbox: BoundCommand<typeof createMailbox>;
@@ -82,6 +84,7 @@ export const createMailCore = (dependencies: MailCoreDependencies): MailCore => 
   getAccount: (input) => getMailAccount(dependencies, input),
   createIdentity: (input) => createIdentity(dependencies, input),
   listIdentities: (input) => listIdentities(dependencies, input),
+  setIdentities: (input) => setIdentities(dependencies, input),
   updateIdentity: (input) => updateIdentity(dependencies, input),
   destroyIdentity: (input) => destroyIdentity(dependencies, input),
   createMailbox: (input) => createMailbox(dependencies, input),

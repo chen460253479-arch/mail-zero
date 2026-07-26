@@ -16,9 +16,12 @@ export type MailApiRuntime = {
   db: DB;
 };
 
-export type OwnedMailApiRuntime = MailApiRuntime & {
-  account: MailAccountRecord;
+export type OpenMailApiRuntime = MailApiRuntime & {
   close(): Promise<void>;
+};
+
+export type OwnedMailApiRuntime = OpenMailApiRuntime & {
+  account: MailAccountRecord;
 };
 
 export function createMailApiRuntime(db: DB, runtimeEnv: MailApiEnvironment): MailApiRuntime {
@@ -39,13 +42,24 @@ export function createMailApiRuntime(db: DB, runtimeEnv: MailApiEnvironment): Ma
   };
 }
 
+export async function openMailApiRuntime(
+  runtimeEnv: MailApiEnvironment,
+): Promise<OpenMailApiRuntime> {
+  const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
+  return {
+    ...createMailApiRuntime(db, runtimeEnv),
+    close: async () => {
+      await conn.end();
+    },
+  };
+}
+
 export async function openOwnedMailApiRuntime(
   userId: string,
   accountId: MailAccountId,
   runtimeEnv: MailApiEnvironment,
 ): Promise<OwnedMailApiRuntime> {
-  const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
-  const runtime = createMailApiRuntime(db, runtimeEnv);
+  const runtime = await openMailApiRuntime(runtimeEnv);
   try {
     const account = await runtime.core.getAccount({ accountId });
     if (account.userId !== userId) {
@@ -65,12 +79,9 @@ export async function openOwnedMailApiRuntime(
     return {
       ...runtime,
       account,
-      close: async () => {
-        await conn.end();
-      },
     };
   } catch (error) {
-    await conn.end().catch(() => undefined);
+    await runtime.close().catch(() => undefined);
     throw error;
   }
 }
