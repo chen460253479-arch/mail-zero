@@ -1,6 +1,6 @@
+import { resolveConnectionCredential } from '../modules/mail-accounts/credentials/resolve';
 import { channelIdToProviderId, getMailChannel } from './mail-channel/registry';
 import { createAuthMiddleware, jwt, bearer, mcp } from 'better-auth/plugins';
-import { resolveConnectionCredential } from './credentials/resolve';
 import { getBrowserTimezone, isValidTimezone } from './timezones';
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';

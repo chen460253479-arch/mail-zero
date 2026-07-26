@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { encryptCredential } from '../../../infrastructure/security/credential-encryption';
 import { resolveConnectionCredential, type ConnectionCredentialRecord } from './resolve';
 import { createZeroOAuthSnapshot } from './zero-oauth';
-import { encryptCredential } from '../../infrastructure/security/credential-encryption';
 
 const encryptionKey = Buffer.alloc(32, 9).toString('base64');
 

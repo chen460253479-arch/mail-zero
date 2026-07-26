@@ -1,11 +1,14 @@
 import {
   createSystemIntegrationRepository,
   type SystemIntegrationRepository,
-} from '../../integrations/core/repository';
-import { createNangoCredentialRepository, type NangoCredentialResolverOptions } from './nango';
-import { NangoIntegrationService } from '../../integrations/nango/service';
-import { NangoClient } from '../../integrations/nango/client';
-import { createDb } from '../../db';
+} from '../../../integrations/core/repository';
+import {
+  createNangoCredentialRepository,
+  type NangoCredentialResolverOptions,
+} from '../credentials/nango';
+import { NangoIntegrationService } from '../../../integrations/nango/service';
+import { NangoClient } from '../../../integrations/nango/client';
+import { createDb } from '../../../db';
 
 export type NangoRuntimeConfig = {
   databaseUrl: string;

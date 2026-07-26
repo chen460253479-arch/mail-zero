@@ -16,5 +16,6 @@ export const createZeroOAuthSnapshot = (
   ...input,
 });
 
-export const readZeroOAuthSnapshot = (value: unknown): ZeroOAuthSnapshot =>
-  zeroOAuthSnapshotSchema.parse(value);
+export const readZeroOAuthSnapshot = (value: unknown): ZeroOAuthSnapshot => {
+  return zeroOAuthSnapshotSchema.parse(value);
+};

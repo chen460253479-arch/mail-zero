@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createZeroOAuthSnapshot, readZeroOAuthSnapshot } from './zero-oauth';
 
-describe('Zero OAuth credential snapshots', () => {
+describe('Zero OAuth credentials', () => {
   it('creates and validates an OAuth snapshot', () => {
     const snapshot = createZeroOAuthSnapshot({
       accessToken: 'access',
@@ -19,8 +19,6 @@ describe('Zero OAuth credential snapshots', () => {
   });
 
   it('rejects incomplete snapshots', () => {
-    expect(() =>
-      readZeroOAuthSnapshot({ type: 'oauth2', accessToken: 'access' }),
-    ).toThrow();
+    expect(() => readZeroOAuthSnapshot({ type: 'oauth2', accessToken: 'access' })).toThrow();
   });
 });

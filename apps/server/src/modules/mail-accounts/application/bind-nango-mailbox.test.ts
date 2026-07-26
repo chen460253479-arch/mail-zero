@@ -5,10 +5,10 @@ import {
   listSafeNangoConnections,
   NangoBindingError,
   type NangoBindingRepository,
-} from './bind';
-import { decryptCredential } from '../../infrastructure/security/credential-encryption';
-import type { NangoClient } from '../../integrations/nango/client';
-import type { MailboxChannel } from '../mail-channel/types';
+} from './bind-nango-mailbox';
+import { decryptCredential } from '../../../infrastructure/security/credential-encryption';
+import type { NangoClient } from '../../../integrations/nango/client';
+import type { MailboxChannel } from '../../../lib/mail-channel/types';
 
 const encryptionKey = Buffer.alloc(32, 6).toString('base64');
 

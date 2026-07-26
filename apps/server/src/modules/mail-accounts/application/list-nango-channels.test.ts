@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('../driver/google', () => ({
+vi.mock('../../../lib/driver/google', () => ({
   GoogleMailManager: class {},
 }));
 
-import type { NangoIntegration } from '../../integrations/nango/schemas';
-import { listAvailableNangoChannels } from './channel-catalog';
-import { listMailChannels } from '../mail-channel/registry';
+import type { NangoIntegration } from '../../../integrations/nango/schemas';
+import { listMailChannels } from '../../../lib/mail-channel/registry';
+import { listAvailableNangoChannels } from './list-nango-channels';
 
 const integration = (
   unique_key: string,

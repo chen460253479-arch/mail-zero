@@ -22,8 +22,12 @@ export const assertAuthorizationCanBeAttached = (
   status: LifecycleConnection['status'],
   hasAuthorizationBinding: boolean,
 ): void => {
-  if (hasAuthorizationBinding) throw new Error('Mailbox authorization already exists');
-  if (status !== 'disconnected') throw new Error('Mailbox is already connected');
+  if (hasAuthorizationBinding) {
+    throw new Error('Mailbox authorization already exists');
+  }
+  if (status !== 'disconnected') {
+    throw new Error('Mailbox is already connected');
+  }
 };
 
 const getConnection = async (

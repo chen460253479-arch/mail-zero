@@ -13,7 +13,7 @@ type RetryOptions<T extends object, Credential> = {
   onUnrecoverableAuth?(error: unknown): void | Promise<void>;
 };
 
-export const createRetryingMailClient = <T extends object, Credential>(
+export const createRetryingClient = <T extends object, Credential>(
   options: RetryOptions<T, Credential>,
 ): T => {
   let client = options.createClient(options.initialCredential);
@@ -65,3 +65,5 @@ export const createRetryingMailClient = <T extends object, Credential>(
     },
   });
 };
+
+export const createRetryingMailClient = createRetryingClient;

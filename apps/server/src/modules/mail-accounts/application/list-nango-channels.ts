@@ -1,5 +1,5 @@
-import type { MailboxChannel, MailChannelId } from '../mail-channel/types';
-import type { NangoIntegration } from '../../integrations/nango/schemas';
+import type { MailboxChannel, MailChannelId } from '../../../lib/mail-channel/types';
+import type { NangoIntegration } from '../../../integrations/nango/schemas';
 
 export type AvailableNangoChannel = {
   channelId: MailChannelId;

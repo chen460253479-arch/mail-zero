@@ -1,9 +1,9 @@
 import { createNangoCredentialSnapshot, resolveFetchedNangoCredential } from '../credentials/nango';
-import { encryptCredential } from '../../infrastructure/security/credential-encryption';
-import type { NangoConnectionSummary } from '../../integrations/nango/schemas';
-import type { MailboxChannel, MailChannelId } from '../mail-channel/types';
-import { normalizeMailboxEmail } from '../mail-channel/mailbox-identity';
-import type { NangoClient } from '../../integrations/nango/client';
+import { encryptCredential } from '../../../infrastructure/security/credential-encryption';
+import type { MailboxChannel, MailChannelId } from '../../../lib/mail-channel/types';
+import type { NangoConnectionSummary } from '../../../integrations/nango/schemas';
+import type { NangoClient } from '../../../integrations/nango/client';
+import { normalizeMailboxEmail } from './mailbox-identity';
 
 export type NangoBindingErrorCode =
   | 'MAILBOX_ALREADY_CONNECTED'

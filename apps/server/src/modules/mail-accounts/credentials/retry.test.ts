@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createRetryingMailClient } from './retrying-client';
+import { createRetryingMailClient } from './retry';
 
 type TestClient = {
   read(): Promise<string>;

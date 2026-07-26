@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { normalizeMailboxEmail } from './mailbox-identity';
+import { normalizeMailboxEmail } from '../../modules/mail-accounts/application/mailbox-identity';
 import type { ChannelChange, ChannelChangeSet, ChannelSyncAdapter } from './sync-types';
 
 type GmailMessage = {
@@ -37,10 +37,7 @@ const toChange = (
   };
 };
 
-export const mapGmailHistory = (
-  history: GmailHistory[],
-  nextCursor: string,
-): ChannelChangeSet => {
+export const mapGmailHistory = (history: GmailHistory[], nextCursor: string): ChannelChangeSet => {
   const changes: ChannelChange[] = [];
 
   for (const item of history) {

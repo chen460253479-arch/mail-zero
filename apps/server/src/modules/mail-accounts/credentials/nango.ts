@@ -3,13 +3,13 @@ import { z } from 'zod';
 import {
   decryptCredential,
   encryptCredential,
-} from '../../infrastructure/security/credential-encryption';
-import type { NangoCredential } from '../../integrations/nango/schemas';
-import type { NangoClient } from '../../integrations/nango/client';
-import type { ResolvedCredential } from '../mail-channel/types';
-import { authorizationBinding } from '../../db/schema';
+} from '../../../infrastructure/security/credential-encryption';
+import type { NangoCredential } from '../../../integrations/nango/schemas';
+import type { ResolvedCredential } from '../../../lib/mail-channel/types';
+import type { NangoClient } from '../../../integrations/nango/client';
+import { authorizationBinding } from '../../../db/schema';
 import { eq, sql } from 'drizzle-orm';
-import type { DB } from '../../db';
+import type { DB } from '../../../db';
 
 const refreshWindowMs = 15 * 60 * 1000;
 

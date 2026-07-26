@@ -2,19 +2,19 @@ import {
   deleteRetainedMailboxData,
   disconnectAuthorization,
   type ConnectionLifecycleDependencies,
-} from '../../lib/connection-lifecycle';
+} from '../../modules/mail-accounts/application/disconnect-mailbox';
 import {
   bindNangoMailbox,
   listSafeNangoConnections,
   NangoBindingError,
-} from '../../lib/nango/bind';
+} from '../../modules/mail-accounts/application/bind-nango-mailbox';
+import { withNangoRuntime, type NangoRuntime } from '../../modules/mail-accounts/runtime/nango';
 import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router } from '../trpc';
+import { resolveFetchedNangoCredential } from '../../modules/mail-accounts/credentials/nango';
 import { resolveGmailConnectMode } from '../../lib/integrations/gmail-connection-options';
-import { withNangoRuntime, type NangoRuntime } from '../../lib/credentials/nango-runtime';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import { findMailChannel, getMailChannel } from '../../lib/mail-channel/registry';
 import { deleteConnectionLocalData, getZeroDB } from '../../lib/server-utils';
-import { resolveFetchedNangoCredential } from '../../lib/credentials/nango';
 import { NangoIntegrationError } from '../../integrations/nango/errors';
 import { disableBrainFunction } from '../../lib/brain';
 import { Ratelimit } from '@upstash/ratelimit';

@@ -31,18 +31,18 @@ import {
   type SerializedAttachment,
   type AttachmentFile,
 } from './lib/attachments';
+import { assertAuthorizationCanBeAttached } from './modules/mail-accounts/application/disconnect-mailbox';
 import { SyncThreadsCoordinatorWorkflow } from './workflows/sync-threads-coordinator-workflow';
+import { normalizeMailboxEmail } from './modules/mail-accounts/application/mailbox-identity';
+import { createZeroOAuthSnapshot } from './modules/mail-accounts/credentials/zero-oauth';
+import { encryptCredential } from './infrastructure/security/credential-encryption';
 import { parseMailIngressCommand } from './modules/mail-sync/application/commands';
 import { WorkerEntrypoint, DurableObject, RpcTarget } from 'cloudflare:workers';
-import { assertAuthorizationCanBeAttached } from './lib/connection-lifecycle';
-import { normalizeMailboxEmail } from './lib/mail-channel/mailbox-identity';
 // import { instrument, type ResolveConfigFn } from '@microlabs/otel-cf-workers';
 import { getZeroAgent, getZeroDB, verifyToken } from './lib/server-utils';
 import { SyncThreadsWorkflow } from './workflows/sync-threads-workflow';
 import { handleGmailPush } from './lib/mail-channel/gmail/handle-push';
-import { createZeroOAuthSnapshot } from './lib/credentials/zero-oauth';
 import { ShardRegistry, ZeroAgent, ZeroDriver } from './routes/agent';
-import { encryptCredential } from './infrastructure/security/credential-encryption';
 import { ThreadSyncWorker } from './routes/agent/sync-worker';
 import type { MailChannelId } from './lib/mail-channel/types';
 import { oAuthDiscoveryMetadata } from 'better-auth/plugins';

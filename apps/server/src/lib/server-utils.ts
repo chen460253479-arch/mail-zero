@@ -1,8 +1,8 @@
+import { resolveConnectionCredential } from '../modules/mail-accounts/credentials/resolve';
+import { createRetryingMailClient } from '../modules/mail-accounts/credentials/retry';
+import { withNangoCredentialResolver } from '../modules/mail-accounts/runtime/nango';
 import { loadGmailOAuthRuntimeConfig } from './integrations/gmail-oauth-runtime';
 import type { IGetThreadResponse, IGetThreadsResponse } from './driver/types';
-import { withNangoCredentialResolver } from './credentials/nango-runtime';
-import { createRetryingMailClient } from './credentials/retrying-client';
-import { resolveConnectionCredential } from './credentials/resolve';
 import { authorizationBinding, connection } from '../db/schema';
 import { OutgoingMessageType } from '../routes/agent/types';
 import { getMailChannel } from './mail-channel/registry';

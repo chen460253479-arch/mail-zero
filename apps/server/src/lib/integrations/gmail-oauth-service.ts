@@ -12,7 +12,7 @@ import {
   decryptCredential,
   encryptCredential,
 } from '../../infrastructure/security/credential-encryption';
-import { createZeroOAuthSnapshot } from '../credentials/zero-oauth';
+import { createZeroOAuthSnapshot } from '../../modules/mail-accounts/credentials/zero-oauth';
 
 export type GmailOAuthRuntimeConfig = {
   clientId: string;

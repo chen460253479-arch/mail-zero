@@ -5,16 +5,14 @@ import {
   deleteRetainedMailboxData,
   disconnectAuthorization,
   type ConnectionLifecycleDependencies,
-} from './connection-lifecycle';
+} from './disconnect-mailbox';
 
 const connection = {
   id: 'connection-1',
   status: 'connected' as const,
 };
 
-const createDependencies = (
-  status: 'connected' | 'disconnected' = 'connected',
-) => {
+const createDependencies = (status: 'connected' | 'disconnected' = 'connected') => {
   const calls: string[] = [];
   const repository = {
     getConnection: vi.fn().mockResolvedValue({ ...connection, status }),
@@ -66,21 +64,14 @@ describe('connection lifecycle', () => {
         dependencies,
       ),
     ).resolves.toEqual({ status: 'disconnected' });
-    expect(calls).toEqual([
-      'stopMailboxTasks',
-      'removeAuthorizationBinding',
-      'markDisconnected',
-    ]);
+    expect(calls).toEqual(['stopMailboxTasks', 'removeAuthorizationBinding', 'markDisconnected']);
   });
 
   it('stops external work before marking the mailbox deleting', async () => {
     const { calls, dependencies } = createDependencies();
 
     await expect(
-      disconnectAuthorization(
-        { connectionId: connection.id, deleteLocalData: true },
-        dependencies,
-      ),
+      disconnectAuthorization({ connectionId: connection.id, deleteLocalData: true }, dependencies),
     ).resolves.toEqual({ status: 'deleted' });
     expect(calls).toEqual([
       'stopMailboxTasks',
@@ -98,10 +89,7 @@ describe('connection lifecycle', () => {
     );
 
     await expect(
-      disconnectAuthorization(
-        { connectionId: connection.id, deleteLocalData: true },
-        dependencies,
-      ),
+      disconnectAuthorization({ connectionId: connection.id, deleteLocalData: true }, dependencies),
     ).rejects.toThrow('provider task cleanup failed');
     expect(repository.markDeleting).not.toHaveBeenCalled();
   });
@@ -119,9 +107,9 @@ describe('connection lifecycle', () => {
 
   it('allows retained data cleanup only for a disconnected mailbox', async () => {
     const connected = createDependencies();
-    await expect(
-      deleteRetainedMailboxData(connection.id, connected.dependencies),
-    ).rejects.toThrow('Mailbox must be disconnected');
+    await expect(deleteRetainedMailboxData(connection.id, connected.dependencies)).rejects.toThrow(
+      'Mailbox must be disconnected',
+    );
 
     const disconnected = createDependencies('disconnected');
     await expect(
