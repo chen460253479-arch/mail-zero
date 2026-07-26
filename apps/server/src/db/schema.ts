@@ -146,7 +146,6 @@ export const connection = createIntegrationTable(
   (t) => [
     unique('connection_user_channel_email_uidx').on(t.userId, t.channelId, t.normalizedEmail),
     unique('connection_id_user_id_uidx').on(t.id, t.userId),
-    index('connection_user_id_idx').on(t.userId),
     index('connection_provider_key_idx').on(t.providerKey),
     check(
       'connection_status_chk',
@@ -182,7 +181,6 @@ export const authorizationBinding = createIntegrationTable(
       t.nangoProviderConfigKey,
       t.nangoConnectionId,
     ),
-    index('authorization_connection_id_idx').on(t.connectionId),
     check(
       'authorization_auth_source_chk',
       sql`${t.authSource} IN ('zero_oauth', 'nango', 'manual')`,
@@ -285,9 +283,7 @@ export const summary = createAppTable(
   },
   (t) => [
     primaryKey({ name: 'summary_pk', columns: [t.connectionId, t.messageId] }),
-    index('summary_connection_id_idx').on(t.connectionId),
     index('summary_connection_id_saved_idx').on(t.connectionId, t.saved),
-    index('summary_saved_idx').on(t.saved),
   ],
 );
 
@@ -314,10 +310,8 @@ export const note = createAppTable(
       columns: [t.connectionId],
       foreignColumns: [connection.id],
     }).onDelete('cascade'),
-    index('note_user_id_idx').on(t.userId),
     index('note_connection_id_idx').on(t.connectionId),
     index('note_user_connection_thread_idx').on(t.userId, t.connectionId, t.threadId),
-    index('note_is_pinned_idx').on(t.isPinned),
   ],
 );
 

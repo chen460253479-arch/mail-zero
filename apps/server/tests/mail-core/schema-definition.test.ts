@@ -176,6 +176,24 @@ describe('local mail schema', () => {
     expect(
       getTableConfig(schema.threadReference).indexes.map(({ config }) => config.name),
     ).not.toContain('thread_reference_account_subject_message_idx');
+    expect(
+      getTableConfig(schema.connection).indexes.map(({ config }) => config.name),
+    ).not.toContain('connection_user_id_idx');
+    expect(
+      getTableConfig(schema.authorizationBinding).indexes.map(({ config }) => config.name),
+    ).not.toContain('authorization_connection_id_idx');
+    expect(
+      getTableConfig(schema.summary).indexes.map(({ config }) => config.name),
+    ).not.toContain('summary_connection_id_idx');
+    expect(
+      getTableConfig(schema.summary).indexes.map(({ config }) => config.name),
+    ).not.toContain('summary_saved_idx');
+    expect(getTableConfig(schema.note).indexes.map(({ config }) => config.name)).not.toContain(
+      'note_user_id_idx',
+    );
+    expect(getTableConfig(schema.note).indexes.map(({ config }) => config.name)).not.toContain(
+      'note_is_pinned_idx',
+    );
   });
 
   it('scopes legacy mail projections by Connection', () => {

@@ -294,16 +294,7 @@ exports[`database structural parity > preserves every field, constraint, index, 
         "onUpdate": "no action",
       },
     ],
-    "indexes": [
-      {
-        "columns": [
-          "connection_id",
-        ],
-        "method": "btree",
-        "unique": false,
-        "where": undefined,
-      },
-    ],
+    "indexes": [],
     "primaryKeys": [],
     "uniqueConstraints": [
       [
@@ -675,14 +666,6 @@ exports[`database structural parity > preserves every field, constraint, index, 
       },
     ],
     "indexes": [
-      {
-        "columns": [
-          "user_id",
-        ],
-        "method": "btree",
-        "unique": false,
-        "where": undefined,
-      },
       {
         "columns": [
           "provider_key",
@@ -3418,14 +3401,6 @@ exports[`database structural parity > preserves every field, constraint, index, 
     "indexes": [
       {
         "columns": [
-          "user_id",
-        ],
-        "method": "btree",
-        "unique": false,
-        "where": undefined,
-      },
-      {
-        "columns": [
           "connection_id",
         ],
         "method": "btree",
@@ -3437,14 +3412,6 @@ exports[`database structural parity > preserves every field, constraint, index, 
           "user_id",
           "connection_id",
           "thread_id",
-        ],
-        "method": "btree",
-        "unique": false,
-        "where": undefined,
-      },
-      {
-        "columns": [
-          "is_pinned",
         ],
         "method": "btree",
         "unique": false,
@@ -4426,22 +4393,6 @@ exports[`database structural parity > preserves every field, constraint, index, 
       {
         "columns": [
           "connection_id",
-        ],
-        "method": "btree",
-        "unique": false,
-        "where": undefined,
-      },
-      {
-        "columns": [
-          "connection_id",
-          "saved",
-        ],
-        "method": "btree",
-        "unique": false,
-        "where": undefined,
-      },
-      {
-        "columns": [
           "saved",
         ],
         "method": "btree",

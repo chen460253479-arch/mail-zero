@@ -1,5 +1,5 @@
 {
-  "id": "1d35529a-e247-489a-aba8-4a048286a52c",
+  "id": "aa59c1dd-95d5-4fde-9691-12651b10320a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -233,23 +233,7 @@
           "notNull": true
         }
       },
-      "indexes": {
-        "authorization_connection_id_idx": {
-          "name": "authorization_connection_id_idx",
-          "columns": [
-            {
-              "expression": "connection_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "authorization_binding_connection_id_connection_id_fk": {
           "name": "authorization_binding_connection_id_connection_id_fk",
@@ -443,21 +427,6 @@
         }
       },
       "indexes": {
-        "connection_user_id_idx": {
-          "name": "connection_user_id_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "connection_provider_key_idx": {
           "name": "connection_provider_key_idx",
           "columns": [
@@ -967,21 +936,6 @@
         }
       },
       "indexes": {
-        "note_user_id_idx": {
-          "name": "note_user_id_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "note_connection_id_idx": {
           "name": "note_connection_id_idx",
           "columns": [
@@ -1014,21 +968,6 @@
             },
             {
               "expression": "thread_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "note_is_pinned_idx": {
-          "name": "note_is_pinned_idx",
-          "columns": [
-            {
-              "expression": "is_pinned",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1605,21 +1544,6 @@
         }
       },
       "indexes": {
-        "summary_connection_id_idx": {
-          "name": "summary_connection_id_idx",
-          "columns": [
-            {
-              "expression": "connection_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "summary_connection_id_saved_idx": {
           "name": "summary_connection_id_saved_idx",
           "columns": [
@@ -1629,21 +1553,6 @@
               "asc": true,
               "nulls": "last"
             },
-            {
-              "expression": "saved",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "summary_saved_idx": {
-          "name": "summary_saved_idx",
-          "columns": [
             {
               "expression": "saved",
               "isExpression": false,

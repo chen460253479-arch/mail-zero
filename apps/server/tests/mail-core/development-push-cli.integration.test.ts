@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { runDevelopmentPush, runDrizzleKitCommand } from '../../src/db/push-development-database';
 import { withMailTestDatabase } from './helpers/database';
+import { user } from '../../src/db/schema';
 import type { Sql } from 'postgres';
 
 const withDatabaseEnvironment = async <T>(
@@ -102,6 +103,53 @@ describe('development database CLI', () => {
         SELECT to_regclass('integration.connection')::text AS name
       `;
       expect(column?.name).toBe('integration.connection');
+    }));
+
+  it('leaves an existing development database unchanged without explicit reset flags', () =>
+    withMailTestDatabase(async ({ databaseUrl, db }) => {
+      const now = new Date('2026-07-26T00:00:00.000Z');
+      await db.insert(user).values({
+        id: 'push-cancel-user',
+        name: 'Push Cancel User',
+        email: 'push-cancel@example.test',
+        emailVerified: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await expect(
+        withDatabaseEnvironment(databaseUrl, () => runDevelopmentPush([])),
+      ).rejects.toThrow('Existing Zero schemas require both --reset and --yes');
+      await expect(
+        db.query.user.findFirst({
+          where: (fields, { eq }) => eq(fields.id, 'push-cancel-user'),
+        }),
+      ).resolves.toMatchObject({ email: 'push-cancel@example.test' });
+    }));
+
+  it('refuses an explicitly confirmed reset in production without changing data', () =>
+    withMailTestDatabase(async ({ databaseUrl, db }) => {
+      const now = new Date('2026-07-26T00:00:00.000Z');
+      await db.insert(user).values({
+        id: 'push-production-user',
+        name: 'Push Production User',
+        email: 'push-production@example.test',
+        emailVerified: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await expect(
+        withDatabaseEnvironment(databaseUrl, async () => {
+          process.env.NODE_ENV = 'production';
+          await runDevelopmentPush(['--reset', '--yes']);
+        }),
+      ).rejects.toThrow('Refusing to reset Zero schemas when NODE_ENV=production');
+      await expect(
+        db.query.user.findFirst({
+          where: (fields, { eq }) => eq(fields.id, 'push-production-user'),
+        }),
+      ).resolves.toMatchObject({ email: 'push-production@example.test' });
     }));
 
   it('applies the same single baseline through drizzle migrate', () =>
