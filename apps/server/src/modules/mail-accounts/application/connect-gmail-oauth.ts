@@ -7,22 +7,22 @@ import {
   type SafeIntegration,
   type SystemIntegrationRecord,
   type SystemIntegrationRepository,
-} from '../../integrations/core/repository';
+} from '../../../integrations/core/repository';
 import {
   decryptCredential,
   encryptCredential,
-} from '../../infrastructure/security/credential-encryption';
+} from '../../../infrastructure/security/credential-encryption';
 import type {
   GmailOAuthGateway,
   GmailOAuthRuntimeConfig,
-} from '../../mail-channel/gmail/auth/types';
-import { createZeroOAuthSnapshot } from '../../modules/mail-accounts/credentials/zero-oauth';
+} from '../../../mail-channel/gmail/auth/types';
+import { createZeroOAuthSnapshot } from '../credentials/zero-oauth';
 
 export type {
   GmailOAuthGateway,
   GmailOAuthRuntimeConfig,
   GmailOAuthTokens,
-} from '../../mail-channel/gmail/auth/types';
+} from '../../../mail-channel/gmail/auth/types';
 
 type GmailMailbox = {
   email: string;

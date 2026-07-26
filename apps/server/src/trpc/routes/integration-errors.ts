@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server';
 
-import { GmailOAuthError } from '../../lib/integrations/gmail-oauth-service';
+import { GmailOAuthError } from '../../modules/mail-accounts/application/connect-gmail-oauth';
 import { NangoIntegrationError } from '../../integrations/nango/errors';
 
 export const mapIntegrationError = (error: unknown): never => {

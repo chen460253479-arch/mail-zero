@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-import { GmailOAuthError } from '../../lib/integrations/gmail-oauth-service';
+import { GmailOAuthError } from '../../modules/mail-accounts/application/connect-gmail-oauth';
 import { NangoIntegrationError } from '../../integrations/nango/errors';
 import { mapIntegrationError } from './integration-errors';
 

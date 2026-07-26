@@ -1,12 +1,8 @@
 import { Hono } from 'hono';
 
-import {
-  GmailOAuthError,
-  GmailOAuthService,
-  gmailOAuthRedirectUris,
-} from '../lib/integrations/gmail-oauth-service';
-import { GoogleGmailOAuthGateway } from '../mail-channel/gmail/auth/google-oauth-gateway';
+import { GmailOAuthError } from '../modules/mail-accounts/application/connect-gmail-oauth';
 import { createSystemIntegrationRepository } from '../integrations/core/repository';
+import { createGmailOAuthApplication } from '../runtime/mail/gmail-oauth';
 import { assertAdministrator } from '../integrations/core/permissions';
 import { getZeroDB } from '../lib/server-utils';
 import type { HonoContext } from '../ctx';
@@ -36,16 +32,12 @@ const createService = (c: {
   env: HonoContext['Bindings'];
   repository: ReturnType<typeof createSystemIntegrationRepository>;
 }) =>
-  new GmailOAuthService({
+  createGmailOAuthApplication({
     repository: c.repository,
-    mailboxRepository: {
-      save: async (userId, mailbox, authorization) =>
-        await (await getZeroDB(userId)).createMailboxWithAuthorization(mailbox, authorization),
-    },
-    gateway: new GoogleGmailOAuthGateway(),
+    saveMailbox: async (userId, mailbox, authorization) =>
+      await (await getZeroDB(userId)).createMailboxWithAuthorization(mailbox, authorization),
     encryptionKey: c.env.CREDENTIAL_ENCRYPTION_KEY,
-    redirectUris: gmailOAuthRedirectUris(c.env.VITE_PUBLIC_BACKEND_URL),
-    now: () => new Date(),
+    backendUrl: c.env.VITE_PUBLIC_BACKEND_URL,
   });
 
 integrationOAuthRouter.get('/gmail/connect/start', async (c) => {

@@ -4,13 +4,10 @@ import {
   createNangoIntegrationService,
   type NangoIntegrationService,
 } from '../../integrations/nango/service';
-import {
-  GmailOAuthService,
-  gmailOAuthRedirectUris,
-} from '../../lib/integrations/gmail-oauth-service';
 import { NangoChannelMappingService } from '../../modules/mail-accounts/application/nango-channel-mapping';
-import { GoogleGmailOAuthGateway } from '../../mail-channel/gmail/auth/google-oauth-gateway';
+import { type GmailOAuthService } from '../../modules/mail-accounts/application/connect-gmail-oauth';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
+import { createGmailOAuthApplication } from '../../runtime/mail/gmail-oauth';
 import { getMailChannel } from '../../lib/mail-channel/registry';
 import { mapIntegrationError } from './integration-errors';
 import { getZeroDB } from '../../lib/server-utils';
@@ -46,16 +43,12 @@ const withIntegrationServices = async <T>(
         listIntegrations: () => nango.listIntegrations(),
         getChannel: (channelId) => getMailChannel(channelId),
       }),
-      gmail: new GmailOAuthService({
+      gmail: createGmailOAuthApplication({
         repository,
-        mailboxRepository: {
-          save: async (userId, mailbox, authorization) =>
-            await (await getZeroDB(userId)).createMailboxWithAuthorization(mailbox, authorization),
-        },
-        gateway: new GoogleGmailOAuthGateway(),
+        saveMailbox: async (userId, mailbox, authorization) =>
+          await (await getZeroDB(userId)).createMailboxWithAuthorization(mailbox, authorization),
         encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
-        redirectUris: gmailOAuthRedirectUris(env.VITE_PUBLIC_BACKEND_URL),
-        now: () => new Date(),
+        backendUrl: env.VITE_PUBLIC_BACKEND_URL,
       }),
     });
   } finally {

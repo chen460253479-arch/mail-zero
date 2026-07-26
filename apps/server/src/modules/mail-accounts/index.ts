@@ -1,5 +1,7 @@
 export * from './application/bind-nango-mailbox';
+export * from './application/connect-gmail-oauth';
 export * from './application/disconnect-mailbox';
+export * from './application/gmail-connection-options';
 export * from './application/list-nango-channels';
 export * from './application/mailbox-identity';
 export * from './application/nango-channel-mapping';

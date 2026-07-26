@@ -8,10 +8,10 @@ import {
   listSafeNangoConnections,
   NangoBindingError,
 } from '../../modules/mail-accounts/application/bind-nango-mailbox';
+import { resolveGmailConnectMode } from '../../modules/mail-accounts/application/gmail-connection-options';
 import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router } from '../trpc';
 import { withNangoRuntime, type NangoRuntime } from '../../modules/mail-accounts/runtime/nango';
 import { resolveFetchedNangoCredential } from '../../modules/mail-accounts/credentials/nango';
-import { resolveGmailConnectMode } from '../../lib/integrations/gmail-connection-options';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import { findMailChannel, getMailChannel } from '../../lib/mail-channel/registry';
 import { deleteConnectionLocalData, getZeroDB } from '../../lib/server-utils';
