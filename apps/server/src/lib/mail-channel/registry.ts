@@ -5,8 +5,12 @@ const channels = new Map<MailChannelId, MailboxChannel>([['gmail', gmailChannel]
 
 export const listMailChannels = () => Array.from(channels.values());
 
+export const findMailChannel = (
+  id: MailChannelId | (string & {}),
+): MailboxChannel | undefined => channels.get(id as MailChannelId);
+
 export const getMailChannel = (id: MailChannelId | (string & {})): MailboxChannel => {
-  const channel = channels.get(id as MailChannelId);
+  const channel = findMailChannel(id);
   if (!channel) throw new Error(`Unsupported mail channel: ${id}`);
   return channel;
 };

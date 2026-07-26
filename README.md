@@ -96,10 +96,11 @@ You can set up Zero in two ways:
 
    ```bash
    docker compose up --detach db valkey upstash-proxy
-   pnpm db:push
+   pnpm db:migrate
    ```
 
-   Run `pnpm db:push` again as part of deployment whenever the database schema changes.
+   Run `pnpm db:migrate` as part of deployment whenever the database schema changes.
+   `pnpm db:push` is a development-only initialization command and refuses production databases.
 
 3. **Start the complete development stack**
 
@@ -275,6 +276,12 @@ Zero uses PostgreSQL for storing data. Here's how to set it up:
      pnpm db:push
      ```
 
+     On an empty development database this applies the declarative schema directly. If Zero
+     business schemas already exist, the command cancels by default and asks whether to clear and
+     recreate only the `auth`, `app`, `integration`, and `mail` schemas. For an intentional
+     non-interactive development reset, run `pnpm db:push -- --reset --yes`. Never use this command
+     for production deployments.
+
    - **Create migration files** (after schema changes):
 
      ```bash
@@ -286,15 +293,6 @@ Zero uses PostgreSQL for storing data. Here's how to set it up:
      ```bash
      pnpm db:migrate
      ```
-
-   - **Backfill encrypted mailbox authorization snapshots** (required once after migration `0039` and before deploying the updated server):
-
-     ```bash
-     pnpm db:backfill-mail-auth
-     ```
-
-     This command is idempotent. It verifies every legacy mailbox binding, encrypts its OAuth
-     credentials with `CREDENTIAL_ENCRYPTION_KEY`, and removes the legacy plaintext token copies.
 
    - **View database content**:
      ```bash

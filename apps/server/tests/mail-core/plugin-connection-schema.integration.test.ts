@@ -151,5 +151,48 @@ describe('plugin-neutral Connection schema', () => {
           updatedAt: now,
         }),
       ).rejects.toMatchObject({ code: '23514' });
+      await expect(
+        db.insert(authorizationBinding).values({
+          id: 'plugin-missing-oauth-credential',
+          connectionId: 'plugin-constraint-gmail',
+          authSource: 'zero_oauth',
+          credentialType: 'oauth2',
+          createdAt: now,
+          updatedAt: now,
+        }),
+      ).rejects.toMatchObject({ code: '23514' });
+      await expect(
+        db.insert(authorizationBinding).values({
+          id: 'plugin-missing-basic-credential',
+          connectionId: 'plugin-constraint-gmail',
+          authSource: 'manual',
+          credentialType: 'basic',
+          createdAt: now,
+          updatedAt: now,
+        }),
+      ).rejects.toMatchObject({ code: '23514' });
+      await expect(
+        db.insert(authorizationBinding).values({
+          id: 'plugin-manual-oauth-expiry',
+          connectionId: 'plugin-constraint-gmail',
+          authSource: 'manual',
+          credentialType: 'basic',
+          encryptedCredentialSnapshot: 'encrypted-basic',
+          accessTokenExpiresAt: now,
+          createdAt: now,
+          updatedAt: now,
+        }),
+      ).rejects.toMatchObject({ code: '23514' });
+      await expect(
+        db.insert(authorizationBinding).values({
+          id: 'plugin-zero-oauth-basic',
+          connectionId: 'plugin-constraint-gmail',
+          authSource: 'zero_oauth',
+          credentialType: 'basic',
+          encryptedCredentialSnapshot: 'encrypted-basic',
+          createdAt: now,
+          updatedAt: now,
+        }),
+      ).rejects.toMatchObject({ code: '23514' });
     }));
 });

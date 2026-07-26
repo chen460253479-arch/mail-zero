@@ -383,6 +383,8 @@ git diff --check
 
 - Gmail History API、Push Notification、Webhook 和真实邮件同步。
 - Gmail、Graph、Zoho 或 IMAP/SMTP 的真实发件。
+- Outlook、Zoho 和 IMAP/SMTP 插件的凭据解析、协议客户端与运行时驱动；本阶段只要求
+  通用连接模型可以合法表达这些后续插件，并保证未安装插件的连接列表不会导致服务失败。
 - 前端改用本地 Email/Thread/Mailbox。
 - 把本地标签、文件夹、已读或删除状态反向写回 Provider。
 - JMAP HTTP 服务、IMAP/SMTP Server、MX、DKIM、SPF。

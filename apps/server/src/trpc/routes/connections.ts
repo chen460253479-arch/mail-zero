@@ -11,7 +11,11 @@ import {
 import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router } from '../trpc';
 import { resolveGmailConnectMode } from '../../lib/integrations/gmail-connection-options';
 import { withNangoRuntime, type NangoRuntime } from '../../lib/credentials/nango-runtime';
-import { channelIdToProviderId, getMailChannel } from '../../lib/mail-channel/registry';
+import {
+  channelIdToProviderId,
+  findMailChannel,
+  getMailChannel,
+} from '../../lib/mail-channel/registry';
 import { createSystemIntegrationRepository } from '../../lib/integrations/repository';
 import { deleteConnectionLocalData, getZeroDB } from '../../lib/server-utils';
 import { NangoIntegrationError } from '../../lib/integrations/nango-service';
@@ -130,7 +134,7 @@ export const connectionsRouter = router({
             channelId: connection.channelId,
             status: connection.status,
             authSource: authorization?.authSource ?? null,
-            capabilities: Array.from(getMailChannel(connection.channelId).capabilities),
+            capabilities: Array.from(findMailChannel(connection.channelId)?.capabilities ?? []),
           };
         }),
         disconnectedIds,

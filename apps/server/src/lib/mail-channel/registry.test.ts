@@ -7,6 +7,7 @@ vi.mock('../driver/google', () => ({
 import {
   assertMailChannelBinding,
   channelIdToProviderId,
+  findMailChannel,
   getMailChannel,
   listMailChannels,
   providerIdToChannelId,
@@ -47,6 +48,7 @@ describe('mail channel registry', () => {
   });
 
   it('rejects unknown channels instead of returning a partial plugin', () => {
+    expect(findMailChannel('imap_smtp')).toBeUndefined();
     expect(() => getMailChannel('zoho_mail')).toThrow('Unsupported mail channel');
   });
 });

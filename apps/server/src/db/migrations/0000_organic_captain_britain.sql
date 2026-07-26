@@ -46,6 +46,18 @@ CREATE TABLE "integration"."authorization_binding" (
         "integration"."authorization_binding"."auth_source" <> 'nango'
         AND "integration"."authorization_binding"."nango_connection_id" IS NULL
         AND "integration"."authorization_binding"."nango_provider_config_key" IS NULL
+      )),
+	CONSTRAINT "authorization_credential_material_chk" CHECK ((
+        "integration"."authorization_binding"."auth_source" = 'nango'
+      ) OR (
+        "integration"."authorization_binding"."auth_source" = 'zero_oauth'
+        AND "integration"."authorization_binding"."credential_type" = 'oauth2'
+        AND "integration"."authorization_binding"."encrypted_credential_snapshot" IS NOT NULL
+      ) OR (
+        "integration"."authorization_binding"."auth_source" = 'manual'
+        AND "integration"."authorization_binding"."credential_type" IN ('basic', 'custom')
+        AND "integration"."authorization_binding"."encrypted_credential_snapshot" IS NOT NULL
+        AND "integration"."authorization_binding"."access_token_expires_at" IS NULL
       ))
 );
 --> statement-breakpoint

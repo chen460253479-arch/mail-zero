@@ -1,5 +1,5 @@
 {
-  "id": "aa59c1dd-95d5-4fde-9691-12651b10320a",
+  "id": "0910672f-4df8-4301-b109-20d78dc2717f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -281,6 +281,10 @@
         "authorization_nango_reference_chk": {
           "name": "authorization_nango_reference_chk",
           "value": "(\n        \"integration\".\"authorization_binding\".\"auth_source\" = 'nango'\n        AND \"integration\".\"authorization_binding\".\"nango_connection_id\" IS NOT NULL\n        AND \"integration\".\"authorization_binding\".\"nango_provider_config_key\" IS NOT NULL\n      ) OR (\n        \"integration\".\"authorization_binding\".\"auth_source\" <> 'nango'\n        AND \"integration\".\"authorization_binding\".\"nango_connection_id\" IS NULL\n        AND \"integration\".\"authorization_binding\".\"nango_provider_config_key\" IS NULL\n      )"
+        },
+        "authorization_credential_material_chk": {
+          "name": "authorization_credential_material_chk",
+          "value": "(\n        \"integration\".\"authorization_binding\".\"auth_source\" = 'nango'\n      ) OR (\n        \"integration\".\"authorization_binding\".\"auth_source\" = 'zero_oauth'\n        AND \"integration\".\"authorization_binding\".\"credential_type\" = 'oauth2'\n        AND \"integration\".\"authorization_binding\".\"encrypted_credential_snapshot\" IS NOT NULL\n      ) OR (\n        \"integration\".\"authorization_binding\".\"auth_source\" = 'manual'\n        AND \"integration\".\"authorization_binding\".\"credential_type\" IN ('basic', 'custom')\n        AND \"integration\".\"authorization_binding\".\"encrypted_credential_snapshot\" IS NOT NULL\n        AND \"integration\".\"authorization_binding\".\"access_token_expires_at\" IS NULL\n      )"
         }
       },
       "isRLSEnabled": false

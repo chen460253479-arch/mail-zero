@@ -25,7 +25,6 @@
     "docker:db:down": "docker compose rm --stop --force db valkey upstash-proxy",
     "docker:db:clean": "docker compose down --volumes",
     "db:generate": "dotenv -- pnpm run -C apps/server db:generate",
-    "db:backfill-mail-auth": "dotenv -- pnpm run -C apps/server db:backfill-mail-auth",
     "db:migrate": "dotenv -- pnpm run -C apps/server db:migrate",
     "db:push": "dotenv -- pnpm run -C apps/server db:push",
     "db:studio": "dotenv -- pnpm run -C apps/server db:studio",

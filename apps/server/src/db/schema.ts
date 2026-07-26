@@ -201,6 +201,21 @@ export const authorizationBinding = createIntegrationTable(
         AND ${t.nangoProviderConfigKey} IS NULL
       )`,
     ),
+    check(
+      'authorization_credential_material_chk',
+      sql`(
+        ${t.authSource} = 'nango'
+      ) OR (
+        ${t.authSource} = 'zero_oauth'
+        AND ${t.credentialType} = 'oauth2'
+        AND ${t.encryptedCredentialSnapshot} IS NOT NULL
+      ) OR (
+        ${t.authSource} = 'manual'
+        AND ${t.credentialType} IN ('basic', 'custom')
+        AND ${t.encryptedCredentialSnapshot} IS NOT NULL
+        AND ${t.accessTokenExpiresAt} IS NULL
+      )`,
+    ),
   ],
 );
 

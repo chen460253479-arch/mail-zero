@@ -179,6 +179,18 @@ exports[`database structural parity > preserves every field, constraint, index, 
         AND "<table>"."nango_connection_id" IS NULL
         AND "<table>"."nango_provider_config_key" IS NULL
       )",
+      "(
+        "<table>"."auth_source" = 'nango'
+      ) OR (
+        "<table>"."auth_source" = 'zero_oauth'
+        AND "<table>"."credential_type" = 'oauth2'
+        AND "<table>"."encrypted_credential_snapshot" IS NOT NULL
+      ) OR (
+        "<table>"."auth_source" = 'manual'
+        AND "<table>"."credential_type" IN ('basic', 'custom')
+        AND "<table>"."encrypted_credential_snapshot" IS NOT NULL
+        AND "<table>"."access_token_expires_at" IS NULL
+      )",
     ],
     "columns": [
       {
