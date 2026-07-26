@@ -5,7 +5,7 @@ import { createMailTable } from '../table';
 import { mailAccount } from './accounts';
 
 export const mailChange = createMailTable(
-  'mail_change',
+  'change',
   {
     mailAccountId: text('mail_account_id')
       .notNull()

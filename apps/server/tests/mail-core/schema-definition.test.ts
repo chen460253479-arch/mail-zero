@@ -234,7 +234,7 @@ describe('local mail schema', () => {
     const predicate = rootNameIndex?.config.where;
     expect(predicate).toBeDefined();
     expect(new PgDialect().sqlToQuery(predicate!).sql).toContain(
-      '"mail0_mailbox"."parent_id" IS NULL AND "mail0_mailbox"."deleted_at" IS NULL',
+      '"mail"."mailbox"."parent_id" IS NULL AND "mail"."mailbox"."deleted_at" IS NULL',
     );
   });
 });

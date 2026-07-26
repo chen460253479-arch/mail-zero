@@ -11,13 +11,13 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
+import { createIntegrationTable, createMailTable } from '../table';
 import { mailAccount, mailIdentity } from './accounts';
-import { createMailTable } from '../table';
 import { email } from './emails';
 import { blob } from './blobs';
 
 export const emailSubmission = createMailTable(
-  'email_submission',
+  'submission',
   {
     id: text('id').primaryKey(),
     mailAccountId: text('mail_account_id')
@@ -104,8 +104,8 @@ export const submissionBlob = createMailTable(
   ],
 );
 
-export const submissionAttempt = createMailTable(
-  'submission_attempt',
+export const submissionAttempt = createIntegrationTable(
+  'send_attempt',
   {
     id: text('id').primaryKey(),
     mailAccountId: text('mail_account_id')

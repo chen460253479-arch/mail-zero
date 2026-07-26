@@ -14,8 +14,8 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
+import { createIntegrationTable, createMailTable } from '../table';
 import { mailAccount, mailIdentity } from './accounts';
-import { createMailTable } from '../table';
 import { mailbox } from './mailboxes';
 import { thread } from './threads';
 import { blob } from './blobs';
@@ -335,7 +335,7 @@ export const emailPart = createMailTable(
   ],
 );
 
-export const remoteEmail = createMailTable(
+export const remoteEmail = createIntegrationTable(
   'remote_email',
   {
     mailAccountId: text('mail_account_id')

@@ -1,3 +1,4 @@
-import { pgTableCreator } from 'drizzle-orm/pg-core';
+import { integrationSchema, mailSchema } from '../../../db/pg-schemas';
 
-export const createMailTable = pgTableCreator((name) => `mail0_${name}`);
+export const createMailTable = mailSchema.table;
+export const createIntegrationTable = integrationSchema.table;

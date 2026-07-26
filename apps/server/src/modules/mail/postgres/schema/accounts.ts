@@ -15,7 +15,7 @@ import { connection, user } from '../../../../db/schema';
 import { createMailTable } from '../table';
 
 export const mailAccount = createMailTable(
-  'mail_account',
+  'account',
   {
     id: text('id').primaryKey(),
     connectionId: text('connection_id').notNull(),
@@ -56,7 +56,7 @@ export const mailAccount = createMailTable(
 );
 
 export const mailIdentity = createMailTable(
-  'mail_identity',
+  'identity',
   {
     id: text('id').primaryKey(),
     mailAccountId: text('mail_account_id')

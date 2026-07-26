@@ -1,5 +1,4 @@
 import {
-  pgTableCreator,
   text,
   timestamp,
   boolean,
@@ -9,12 +8,15 @@ import {
   unique,
   index,
 } from 'drizzle-orm/pg-core';
+import { appSchema, authSchema, integrationSchema } from './pg-schemas';
 import type { MailChannelId } from '../lib/mail-channel/types';
 import { defaultUserSettings } from '../lib/schemas';
 
-export const createTable = pgTableCreator((name) => `mail0_${name}`);
+const createAuthTable = authSchema.table;
+const createAppTable = appSchema.table;
+const createIntegrationTable = integrationSchema.table;
 
-export const user = createTable('user', {
+export const user = createAuthTable('user_account', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   email: text('email').notNull().unique(),
@@ -29,7 +31,7 @@ export const user = createTable('user', {
   phoneNumberVerified: boolean('phone_number_verified'),
 });
 
-export const session = createTable(
+export const session = createAuthTable(
   'session',
   {
     id: text('id').primaryKey(),
@@ -49,7 +51,7 @@ export const session = createTable(
   ],
 );
 
-export const account = createTable(
+export const account = createAuthTable(
   'account',
   {
     id: text('id').primaryKey(),
@@ -75,7 +77,7 @@ export const account = createTable(
   ],
 );
 
-export const userHotkeys = createTable(
+export const userHotkeys = createAppTable(
   'user_hotkeys',
   {
     userId: text('user_id')
@@ -88,7 +90,7 @@ export const userHotkeys = createTable(
   (t) => [index('user_hotkeys_shortcuts_idx').on(t.shortcuts)],
 );
 
-export const verification = createTable(
+export const verification = createAuthTable(
   'verification',
   {
     id: text('id').primaryKey(),
@@ -104,7 +106,7 @@ export const verification = createTable(
   ],
 );
 
-export const earlyAccess = createTable(
+export const earlyAccess = createAppTable(
   'early_access',
   {
     id: text('id').primaryKey(),
@@ -117,7 +119,7 @@ export const earlyAccess = createTable(
   (t) => [index('early_access_is_early_access_idx').on(t.isEarlyAccess)],
 );
 
-export const connection = createTable(
+export const connection = createIntegrationTable(
   'connection',
   {
     id: text('id').primaryKey(),
@@ -151,7 +153,7 @@ export const connection = createTable(
   ],
 );
 
-export const authorizationBinding = createTable(
+export const authorizationBinding = createIntegrationTable(
   'authorization_binding',
   {
     id: text('id').primaryKey(),
@@ -175,7 +177,7 @@ export const authorizationBinding = createTable(
   ],
 );
 
-export const systemIntegrationConfig = createTable('system_integration_config', {
+export const systemIntegrationConfig = createIntegrationTable('system_config', {
   id: text('id').primaryKey(),
   integrationKey: text('integration_key').$type<'nango' | 'gmail_zero_oauth'>().notNull().unique(),
   publicConfig: jsonb('public_config').notNull(),
@@ -189,8 +191,8 @@ export const systemIntegrationConfig = createTable('system_integration_config', 
   updatedAt: timestamp('updated_at').notNull(),
 });
 
-export const channelIntegrationMapping = createTable(
-  'channel_integration_mapping',
+export const channelIntegrationMapping = createIntegrationTable(
+  'channel_mapping',
   {
     id: text('id').primaryKey(),
     channelId: text('channel_id').$type<MailChannelId>().notNull(),
@@ -202,8 +204,8 @@ export const channelIntegrationMapping = createTable(
   (t) => [unique().on(t.channelId, t.authSource)],
 );
 
-export const integrationOAuthSession = createTable(
-  'integration_oauth_session',
+export const integrationOAuthSession = createIntegrationTable(
+  'oauth_session',
   {
     id: text('id').primaryKey(),
     integrationKey: text('integration_key').$type<'gmail_zero_oauth'>().notNull(),
@@ -223,7 +225,7 @@ export const integrationOAuthSession = createTable(
   ],
 );
 
-export const summary = createTable(
+export const summary = createAppTable(
   'summary',
   {
     messageId: text('message_id').primaryKey(),
@@ -245,7 +247,7 @@ export const summary = createTable(
 );
 
 // Testing
-export const note = createTable(
+export const note = createAppTable(
   'note',
   {
     id: text('id').primaryKey(),
@@ -268,7 +270,7 @@ export const note = createTable(
   ],
 );
 
-export const userSettings = createTable(
+export const userSettings = createAppTable(
   'user_settings',
   {
     id: text('id').primaryKey(),
@@ -286,7 +288,7 @@ export const userSettings = createTable(
   (t) => [index('user_settings_settings_idx').on(t.settings)],
 );
 
-export const writingStyleMatrix = createTable(
+export const writingStyleMatrix = createAppTable(
   'writing_style_matrix',
   {
     connectionId: text()
@@ -311,7 +313,7 @@ export const writingStyleMatrix = createTable(
   },
 );
 
-export const jwks = createTable(
+export const jwks = createAuthTable(
   'jwks',
   {
     id: text('id').primaryKey(),
@@ -322,7 +324,7 @@ export const jwks = createTable(
   (t) => [index('jwks_created_at_idx').on(t.createdAt)],
 );
 
-export const oauthApplication = createTable(
+export const oauthApplication = createAuthTable(
   'oauth_application',
   {
     id: text('id').primaryKey(),
@@ -344,7 +346,7 @@ export const oauthApplication = createTable(
   ],
 );
 
-export const oauthAccessToken = createTable(
+export const oauthAccessToken = createAuthTable(
   'oauth_access_token',
   {
     id: text('id').primaryKey(),
@@ -365,7 +367,7 @@ export const oauthAccessToken = createTable(
   ],
 );
 
-export const oauthConsent = createTable(
+export const oauthConsent = createAuthTable(
   'oauth_consent',
   {
     id: text('id').primaryKey(),
@@ -383,7 +385,7 @@ export const oauthConsent = createTable(
   ],
 );
 
-export const emailTemplate = createTable(
+export const emailTemplate = createAppTable(
   'email_template',
   {
     id: text('id').primaryKey(),
@@ -400,8 +402,8 @@ export const emailTemplate = createTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (t) => [
-    index('idx_mail0_email_template_user_id').on(t.userId),
-    unique('mail0_email_template_user_id_name_unique').on(t.userId, t.name),
+    index('email_template_user_id_idx').on(t.userId),
+    unique('email_template_user_id_name_uidx').on(t.userId, t.name),
   ],
 );
 
