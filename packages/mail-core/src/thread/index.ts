@@ -7,6 +7,11 @@ export type {
 export { normalizeSubject } from './normalize-subject';
 export { normalizeMessageId } from './thread-keys';
 export {
+  createThreadReferenceKeys,
+  hashThreadKey,
+  type ThreadReferenceKey,
+} from './thread-reference';
+export {
   getThread,
   queryThreads,
   type GetThreadInput,
