@@ -33,12 +33,15 @@ export type BasicCredential = {
 };
 
 export type ResolvedCredential = OAuth2Credential | BasicCredential;
+export type MailCredentialType = ResolvedCredential['type'] | 'custom';
 
 export interface MailboxChannel {
   id: MailChannelId;
+  providerKey: string;
   displayName: string;
   legacyProviderId?: 'google' | 'microsoft';
   nangoProviders?: readonly string[];
+  credentialTypes: ReadonlySet<MailCredentialType>;
   capabilities: ReadonlySet<MailCapability>;
   sync?: ChannelSyncAdapter;
   createClient(config: ManagerConfig): MailClient;

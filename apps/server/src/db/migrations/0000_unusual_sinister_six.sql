@@ -28,14 +28,25 @@ CREATE TABLE "integration"."authorization_binding" (
 	"auth_source" text NOT NULL,
 	"credential_type" text NOT NULL,
 	"encrypted_credential_snapshot" text,
-	"access_token_expires_at" timestamp,
-	"credential_fetched_at" timestamp,
+	"access_token_expires_at" timestamp with time zone,
+	"credential_fetched_at" timestamp with time zone,
 	"nango_connection_id" text,
 	"nango_provider_config_key" text,
-	"created_at" timestamp NOT NULL,
-	"updated_at" timestamp NOT NULL,
+	"created_at" timestamp with time zone NOT NULL,
+	"updated_at" timestamp with time zone NOT NULL,
 	CONSTRAINT "authorization_binding_connection_id_unique" UNIQUE("connection_id"),
-	CONSTRAINT "authorization_binding_nango_provider_config_key_nango_connection_id_unique" UNIQUE("nango_provider_config_key","nango_connection_id")
+	CONSTRAINT "authorization_binding_nango_ref_uidx" UNIQUE("nango_provider_config_key","nango_connection_id"),
+	CONSTRAINT "authorization_auth_source_chk" CHECK ("integration"."authorization_binding"."auth_source" IN ('zero_oauth', 'nango', 'manual')),
+	CONSTRAINT "authorization_credential_type_chk" CHECK ("integration"."authorization_binding"."credential_type" IN ('oauth2', 'basic', 'custom')),
+	CONSTRAINT "authorization_nango_reference_chk" CHECK ((
+        "integration"."authorization_binding"."auth_source" = 'nango'
+        AND "integration"."authorization_binding"."nango_connection_id" IS NOT NULL
+        AND "integration"."authorization_binding"."nango_provider_config_key" IS NOT NULL
+      ) OR (
+        "integration"."authorization_binding"."auth_source" <> 'nango'
+        AND "integration"."authorization_binding"."nango_connection_id" IS NULL
+        AND "integration"."authorization_binding"."nango_provider_config_key" IS NULL
+      ))
 );
 --> statement-breakpoint
 CREATE TABLE "integration"."channel_mapping" (
@@ -43,9 +54,10 @@ CREATE TABLE "integration"."channel_mapping" (
 	"channel_id" text NOT NULL,
 	"auth_source" text NOT NULL,
 	"external_integration_id" text NOT NULL,
-	"created_at" timestamp NOT NULL,
-	"updated_at" timestamp NOT NULL,
-	CONSTRAINT "channel_mapping_channel_id_auth_source_unique" UNIQUE("channel_id","auth_source")
+	"created_at" timestamp with time zone NOT NULL,
+	"updated_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "channel_mapping_channel_auth_uidx" UNIQUE("channel_id","auth_source"),
+	CONSTRAINT "channel_mapping_auth_source_chk" CHECK ("integration"."channel_mapping"."auth_source" = 'nango')
 );
 --> statement-breakpoint
 CREATE TABLE "integration"."connection" (
@@ -57,16 +69,14 @@ CREATE TABLE "integration"."connection" (
 	"picture" text,
 	"channel_id" text NOT NULL,
 	"status" text DEFAULT 'connected' NOT NULL,
-	"disconnected_at" timestamp,
-	"access_token" text,
-	"refresh_token" text,
-	"scope" text NOT NULL,
-	"provider_id" text NOT NULL,
-	"expires_at" timestamp NOT NULL,
-	"created_at" timestamp NOT NULL,
-	"updated_at" timestamp NOT NULL,
-	CONSTRAINT "connection_user_id_normalized_email_unique" UNIQUE("user_id","normalized_email"),
-	CONSTRAINT "connection_id_user_id_uidx" UNIQUE("id","user_id")
+	"disconnected_at" timestamp with time zone,
+	"provider_key" text NOT NULL,
+	"created_at" timestamp with time zone NOT NULL,
+	"updated_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "connection_user_channel_email_uidx" UNIQUE("user_id","channel_id","normalized_email"),
+	CONSTRAINT "connection_id_user_id_uidx" UNIQUE("id","user_id"),
+	CONSTRAINT "connection_status_chk" CHECK ("integration"."connection"."status" IN ('connected', 'disconnected', 'reconnect_required', 'deleting')),
+	CONSTRAINT "connection_provider_key_chk" CHECK ("integration"."connection"."provider_key" ~ '^[a-z][a-z0-9]*([._-][a-z0-9]+)*$')
 );
 --> statement-breakpoint
 CREATE TABLE "app"."early_access" (
@@ -100,10 +110,12 @@ CREATE TABLE "integration"."oauth_session" (
 	"encrypted_payload" text NOT NULL,
 	"state_hash" text NOT NULL,
 	"created_by" text NOT NULL,
-	"expires_at" timestamp NOT NULL,
-	"consumed_at" timestamp,
-	"created_at" timestamp NOT NULL,
-	CONSTRAINT "oauth_session_state_hash_unique" UNIQUE("state_hash")
+	"expires_at" timestamp with time zone NOT NULL,
+	"consumed_at" timestamp with time zone,
+	"created_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "oauth_session_state_hash_unique" UNIQUE("state_hash"),
+	CONSTRAINT "oauth_session_integration_key_chk" CHECK ("integration"."oauth_session"."integration_key" = 'gmail_zero_oauth'),
+	CONSTRAINT "oauth_session_purpose_chk" CHECK ("integration"."oauth_session"."purpose" IN ('validate_config', 'connect_mailbox'))
 );
 --> statement-breakpoint
 CREATE TABLE "auth"."jwks" (
@@ -116,6 +128,7 @@ CREATE TABLE "auth"."jwks" (
 CREATE TABLE "app"."note" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
+	"connection_id" text NOT NULL,
 	"thread_id" text NOT NULL,
 	"content" text NOT NULL,
 	"color" text DEFAULT 'default' NOT NULL,
@@ -179,14 +192,15 @@ CREATE TABLE "auth"."session" (
 );
 --> statement-breakpoint
 CREATE TABLE "app"."summary" (
-	"message_id" text PRIMARY KEY NOT NULL,
+	"message_id" text NOT NULL,
 	"content" text NOT NULL,
 	"created_at" timestamp NOT NULL,
 	"updated_at" timestamp NOT NULL,
 	"connection_id" text NOT NULL,
 	"saved" boolean DEFAULT false NOT NULL,
 	"tags" text,
-	"suggested_reply" text
+	"suggested_reply" text,
+	CONSTRAINT "summary_pk" PRIMARY KEY("connection_id","message_id")
 );
 --> statement-breakpoint
 CREATE TABLE "integration"."system_config" (
@@ -195,11 +209,13 @@ CREATE TABLE "integration"."system_config" (
 	"public_config" jsonb NOT NULL,
 	"encrypted_secret" text NOT NULL,
 	"status" text NOT NULL,
-	"validated_at" timestamp NOT NULL,
+	"validated_at" timestamp with time zone NOT NULL,
 	"updated_by" text NOT NULL,
-	"created_at" timestamp NOT NULL,
-	"updated_at" timestamp NOT NULL,
-	CONSTRAINT "system_config_integration_key_unique" UNIQUE("integration_key")
+	"created_at" timestamp with time zone NOT NULL,
+	"updated_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "system_config_integration_key_unique" UNIQUE("integration_key"),
+	CONSTRAINT "system_integration_key_chk" CHECK ("integration"."system_config"."integration_key" IN ('nango', 'gmail_zero_oauth')),
+	CONSTRAINT "system_integration_status_chk" CHECK ("integration"."system_config"."status" IN ('active', 'error'))
 );
 --> statement-breakpoint
 CREATE TABLE "auth"."user_account" (
@@ -249,7 +265,7 @@ CREATE TABLE "app"."writing_style_matrix" (
 	"numMessages" integer NOT NULL,
 	"style" jsonb NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "writing_style_matrix_connectionId_pk" PRIMARY KEY("connectionId")
+	CONSTRAINT "writing_style_matrix_pk" PRIMARY KEY("connectionId")
 );
 --> statement-breakpoint
 CREATE TABLE "mail"."account" (
@@ -572,6 +588,7 @@ ALTER TABLE "integration"."connection" ADD CONSTRAINT "connection_user_id_user_a
 ALTER TABLE "app"."email_template" ADD CONSTRAINT "email_template_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."oauth_session" ADD CONSTRAINT "oauth_session_created_by_user_account_id_fk" FOREIGN KEY ("created_by") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "app"."note" ADD CONSTRAINT "note_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "app"."note" ADD CONSTRAINT "note_connection_fk" FOREIGN KEY ("connection_id") REFERENCES "integration"."connection"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auth"."session" ADD CONSTRAINT "session_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "app"."summary" ADD CONSTRAINT "summary_connection_id_connection_id_fk" FOREIGN KEY ("connection_id") REFERENCES "integration"."connection"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."system_config" ADD CONSTRAINT "system_config_updated_by_user_account_id_fk" FOREIGN KEY ("updated_by") REFERENCES "auth"."user_account"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -632,16 +649,15 @@ CREATE INDEX "account_provider_user_id_idx" ON "auth"."account" USING btree ("pr
 CREATE INDEX "account_expires_at_idx" ON "auth"."account" USING btree ("access_token_expires_at");--> statement-breakpoint
 CREATE INDEX "authorization_connection_id_idx" ON "integration"."authorization_binding" USING btree ("connection_id");--> statement-breakpoint
 CREATE INDEX "connection_user_id_idx" ON "integration"."connection" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "connection_expires_at_idx" ON "integration"."connection" USING btree ("expires_at");--> statement-breakpoint
-CREATE INDEX "connection_provider_id_idx" ON "integration"."connection" USING btree ("provider_id");--> statement-breakpoint
+CREATE INDEX "connection_provider_key_idx" ON "integration"."connection" USING btree ("provider_key");--> statement-breakpoint
 CREATE INDEX "early_access_is_early_access_idx" ON "app"."early_access" USING btree ("is_early_access");--> statement-breakpoint
 CREATE INDEX "email_template_user_id_idx" ON "app"."email_template" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "integration_oauth_session_expires_at_idx" ON "integration"."oauth_session" USING btree ("expires_at");--> statement-breakpoint
 CREATE INDEX "integration_oauth_session_created_by_idx" ON "integration"."oauth_session" USING btree ("created_by");--> statement-breakpoint
 CREATE INDEX "jwks_created_at_idx" ON "auth"."jwks" USING btree ("created_at");--> statement-breakpoint
 CREATE INDEX "note_user_id_idx" ON "app"."note" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "note_thread_id_idx" ON "app"."note" USING btree ("thread_id");--> statement-breakpoint
-CREATE INDEX "note_user_thread_idx" ON "app"."note" USING btree ("user_id","thread_id");--> statement-breakpoint
+CREATE INDEX "note_connection_id_idx" ON "app"."note" USING btree ("connection_id");--> statement-breakpoint
+CREATE INDEX "note_user_connection_thread_idx" ON "app"."note" USING btree ("user_id","connection_id","thread_id");--> statement-breakpoint
 CREATE INDEX "note_is_pinned_idx" ON "app"."note" USING btree ("is_pinned");--> statement-breakpoint
 CREATE INDEX "oauth_access_token_user_id_idx" ON "auth"."oauth_access_token" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "oauth_access_token_client_id_idx" ON "auth"."oauth_access_token" USING btree ("client_id");--> statement-breakpoint
@@ -664,29 +680,42 @@ CREATE INDEX "writing_style_matrix_style_idx" ON "app"."writing_style_matrix" US
 CREATE UNIQUE INDEX "mail_account_connection_id_uidx" ON "mail"."account" USING btree ("connection_id");--> statement-breakpoint
 CREATE INDEX "mail_account_user_id_idx" ON "mail"."account" USING btree ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "mail_identity_account_default_active_uidx" ON "mail"."identity" USING btree ("mail_account_id") WHERE "mail"."identity"."is_default" = true AND "mail"."identity"."deleted_at" IS NULL;--> statement-breakpoint
+CREATE INDEX "mail_identity_account_created_active_idx" ON "mail"."identity" USING btree ("mail_account_id","created_at","id") WHERE "mail"."identity"."deleted_at" IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "blob_account_sha_size_uidx" ON "mail"."blob" USING btree ("mail_account_id","sha256","size_bytes");--> statement-breakpoint
 CREATE INDEX "blob_account_object_key_idx" ON "mail"."blob" USING btree ("mail_account_id","object_key");--> statement-breakpoint
+CREATE INDEX "blob_account_created_id_idx" ON "mail"."blob" USING btree ("mail_account_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "blob_account_status_content_created_idx" ON "mail"."blob" USING btree ("mail_account_id","status","content_type","created_at","id");--> statement-breakpoint
-CREATE INDEX "mail_change_account_state_collection_entity_idx" ON "mail"."change" USING btree ("mail_account_id","state_version","collection","entity_id");--> statement-breakpoint
 CREATE INDEX "email_account_received_id_idx" ON "mail"."email" USING btree ("mail_account_id","received_at" DESC NULLS LAST,"id" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "email_account_sent_id_idx" ON "mail"."email" USING btree ("mail_account_id","sent_at","id");--> statement-breakpoint
 CREATE INDEX "email_account_size_id_idx" ON "mail"."email" USING btree ("mail_account_id","size_bytes","id");--> statement-breakpoint
 CREATE INDEX "email_account_normalized_subject_id_idx" ON "mail"."email" USING btree ("mail_account_id","normalized_subject","id");--> statement-breakpoint
+CREATE INDEX "email_blob_account_idx" ON "mail"."email" USING btree ("blob_id","mail_account_id");--> statement-breakpoint
+CREATE INDEX "email_identity_account_idx" ON "mail"."email" USING btree ("identity_id","mail_account_id");--> statement-breakpoint
+CREATE INDEX "email_reply_account_idx" ON "mail"."email" USING btree ("reply_to_email_id","mail_account_id");--> statement-breakpoint
 CREATE INDEX "email_account_thread_received_id_idx" ON "mail"."email" USING btree ("mail_account_id","thread_id","received_at","id");--> statement-breakpoint
 CREATE INDEX "email_address_account_normalized_kind_email_idx" ON "mail"."email_address" USING btree ("mail_account_id","normalized_email","kind","email_id");--> statement-breakpoint
+CREATE INDEX "email_content_text_blob_account_idx" ON "mail"."email_content" USING btree ("text_blob_id","mail_account_id");--> statement-breakpoint
+CREATE INDEX "email_content_html_blob_account_idx" ON "mail"."email_content" USING btree ("html_blob_id","mail_account_id");--> statement-breakpoint
 CREATE INDEX "email_keyword_account_keyword_email_idx" ON "mail"."email_keyword" USING btree ("mail_account_id","keyword","email_id");--> statement-breakpoint
 CREATE INDEX "email_mailbox_account_mailbox_email_idx" ON "mail"."email_mailbox" USING btree ("mail_account_id","mailbox_id","email_id");--> statement-breakpoint
+CREATE INDEX "email_part_parent_email_account_idx" ON "mail"."email_part" USING btree ("parent_part_id","email_id","mail_account_id");--> statement-breakpoint
+CREATE INDEX "email_part_blob_account_idx" ON "mail"."email_part" USING btree ("blob_id","mail_account_id");--> statement-breakpoint
 CREATE INDEX "email_search_document_gin_idx" ON "mail"."email_search" USING gin ("document");--> statement-breakpoint
 CREATE INDEX "email_trash_restore_account_email_mailbox_idx" ON "mail"."email_trash_restore" USING btree ("mail_account_id","email_id","mailbox_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "remote_email_account_provider_remote_uidx" ON "integration"."remote_email" USING btree ("mail_account_id","provider","remote_email_id");--> statement-breakpoint
+CREATE INDEX "remote_email_email_account_idx" ON "integration"."remote_email" USING btree ("email_id","mail_account_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "mailbox_account_role_active_uidx" ON "mail"."mailbox" USING btree ("mail_account_id","role") WHERE "mail"."mailbox"."role" IS NOT NULL AND "mail"."mailbox"."deleted_at" IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "mailbox_active_sibling_name_uidx" ON "mail"."mailbox" USING btree ("mail_account_id","parent_id","normalized_name") WHERE "mail"."mailbox"."deleted_at" IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "mailbox_active_root_name_uidx" ON "mail"."mailbox" USING btree ("mail_account_id","normalized_name") WHERE "mail"."mailbox"."parent_id" IS NULL AND "mail"."mailbox"."deleted_at" IS NULL;--> statement-breakpoint
+CREATE INDEX "mailbox_account_sort_active_idx" ON "mail"."mailbox" USING btree ("mail_account_id","sort_order","id") WHERE "mail"."mailbox"."deleted_at" IS NULL;--> statement-breakpoint
 CREATE INDEX "mailbox_thread_account_thread_idx" ON "mail"."mailbox_thread" USING btree ("mail_account_id","thread_id");--> statement-breakpoint
 CREATE INDEX "email_submission_account_status_send_idx" ON "mail"."submission" USING btree ("mail_account_id","status","send_at");--> statement-breakpoint
+CREATE INDEX "email_submission_account_created_id_idx" ON "mail"."submission" USING btree ("mail_account_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "email_submission_account_identity_created_id_idx" ON "mail"."submission" USING btree ("mail_account_id","identity_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "email_submission_email_account_idx" ON "mail"."submission" USING btree ("email_id","mail_account_id");--> statement-breakpoint
+CREATE INDEX "email_submission_identity_account_idx" ON "mail"."submission" USING btree ("identity_id","mail_account_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "email_submission_account_idempotency_uidx" ON "mail"."submission" USING btree ("mail_account_id","idempotency_key");--> statement-breakpoint
 CREATE INDEX "submission_blob_account_blob_idx" ON "mail"."submission_blob" USING btree ("mail_account_id","blob_id");--> statement-breakpoint
 CREATE INDEX "thread_account_latest_id_idx" ON "mail"."thread" USING btree ("mail_account_id","latest_received_at" DESC NULLS LAST,"id");--> statement-breakpoint
-CREATE INDEX "thread_reference_account_subject_message_idx" ON "mail"."thread_reference" USING btree ("mail_account_id","normalized_subject_hash","message_id_hash");--> statement-breakpoint
 CREATE INDEX "thread_reference_account_thread_idx" ON "mail"."thread_reference" USING btree ("mail_account_id","thread_id");--> statement-breakpoint
 CREATE INDEX "thread_reference_account_email_idx" ON "mail"."thread_reference" USING btree ("mail_account_id","email_id");

@@ -771,8 +771,8 @@ export const resetConnection = async (connectionId: string) => {
   await db
     .update(connection)
     .set({
-      accessToken: null,
-      refreshToken: null,
+      status: 'reconnect_required',
+      updatedAt: new Date(),
     })
     .where(eq(connection.id, connectionId));
   await conn.end();

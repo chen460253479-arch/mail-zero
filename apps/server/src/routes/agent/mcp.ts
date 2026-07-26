@@ -59,7 +59,7 @@ export class ZeroMCP extends McpAgent<typeof env, Record<string, unknown>, { use
         return {
           content: connections.map((c) => ({
             type: 'text',
-            text: `Email: ${c.email} | Provider: ${c.providerId}`,
+            text: `Email: ${c.email} | Provider: ${c.providerKey}`,
           })),
         };
       },
@@ -152,7 +152,7 @@ export class ZeroMCP extends McpAgent<typeof env, Record<string, unknown>, { use
           content: [
             {
               type: 'text' as const,
-              text: `Email: ${_connection.email} | Provider: ${_connection.providerId}`,
+              text: `Email: ${_connection.email} | Provider: ${_connection.providerKey}`,
             },
           ],
         };

@@ -33,9 +33,7 @@ export type SaveNangoBindingInput = {
     name: string;
     picture: string;
     channelId: MailChannelId;
-    providerId: 'google' | 'microsoft';
-    scope: string;
-    expiresAt: Date;
+    providerKey: string;
   };
   authorization: {
     authSource: 'nango';
@@ -49,7 +47,10 @@ export type SaveNangoBindingInput = {
 };
 
 export interface NangoBindingRepository {
-  findMailboxByNormalizedEmail(normalizedEmail: string): Promise<ExistingMailbox | null>;
+  findMailboxByNormalizedEmail(
+    channelId: MailChannelId,
+    normalizedEmail: string,
+  ): Promise<ExistingMailbox | null>;
   findByNangoReference(
     integrationId: string,
     connectionId: string,
@@ -115,7 +116,7 @@ export const bindNangoMailbox = async (
   } catch {
     throw new NangoBindingError('NANGO_CONNECTION_INVALID');
   }
-  if (resolved.credential.type !== 'oauth2' || !channel.legacyProviderId) {
+  if (resolved.credential.type !== 'oauth2') {
     throw new NangoBindingError('MAIL_CHANNEL_UNAVAILABLE');
   }
 
@@ -138,7 +139,10 @@ export const bindNangoMailbox = async (
     throw new NangoBindingError('NANGO_CONNECTION_INVALID');
   }
 
-  const existing = await dependencies.repository.findMailboxByNormalizedEmail(normalizedEmail);
+  const existing = await dependencies.repository.findMailboxByNormalizedEmail(
+    input.channelId,
+    normalizedEmail,
+  );
   if (existing && existing.status !== 'disconnected') {
     throw new NangoBindingError('MAILBOX_ALREADY_CONNECTED');
   }
@@ -155,9 +159,7 @@ export const bindNangoMailbox = async (
       name: identity.name,
       picture: identity.picture,
       channelId: input.channelId,
-      providerId: channel.legacyProviderId,
-      scope: channel.getScope(managerConfig),
-      expiresAt: resolved.expiresAt ?? new Date(0),
+      providerKey: channel.providerKey,
     },
     authorization: {
       authSource: 'nango',

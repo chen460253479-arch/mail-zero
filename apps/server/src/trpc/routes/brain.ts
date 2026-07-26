@@ -1,5 +1,6 @@
-import { disableBrainFunction, getPrompts } from '../../lib/brain';
 import { EProviders, EPrompts, type ISubscribeBatch } from '../../types';
+import { channelIdToProviderId } from '../../lib/mail-channel/registry';
+import { disableBrainFunction, getPrompts } from '../../lib/brain';
 import { activeConnectionProcedure, router } from '../trpc';
 import { setSubscribedState } from '../../lib/utils';
 import { env } from '../../env';
@@ -14,18 +15,22 @@ const labelsSchema = z.array(labelSchema);
 
 export const brainRouter = router({
   enableBrain: activeConnectionProcedure.mutation(async ({ ctx }) => {
-    const connection = ctx.activeConnection as { id: string; providerId: EProviders };
-    await setSubscribedState(connection.id, connection.providerId);
+    const connection = ctx.activeConnection;
+    const providerId = channelIdToProviderId(connection.channelId) as EProviders;
+    await setSubscribedState(connection.id, providerId);
     await env.subscribe_queue.send({
       connectionId: connection.id,
-      providerId: connection.providerId,
+      providerId,
     } as ISubscribeBatch);
     return true;
     // return await enableBrainFunction(connection);
   }),
   disableBrain: activeConnectionProcedure.mutation(async ({ ctx }) => {
-    const connection = ctx.activeConnection as { id: string; providerId: EProviders };
-    return await disableBrainFunction(connection);
+    const connection = ctx.activeConnection;
+    return await disableBrainFunction({
+      id: connection.id,
+      providerId: channelIdToProviderId(connection.channelId) as EProviders,
+    });
   }),
 
   generateSummary: activeConnectionProcedure
@@ -53,7 +58,8 @@ export const brainRouter = router({
     }),
   getState: activeConnectionProcedure.query(async ({ ctx }) => {
     const connection = ctx.activeConnection;
-    const state = await env.subscribed_accounts.get(`${connection.id}__${connection.providerId}`);
+    const providerId = channelIdToProviderId(connection.channelId);
+    const state = await env.subscribed_accounts.get(`${connection.id}__${providerId}`);
     if (!state || state === 'pending') return { enabled: false };
     return { enabled: true };
   }),

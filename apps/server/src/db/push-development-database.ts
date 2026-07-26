@@ -1,6 +1,8 @@
+import { createInterface } from 'node:readline/promises';
+import { dirname, resolve } from 'node:path';
+import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { createInterface } from 'node:readline/promises';
 
 import postgres, { type Sql } from 'postgres';
 
@@ -42,9 +44,7 @@ export const inspectZeroSchemas = async (sql: Sql): Promise<ExistingSchema[]> =>
 
 export const resetZeroSchemas = async (sql: Sql): Promise<void> => {
   await sql.begin(async (transaction) => {
-    await transaction.unsafe(
-      'DROP TABLE IF EXISTS "drizzle"."__drizzle_migrations" CASCADE',
-    );
+    await transaction.unsafe('DROP TABLE IF EXISTS "drizzle"."__drizzle_migrations" CASCADE');
     for (const schemaName of ZERO_SCHEMA_NAMES) {
       await transaction.unsafe(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
     }
@@ -79,9 +79,12 @@ const confirmReset = async (existing: ExistingSchema[]): Promise<boolean> => {
   }
 };
 
-const runRawDrizzlePush = async (): Promise<void> => {
-  const executable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-  const child = spawn(executable, ['exec', 'drizzle-kit', 'push'], {
+const require = createRequire(import.meta.url);
+
+export const runDrizzleKitCommand = async (command: 'push' | 'migrate'): Promise<string> => {
+  const drizzleKitEntry = require.resolve('drizzle-kit');
+  const drizzleKitCli = resolve(dirname(drizzleKitEntry), 'bin.cjs');
+  const child = spawn(process.execPath, [drizzleKitCli, command], {
     cwd: process.cwd(),
     env: process.env,
     shell: false,
@@ -105,9 +108,10 @@ const runRawDrizzlePush = async (): Promise<void> => {
   });
   if (exitCode !== 0 || pushOutputContainsError(output)) {
     throw new DevelopmentPushError(
-      `Drizzle push failed${exitCode === 0 ? ' despite reporting exit code 0' : ` with exit code ${exitCode}`}.`,
+      `Drizzle ${command} failed${exitCode === 0 ? ' despite reporting exit code 0' : ` with exit code ${exitCode}`}.`,
     );
   }
+  return output;
 };
 
 const resolvePromptDecision = async (decision: PushDecision): Promise<PushDecision> => {
@@ -146,7 +150,7 @@ export const runDevelopmentPush = async (argv: string[]): Promise<void> => {
     await sql.end();
   }
 
-  await runRawDrizzlePush();
+  await runDrizzleKitCommand('push');
 };
 
 const isMainModule =

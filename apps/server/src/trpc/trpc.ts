@@ -93,7 +93,7 @@ export const activeConnectionProcedure = privateProcedure.use(async ({ ctx, next
       completeRequestSpan(ctx.c, connectionSpan.id, {
         success: true,
         connectionId: activeConnection.id,
-        connectionType: activeConnection.providerId,
+        connectionType: activeConnection.providerKey,
       });
     }
 
@@ -145,8 +145,8 @@ export const activeDriverProcedure = activeConnectionProcedure.use(async ({ ctx,
       // Remove the access token and refresh token
       const db = await getZeroDB(sessionUser.id);
       await db.updateConnection(activeConnection.id, {
-        accessToken: null,
-        refreshToken: null,
+        status: 'reconnect_required',
+        updatedAt: new Date(),
       });
 
       ctx.c.header(

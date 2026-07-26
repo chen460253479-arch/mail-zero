@@ -91,7 +91,13 @@ export const runFailureIndependentCleanup = async (
 };
 
 export const withMailTestDatabase = async (
-  test: (input: { db: DB; sql: Sql; unitOfWork: PostgresMailUnitOfWork }) => Promise<void>,
+  test: (input: {
+    db: DB;
+    sql: Sql;
+    unitOfWork: PostgresMailUnitOfWork;
+    databaseUrl: string;
+  }) => Promise<void>,
+  options: { applyMigrations?: boolean } = {},
 ): Promise<void> => {
   const databaseUrl = resolveDatabaseUrl();
   const databaseName = `mail_core_test_${randomBytes(16).toString('hex')}`;
@@ -108,12 +114,16 @@ export const withMailTestDatabase = async (
       max: 10,
       onnotice: () => undefined,
     });
-    await applyGeneratedMigrations(isolated);
+    if (options.applyMigrations !== false) {
+      await applyGeneratedMigrations(isolated);
+    }
+    const isolatedDatabaseUrl = databaseUrlFor(databaseUrl, databaseName);
     const db = createDrizzle(isolated);
     await test({
       db,
       sql: isolated,
       unitOfWork: new PostgresMailUnitOfWork(db),
+      databaseUrl: isolatedDatabaseUrl,
     });
   } catch (error) {
     primaryFailure = true;

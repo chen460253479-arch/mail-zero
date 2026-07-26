@@ -1,9 +1,9 @@
+import { channelIdToProviderId, getMailChannel } from './mail-channel/registry';
 import { createAuthMiddleware, jwt, bearer, mcp } from 'better-auth/plugins';
 import { resolveConnectionCredential } from './credentials/resolve';
 import { getBrowserTimezone, isValidTimezone } from './timezones';
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { getMailChannel } from './mail-channel/registry';
 import { dubAnalytics } from '@dub/better-auth';
 import { defaultUserSettings } from './schemas';
 import { disableBrainFunction } from './brain';
@@ -64,7 +64,7 @@ export const createAuth = () => {
               connections.map(async (connection) => {
                 await disableBrainFunction({
                   id: connection.id,
-                  providerId: connection.providerId as EProviders,
+                  providerId: channelIdToProviderId(connection.channelId) as EProviders,
                 });
                 const record = await db.findConnectionWithAuthorization(connection.id);
                 if (!record) return false;

@@ -39,9 +39,7 @@ type GmailMailbox = {
   name: string;
   picture: string;
   channelId: 'gmail';
-  providerId: 'google';
-  scope: string;
-  expiresAt: Date;
+  providerKey: 'gmail';
 };
 
 type GmailAuthorization = {
@@ -270,9 +268,7 @@ export class GmailOAuthService {
           name: identity.name || 'Unknown',
           picture: identity.picture || '',
           channelId: 'gmail',
-          providerId: 'google',
-          scope: tokens.scope,
-          expiresAt: tokens.expiresAt,
+          providerKey: 'gmail',
         },
         {
           authSource: 'zero_oauth',

@@ -1,5 +1,5 @@
 {
-  "id": "6a8ccfba-d373-4c7c-b463-e83270e53020",
+  "id": "1d35529a-e247-489a-aba8-4a048286a52c",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -198,13 +198,13 @@
         },
         "access_token_expires_at": {
           "name": "access_token_expires_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
         "credential_fetched_at": {
           "name": "credential_fetched_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
@@ -222,13 +222,13 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         }
@@ -275,8 +275,8 @@
             "connection_id"
           ]
         },
-        "authorization_binding_nango_provider_config_key_nango_connection_id_unique": {
-          "name": "authorization_binding_nango_provider_config_key_nango_connection_id_unique",
+        "authorization_binding_nango_ref_uidx": {
+          "name": "authorization_binding_nango_ref_uidx",
           "nullsNotDistinct": false,
           "columns": [
             "nango_provider_config_key",
@@ -285,7 +285,20 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "authorization_auth_source_chk": {
+          "name": "authorization_auth_source_chk",
+          "value": "\"integration\".\"authorization_binding\".\"auth_source\" IN ('zero_oauth', 'nango', 'manual')"
+        },
+        "authorization_credential_type_chk": {
+          "name": "authorization_credential_type_chk",
+          "value": "\"integration\".\"authorization_binding\".\"credential_type\" IN ('oauth2', 'basic', 'custom')"
+        },
+        "authorization_nango_reference_chk": {
+          "name": "authorization_nango_reference_chk",
+          "value": "(\n        \"integration\".\"authorization_binding\".\"auth_source\" = 'nango'\n        AND \"integration\".\"authorization_binding\".\"nango_connection_id\" IS NOT NULL\n        AND \"integration\".\"authorization_binding\".\"nango_provider_config_key\" IS NOT NULL\n      ) OR (\n        \"integration\".\"authorization_binding\".\"auth_source\" <> 'nango'\n        AND \"integration\".\"authorization_binding\".\"nango_connection_id\" IS NULL\n        AND \"integration\".\"authorization_binding\".\"nango_provider_config_key\" IS NULL\n      )"
+        }
+      },
       "isRLSEnabled": false
     },
     "integration.channel_mapping": {
@@ -318,13 +331,13 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         }
@@ -333,8 +346,8 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "channel_mapping_channel_id_auth_source_unique": {
-          "name": "channel_mapping_channel_id_auth_source_unique",
+        "channel_mapping_channel_auth_uidx": {
+          "name": "channel_mapping_channel_auth_uidx",
           "nullsNotDistinct": false,
           "columns": [
             "channel_id",
@@ -343,7 +356,12 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "channel_mapping_auth_source_chk": {
+          "name": "channel_mapping_auth_source_chk",
+          "value": "\"integration\".\"channel_mapping\".\"auth_source\" = 'nango'"
+        }
+      },
       "isRLSEnabled": false
     },
     "integration.connection": {
@@ -401,49 +419,25 @@
         },
         "disconnected_at": {
           "name": "disconnected_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
-        "access_token": {
-          "name": "access_token",
+        "provider_key": {
+          "name": "provider_key",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "refresh_token": {
-          "name": "refresh_token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "scope": {
-          "name": "scope",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "provider_id": {
-          "name": "provider_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp",
           "primaryKey": false,
           "notNull": true
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         }
@@ -464,26 +458,11 @@
           "method": "btree",
           "with": {}
         },
-        "connection_expires_at_idx": {
-          "name": "connection_expires_at_idx",
+        "connection_provider_key_idx": {
+          "name": "connection_provider_key_idx",
           "columns": [
             {
-              "expression": "expires_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "connection_provider_id_idx": {
-          "name": "connection_provider_id_idx",
-          "columns": [
-            {
-              "expression": "provider_id",
+              "expression": "provider_key",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -513,11 +492,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "connection_user_id_normalized_email_unique": {
-          "name": "connection_user_id_normalized_email_unique",
+        "connection_user_channel_email_uidx": {
+          "name": "connection_user_channel_email_uidx",
           "nullsNotDistinct": false,
           "columns": [
             "user_id",
+            "channel_id",
             "normalized_email"
           ]
         },
@@ -531,7 +511,16 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "connection_status_chk": {
+          "name": "connection_status_chk",
+          "value": "\"integration\".\"connection\".\"status\" IN ('connected', 'disconnected', 'reconnect_required', 'deleting')"
+        },
+        "connection_provider_key_chk": {
+          "name": "connection_provider_key_chk",
+          "value": "\"integration\".\"connection\".\"provider_key\" ~ '^[a-z][a-z0-9]*([._-][a-z0-9]+)*$'"
+        }
+      },
       "isRLSEnabled": false
     },
     "app.early_access": {
@@ -766,19 +755,19 @@
         },
         "expires_at": {
           "name": "expires_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },
         "consumed_at": {
           "name": "consumed_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         }
@@ -842,7 +831,16 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "oauth_session_integration_key_chk": {
+          "name": "oauth_session_integration_key_chk",
+          "value": "\"integration\".\"oauth_session\".\"integration_key\" = 'gmail_zero_oauth'"
+        },
+        "oauth_session_purpose_chk": {
+          "name": "oauth_session_purpose_chk",
+          "value": "\"integration\".\"oauth_session\".\"purpose\" IN ('validate_config', 'connect_mailbox')"
+        }
+      },
       "isRLSEnabled": false
     },
     "auth.jwks": {
@@ -914,6 +912,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "connection_id": {
+          "name": "connection_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "thread_id": {
           "name": "thread_id",
           "type": "text",
@@ -978,11 +982,11 @@
           "method": "btree",
           "with": {}
         },
-        "note_thread_id_idx": {
-          "name": "note_thread_id_idx",
+        "note_connection_id_idx": {
+          "name": "note_connection_id_idx",
           "columns": [
             {
-              "expression": "thread_id",
+              "expression": "connection_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -993,11 +997,17 @@
           "method": "btree",
           "with": {}
         },
-        "note_user_thread_idx": {
-          "name": "note_user_thread_idx",
+        "note_user_connection_thread_idx": {
+          "name": "note_user_connection_thread_idx",
           "columns": [
             {
               "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "connection_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1038,6 +1048,20 @@
           "schemaTo": "auth",
           "columnsFrom": [
             "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "note_connection_fk": {
+          "name": "note_connection_fk",
+          "tableFrom": "note",
+          "tableTo": "connection",
+          "schemaTo": "integration",
+          "columnsFrom": [
+            "connection_id"
           ],
           "columnsTo": [
             "id"
@@ -1533,7 +1557,7 @@
         "message_id": {
           "name": "message_id",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
         },
         "content": {
@@ -1649,7 +1673,15 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
+      "compositePrimaryKeys": {
+        "summary_pk": {
+          "name": "summary_pk",
+          "columns": [
+            "connection_id",
+            "message_id"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -1691,7 +1723,7 @@
         },
         "validated_at": {
           "name": "validated_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },
@@ -1703,13 +1735,13 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         }
@@ -1742,7 +1774,16 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "system_integration_key_chk": {
+          "name": "system_integration_key_chk",
+          "value": "\"integration\".\"system_config\".\"integration_key\" IN ('nango', 'gmail_zero_oauth')"
+        },
+        "system_integration_status_chk": {
+          "name": "system_integration_status_chk",
+          "value": "\"integration\".\"system_config\".\"status\" IN ('active', 'error')"
+        }
+      },
       "isRLSEnabled": false
     },
     "auth.user_account": {
@@ -2141,8 +2182,8 @@
         }
       },
       "compositePrimaryKeys": {
-        "writing_style_matrix_connectionId_pk": {
-          "name": "writing_style_matrix_connectionId_pk",
+        "writing_style_matrix_pk": {
+          "name": "writing_style_matrix_pk",
           "columns": [
             "connectionId"
           ]
@@ -2389,6 +2430,34 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "mail_identity_account_created_active_idx": {
+          "name": "mail_identity_account_created_active_idx",
+          "columns": [
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"mail\".\"identity\".\"deleted_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2538,6 +2607,33 @@
           "method": "btree",
           "with": {}
         },
+        "blob_account_created_id_idx": {
+          "name": "blob_account_created_id_idx",
+          "columns": [
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "blob_account_status_content_created_idx": {
           "name": "blob_account_status_content_created_idx",
           "columns": [
@@ -2670,41 +2766,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "mail_change_account_state_collection_entity_idx": {
-          "name": "mail_change_account_state_collection_entity_idx",
-          "columns": [
-            {
-              "expression": "mail_account_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "state_version",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "collection",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "entity_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "change_mail_account_id_account_id_fk": {
           "name": "change_mail_account_id_account_id_fk",
@@ -2984,6 +3046,69 @@
             },
             {
               "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "email_blob_account_idx": {
+          "name": "email_blob_account_idx",
+          "columns": [
+            {
+              "expression": "blob_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "email_identity_account_idx": {
+          "name": "email_identity_account_idx",
+          "columns": [
+            {
+              "expression": "identity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "email_reply_account_idx": {
+          "name": "email_reply_account_idx",
+          "columns": [
+            {
+              "expression": "reply_to_email_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3329,7 +3454,50 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "email_content_text_blob_account_idx": {
+          "name": "email_content_text_blob_account_idx",
+          "columns": [
+            {
+              "expression": "text_blob_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "email_content_html_blob_account_idx": {
+          "name": "email_content_html_blob_account_idx",
+          "columns": [
+            {
+              "expression": "html_blob_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "email_content_mail_account_id_account_id_fk": {
           "name": "email_content_mail_account_id_account_id_fk",
@@ -3756,7 +3924,56 @@
           "notNull": true
         }
       },
-      "indexes": {},
+      "indexes": {
+        "email_part_parent_email_account_idx": {
+          "name": "email_part_parent_email_account_idx",
+          "columns": [
+            {
+              "expression": "parent_part_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "email_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "email_part_blob_account_idx": {
+          "name": "email_part_blob_account_idx",
+          "columns": [
+            {
+              "expression": "blob_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "email_part_mail_account_id_account_id_fk": {
           "name": "email_part_mail_account_id_account_id_fk",
@@ -4185,6 +4402,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "remote_email_email_account_idx": {
+          "name": "remote_email_email_account_idx",
+          "columns": [
+            {
+              "expression": "email_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -4409,6 +4647,34 @@
           ],
           "isUnique": true,
           "where": "\"mail\".\"mailbox\".\"parent_id\" IS NULL AND \"mail\".\"mailbox\".\"deleted_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "mailbox_account_sort_active_idx": {
+          "name": "mailbox_account_sort_active_idx",
+          "columns": [
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sort_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"mail\".\"mailbox\".\"deleted_at\" IS NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -4726,6 +4992,108 @@
             },
             {
               "expression": "send_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "email_submission_account_created_id_idx": {
+          "name": "email_submission_account_created_id_idx",
+          "columns": [
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "email_submission_account_identity_created_id_idx": {
+          "name": "email_submission_account_identity_created_id_idx",
+          "columns": [
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "identity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "email_submission_email_account_idx": {
+          "name": "email_submission_email_account_idx",
+          "columns": [
+            {
+              "expression": "email_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "email_submission_identity_account_idx": {
+          "name": "email_submission_identity_account_idx",
+          "columns": [
+            {
+              "expression": "identity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5313,33 +5681,6 @@
         }
       },
       "indexes": {
-        "thread_reference_account_subject_message_idx": {
-          "name": "thread_reference_account_subject_message_idx",
-          "columns": [
-            {
-              "expression": "mail_account_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "normalized_subject_hash",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "message_id_hash",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "thread_reference_account_thread_idx": {
           "name": "thread_reference_account_thread_idx",
           "columns": [

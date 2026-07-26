@@ -31,7 +31,7 @@ describe('local mail schema', () => {
 
     expect(
       getTableConfig(schema.connection).uniqueConstraints.map((constraint) => constraint.getName()),
-    ).toContain('connection_user_email_uidx');
+    ).toContain('connection_user_channel_email_uidx');
     expect(
       getTableConfig(schema.authorizationBinding).uniqueConstraints.map((constraint) =>
         constraint.getName(),
@@ -202,6 +202,48 @@ describe('local mail schema', () => {
           column instanceof IndexedColumn ? column.name : undefined,
         ),
     ).toEqual(['user_id', 'connection_id', 'thread_id']);
+  });
+
+  it('keeps provider credentials out of plugin-neutral Connections', () => {
+    const connectionConfig = getTableConfig(schema.connection);
+    const connectionColumns = connectionConfig.columns.map(({ name }) => name);
+
+    expect(connectionColumns).toContain('provider_key');
+    expect(connectionColumns).not.toEqual(
+      expect.arrayContaining([
+        'provider_id',
+        'access_token',
+        'refresh_token',
+        'scope',
+        'expires_at',
+      ]),
+    );
+    expect(
+      connectionConfig.uniqueConstraints
+        .find(({ name }) => name === 'connection_user_channel_email_uidx')
+        ?.columns.map(({ name }) => name),
+    ).toEqual(['user_id', 'channel_id', 'normalized_email']);
+    expect(connectionConfig.checks.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(['connection_status_chk', 'connection_provider_key_chk']),
+    );
+  });
+
+  it('constrains stable Authorization Binding discriminators without OAuth-only requirements', () => {
+    const authorizationConfig = getTableConfig(schema.authorizationBinding);
+    const authorizationColumns = authorizationConfig.columns;
+
+    expect(
+      authorizationColumns.find(({ name }) => name === 'access_token_expires_at')?.notNull,
+    ).toBe(false);
+    expect(
+      authorizationColumns.find(({ name }) => name === 'encrypted_credential_snapshot')?.notNull,
+    ).toBe(false);
+    expect(authorizationConfig.checks.map(({ name }) => name)).toEqual(
+      expect.arrayContaining([
+        'authorization_auth_source_chk',
+        'authorization_credential_type_chk',
+      ]),
+    );
   });
 
   it('exports every local mail collection', () => {

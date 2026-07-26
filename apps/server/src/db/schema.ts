@@ -8,10 +8,12 @@ import {
   unique,
   index,
   foreignKey,
+  check,
 } from 'drizzle-orm/pg-core';
 import { appSchema, authSchema, integrationSchema } from './pg-schemas';
 import type { MailChannelId } from '../lib/mail-channel/types';
 import { defaultUserSettings } from '../lib/schemas';
+import { sql } from 'drizzle-orm';
 
 const createAuthTable = authSchema.table;
 const createAppTable = appSchema.table;
@@ -136,21 +138,24 @@ export const connection = createIntegrationTable(
       .$type<'connected' | 'disconnected' | 'reconnect_required' | 'deleting'>()
       .notNull()
       .default('connected'),
-    disconnectedAt: timestamp('disconnected_at'),
-    accessToken: text('access_token'),
-    refreshToken: text('refresh_token'),
-    scope: text('scope').notNull(),
-    providerId: text('provider_id').$type<'google' | 'microsoft'>().notNull(),
-    expiresAt: timestamp('expires_at').notNull(),
-    createdAt: timestamp('created_at').notNull(),
-    updatedAt: timestamp('updated_at').notNull(),
+    disconnectedAt: timestamp('disconnected_at', { withTimezone: true }),
+    providerKey: text('provider_key').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
   (t) => [
-    unique('connection_user_email_uidx').on(t.userId, t.normalizedEmail),
+    unique('connection_user_channel_email_uidx').on(t.userId, t.channelId, t.normalizedEmail),
     unique('connection_id_user_id_uidx').on(t.id, t.userId),
     index('connection_user_id_idx').on(t.userId),
-    index('connection_expires_at_idx').on(t.expiresAt),
-    index('connection_provider_id_idx').on(t.providerId),
+    index('connection_provider_key_idx').on(t.providerKey),
+    check(
+      'connection_status_chk',
+      sql`${t.status} IN ('connected', 'disconnected', 'reconnect_required', 'deleting')`,
+    ),
+    check(
+      'connection_provider_key_chk',
+      sql`${t.providerKey} ~ '^[a-z][a-z0-9]*([._-][a-z0-9]+)*$'`,
+    ),
   ],
 );
 
@@ -165,12 +170,12 @@ export const authorizationBinding = createIntegrationTable(
     authSource: text('auth_source').$type<'zero_oauth' | 'nango' | 'manual'>().notNull(),
     credentialType: text('credential_type').$type<'oauth2' | 'basic' | 'custom'>().notNull(),
     encryptedCredentialSnapshot: text('encrypted_credential_snapshot'),
-    accessTokenExpiresAt: timestamp('access_token_expires_at'),
-    credentialFetchedAt: timestamp('credential_fetched_at'),
+    accessTokenExpiresAt: timestamp('access_token_expires_at', { withTimezone: true }),
+    credentialFetchedAt: timestamp('credential_fetched_at', { withTimezone: true }),
     nangoConnectionId: text('nango_connection_id'),
     nangoProviderConfigKey: text('nango_provider_config_key'),
-    createdAt: timestamp('created_at').notNull(),
-    updatedAt: timestamp('updated_at').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
   (t) => [
     unique('authorization_binding_nango_ref_uidx').on(
@@ -178,22 +183,52 @@ export const authorizationBinding = createIntegrationTable(
       t.nangoConnectionId,
     ),
     index('authorization_connection_id_idx').on(t.connectionId),
+    check(
+      'authorization_auth_source_chk',
+      sql`${t.authSource} IN ('zero_oauth', 'nango', 'manual')`,
+    ),
+    check(
+      'authorization_credential_type_chk',
+      sql`${t.credentialType} IN ('oauth2', 'basic', 'custom')`,
+    ),
+    check(
+      'authorization_nango_reference_chk',
+      sql`(
+        ${t.authSource} = 'nango'
+        AND ${t.nangoConnectionId} IS NOT NULL
+        AND ${t.nangoProviderConfigKey} IS NOT NULL
+      ) OR (
+        ${t.authSource} <> 'nango'
+        AND ${t.nangoConnectionId} IS NULL
+        AND ${t.nangoProviderConfigKey} IS NULL
+      )`,
+    ),
   ],
 );
 
-export const systemIntegrationConfig = createIntegrationTable('system_config', {
-  id: text('id').primaryKey(),
-  integrationKey: text('integration_key').$type<'nango' | 'gmail_zero_oauth'>().notNull().unique(),
-  publicConfig: jsonb('public_config').notNull(),
-  encryptedSecret: text('encrypted_secret').notNull(),
-  status: text('status').$type<'active' | 'error'>().notNull(),
-  validatedAt: timestamp('validated_at').notNull(),
-  updatedBy: text('updated_by')
-    .notNull()
-    .references(() => user.id),
-  createdAt: timestamp('created_at').notNull(),
-  updatedAt: timestamp('updated_at').notNull(),
-});
+export const systemIntegrationConfig = createIntegrationTable(
+  'system_config',
+  {
+    id: text('id').primaryKey(),
+    integrationKey: text('integration_key')
+      .$type<'nango' | 'gmail_zero_oauth'>()
+      .notNull()
+      .unique(),
+    publicConfig: jsonb('public_config').notNull(),
+    encryptedSecret: text('encrypted_secret').notNull(),
+    status: text('status').$type<'active' | 'error'>().notNull(),
+    validatedAt: timestamp('validated_at', { withTimezone: true }).notNull(),
+    updatedBy: text('updated_by')
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    check('system_integration_key_chk', sql`${t.integrationKey} IN ('nango', 'gmail_zero_oauth')`),
+    check('system_integration_status_chk', sql`${t.status} IN ('active', 'error')`),
+  ],
+);
 
 export const channelIntegrationMapping = createIntegrationTable(
   'channel_mapping',
@@ -202,10 +237,13 @@ export const channelIntegrationMapping = createIntegrationTable(
     channelId: text('channel_id').$type<MailChannelId>().notNull(),
     authSource: text('auth_source').$type<'nango'>().notNull(),
     externalIntegrationId: text('external_integration_id').notNull(),
-    createdAt: timestamp('created_at').notNull(),
-    updatedAt: timestamp('updated_at').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
-  (t) => [unique('channel_mapping_channel_auth_uidx').on(t.channelId, t.authSource)],
+  (t) => [
+    unique('channel_mapping_channel_auth_uidx').on(t.channelId, t.authSource),
+    check('channel_mapping_auth_source_chk', sql`${t.authSource} = 'nango'`),
+  ],
 );
 
 export const integrationOAuthSession = createIntegrationTable(
@@ -219,13 +257,15 @@ export const integrationOAuthSession = createIntegrationTable(
     createdBy: text('created_by')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    expiresAt: timestamp('expires_at').notNull(),
-    consumedAt: timestamp('consumed_at'),
-    createdAt: timestamp('created_at').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
   (t) => [
     index('integration_oauth_session_expires_at_idx').on(t.expiresAt),
     index('integration_oauth_session_created_by_idx').on(t.createdBy),
+    check('oauth_session_integration_key_chk', sql`${t.integrationKey} = 'gmail_zero_oauth'`),
+    check('oauth_session_purpose_chk', sql`${t.purpose} IN ('validate_config', 'connect_mailbox')`),
   ],
 );
 

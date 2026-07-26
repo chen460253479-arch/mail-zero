@@ -11,11 +11,11 @@ import {
 import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router } from '../trpc';
 import { resolveGmailConnectMode } from '../../lib/integrations/gmail-connection-options';
 import { withNangoRuntime, type NangoRuntime } from '../../lib/credentials/nango-runtime';
+import { channelIdToProviderId, getMailChannel } from '../../lib/mail-channel/registry';
 import { createSystemIntegrationRepository } from '../../lib/integrations/repository';
 import { deleteConnectionLocalData, getZeroDB } from '../../lib/server-utils';
 import { NangoIntegrationError } from '../../lib/integrations/nango-service';
 import { resolveFetchedNangoCredential } from '../../lib/credentials/nango';
-import { getMailChannel } from '../../lib/mail-channel/registry';
 import { disableBrainFunction } from '../../lib/brain';
 import { Ratelimit } from '@upstash/ratelimit';
 import type { EProviders } from '../../types';
@@ -94,7 +94,7 @@ const createLifecycleDependencies = async (
       if (!mailbox) return;
       await disableBrainFunction({
         id: connection.id,
-        providerId: mailbox.providerId as EProviders,
+        providerId: channelIdToProviderId(mailbox.channelId) as EProviders,
       });
     },
     cleanupLocalData: (connection) => deleteConnectionLocalData(connection.id),
@@ -202,8 +202,8 @@ export const connectionsRouter = router({
               isIntegrationAvailable: async (channelId, candidateIntegrationId) =>
                 channelId === 'gmail' && candidateIntegrationId === integrationId,
               repository: {
-                findMailboxByNormalizedEmail: (normalizedEmail) =>
-                  db.findConnectionByNormalizedEmail(normalizedEmail),
+                findMailboxByNormalizedEmail: (channelId, normalizedEmail) =>
+                  db.findConnectionByNormalizedEmail(channelId, normalizedEmail),
                 findByNangoReference: (candidateIntegrationId, connectionId) =>
                   db.findAuthorizationByNangoReference(candidateIntegrationId, connectionId),
                 save: async ({ mailbox, authorization }) => {
@@ -219,6 +219,7 @@ export const connectionsRouter = router({
                       throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
                     }
                     const existing = await db.findConnectionByNormalizedEmail(
+                      mailbox.channelId,
                       mailbox.normalizedEmail,
                     );
                     if (existing && existing.channelId !== mailbox.channelId) {

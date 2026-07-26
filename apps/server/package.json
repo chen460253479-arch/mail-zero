@@ -8,7 +8,6 @@
     "types": "wrangler types --env local",
     "lint": "eslint .",
     "db:generate": "drizzle-kit generate",
-    "db:backfill-mail-auth": "tsx src/db/backfill-authorization-bindings.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "tsx src/db/push-development-database.ts",
     "db:push:drizzle": "drizzle-kit push",

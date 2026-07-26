@@ -17,6 +17,12 @@ import {
   type WritingStyleMatrix,
 } from './services/writing-style-service';
 import {
+  assertMailChannelBinding,
+  channelIdToProviderId,
+  getMailChannel,
+  providerIdToChannelId,
+} from './lib/mail-channel/registry';
+import {
   toAttachmentFiles,
   type SerializedAttachment,
   type AttachmentFile,
@@ -28,9 +34,11 @@ import { normalizeMailboxEmail } from './lib/mail-channel/mailbox-identity';
 // import { instrument, type ResolveConfigFn } from '@microlabs/otel-cf-workers';
 import { getZeroAgent, getZeroDB, verifyToken } from './lib/server-utils';
 import { SyncThreadsWorkflow } from './workflows/sync-threads-workflow';
+import { createZeroOAuthSnapshot } from './lib/credentials/zero-oauth';
 import { ShardRegistry, ZeroAgent, ZeroDriver } from './routes/agent';
-import { providerIdToChannelId } from './lib/mail-channel/registry';
+import { encryptCredential } from './lib/credentials/encryption';
 import { ThreadSyncWorker } from './routes/agent/sync-worker';
+import type { MailChannelId } from './lib/mail-channel/types';
 import { oAuthDiscoveryMetadata } from 'better-auth/plugins';
 import { EProviders, type IEmailSendBatch } from './types';
 import { eq, and, desc, asc, inArray } from 'drizzle-orm';
@@ -75,10 +83,14 @@ type CreateAuthorizationInput = Omit<
   'id' | 'connectionId' | 'createdAt' | 'updatedAt'
 >;
 
-type LegacyConnectionDetails = Pick<typeof connection.$inferInsert, 'expiresAt' | 'scope'> &
-  Partial<
-    Pick<typeof connection.$inferInsert, 'accessToken' | 'refreshToken' | 'name' | 'picture'>
-  >;
+type LegacyConnectionDetails = {
+  expiresAt: Date;
+  scope: string;
+  accessToken?: string | null;
+  refreshToken?: string | null;
+  name?: string | null;
+  picture?: string | null;
+};
 
 export class DbRpcDO extends RpcTarget {
   constructor(
@@ -140,8 +152,12 @@ export class DbRpcDO extends RpcTarget {
     return await this.mainDo.findManyConnectionsWithAuthorization(this.userId);
   }
 
-  async findConnectionByNormalizedEmail(normalizedEmail: string) {
-    return await this.mainDo.findConnectionByNormalizedEmail(this.userId, normalizedEmail);
+  async findConnectionByNormalizedEmail(channelId: MailChannelId, normalizedEmail: string) {
+    return await this.mainDo.findConnectionByNormalizedEmail(
+      this.userId,
+      channelId,
+      normalizedEmail,
+    );
   }
 
   async findAuthorizationByNangoReference(integrationId: string, connectionId: string) {
@@ -266,7 +282,7 @@ export class DbRpcDO extends RpcTarget {
     connectionId: string,
     updatingInfo: Partial<typeof connection.$inferInsert>,
   ) {
-    return await this.mainDo.updateConnection(connectionId, updatingInfo);
+    return await this.mainDo.updateConnection(this.userId, connectionId, updatingInfo);
   }
 
   async listEmailTemplates(): Promise<(typeof emailTemplate.$inferSelect)[]> {
@@ -399,9 +415,17 @@ class ZeroDB extends DurableObject<ZeroEnv> {
       .where(eq(connection.userId, userId));
   }
 
-  async findConnectionByNormalizedEmail(userId: string, normalizedEmail: string) {
+  async findConnectionByNormalizedEmail(
+    userId: string,
+    channelId: MailChannelId,
+    normalizedEmail: string,
+  ) {
     const mailbox = await this.db.query.connection.findFirst({
-      where: and(eq(connection.userId, userId), eq(connection.normalizedEmail, normalizedEmail)),
+      where: and(
+        eq(connection.userId, userId),
+        eq(connection.channelId, channelId),
+        eq(connection.normalizedEmail, normalizedEmail),
+      ),
       columns: {
         id: true,
         channelId: true,
@@ -612,17 +636,31 @@ class ZeroDB extends DurableObject<ZeroEnv> {
     userId: string,
     updatingInfo: LegacyConnectionDetails,
   ): Promise<{ id: string }[]> {
+    if (!updatingInfo.accessToken || !updatingInfo.refreshToken) {
+      throw new Error('Mailbox OAuth credential is missing');
+    }
+    const channelId = providerIdToChannelId(providerId);
+    const channel = getMailChannel(channelId);
     const created = await this.createMailboxWithAuthorization(
       userId,
       {
-        ...updatingInfo,
-        providerId,
-        channelId: providerIdToChannelId(providerId),
+        name: updatingInfo.name,
+        picture: updatingInfo.picture,
+        providerKey: channel.providerKey,
+        channelId,
         email,
       },
       {
         authSource: 'zero_oauth',
         credentialType: 'oauth2',
+        encryptedCredentialSnapshot: await encryptCredential(
+          createZeroOAuthSnapshot({
+            accessToken: updatingInfo.accessToken,
+            refreshToken: updatingInfo.refreshToken,
+            scope: updatingInfo.scope,
+          }),
+          this.env.CREDENTIAL_ENCRYPTION_KEY,
+        ),
         accessTokenExpiresAt: updatingInfo.expiresAt,
         credentialFetchedAt: new Date(),
       },
@@ -637,17 +675,23 @@ class ZeroDB extends DurableObject<ZeroEnv> {
   ): Promise<{ id: string }> {
     const now = new Date();
     const normalizedEmail = normalizeMailboxEmail(mailbox.email);
+    assertMailChannelBinding({
+      channelId: mailbox.channelId,
+      providerKey: mailbox.providerKey,
+      credentialType: authorization.credentialType,
+    });
 
     return await this.db.transaction(async (tx) => {
       const existing = await tx.query.connection.findFirst({
-        where: and(eq(connection.userId, userId), eq(connection.normalizedEmail, normalizedEmail)),
+        where: and(
+          eq(connection.userId, userId),
+          eq(connection.channelId, mailbox.channelId),
+          eq(connection.normalizedEmail, normalizedEmail),
+        ),
       });
       const connectionId = existing?.id ?? crypto.randomUUID();
 
       if (existing) {
-        if (existing.channelId !== mailbox.channelId) {
-          throw new Error('MAILBOX_IDENTITY_MISMATCH');
-        }
         const existingAuthorization = await tx.query.authorizationBinding.findFirst({
           where: eq(authorizationBinding.connectionId, existing.id),
         });
@@ -757,13 +801,14 @@ class ZeroDB extends DurableObject<ZeroEnv> {
   }
 
   async updateConnection(
+    userId: string,
     connectionId: string,
     updatingInfo: Partial<typeof connection.$inferInsert>,
   ) {
     return await this.db
       .update(connection)
       .set(updatingInfo)
-      .where(eq(connection.id, connectionId));
+      .where(and(eq(connection.id, connectionId), eq(connection.userId, userId)));
   }
 
   async findManyEmailTemplates(userId: string): Promise<(typeof emailTemplate.$inferSelect)[]> {
@@ -1415,8 +1460,8 @@ export default class Entry extends WorkerEntrypoint<ZeroEnv> {
     console.log('[SCHEDULED] Checking for expired subscriptions...');
     const { db, conn } = createDb(this.env.HYPERDRIVE.connectionString);
     const allAccounts = await db.query.connection.findMany({
-      where: (fields, { isNotNull, and }) =>
-        and(isNotNull(fields.accessToken), isNotNull(fields.refreshToken)),
+      where: (fields, { eq, and }) =>
+        and(eq(fields.status, 'connected'), eq(fields.channelId, 'gmail')),
     });
     await conn.end();
     console.log('[SCHEDULED] allAccounts', allAccounts.length);
@@ -1470,7 +1515,8 @@ export default class Entry extends WorkerEntrypoint<ZeroEnv> {
     // );
 
     await Promise.all(
-      allAccounts.map(async ({ id, providerId }) => {
+      allAccounts.map(async ({ id, channelId }) => {
+        const providerId = channelIdToProviderId(channelId);
         const lastSubscribed = await this.env.gmail_sub_age.get(`${id}__${providerId}`);
 
         if (lastSubscribed) {

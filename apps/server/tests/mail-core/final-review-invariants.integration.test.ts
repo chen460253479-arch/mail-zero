@@ -290,9 +290,7 @@ describe('final review PostgreSQL invariants', () => {
         email: 'owner-primary-unbound@example.test',
         normalizedEmail: 'owner-primary-unbound@example.test',
         channelId: 'owner-primary-unbound-channel' as typeof connection.$inferInsert.channelId,
-        scope: '',
-        providerId: 'google',
-        expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+        providerKey: 'test.postgres',
         createdAt: now,
         updatedAt: now,
       });
@@ -302,9 +300,7 @@ describe('final review PostgreSQL invariants', () => {
         email: 'owner-other@example.test',
         normalizedEmail: 'owner-other@example.test',
         channelId: 'owner-other-channel' as typeof connection.$inferInsert.channelId,
-        scope: '',
-        providerId: 'google',
-        expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+        providerKey: 'test.postgres',
         createdAt: now,
         updatedAt: now,
       });

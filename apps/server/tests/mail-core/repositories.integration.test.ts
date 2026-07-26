@@ -32,9 +32,7 @@ describe('PostgreSQL mail adapters', () => {
         email: 'postgres-user-1@example.test',
         normalizedEmail: 'postgres-user-1@example.test',
         channelId: 'postgres-channel-1' as typeof connection.$inferInsert.channelId,
-        scope: '',
-        providerId: 'google',
-        expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+        providerKey: 'test.postgres',
         createdAt: now,
         updatedAt: now,
       });

@@ -273,7 +273,7 @@ describe('Gmail OAuth integration service', () => {
       expect.objectContaining({
         email: 'Owner@Example.com',
         channelId: 'gmail',
-        providerId: 'google',
+        providerKey: 'gmail',
       }),
       expect.objectContaining({
         authSource: 'zero_oauth',

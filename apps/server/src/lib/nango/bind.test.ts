@@ -30,10 +30,12 @@ const connection = {
 const createChannel = () =>
   ({
     id: 'gmail',
+    providerKey: 'gmail',
     displayName: 'Gmail',
     legacyProviderId: 'google',
     nangoProviders: ['google-mail'],
     capabilities: new Set(),
+    credentialTypes: new Set(['oauth2']),
     createClient: vi.fn(),
     resolveIdentity: vi.fn().mockResolvedValue({
       email: 'Owner@Example.com',
