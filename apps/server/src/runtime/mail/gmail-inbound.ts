@@ -14,6 +14,7 @@ import {
   mailAccount,
   mailbox,
 } from '../../db/schema';
+import { readGmailOAuthRuntimeConfig } from '../../modules/mail-accounts/application/connect-gmail-oauth';
 import { createPostgresMailSyncRepository } from '../../modules/mail-sync/postgres/sync-repository';
 import { bootstrapLocalMailAccount } from '../../modules/mail-sync/application/bootstrap-account';
 import { createNangoCredentialRepository } from '../../modules/mail-accounts/credentials/nango';
@@ -83,6 +84,14 @@ const createAdapterFactory = (db: DB, runtimeEnv: ZeroEnv) => ({
       record.authorization?.authSource === 'nango'
         ? await createNangoResolver(db, runtimeEnv)
         : undefined;
+    const zeroOAuth =
+      record.authorization?.authSource === 'zero_oauth'
+        ? await readGmailOAuthRuntimeConfig({
+            repository: createSystemIntegrationRepository(db),
+            encryptionKey: runtimeEnv.CREDENTIAL_ENCRYPTION_KEY,
+            redirectUri: `${runtimeEnv.VITE_PUBLIC_BACKEND_URL.replace(/\/+$/u, '')}/api/integrations/gmail/connect/callback`,
+          })
+        : undefined;
     const resolveCredential = async (forceRefresh: boolean) =>
       await resolveConnectionCredential(
         record,
@@ -91,7 +100,7 @@ const createAdapterFactory = (db: DB, runtimeEnv: ZeroEnv) => ({
       );
     const executor = createCredentialAwareGmailExecutor({
       resolveCredential,
-      createClient: createGoogleGmailApiExecutor,
+      createClient: (credential) => createGoogleGmailApiExecutor(credential, zeroOAuth),
       invalidateCredential: async () => {
         if (nango && record.authorization?.id) {
           await nango.repository.invalidate(record.authorization.id);
