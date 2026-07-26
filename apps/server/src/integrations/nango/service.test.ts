@@ -5,9 +5,9 @@ import type {
   SystemIntegrationRecord,
   SystemIntegrationRepository,
 } from '../../integrations/core/repository';
-import { NangoIntegrationError, NangoIntegrationService } from './nango-service';
-import { NangoClientError, type NangoClient } from '../nango/client';
 import { encryptCredential } from '../../infrastructure/security/credential-encryption';
+import { NangoIntegrationError, NangoIntegrationService } from './service';
+import { NangoClientError, type NangoClient } from './client';
 
 const encryptionKey = Buffer.alloc(32, 9).toString('base64');
 const now = new Date('2026-07-24T08:00:00.000Z');
@@ -212,6 +212,30 @@ describe('Nango integration service', () => {
     expect(state.saveActive).toHaveBeenCalledOnce();
   });
 
+  it('lists configured Nango integrations without applying mail-provider filtering', async () => {
+    const encryptedSecret = await encryptCredential({ secretKey: 'secret' }, encryptionKey);
+    state.setCurrent({
+      id: 'integration-record-1',
+      integrationKey: 'nango',
+      publicConfig: { baseUrl: 'https://api.nango.dev' },
+      encryptedSecret,
+      status: 'active',
+      validatedAt: now,
+      updatedBy: 'admin-1',
+      createdAt: now,
+      updatedAt: now,
+    });
+    const client = createClient();
+    const service = new NangoIntegrationService({
+      repository: state.repository,
+      encryptionKey,
+      createClient: () => client,
+      now: () => now,
+    });
+
+    await expect(service.listIntegrations()).resolves.toEqual([integration]);
+  });
+
   it('forbids changing the Base URL while Nango bindings exist', async () => {
     const encryptedSecret = await encryptCredential({ secretKey: 'old-secret' }, encryptionKey);
     state.setCurrent({
@@ -276,28 +300,6 @@ describe('Nango integration service', () => {
     expect(client.listConnections).toHaveBeenCalledOnce();
     expect(client.getConnection).toHaveBeenCalledTimes(2);
     expect(state.saveActive).toHaveBeenCalledOnce();
-  });
-
-  it('forbids changing an occupied Gmail mapping', async () => {
-    state.setMapping({
-      id: 'mapping-1',
-      channelId: 'gmail',
-      authSource: 'nango',
-      externalIntegrationId: 'gmail-production',
-      createdAt: now,
-      updatedAt: now,
-    });
-    state.setReferences([{ integrationId: 'gmail-production', connectionId: 'connection-1' }]);
-    const service = new NangoIntegrationService({
-      repository: state.repository,
-      encryptionKey,
-      createClient,
-      now: () => now,
-    });
-
-    await expect(service.setGmailMapping('gmail-replacement')).rejects.toEqual(
-      new NangoIntegrationError('INTEGRATION_IN_USE'),
-    );
   });
 
   it('forbids deleting Nango while bindings exist', async () => {

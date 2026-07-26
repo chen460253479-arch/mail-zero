@@ -4,30 +4,15 @@ import {
   type SafeIntegration,
   type SystemIntegrationRepository,
 } from '../../integrations/core/repository';
-import { NangoClientError, type NangoClient, type NangoOperation } from '../nango/client';
 import {
   decryptCredential,
   encryptCredential,
 } from '../../infrastructure/security/credential-encryption';
-import { gmailNangoProviders } from '../mail-channel/gmail-metadata';
-import type { NangoIntegration } from '../nango/types';
+import { mapNangoClientError, NangoIntegrationError } from './errors';
+import type { NangoIntegration } from './schemas';
+import type { NangoClient } from './client';
 
 type NangoClientLike = Pick<NangoClient, 'listIntegrations' | 'listConnections' | 'getConnection'>;
-
-type NangoIntegrationErrorCode =
-  | 'INTEGRATION_IN_USE'
-  | 'NANGO_API_KEY_INVALID'
-  | 'NANGO_CONNECTION_INVALID'
-  | 'NANGO_CONNECTION_NOT_FOUND'
-  | 'NANGO_ENDPOINT_NOT_FOUND'
-  | 'NANGO_INTEGRATION_UNAVAILABLE'
-  | 'NANGO_INSUFFICIENT_PERMISSIONS'
-  | 'NANGO_INVALID_RESPONSE'
-  | 'NANGO_NOT_CONFIGURED'
-  | 'NANGO_PERMISSION_VALIDATION_FAILED'
-  | 'NANGO_REQUEST_FAILED'
-  | 'NANGO_SECRET_REQUIRED'
-  | 'NANGO_UNREACHABLE';
 
 type NangoSecret = {
   secretKey: string;
@@ -71,42 +56,6 @@ const mapWithConcurrency = async <T>(
     }
   };
   await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, worker));
-};
-
-export class NangoIntegrationError extends Error {
-  constructor(
-    public readonly code: NangoIntegrationErrorCode,
-    public readonly operation?: NangoOperation,
-    public readonly status?: number | null,
-  ) {
-    super(operation ? `${code}|${operation}|${status ?? ''}` : code);
-    this.name = 'NangoIntegrationError';
-  }
-}
-
-const mapNangoClientError = (error: unknown): NangoIntegrationError => {
-  if (!(error instanceof NangoClientError)) {
-    return new NangoIntegrationError('NANGO_PERMISSION_VALIDATION_FAILED');
-  }
-
-  const code: NangoIntegrationErrorCode =
-    error.code === 'INVALID_API_KEY'
-      ? 'NANGO_API_KEY_INVALID'
-      : error.code === 'INSUFFICIENT_PERMISSIONS'
-        ? 'NANGO_INSUFFICIENT_PERMISSIONS'
-        : error.code === 'ENDPOINT_NOT_FOUND'
-          ? error.operation === 'get_connection'
-            ? 'NANGO_CONNECTION_NOT_FOUND'
-            : 'NANGO_ENDPOINT_NOT_FOUND'
-          : error.code === 'INVALID_CREDENTIALS'
-            ? 'NANGO_CONNECTION_INVALID'
-            : error.code === 'INVALID_RESPONSE'
-              ? 'NANGO_INVALID_RESPONSE'
-              : error.status === null
-                ? 'NANGO_UNREACHABLE'
-                : 'NANGO_REQUEST_FAILED';
-
-  return new NangoIntegrationError(code, error.operation, error.status);
 };
 
 export class NangoIntegrationService {
@@ -178,32 +127,13 @@ export class NangoIntegrationService {
     };
   }
 
-  async listGmailIntegrations(): Promise<NangoIntegration[]> {
+  async listIntegrations(): Promise<NangoIntegration[]> {
     const client = this.dependencies.createClient(await this.getRuntimeConfig());
     try {
-      return (await client.listIntegrations()).filter(({ provider }) =>
-        gmailNangoProviders.includes(provider),
-      );
+      return await client.listIntegrations();
     } catch (error) {
       throw mapNangoClientError(error);
     }
-  }
-
-  async setGmailMapping(integrationId: string): Promise<void> {
-    const current = await this.dependencies.repository.getMapping('gmail', 'nango');
-    if (current?.externalIntegrationId === integrationId) return;
-    if (
-      current &&
-      (await this.dependencies.repository.countNangoBindings(current.externalIntegrationId)) > 0
-    ) {
-      throw new NangoIntegrationError('INTEGRATION_IN_USE');
-    }
-
-    const integrations = await this.listGmailIntegrations();
-    if (!integrations.some(({ unique_key }) => unique_key === integrationId)) {
-      throw new NangoIntegrationError('NANGO_INTEGRATION_UNAVAILABLE');
-    }
-    await this.dependencies.repository.setMapping('gmail', 'nango', integrationId);
   }
 
   async delete(): Promise<void> {
@@ -241,3 +171,5 @@ export class NangoIntegrationService {
     }
   }
 }
+
+export { NangoIntegrationError } from './errors';

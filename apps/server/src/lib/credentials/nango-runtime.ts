@@ -3,8 +3,8 @@ import {
   type SystemIntegrationRepository,
 } from '../../integrations/core/repository';
 import { createNangoCredentialRepository, type NangoCredentialResolverOptions } from './nango';
-import { NangoIntegrationService } from '../integrations/nango-service';
-import { NangoClient } from '../nango/client';
+import { NangoIntegrationService } from '../../integrations/nango/service';
+import { NangoClient } from '../../integrations/nango/client';
 import { createDb } from '../../db';
 
 export type NangoRuntimeConfig = {

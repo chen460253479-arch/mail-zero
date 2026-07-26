@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const recordSchema = z.record(z.string(), z.unknown());
+const metadataSchema = z.record(z.string(), z.unknown());
 const tagsSchema = z.record(z.string(), z.string());
 const connectionErrorSchema = z.object({
   type: z.string(),
@@ -17,7 +17,7 @@ export const nangoConnectionSummarySchema = z.object({
   connection_id: z.string().min(1),
   provider_config_key: z.string().min(1),
   provider: z.string().min(1),
-  metadata: recordSchema.nullable().default(null),
+  metadata: metadataSchema.nullable().default(null),
   tags: tagsSchema.default({}),
   errors: z.array(connectionErrorSchema).default([]),
 });
@@ -26,19 +26,19 @@ const oauth2CredentialSchema = z.object({
   type: z.literal('OAUTH2'),
   access_token: z.string().min(1),
   expires_at: z.union([z.string(), z.number()]).nullable().optional(),
-  raw: recordSchema.default({}),
+  raw: metadataSchema.default({}),
 });
 
 const basicCredentialSchema = z.object({
   type: z.literal('BASIC'),
   username: z.string(),
   password: z.string(),
-  raw: recordSchema.default({}),
+  raw: metadataSchema.default({}),
 });
 
 const customCredentialSchema = z.object({
   type: z.literal('CUSTOM'),
-  raw: recordSchema,
+  raw: metadataSchema,
 });
 
 export const nangoCredentialSchema = z.discriminatedUnion('type', [

@@ -4,11 +4,13 @@ import {
   GmailOAuthService,
   gmailOAuthRedirectUris,
 } from '../../lib/integrations/gmail-oauth-service';
+import { NangoChannelMappingService } from '../../modules/mail-accounts/application/nango-channel-mapping';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import { GoogleGmailOAuthGateway } from '../../lib/integrations/google-gmail-oauth';
-import { NangoIntegrationService } from '../../lib/integrations/nango-service';
+import { NangoIntegrationService } from '../../integrations/nango/service';
+import { getMailChannel } from '../../lib/mail-channel/registry';
+import { NangoClient } from '../../integrations/nango/client';
 import { mapIntegrationError } from './integration-errors';
-import { NangoClient } from '../../lib/nango/client';
 import { getZeroDB } from '../../lib/server-utils';
 import { adminProcedure, router } from '../trpc';
 import type { ZeroEnv } from '../../env';
@@ -17,6 +19,7 @@ import { createDb } from '../../db';
 type IntegrationServices = {
   repository: ReturnType<typeof createSystemIntegrationRepository>;
   nango: NangoIntegrationService;
+  nangoChannels: NangoChannelMappingService;
   gmail: GmailOAuthService;
 };
 
@@ -27,13 +30,19 @@ const withIntegrationServices = async <T>(
   const { db, conn } = createDb(env.HYPERDRIVE.connectionString);
   try {
     const repository = createSystemIntegrationRepository(db);
+    const nango = new NangoIntegrationService({
+      repository,
+      encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
+      createClient: (config) => new NangoClient({ ...config, fetch }),
+      now: () => new Date(),
+    });
     return await run({
       repository,
-      nango: new NangoIntegrationService({
+      nango,
+      nangoChannels: new NangoChannelMappingService({
         repository,
-        encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
-        createClient: (config) => new NangoClient({ ...config, fetch }),
-        now: () => new Date(),
+        listIntegrations: () => nango.listIntegrations(),
+        getChannel: (channelId) => getMailChannel(channelId),
       }),
       gmail: new GmailOAuthService({
         repository,
@@ -110,8 +119,8 @@ export const integrationsRouter = router({
 
   listNangoGmailIntegrations: adminProcedure.query(async ({ ctx }) => {
     try {
-      return await withIntegrationServices(ctx.c.env, async ({ nango }) =>
-        (await nango.listGmailIntegrations()).map(({ unique_key, display_name }) => ({
+      return await withIntegrationServices(ctx.c.env, async ({ nangoChannels }) =>
+        (await nangoChannels.listIntegrations('gmail')).map(({ unique_key, display_name }) => ({
           integrationId: unique_key,
           displayName: display_name,
         })),
@@ -125,8 +134,8 @@ export const integrationsRouter = router({
     .input(z.object({ integrationId: z.string().trim().min(1) }))
     .mutation(async ({ input, ctx }) => {
       try {
-        await withIntegrationServices(ctx.c.env, ({ nango }) =>
-          nango.setGmailMapping(input.integrationId),
+        await withIntegrationServices(ctx.c.env, ({ nangoChannels }) =>
+          nangoChannels.setMapping('gmail', input.integrationId),
         );
         return { saved: true };
       } catch (error) {

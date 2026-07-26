@@ -7,7 +7,7 @@ import {
   type NangoConnection,
   type NangoConnectionSummary,
   type NangoIntegration,
-} from './types';
+} from './schemas';
 
 const integrationListSchema = z.object({
   data: z.array(nangoIntegrationSchema),

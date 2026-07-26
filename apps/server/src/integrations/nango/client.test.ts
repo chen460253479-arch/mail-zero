@@ -18,7 +18,7 @@ const createClient = (fetchMock: typeof fetch) =>
     fetch: fetchMock,
   });
 
-describe('NangoClient', () => {
+describe('Nango client', () => {
   it('sends the secret only in the Authorization header', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({

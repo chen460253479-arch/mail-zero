@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 import { GmailOAuthError } from '../../lib/integrations/gmail-oauth-service';
-import { NangoIntegrationError } from '../../lib/integrations/nango-service';
+import { NangoIntegrationError } from '../../integrations/nango/errors';
 import { mapIntegrationError } from './integration-errors';
 
 describe('administrator integrations router', () => {

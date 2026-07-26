@@ -4,9 +4,9 @@ vi.mock('../driver/google', () => ({
   GoogleMailManager: class {},
 }));
 
+import type { NangoIntegration } from '../../integrations/nango/schemas';
 import { listAvailableNangoChannels } from './channel-catalog';
 import { listMailChannels } from '../mail-channel/registry';
-import type { NangoIntegration } from './types';
 
 const integration = (
   unique_key: string,

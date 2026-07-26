@@ -11,14 +11,11 @@ import {
 import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router } from '../trpc';
 import { resolveGmailConnectMode } from '../../lib/integrations/gmail-connection-options';
 import { withNangoRuntime, type NangoRuntime } from '../../lib/credentials/nango-runtime';
-import {
-  findMailChannel,
-  getMailChannel,
-} from '../../lib/mail-channel/registry';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
+import { findMailChannel, getMailChannel } from '../../lib/mail-channel/registry';
 import { deleteConnectionLocalData, getZeroDB } from '../../lib/server-utils';
-import { NangoIntegrationError } from '../../lib/integrations/nango-service';
 import { resolveFetchedNangoCredential } from '../../lib/credentials/nango';
+import { NangoIntegrationError } from '../../integrations/nango/errors';
 import { disableBrainFunction } from '../../lib/brain';
 import { Ratelimit } from '@upstash/ratelimit';
 import type { EProviders } from '../../types';

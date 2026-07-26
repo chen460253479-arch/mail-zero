@@ -11,7 +11,7 @@ import {
   decryptCredential,
   encryptCredential,
 } from '../../infrastructure/security/credential-encryption';
-import type { NangoClient } from '../nango/client';
+import type { NangoClient } from '../../integrations/nango/client';
 
 const encryptionKey = Buffer.alloc(32, 4).toString('base64');
 const now = new Date('2026-07-24T12:00:00.000Z');
