@@ -21,6 +21,7 @@ import {
   type BlobId,
   type EmailId,
   type MailAccountId,
+  type MailboxId,
   type ThreadId,
 } from '../types';
 import type { CreateDraftInput, DraftAttachment, DraftContent, DraftResult } from './draft-types';
@@ -581,17 +582,35 @@ const buildThread = (
   updatedAt: now,
 });
 
-export async function createDraft(
+export type PreparedDraftCreate = {
+  accountId: MailAccountId;
+  content: DraftContent;
+  now: Date;
+  emailId: EmailId;
+  messageId: string;
+  preflight: DraftReferences;
+  raw: Uint8Array;
+  prepared: PreparedDraftRevision;
+};
+
+export type ValidatedDraftCreate = {
+  references: DraftReferences;
+  revision: DraftRevisionBlobs;
+  newThread: boolean;
+  threadId: ThreadId;
+  draftsMailboxId: MailboxId;
+};
+
+export async function prepareDraftCreate(
   dependencies: MailCoreDependencies,
   input: CreateDraftInput,
-): Promise<DraftResult> {
+): Promise<PreparedDraftCreate> {
   const content = normalizeDraftContent(dependencies, input);
-  const normalizedInput: CreateDraftInput = { ...content, accountId: input.accountId };
   const now = dependencies.clock.now();
   const emailId = dependencies.idFactory.next<'Email'>() as EmailId;
   const messageId = `<${emailId}@local.zero>`;
   const preflight = await dependencies.unitOfWork.run((tx) =>
-    requireDraftReferences(tx, input.accountId, normalizedInput),
+    requireDraftReferences(tx, input.accountId, content),
   );
   const attachments = await loadDraftAttachments(dependencies, preflight.attachments);
   const replyHeaders = draftReplyHeaders(preflight.reply);
@@ -601,131 +620,170 @@ export async function createDraft(
     messageId,
     date: now,
     identity: preflight.identity,
-    content: normalizedInput,
+    content,
     ...replyHeaders,
     attachments,
   });
   const prepared = await prepareDraftRevision(dependencies, {
     accountId: input.accountId,
     raw,
-    content: normalizedInput,
+    content,
   });
+  return {
+    accountId: input.accountId,
+    content,
+    now,
+    emailId,
+    messageId,
+    preflight,
+    raw,
+    prepared,
+  };
+}
+
+export async function createDraftInTransaction(
+  dependencies: MailCoreDependencies,
+  tx: MailTransaction,
+  preparedCreate: PreparedDraftCreate,
+  committedObjectKeys: string[],
+  validated?: ValidatedDraftCreate,
+): Promise<DraftResult> {
+  const { accountId, content, now, emailId, messageId, raw } = preparedCreate;
+  const checked =
+    validated ?? (await validateDraftCreateInTransaction(dependencies, tx, preparedCreate));
+  const { references, revision, newThread, threadId, draftsMailboxId } = checked;
+
+  await insertDraftRevisionBlobs(tx, revision);
+  if (newThread) {
+    await tx.threads.insert(buildThread(threadId, accountId, references, content, now));
+  }
+  const emailContent = draftEmailContent(dependencies, {
+    content,
+    references,
+    revision,
+    raw,
+    draftRevision: 1,
+    messageId,
+  });
+  const stored = await tx.emails.insert({
+    id: emailId,
+    accountId,
+    threadId,
+    ...emailContent,
+    receivedAt: now,
+    lifecycle: 'draft',
+    createdAt: now,
+    updatedAt: now,
+    destroyedAt: null,
+    mailboxIds: [draftsMailboxId],
+    restoreMailboxIds: [],
+    keywords: ['$draft'],
+  });
+  await tx.emails.publishSearchDocument(
+    accountId,
+    emailId,
+    createEmailSearchDocument({
+      subject: content.subject,
+      addresses: [
+        ...stored.sender,
+        ...stored.from,
+        ...stored.replyTo,
+        ...stored.to,
+        ...stored.cc,
+        ...stored.bcc,
+      ],
+      textBody: content.textBody,
+      htmlBody: content.htmlBody,
+    }),
+  );
+  await commitDraftRevisionBlobs(dependencies, tx, accountId, revision, now, committedObjectKeys);
+  const aggregateChanges = await applyEmailAggregateDelta(tx, {
+    accountId,
+    before: null,
+    after: stored,
+    now,
+  });
+  const stateVersion = await recordChanges(tx, {
+    accountId,
+    changes: [
+      {
+        collection: 'email',
+        entityId: emailId,
+        changeType: 'created',
+        changedProperties: null,
+      },
+      ...(newThread
+        ? [
+            {
+              collection: 'thread' as const,
+              entityId: threadId,
+              changeType: 'created' as const,
+              changedProperties: null,
+            },
+          ]
+        : []),
+      ...aggregateChanges.filter(
+        ({ collection, entityId }) =>
+          !(newThread && collection === 'thread' && entityId === threadId),
+      ),
+    ],
+    createdAt: now,
+  });
+  return { ...stored, stateVersion };
+}
+
+export async function validateDraftCreateInTransaction(
+  dependencies: MailCoreDependencies,
+  tx: MailTransaction,
+  preparedCreate: PreparedDraftCreate,
+): Promise<ValidatedDraftCreate> {
+  const { accountId, content, now, preflight, prepared } = preparedCreate;
+  const references = await requireDraftReferences(tx, accountId, content);
+  requireStableReferences(preflight, references);
+  const revision = await allocateDraftRevisionBlobs(dependencies, tx, accountId, prepared, now);
+  await requireDraftQuota(tx, {
+    accountId,
+    excludeEmailId: null,
+    revisionBlobs: revision,
+    attachments: references.attachments,
+  });
+  const newThread = references.reply === null;
+  const threadId =
+    references.reply?.threadId ?? (dependencies.idFactory.next<'Thread'>() as ThreadId);
+  if (!newThread && (await tx.threads.findById(accountId, threadId)) === null) {
+    throw new MailCoreError('THREAD_NOT_FOUND', { entityId: threadId });
+  }
+  const draftsMailbox = await tx.mailboxes.findByRole(accountId, 'drafts');
+  if (draftsMailbox === null) {
+    throw new MailCoreError('MAILBOX_NOT_FOUND');
+  }
+  return {
+    references,
+    revision,
+    newThread,
+    threadId,
+    draftsMailboxId: draftsMailbox.id,
+  };
+}
+
+export async function createDraft(
+  dependencies: MailCoreDependencies,
+  input: CreateDraftInput,
+): Promise<DraftResult> {
+  const preparedCreate = await prepareDraftCreate(dependencies, input);
   const committedObjectKeys: string[] = [];
   let operationCompleted = false;
   try {
     return await dependencies.unitOfWork.run(async (tx) => {
       await tx.lockAccount(input.accountId);
-      const references = await requireDraftReferences(tx, input.accountId, normalizedInput);
-      requireStableReferences(preflight, references);
-      const revision = await allocateDraftRevisionBlobs(
+      const result = await createDraftInTransaction(
         dependencies,
         tx,
-        input.accountId,
-        prepared,
-        now,
-      );
-      await requireDraftQuota(tx, {
-        accountId: input.accountId,
-        excludeEmailId: null,
-        revisionBlobs: revision,
-        attachments: references.attachments,
-      });
-      await insertDraftRevisionBlobs(tx, revision);
-      const newThread = references.reply === null;
-      const threadId =
-        references.reply?.threadId ?? (dependencies.idFactory.next<'Thread'>() as ThreadId);
-      if (newThread) {
-        await tx.threads.insert(
-          buildThread(threadId, input.accountId, references, normalizedInput, now),
-        );
-      } else if ((await tx.threads.findById(input.accountId, threadId)) === null) {
-        throw new MailCoreError('THREAD_NOT_FOUND', { entityId: threadId });
-      }
-      const content = draftEmailContent(dependencies, {
-        content: normalizedInput,
-        references,
-        revision,
-        raw,
-        draftRevision: 1,
-        messageId,
-      });
-      const draftsMailbox = await tx.mailboxes.findByRole(input.accountId, 'drafts');
-      if (draftsMailbox === null) {
-        throw new MailCoreError('MAILBOX_NOT_FOUND');
-      }
-      const stored = await tx.emails.insert({
-        id: emailId,
-        accountId: input.accountId,
-        threadId,
-        ...content,
-        receivedAt: now,
-        lifecycle: 'draft',
-        createdAt: now,
-        updatedAt: now,
-        destroyedAt: null,
-        mailboxIds: [draftsMailbox.id],
-        restoreMailboxIds: [],
-        keywords: ['$draft'],
-      });
-      await tx.emails.publishSearchDocument(
-        input.accountId,
-        emailId,
-        createEmailSearchDocument({
-          subject: normalizedInput.subject,
-          addresses: [
-            ...stored.sender,
-            ...stored.from,
-            ...stored.replyTo,
-            ...stored.to,
-            ...stored.cc,
-            ...stored.bcc,
-          ],
-          textBody: normalizedInput.textBody,
-          htmlBody: normalizedInput.htmlBody,
-        }),
-      );
-      await commitDraftRevisionBlobs(
-        dependencies,
-        tx,
-        input.accountId,
-        revision,
-        now,
+        preparedCreate,
         committedObjectKeys,
       );
-      const aggregateChanges = await applyEmailAggregateDelta(tx, {
-        accountId: input.accountId,
-        before: null,
-        after: stored,
-        now,
-      });
-      const stateVersion = await recordChanges(tx, {
-        accountId: input.accountId,
-        changes: [
-          {
-            collection: 'email',
-            entityId: emailId,
-            changeType: 'created',
-            changedProperties: null,
-          },
-          ...(newThread
-            ? [
-                {
-                  collection: 'thread' as const,
-                  entityId: threadId,
-                  changeType: 'created' as const,
-                  changedProperties: null,
-                },
-              ]
-            : []),
-          ...aggregateChanges.filter(
-            ({ collection, entityId }) =>
-              !(newThread && collection === 'thread' && entityId === threadId),
-          ),
-        ],
-        createdAt: now,
-      });
       operationCompleted = true;
-      return { ...stored, stateVersion };
+      return result;
     });
   } catch (error) {
     if (!operationCompleted) {
@@ -733,6 +791,6 @@ export async function createDraft(
     }
     throw error;
   } finally {
-    await discardTemporaryBlobs(dependencies.blobStore, prepared.all);
+    await discardTemporaryBlobs(dependencies.blobStore, preparedCreate.prepared.all);
   }
 }

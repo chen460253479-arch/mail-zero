@@ -423,6 +423,7 @@ export interface QueryChangesInput {
 }
 
 export interface ChangeRepository {
+  /** Coalesces repeated writes for the same account/state/collection/entity key. */
   recordChange(record: MailChangeRecord): Promise<void>;
   oldestAvailableState(accountId: MailAccountId): Promise<bigint>;
   queryChanges(input: QueryChangesInput): Promise<MailChangeRecord[]>;

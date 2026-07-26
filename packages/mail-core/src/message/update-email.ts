@@ -35,6 +35,20 @@ type NormalizedPatch = {
   removeKeywords: Keyword[];
 };
 
+type DerivedEmailState = {
+  mailboxIds: MailboxId[];
+  keywords: Keyword[];
+  restoreMailboxIds: MailboxId[];
+  changedProperties: string[];
+};
+
+export type PreparedEmailStateMutation = {
+  input: EmailStateInput;
+  email: EmailRecord;
+  next: DerivedEmailState;
+  now: Date;
+};
+
 const sortStrings = <Value extends string>(values: Iterable<Value>): Value[] =>
   [...values].sort((left, right) => left.localeCompare(right));
 
@@ -127,110 +141,241 @@ const applyEmailState = async (
   const now = dependencies.clock.now();
   return dependencies.unitOfWork.run(async (tx) => {
     await tx.lockAccount(input.accountId);
-    const email = await requireEmail(tx, input);
-    const next = await derive(tx, email);
-    if (next.mailboxIds.length === 0) {
-      throw new MailCoreError('EMAIL_MUST_HAVE_MAILBOX', {
-        entityId: input.emailId,
-      });
-    }
-    if (next.changedProperties.length === 0) {
-      return withStateVersion(email, await currentStateVersion(tx, input.accountId));
-    }
-
-    await tx.emails.update(input.accountId, input.emailId, {
-      mailboxIds: next.mailboxIds,
-      keywords: next.keywords,
-      restoreMailboxIds: next.restoreMailboxIds,
-      updatedAt: now,
-    });
-    const updated = (await tx.emails.findById(input.accountId, input.emailId))!;
-    const aggregateChanges = await applyEmailAggregateDelta(tx, {
-      accountId: input.accountId,
-      before: email,
-      after: updated,
-      now,
-    });
-    const stateVersion = await recordChanges(tx, {
-      accountId: input.accountId,
-      changes: [
-        {
-          collection: 'email',
-          entityId: email.id,
-          changeType: 'updated',
-          changedProperties: next.changedProperties,
-        },
-        ...aggregateChanges,
-      ],
-      createdAt: now,
-    });
-    return withStateVersion(updated, stateVersion);
+    return applyEmailStateInTransaction(tx, input, now, derive);
   });
 };
+
+const applyEmailStateInTransaction = async (
+  tx: MailTransaction,
+  input: EmailStateInput,
+  now: Date,
+  derive: (
+    tx: MailTransaction,
+    email: EmailRecord,
+  ) => Promise<{
+    mailboxIds: MailboxId[];
+    keywords: Keyword[];
+    restoreMailboxIds: MailboxId[];
+    changedProperties: string[];
+  }>,
+): Promise<EmailStateResult> => {
+  const email = await requireEmail(tx, input);
+  const next = await derive(tx, email);
+  if (next.mailboxIds.length === 0) {
+    throw new MailCoreError('EMAIL_MUST_HAVE_MAILBOX', {
+      entityId: input.emailId,
+    });
+  }
+  if (next.changedProperties.length === 0) {
+    return withStateVersion(email, await currentStateVersion(tx, input.accountId));
+  }
+
+  await tx.emails.update(input.accountId, input.emailId, {
+    mailboxIds: next.mailboxIds,
+    keywords: next.keywords,
+    restoreMailboxIds: next.restoreMailboxIds,
+    updatedAt: now,
+  });
+  const updated = (await tx.emails.findById(input.accountId, input.emailId))!;
+  const aggregateChanges = await applyEmailAggregateDelta(tx, {
+    accountId: input.accountId,
+    before: email,
+    after: updated,
+    now,
+  });
+  const stateVersion = await recordChanges(tx, {
+    accountId: input.accountId,
+    changes: [
+      {
+        collection: 'email',
+        entityId: email.id,
+        changeType: 'updated',
+        changedProperties: next.changedProperties,
+      },
+      ...aggregateChanges,
+    ],
+    createdAt: now,
+  });
+  return withStateVersion(updated, stateVersion);
+};
+
+const deriveEmailState = async (
+  tx: MailTransaction,
+  input: EmailStateInput,
+  email: EmailRecord,
+  patch: NormalizedPatch,
+): Promise<DerivedEmailState> => {
+  await requireMailboxReferences(tx, input.accountId, [
+    ...patch.addMailboxIds,
+    ...patch.removeMailboxIds,
+  ]);
+  const mailboxIds = new Set(email.mailboxIds);
+  patch.removeMailboxIds.forEach((id) => mailboxIds.delete(id));
+  patch.addMailboxIds.forEach((id) => mailboxIds.add(id));
+  const keywords = new Set(email.keywords.map(normalizeKeyword));
+  patch.removeKeywords.forEach((keyword) => keywords.delete(keyword));
+  patch.addKeywords.forEach((keyword) => keywords.add(keyword));
+  const nextMailboxIds = sortStrings(mailboxIds);
+  const nextKeywords = sortStrings(keywords);
+  const drafts = await tx.mailboxes.findByRole(input.accountId, 'drafts');
+  if (drafts === null) {
+    throw new MailCoreError('MAILBOX_NOT_FOUND');
+  }
+  const hasDraftKeyword = nextKeywords.includes('$draft');
+  const hasDraftMailbox = nextMailboxIds.includes(drafts.id);
+  if (
+    (email.lifecycle === 'draft' && (!hasDraftKeyword || !hasDraftMailbox)) ||
+    (email.lifecycle !== 'draft' && (hasDraftKeyword || hasDraftMailbox))
+  ) {
+    throw new MailCoreError('INVALID_PATCH', { entityId: email.id });
+  }
+  const trash = await tx.mailboxes.findByRole(input.accountId, 'trash');
+  if (trash === null) {
+    throw new MailCoreError('MAILBOX_NOT_FOUND');
+  }
+  let nextRestoreMailboxIds = sortStrings(email.restoreMailboxIds);
+  if (!email.mailboxIds.includes(trash.id) && nextMailboxIds.includes(trash.id)) {
+    nextRestoreMailboxIds = sortStrings(
+      email.mailboxIds.filter((mailboxId) => mailboxId !== trash.id),
+    );
+  } else if (email.mailboxIds.includes(trash.id)) {
+    if (nextMailboxIds.includes(trash.id)) {
+      const restoreMailboxIds = new Set(email.restoreMailboxIds);
+      patch.removeMailboxIds.forEach((id) => restoreMailboxIds.delete(id));
+      patch.addMailboxIds
+        .filter((id) => id !== trash.id)
+        .forEach((id) => restoreMailboxIds.add(id));
+      nextRestoreMailboxIds = sortStrings(restoreMailboxIds);
+    } else {
+      nextRestoreMailboxIds = [];
+    }
+  }
+  if (nextMailboxIds.length === 0) {
+    throw new MailCoreError('EMAIL_MUST_HAVE_MAILBOX', {
+      entityId: input.emailId,
+    });
+  }
+  const mailboxStateChanged =
+    nextMailboxIds.join('\u0000') !== sortStrings(email.mailboxIds).join('\u0000') ||
+    nextRestoreMailboxIds.join('\u0000') !== sortStrings(email.restoreMailboxIds).join('\u0000');
+  return {
+    mailboxIds: nextMailboxIds,
+    keywords: nextKeywords,
+    restoreMailboxIds: nextRestoreMailboxIds,
+    changedProperties: [
+      ...(mailboxStateChanged ? ['mailboxIds'] : []),
+      ...(nextKeywords.join('\u0000') === sortStrings(email.keywords).join('\u0000')
+        ? []
+        : ['keywords']),
+    ],
+  };
+};
+
+export async function applyPreparedEmailStateInTransaction(
+  tx: MailTransaction,
+  prepared: PreparedEmailStateMutation,
+): Promise<EmailStateResult> {
+  const { input, email, next, now } = prepared;
+  if (next.changedProperties.length === 0) {
+    return withStateVersion(email, await currentStateVersion(tx, input.accountId));
+  }
+  await tx.emails.update(input.accountId, input.emailId, {
+    mailboxIds: next.mailboxIds,
+    keywords: next.keywords,
+    restoreMailboxIds: next.restoreMailboxIds,
+    updatedAt: now,
+  });
+  const updated = (await tx.emails.findById(input.accountId, input.emailId))!;
+  const aggregateChanges = await applyEmailAggregateDelta(tx, {
+    accountId: input.accountId,
+    before: email,
+    after: updated,
+    now,
+  });
+  const stateVersion = await recordChanges(tx, {
+    accountId: input.accountId,
+    changes: [
+      {
+        collection: 'email',
+        entityId: email.id,
+        changeType: 'updated',
+        changedProperties: next.changedProperties,
+      },
+      ...aggregateChanges,
+    ],
+    createdAt: now,
+  });
+  return withStateVersion(updated, stateVersion);
+}
 
 export async function updateEmail(
   dependencies: MailCoreDependencies,
   input: UpdateEmailInput,
 ): Promise<EmailStateResult> {
-  const patch = normalizePatch(input);
-  return applyEmailState(dependencies, input, async (tx, email) => {
-    await requireMailboxReferences(tx, input.accountId, [
-      ...patch.addMailboxIds,
-      ...patch.removeMailboxIds,
-    ]);
-    const mailboxIds = new Set(email.mailboxIds);
-    patch.removeMailboxIds.forEach((id) => mailboxIds.delete(id));
-    patch.addMailboxIds.forEach((id) => mailboxIds.add(id));
-    const keywords = new Set(email.keywords.map(normalizeKeyword));
-    patch.removeKeywords.forEach((keyword) => keywords.delete(keyword));
-    patch.addKeywords.forEach((keyword) => keywords.add(keyword));
-    const nextMailboxIds = sortStrings(mailboxIds);
-    const nextKeywords = sortStrings(keywords);
-    const drafts = await tx.mailboxes.findByRole(input.accountId, 'drafts');
-    if (drafts === null) {
-      throw new MailCoreError('MAILBOX_NOT_FOUND');
-    }
-    const hasDraftKeyword = nextKeywords.includes('$draft');
-    const hasDraftMailbox = nextMailboxIds.includes(drafts.id);
-    if (
-      (email.lifecycle === 'draft' && (!hasDraftKeyword || !hasDraftMailbox)) ||
-      (email.lifecycle !== 'draft' && (hasDraftKeyword || hasDraftMailbox))
-    ) {
-      throw new MailCoreError('INVALID_PATCH', { entityId: email.id });
-    }
-    const trash = await tx.mailboxes.findByRole(input.accountId, 'trash');
-    if (trash === null) {
-      throw new MailCoreError('MAILBOX_NOT_FOUND');
-    }
-    let nextRestoreMailboxIds = sortStrings(email.restoreMailboxIds);
-    if (email.mailboxIds.includes(trash.id)) {
-      if (nextMailboxIds.includes(trash.id)) {
-        const restoreMailboxIds = new Set(email.restoreMailboxIds);
-        patch.removeMailboxIds.forEach((id) => restoreMailboxIds.delete(id));
-        patch.addMailboxIds
-          .filter((id) => id !== trash.id)
-          .forEach((id) => restoreMailboxIds.add(id));
-        nextRestoreMailboxIds = sortStrings(restoreMailboxIds);
-      } else {
-        nextRestoreMailboxIds = [];
-      }
-    }
-    const mailboxStateChanged =
-      nextMailboxIds.join('\u0000') !== sortStrings(email.mailboxIds).join('\u0000') ||
-      nextRestoreMailboxIds.join('\u0000') !== sortStrings(email.restoreMailboxIds).join('\u0000');
-    const changedProperties = [
-      ...(mailboxStateChanged ? ['mailboxIds'] : []),
-      ...(nextKeywords.join('\u0000') === sortStrings(email.keywords).join('\u0000')
-        ? []
-        : ['keywords']),
-    ];
-    return {
-      mailboxIds: nextMailboxIds,
-      keywords: nextKeywords,
-      restoreMailboxIds: nextRestoreMailboxIds,
-      changedProperties,
-    };
+  return dependencies.unitOfWork.run(async (tx) => {
+    await tx.lockAccount(input.accountId);
+    return updateEmailInTransaction(dependencies, tx, input);
   });
+}
+
+export async function updateEmailInTransaction(
+  dependencies: MailCoreDependencies,
+  tx: MailTransaction,
+  input: UpdateEmailInput,
+): Promise<EmailStateResult> {
+  const patch = normalizePatch(input);
+  const email = await requireEmail(tx, input);
+  const next = await deriveEmailState(tx, input, email, patch);
+  return applyPreparedEmailStateInTransaction(tx, {
+    input,
+    email,
+    next,
+    now: dependencies.clock.now(),
+  });
+}
+
+export async function prepareEmailStateReplacementInTransaction(
+  dependencies: MailCoreDependencies,
+  tx: MailTransaction,
+  input: EmailStateInput & {
+    mailboxIds?: MailboxId[];
+    keywords?: Keyword[];
+  },
+): Promise<PreparedEmailStateMutation> {
+  const email = await requireEmail(tx, input);
+  const requestedMailboxIds =
+    input.mailboxIds === undefined ? email.mailboxIds : normalizeMailboxIds(input.mailboxIds);
+  const requestedKeywords =
+    input.keywords === undefined ? email.keywords : normalizeKeywords(input.keywords);
+  const patchInput: UpdateEmailInput = {
+    accountId: input.accountId,
+    emailId: input.emailId,
+    addMailboxIds: requestedMailboxIds.filter((id) => !email.mailboxIds.includes(id)),
+    removeMailboxIds: email.mailboxIds.filter((id) => !requestedMailboxIds.includes(id)),
+    addKeywords: requestedKeywords.filter((keyword) => !email.keywords.includes(keyword)),
+    removeKeywords: email.keywords.filter((keyword) => !requestedKeywords.includes(keyword)),
+  };
+  const next = await deriveEmailState(tx, input, email, normalizePatch(patchInput));
+  return {
+    input,
+    email,
+    next,
+    now: dependencies.clock.now(),
+  };
+}
+
+export async function replaceEmailStateInTransaction(
+  dependencies: MailCoreDependencies,
+  tx: MailTransaction,
+  input: EmailStateInput & {
+    mailboxIds?: MailboxId[];
+    keywords?: Keyword[];
+  },
+): Promise<EmailStateResult> {
+  return applyPreparedEmailStateInTransaction(
+    tx,
+    await prepareEmailStateReplacementInTransaction(dependencies, tx, input),
+  );
 }
 
 export async function moveEmailToTrash(

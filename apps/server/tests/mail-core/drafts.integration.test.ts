@@ -1,4 +1,10 @@
-import { createDraft, createIdentity, createSubmission, updateDraft } from '@zero/mail-core';
+import {
+  createDraft,
+  createIdentity,
+  createSubmission,
+  setEmails,
+  updateDraft,
+} from '@zero/mail-core';
 import { describe, expect, it } from 'vitest';
 
 import { createPostgresMailTestHarness } from './helpers/harness';
@@ -106,5 +112,82 @@ describe('PostgreSQL Draft integration', () => {
           objectKey: initialTextBlob!.objectKey,
         }),
       ).toEqual(initialTextBytes);
+    }));
+
+  it('commits Email/set create, update, and destroy with one PostgreSQL state', () =>
+    withMailTestDatabase(async ({ db, unitOfWork }) => {
+      const harness = await createPostgresMailTestHarness(db, unitOfWork, 'email-set');
+      const identity = await createIdentity(harness.dependencies, {
+        accountId: harness.accountId,
+        name: 'Batch sender',
+        email: 'batch-sender@example.test',
+        replyTo: null,
+        makeDefault: true,
+      });
+      const content = {
+        identityId: identity.id,
+        replyToEmailId: null,
+        to: [{ email: 'recipient@example.test' }],
+        cc: [],
+        bcc: [],
+        subject: 'Batch draft',
+        textBody: 'Batch body',
+        htmlBody: '',
+        attachmentBlobIds: [],
+      };
+      const updatedDraft = await createDraft(harness.dependencies, {
+        accountId: harness.accountId,
+        ...content,
+      });
+      const destroyedDraft = await createDraft(harness.dependencies, {
+        accountId: harness.accountId,
+        ...content,
+        subject: 'Destroy me',
+      });
+      const before = await unitOfWork.run(async (tx) => {
+        const account = await tx.accounts.findById(harness.accountId);
+        return account!.stateVersion;
+      });
+
+      const result = await setEmails(harness.dependencies, {
+        accountId: harness.accountId,
+        ifInState: before.toString(),
+        create: {
+          created: { ...content, subject: 'Created in set' },
+        },
+        update: {
+          [updatedDraft.id]: {
+            content: { ...content, subject: 'Updated in set' },
+            ifDraftRevision: 1,
+            keywords: ['$draft', '$flagged'],
+          },
+        },
+        destroy: [destroyedDraft.id],
+      });
+
+      expect(result).toMatchObject({
+        oldState: before.toString(),
+        newState: (before + 1n).toString(),
+        destroyed: [destroyedDraft.id],
+        notCreated: {},
+        notUpdated: {},
+        notDestroyed: {},
+      });
+      expect(result.created.created).toMatchObject({
+        subject: 'Created in set',
+        draftRevision: 1,
+      });
+      expect(result.updated[updatedDraft.id]).toMatchObject({
+        subject: 'Updated in set',
+        draftRevision: 2,
+        keywords: ['$draft', '$flagged'],
+      });
+      await unitOfWork.run(async (tx) => {
+        expect(await tx.emails.findById(harness.accountId, destroyedDraft.id)).toMatchObject({
+          destroyedAt: expect.any(Date),
+          mailboxIds: [],
+        });
+        expect((await tx.accounts.findById(harness.accountId))!.stateVersion).toBe(before + 1n);
+      });
     }));
 });

@@ -41,6 +41,7 @@ import type { ThreadQueryProjection, ThreadQueryRepository } from '../store/thre
 import { calculateEmailAggregateDelta } from '../mailbox/email-aggregate-delta';
 import type { MailTransaction, MailUnitOfWork } from '../store/unit-of-work';
 import type { AggregateMismatch, MailAggregateValues } from '../mailbox';
+import { mergeMailChanges } from '../changes/merge-change';
 import { MailCoreError } from '../types';
 
 export interface MemoryMailState {
@@ -973,7 +974,12 @@ const createRepositories = (
 
   const changes: ChangeRepository = {
     async recordChange(record) {
-      state.changes.set(changeKey(record), copy(record));
+      const key = changeKey(record);
+      const existing = state.changes.get(key);
+      state.changes.set(
+        key,
+        copy(existing === undefined ? record : mergeMailChanges(existing, record)),
+      );
     },
     async oldestAvailableState(accountId) {
       return state.oldestAvailableStates.get(accountId) ?? 0n;

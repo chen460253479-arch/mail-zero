@@ -12,6 +12,7 @@ import {
   requireDraftQuota,
   requireDraftReferences,
   requireStableReferences,
+  type DraftRevisionBlobs,
   type DraftReferences,
 } from './create-draft';
 import { discardCommittedBlobs, discardTemporaryBlobs } from '../blob/blob-lifecycle';
@@ -118,10 +119,30 @@ const updateOwnedThreadSubject = async (
   return true;
 };
 
-export async function updateDraft(
+export type PreparedDraftUpdate = {
+  input: UpdateDraftInput;
+  content: UpdateDraftInput['content'];
+  preflight: {
+    email: EmailRecord;
+    references: DraftReferences;
+  };
+  messageId: string;
+  nextRevision: number;
+  raw: Uint8Array;
+  prepared: Awaited<ReturnType<typeof prepareDraftRevision>>;
+  now: Date;
+};
+
+export type ValidatedDraftUpdate = {
+  current: EmailRecord;
+  references: DraftReferences;
+  revision: DraftRevisionBlobs;
+};
+
+export async function prepareDraftUpdate(
   dependencies: MailCoreDependencies,
   input: UpdateDraftInput,
-): Promise<DraftResult> {
+): Promise<PreparedDraftUpdate> {
   const content = normalizeDraftContent(dependencies, input.content);
   const normalizedInput: UpdateDraftInput = { ...input, content };
   const preflight = await dependencies.unitOfWork.run(async (tx) => ({
@@ -152,123 +173,161 @@ export async function updateDraft(
     content,
   });
   const now = dependencies.clock.now();
+  return {
+    input: normalizedInput,
+    content,
+    preflight,
+    messageId,
+    nextRevision,
+    raw,
+    prepared,
+    now,
+  };
+}
+
+export async function updateDraftInTransaction(
+  dependencies: MailCoreDependencies,
+  tx: MailTransaction,
+  preparedUpdate: PreparedDraftUpdate,
+  committedObjectKeys: string[],
+  validated?: ValidatedDraftUpdate,
+): Promise<DraftResult> {
+  const { input, content, messageId, nextRevision, raw, now } = preparedUpdate;
+  const checked =
+    validated ?? (await validateDraftUpdateInTransaction(dependencies, tx, preparedUpdate));
+  const { current, references, revision } = checked;
+  await insertDraftRevisionBlobs(tx, revision);
+  const nextContent = draftEmailContent(dependencies, {
+    content,
+    references,
+    revision,
+    raw,
+    draftRevision: nextRevision,
+    messageId,
+  });
+  const updated = await tx.emails.update(input.accountId, input.emailId, {
+    ...nextContent,
+    updatedAt: now,
+  });
+  await tx.emails.publishSearchDocument(
+    input.accountId,
+    input.emailId,
+    createEmailSearchDocument({
+      subject: content.subject,
+      addresses: [
+        ...updated.sender,
+        ...updated.from,
+        ...updated.replyTo,
+        ...updated.to,
+        ...updated.cc,
+        ...updated.bcc,
+      ],
+      textBody: content.textBody,
+      htmlBody: content.htmlBody,
+    }),
+  );
+  await commitDraftRevisionBlobs(
+    dependencies,
+    tx,
+    input.accountId,
+    revision,
+    now,
+    committedObjectKeys,
+  );
+  const normalizedSubjectChanged = await updateOwnedThreadSubject(
+    tx,
+    current,
+    content.subject,
+    now,
+  );
+  const aggregateChanges = await applyEmailAggregateDelta(tx, {
+    accountId: input.accountId,
+    before: current,
+    after: updated,
+    now,
+  });
+  const aggregateThreadChange = aggregateChanges.find(
+    ({ collection, entityId }) => collection === 'thread' && entityId === current.threadId,
+  );
+  const threadChange = normalizedSubjectChanged
+    ? {
+        collection: 'thread' as const,
+        entityId: current.threadId,
+        changeType: 'updated' as const,
+        changedProperties: [
+          ...new Set(['normalizedSubject', ...(aggregateThreadChange?.changedProperties ?? [])]),
+        ],
+      }
+    : aggregateThreadChange;
+  const stateVersion = await recordChanges(tx, {
+    accountId: input.accountId,
+    changes: [
+      {
+        collection: 'email',
+        entityId: current.id,
+        changeType: 'updated',
+        changedProperties: changedDraftProperties(current, updated),
+      },
+      ...(threadChange === undefined ? [] : [threadChange]),
+      ...aggregateChanges.filter(
+        ({ collection, entityId }) => !(collection === 'thread' && entityId === current.threadId),
+      ),
+    ],
+    createdAt: now,
+  });
+  return { ...updated, stateVersion };
+}
+
+export async function validateDraftUpdateInTransaction(
+  dependencies: MailCoreDependencies,
+  tx: MailTransaction,
+  preparedUpdate: PreparedDraftUpdate,
+): Promise<ValidatedDraftUpdate> {
+  const { input, content, preflight, messageId, prepared, now } = preparedUpdate;
+  const current = await requireMutableDraft(tx, input);
+  const references = await requireDraftReferences(tx, input.accountId, content);
+  requireStableReferences(preflight.references, references);
+  requireImmutableReplyTarget(current, references);
+  if (
+    current.messageId !== messageId ||
+    current.receivedAt.getTime() !== preflight.email.receivedAt.getTime()
+  ) {
+    throw new MailCoreError('DRAFT_REVISION_CONFLICT', { entityId: input.emailId });
+  }
+  const revision = await allocateDraftRevisionBlobs(
+    dependencies,
+    tx,
+    input.accountId,
+    prepared,
+    now,
+  );
+  await requireDraftQuota(tx, {
+    accountId: input.accountId,
+    excludeEmailId: input.emailId,
+    revisionBlobs: revision,
+    attachments: references.attachments,
+  });
+  return { current, references, revision };
+}
+
+export async function updateDraft(
+  dependencies: MailCoreDependencies,
+  input: UpdateDraftInput,
+): Promise<DraftResult> {
+  const preparedUpdate = await prepareDraftUpdate(dependencies, input);
   const committedObjectKeys: string[] = [];
   let operationCompleted = false;
   try {
     return await dependencies.unitOfWork.run(async (tx) => {
       await tx.lockAccount(input.accountId);
-      const current = await requireMutableDraft(tx, normalizedInput);
-      const references: DraftReferences = await requireDraftReferences(
-        tx,
-        input.accountId,
-        content,
-      );
-      requireStableReferences(preflight.references, references);
-      requireImmutableReplyTarget(current, references);
-      if (
-        current.messageId !== messageId ||
-        current.receivedAt.getTime() !== preflight.email.receivedAt.getTime()
-      ) {
-        throw new MailCoreError('DRAFT_REVISION_CONFLICT', { entityId: input.emailId });
-      }
-      const revision = await allocateDraftRevisionBlobs(
+      const result = await updateDraftInTransaction(
         dependencies,
         tx,
-        input.accountId,
-        prepared,
-        now,
-      );
-      await requireDraftQuota(tx, {
-        accountId: input.accountId,
-        excludeEmailId: input.emailId,
-        revisionBlobs: revision,
-        attachments: references.attachments,
-      });
-      await insertDraftRevisionBlobs(tx, revision);
-      const nextContent = draftEmailContent(dependencies, {
-        content,
-        references,
-        revision,
-        raw,
-        draftRevision: nextRevision,
-        messageId,
-      });
-      const updated = await tx.emails.update(input.accountId, input.emailId, {
-        ...nextContent,
-        updatedAt: now,
-      });
-      await tx.emails.publishSearchDocument(
-        input.accountId,
-        input.emailId,
-        createEmailSearchDocument({
-          subject: content.subject,
-          addresses: [
-            ...updated.sender,
-            ...updated.from,
-            ...updated.replyTo,
-            ...updated.to,
-            ...updated.cc,
-            ...updated.bcc,
-          ],
-          textBody: content.textBody,
-          htmlBody: content.htmlBody,
-        }),
-      );
-      await commitDraftRevisionBlobs(
-        dependencies,
-        tx,
-        input.accountId,
-        revision,
-        now,
+        preparedUpdate,
         committedObjectKeys,
       );
-      const normalizedSubjectChanged = await updateOwnedThreadSubject(
-        tx,
-        current,
-        content.subject,
-        now,
-      );
-      const aggregateChanges = await applyEmailAggregateDelta(tx, {
-        accountId: input.accountId,
-        before: current,
-        after: updated,
-        now,
-      });
-      const aggregateThreadChange = aggregateChanges.find(
-        ({ collection, entityId }) => collection === 'thread' && entityId === current.threadId,
-      );
-      const threadChange = normalizedSubjectChanged
-        ? {
-            collection: 'thread' as const,
-            entityId: current.threadId,
-            changeType: 'updated' as const,
-            changedProperties: [
-              ...new Set([
-                'normalizedSubject',
-                ...(aggregateThreadChange?.changedProperties ?? []),
-              ]),
-            ],
-          }
-        : aggregateThreadChange;
-      const stateVersion = await recordChanges(tx, {
-        accountId: input.accountId,
-        changes: [
-          {
-            collection: 'email',
-            entityId: current.id,
-            changeType: 'updated',
-            changedProperties: changedDraftProperties(current, updated),
-          },
-          ...(threadChange === undefined ? [] : [threadChange]),
-          ...aggregateChanges.filter(
-            ({ collection, entityId }) =>
-              !(collection === 'thread' && entityId === current.threadId),
-          ),
-        ],
-        createdAt: now,
-      });
       operationCompleted = true;
-      return { ...updated, stateVersion };
+      return result;
     });
   } catch (error) {
     if (!operationCompleted) {
@@ -276,6 +335,6 @@ export async function updateDraft(
     }
     throw error;
   } finally {
-    await discardTemporaryBlobs(dependencies.blobStore, prepared.all);
+    await discardTemporaryBlobs(dependencies.blobStore, preparedUpdate.prepared.all);
   }
 }

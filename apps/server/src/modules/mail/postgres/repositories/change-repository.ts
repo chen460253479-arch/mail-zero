@@ -1,4 +1,9 @@
-import type { ChangeRepository, MailChangeRecord, QueryChangesInput } from '@zero/mail-core';
+import {
+  mergeMailChanges,
+  type ChangeRepository,
+  type MailChangeRecord,
+  type QueryChangesInput,
+} from '@zero/mail-core';
 import { and, asc, eq, gt, lte, type SQL } from 'drizzle-orm';
 
 import { runAdapter, type MailDatabase } from './database';
@@ -31,10 +36,29 @@ const ordered = (db: MailDatabase, input: QueryChangesInput) =>
 export const createChangeRepository = (db: MailDatabase): ChangeRepository => ({
   recordChange: (record) =>
     runAdapter(async () => {
-      await db.insert(mailChange).values({
-        ...record,
-        mailAccountId: record.accountId,
-      });
+      const key = and(
+        eq(mailChange.mailAccountId, record.accountId),
+        eq(mailChange.stateVersion, record.stateVersion),
+        eq(mailChange.collection, record.collection),
+        eq(mailChange.entityId, record.entityId),
+      );
+      const existing = await db.select().from(mailChange).where(key).limit(1);
+      if (existing[0] === undefined) {
+        await db.insert(mailChange).values({
+          ...record,
+          mailAccountId: record.accountId,
+        });
+        return;
+      }
+      const merged = mergeMailChanges(mapChange(existing[0]), record);
+      await db
+        .update(mailChange)
+        .set({
+          changeType: merged.changeType,
+          changedProperties: merged.changedProperties,
+          createdAt: merged.createdAt,
+        })
+        .where(key);
     }),
   oldestAvailableState: (accountId) =>
     runAdapter(async () => {

@@ -18,6 +18,12 @@ export { parseRawEmail } from './mime';
 export { renderDraft } from './render-draft';
 export { updateDraft } from './update-draft';
 export {
+  setEmails,
+  type EmailSetPatch,
+  type SetEmailsInput,
+  type SetEmailsResult,
+} from './set-emails';
+export {
   moveEmailToTrash,
   restoreEmail,
   updateEmail,
