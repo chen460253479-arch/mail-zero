@@ -1,5 +1,5 @@
 {
-  "id": "723d3f29-37cc-481d-b5f3-9508bda6aa75",
+  "id": "8ec1a3da-87a7-4e51-b3a0-290439964f7a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -6610,6 +6610,152 @@
         "send_attempt_lifecycle_chk": {
           "name": "send_attempt_lifecycle_chk",
           "value": "(\"integration\".\"send_attempt\".\"finished_at\" IS NULL AND \"integration\".\"send_attempt\".\"outcome\" IS NULL)\n        OR (\"integration\".\"send_attempt\".\"finished_at\" IS NOT NULL AND \"integration\".\"send_attempt\".\"outcome\" IS NOT NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "mail.thread_snooze": {
+      "name": "thread_snooze",
+      "schema": "mail",
+      "columns": {
+        "mail_account_id": {
+          "name": "mail_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wake_at": {
+          "name": "wake_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "restore_mailbox_ids": {
+          "name": "restore_mailbox_ids",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lease_owner": {
+          "name": "lease_owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "thread_snooze_due_idx": {
+          "name": "thread_snooze_due_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "wake_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "thread_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"mail\".\"thread_snooze\".\"status\" IN ('scheduled', 'waking')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "thread_snooze_account_fk": {
+          "name": "thread_snooze_account_fk",
+          "tableFrom": "thread_snooze",
+          "tableTo": "account",
+          "schemaTo": "mail",
+          "columnsFrom": [
+            "mail_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "thread_snooze_thread_account_fk": {
+          "name": "thread_snooze_thread_account_fk",
+          "tableFrom": "thread_snooze",
+          "tableTo": "thread",
+          "schemaTo": "mail",
+          "columnsFrom": [
+            "thread_id",
+            "mail_account_id"
+          ],
+          "columnsTo": [
+            "id",
+            "mail_account_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "thread_snooze_pk": {
+          "name": "thread_snooze_pk",
+          "columns": [
+            "mail_account_id",
+            "thread_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "thread_snooze_status_chk": {
+          "name": "thread_snooze_status_chk",
+          "value": "\"mail\".\"thread_snooze\".\"status\" IN ('scheduled', 'waking', 'completed', 'canceled')"
+        },
+        "thread_snooze_lease_chk": {
+          "name": "thread_snooze_lease_chk",
+          "value": "(\"mail\".\"thread_snooze\".\"status\" = 'waking' AND \"mail\".\"thread_snooze\".\"lease_owner\" IS NOT NULL AND \"mail\".\"thread_snooze\".\"lease_expires_at\" IS NOT NULL)\n        OR (\"mail\".\"thread_snooze\".\"status\" <> 'waking' AND \"mail\".\"thread_snooze\".\"lease_owner\" IS NULL AND \"mail\".\"thread_snooze\".\"lease_expires_at\" IS NULL)"
         }
       },
       "isRLSEnabled": false

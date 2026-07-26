@@ -37,6 +37,7 @@ import { MailOutboundError, parseMailOutboundCommand } from './modules/mail-outb
 import { encryptCredential } from './infrastructure/security/credential-encryption';
 import { parseMailIngressCommand } from './modules/mail-sync/application/commands';
 import { WorkerEntrypoint, DurableObject, RpcTarget } from 'cloudflare:workers';
+import { wakeDueMailSnoozes } from './modules/mail-snooze/runtime/environment';
 import { handleGmailPush } from './mail-channel/gmail/inbound/handle-push';
 // import { instrument, type ResolveConfigFn } from '@microlabs/otel-cf-workers';
 import { getZeroAgent, getZeroDB, verifyToken } from './lib/server-utils';
@@ -1442,6 +1443,8 @@ export default class Entry extends WorkerEntrypoint<ZeroEnv> {
     await enqueueDueMailIngressWork(this.env);
 
     await enqueueDueMailOutboundWork(this.env);
+
+    await wakeDueMailSnoozes(this.env);
 
     await this.processExpiredSubscriptions();
   }

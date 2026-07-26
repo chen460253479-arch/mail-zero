@@ -7,6 +7,7 @@ import type {
 } from '@zero/mail-core';
 import { describe, expect, it } from 'vitest';
 
+import { createPostgresMailSnoozeRepository } from '../../src/modules/mail-snooze/postgres/repository';
 import { createPostgresMailViewProjection } from '../../src/modules/mail-api/projections/postgres';
 import { createPostgresMailTestHarness } from './helpers/harness';
 import { withMailTestDatabase } from './helpers/database';
@@ -88,6 +89,23 @@ describe('Mail API PostgreSQL Thread projection', () => {
         }
       });
       const projection = createPostgresMailViewProjection(db);
+      await createPostgresMailSnoozeRepository(db).schedule({
+        accountId: h.accountId,
+        threadId: 'view-thread-2',
+        wakeAt: new Date(now.getTime() + 60_000),
+        restoreMailboxIds: [h.inbox.id],
+        now,
+      });
+      await expect(
+        projection.threadPage({
+          accountId: h.accountId,
+          mailboxId: h.inbox.id,
+          snoozed: true,
+          limit: 10,
+        }),
+      ).resolves.toMatchObject({
+        items: [{ id: 'view-thread-2' }],
+      });
       const first = await projection.threadPage({
         accountId: h.accountId,
         mailboxId: h.inbox.id,

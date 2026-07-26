@@ -38,6 +38,7 @@ describe('mailAccountProcedure', () => {
         account: account(),
         core: {} as MailCore,
         outbound: {} as OwnedMailApiRuntime['outbound'],
+        snooze: {} as OwnedMailApiRuntime['snooze'],
         db: {} as OwnedMailApiRuntime['db'],
         close,
       }),

@@ -12,3 +12,16 @@ export const updateThreadsInputSchema = z.object({
   removeKeywords: z.array(z.string().min(1)).max(100).default([]),
   clientMutationId: z.string().min(1).max(255),
 });
+
+export const snoozeThreadsInputSchema = z.object({
+  accountId: mailAccountIdSchema,
+  threadIds: z.array(mailIdSchema).min(1).max(200),
+  wakeAt: z.string().datetime({ offset: true }),
+  clientMutationId: z.string().min(1).max(255),
+});
+
+export const unsnoozeThreadsInputSchema = z.object({
+  accountId: mailAccountIdSchema,
+  threadIds: z.array(mailIdSchema).min(1).max(200),
+  clientMutationId: z.string().min(1).max(255),
+});

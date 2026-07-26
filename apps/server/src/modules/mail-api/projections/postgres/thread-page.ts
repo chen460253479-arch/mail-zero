@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, exists, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, inArray, isNull, lt, not, or, sql } from 'drizzle-orm';
 
 import {
   email,
@@ -9,6 +9,7 @@ import {
   thread,
 } from '../../../mail/postgres/schema';
 import type { ThreadPageProjectionInput, ThreadPageProjectionResult } from '../port';
+import { threadSnooze } from '../../../mail-snooze/postgres/schema';
 import { MailCoreError } from '@zero/mail-core';
 import type { DB } from '../../../../db';
 
@@ -120,6 +121,18 @@ export async function queryThreadPage(
             lt(thread.id, cursor.threadId),
           ),
         );
+  const activeSnooze = exists(
+    db
+      .select({ one: sql`1` })
+      .from(threadSnooze)
+      .where(
+        and(
+          eq(threadSnooze.mailAccountId, input.accountId),
+          eq(threadSnooze.threadId, thread.id),
+          inArray(threadSnooze.status, ['scheduled', 'waking']),
+        ),
+      ),
+  );
   const rows = await db
     .select()
     .from(thread)
@@ -129,7 +142,7 @@ export async function queryThreadPage(
         membership,
         matchingEmail,
         position,
-        input.snoozed === true ? sql`false` : undefined,
+        input.snoozed === undefined ? undefined : input.snoozed ? activeSnooze : not(activeSnooze),
       ),
     )
     .orderBy(desc(thread.latestReceivedAt), desc(thread.id))

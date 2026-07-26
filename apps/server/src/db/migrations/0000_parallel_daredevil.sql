@@ -863,4 +863,22 @@ CREATE INDEX "inbound_sync_item_due_pending_idx" ON "integration"."inbound_sync_
 CREATE INDEX "inbound_sync_item_lease_idx" ON "integration"."inbound_sync_item" USING btree ("lease_expires_at","id") WHERE "integration"."inbound_sync_item"."lease_expires_at" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "outbound_delivery_due_idx" ON "integration"."outbound_delivery" USING btree ("status","available_at","id") WHERE "integration"."outbound_delivery"."status" IN ('scheduled', 'ready', 'retry_wait', 'uncertain');--> statement-breakpoint
 CREATE INDEX "outbound_delivery_expired_lease_idx" ON "integration"."outbound_delivery" USING btree ("lease_expires_at","id") WHERE "integration"."outbound_delivery"."status" = 'leased';--> statement-breakpoint
-CREATE UNIQUE INDEX "send_attempt_open_delivery_uidx" ON "integration"."send_attempt" USING btree ("mail_account_id","delivery_id") WHERE "integration"."send_attempt"."finished_at" IS NULL AND "integration"."send_attempt"."kind" = 'send';
+CREATE UNIQUE INDEX "send_attempt_open_delivery_uidx" ON "integration"."send_attempt" USING btree ("mail_account_id","delivery_id") WHERE "integration"."send_attempt"."finished_at" IS NULL AND "integration"."send_attempt"."kind" = 'send';--> statement-breakpoint
+CREATE TABLE "mail"."thread_snooze" (
+	"mail_account_id" text NOT NULL,
+	"thread_id" text NOT NULL,
+	"wake_at" timestamp with time zone NOT NULL,
+	"restore_mailbox_ids" text[] NOT NULL,
+	"status" text NOT NULL,
+	"lease_owner" text,
+	"lease_expires_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "thread_snooze_pk" PRIMARY KEY("mail_account_id","thread_id"),
+	CONSTRAINT "thread_snooze_status_chk" CHECK ("mail"."thread_snooze"."status" IN ('scheduled', 'waking', 'completed', 'canceled')),
+	CONSTRAINT "thread_snooze_lease_chk" CHECK (("mail"."thread_snooze"."status" = 'waking' AND "mail"."thread_snooze"."lease_owner" IS NOT NULL AND "mail"."thread_snooze"."lease_expires_at" IS NOT NULL)
+        OR ("mail"."thread_snooze"."status" <> 'waking' AND "mail"."thread_snooze"."lease_owner" IS NULL AND "mail"."thread_snooze"."lease_expires_at" IS NULL))
+);--> statement-breakpoint
+ALTER TABLE "mail"."thread_snooze" ADD CONSTRAINT "thread_snooze_account_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mail"."thread_snooze" ADD CONSTRAINT "thread_snooze_thread_account_fk" FOREIGN KEY ("thread_id","mail_account_id") REFERENCES "mail"."thread"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "thread_snooze_due_idx" ON "mail"."thread_snooze" USING btree ("status","wake_at","thread_id") WHERE "mail"."thread_snooze"."status" IN ('scheduled', 'waking');
