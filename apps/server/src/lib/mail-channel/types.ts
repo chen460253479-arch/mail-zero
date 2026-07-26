@@ -1,3 +1,4 @@
+import type { InboundMailAdapterFactory } from '../../modules/mail-sync';
 import type { MailClient, ManagerConfig } from '../driver/types';
 import type { ChannelSyncAdapter } from './sync-types';
 
@@ -43,6 +44,7 @@ export interface MailboxChannel {
   nangoProviders?: readonly string[];
   credentialTypes: ReadonlySet<MailCredentialType>;
   capabilities: ReadonlySet<MailCapability>;
+  inbound?: InboundMailAdapterFactory;
   sync?: ChannelSyncAdapter;
   createClient(config: ManagerConfig): MailClient;
   resolveIdentity(config: ManagerConfig): Promise<{ email: string; name: string; picture: string }>;
