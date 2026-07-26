@@ -5,6 +5,7 @@ import { createPostgresMailTestHarness } from '../../../../tests/mail-core/helpe
 import { withMailTestDatabase } from '../../../../tests/mail-core/helpers/database';
 import { PostgresMailOutboundUnitOfWork } from '../postgres/unit-of-work';
 import type { MailOutboundTransaction } from '../postgres/unit-of-work';
+import { setOutboundSubmissions } from './set-submissions';
 import { enqueueSubmission } from './enqueue-submission';
 
 describe('enqueueSubmission', () => {
@@ -135,5 +136,74 @@ describe('enqueueSubmission', () => {
           stateVersion: before!.stateVersion,
         });
       });
+    }));
+
+  it('checks ifInState under the same account lock and transaction as enqueue', () =>
+    withMailTestDatabase(async ({ db }) => {
+      let sequence = 0;
+      const unitOfWork = new PostgresMailOutboundUnitOfWork(db, {
+        nextId: () => `state-infra-${++sequence}`,
+        nextLeaseToken: () => `state-lease-${++sequence}`,
+      });
+      const harness = await createPostgresMailTestHarness(
+        db,
+        unitOfWork.mailUnitOfWork,
+        'enqueue-state',
+      );
+      const identity = await createIdentity(harness.dependencies, {
+        accountId: harness.accountId,
+        name: 'State Sender',
+        email: 'state@example.test',
+        replyTo: null,
+        makeDefault: true,
+      });
+      const draft = await createDraft(harness.dependencies, {
+        accountId: harness.accountId,
+        identityId: identity.id,
+        replyToEmailId: null,
+        to: [{ email: 'recipient@example.test' }],
+        cc: [],
+        bcc: [],
+        subject: 'State',
+        textBody: 'State body',
+        htmlBody: '',
+        attachmentBlobIds: [],
+      });
+      const currentState = await unitOfWork.mailUnitOfWork.run(async (tx) =>
+        (await tx.accounts.findById(harness.accountId))!.stateVersion.toString(),
+      );
+      const wakeup = { enqueue: vi.fn() };
+
+      await expect(
+        setOutboundSubmissions(
+          {
+            accountId: harness.accountId,
+            ifInState: (BigInt(currentState) - 1n).toString(),
+            create: {
+              clientRequest: {
+                emailId: draft.id,
+                identityId: identity.id,
+                idempotencyKey: 'enqueue-stale-state',
+                sendAt: null,
+              },
+            },
+            destroy: [],
+          },
+          {
+            unitOfWork,
+            mailCoreDependencies: harness.dependencies,
+            clock: harness.dependencies.clock,
+            nextId: () => `state-delivery-${++sequence}`,
+            wakeup,
+          },
+        ),
+      ).rejects.toMatchObject({ code: 'STATE_MISMATCH' });
+
+      await unitOfWork.run(async (tx) => {
+        expect(
+          await tx.mail.submissions.findByIdempotencyKey(harness.accountId, 'enqueue-stale-state'),
+        ).toBeNull();
+      });
+      expect(wakeup.enqueue).not.toHaveBeenCalled();
     }));
 });

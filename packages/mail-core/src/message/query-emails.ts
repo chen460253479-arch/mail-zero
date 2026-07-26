@@ -16,6 +16,7 @@ export type QueryEmailsInput = {
   sort?: EmailQuerySort;
   limit: number;
   cursor: string | null;
+  calculateTotal?: boolean;
 };
 
 export type EmailQueryResult = {
@@ -23,6 +24,7 @@ export type EmailQueryResult = {
   nextCursor: string | null;
   appliedFilter: EmailQueryFilter;
   appliedSort: EmailQuerySort;
+  total: number | null;
 };
 
 export const normalizeSearchText = (value: string): string =>
@@ -143,11 +145,12 @@ const validateCursor = (
   accountId: MailAccountId,
   filter: EmailQueryFilter,
   sort: EmailQuerySort,
+  signingKey: string,
 ): SearchEmailCursor | null => {
   if (encoded === null) {
     return null;
   }
-  const payload = decodeCursor(encoded, accountId);
+  const payload = decodeCursor(encoded, accountId, signingKey);
   if (
     payload.kind !== 'email' ||
     payload.sort !== sort.property ||
@@ -161,7 +164,7 @@ const validateCursor = (
 };
 
 export async function queryEmails(
-  dependencies: Pick<MailCoreDependencies, 'searchStore' | 'unitOfWork'>,
+  dependencies: Pick<MailCoreDependencies, 'cursorSigningKey' | 'searchStore' | 'unitOfWork'>,
   input: QueryEmailsInput,
 ): Promise<EmailQueryResult> {
   if (!Number.isInteger(input.limit) || input.limit <= 0 || input.limit > MAX_QUERY_LIMIT) {
@@ -169,7 +172,13 @@ export async function queryEmails(
   }
   const filter = normalizeFilter(input.filter);
   const sort = normalizeSort(input.sort);
-  const cursor = validateCursor(input.cursor, input.accountId, filter, sort);
+  const cursor = validateCursor(
+    input.cursor,
+    input.accountId,
+    filter,
+    sort,
+    dependencies.cursorSigningKey,
+  );
 
   await dependencies.unitOfWork.run(async (tx) => {
     if ((await tx.accounts.findById(input.accountId)) === null) {
@@ -194,23 +203,28 @@ export async function queryEmails(
     sort,
     limit: input.limit,
     cursor,
+    calculateTotal: input.calculateTotal ?? false,
   });
   return {
     emailIds: result.emailIds,
     nextCursor:
       result.nextCursor === null
         ? null
-        : encodeCursor({
-            version: 1,
-            kind: 'email',
-            accountId: input.accountId,
-            sort: sort.property,
-            direction: sort.direction,
-            query: querySignature(filter),
-            value: result.nextCursor.value,
-            emailId: result.nextCursor.emailId,
-          }),
+        : encodeCursor(
+            {
+              version: 1,
+              kind: 'email',
+              accountId: input.accountId,
+              sort: sort.property,
+              direction: sort.direction,
+              query: querySignature(filter),
+              value: result.nextCursor.value,
+              emailId: result.nextCursor.emailId,
+            },
+            dependencies.cursorSigningKey,
+          ),
     appliedFilter: filter,
     appliedSort: sort,
+    total: result.total,
   };
 }

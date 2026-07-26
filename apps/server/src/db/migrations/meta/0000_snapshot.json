@@ -1,5 +1,5 @@
 {
-  "id": "8ec1a3da-87a7-4e51-b3a0-290439964f7a",
+  "id": "0c30dc88-871e-4a78-8991-4ddd368947e5",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -6636,9 +6636,9 @@
           "primaryKey": false,
           "notNull": true
         },
-        "restore_mailbox_ids": {
-          "name": "restore_mailbox_ids",
-          "type": "text[]",
+        "restore_plan": {
+          "name": "restore_plan",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": true
         },
@@ -6699,7 +6699,29 @@
             }
           ],
           "isUnique": false,
-          "where": "\"mail\".\"thread_snooze\".\"status\" IN ('scheduled', 'waking')",
+          "where": "\"mail\".\"thread_snooze\".\"status\" = 'scheduled'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "thread_snooze_expired_lease_idx": {
+          "name": "thread_snooze_expired_lease_idx",
+          "columns": [
+            {
+              "expression": "lease_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "thread_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"mail\".\"thread_snooze\".\"status\" = 'waking'",
           "concurrently": false,
           "method": "btree",
           "with": {}

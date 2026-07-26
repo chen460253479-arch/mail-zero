@@ -15,6 +15,14 @@ export const createAccountService = (core: Pick<MailCore, 'getAccount' | 'listAc
     };
   },
   async get(input: { accountId: string }) {
-    return toAccountDto(await core.getAccount({ accountId: input.accountId as MailAccountId }));
+    return {
+      ...toAccountDto(await core.getAccount({ accountId: input.accountId as MailAccountId })),
+      capabilities: {
+        mail: true,
+        emailSubmission: true,
+        blobUpload: true,
+        snooze: true,
+      } as const,
+    };
   },
 });

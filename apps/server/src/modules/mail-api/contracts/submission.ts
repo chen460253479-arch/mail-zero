@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import {
   changesInputSchema,
+  enforceSetOperationLimit,
   isoDateSchema,
   mailAccountIdSchema,
   mailIdSchema,
@@ -43,12 +44,14 @@ export const submissionCreateSchema = z.object({
   idempotencyKey: z.string().min(1).max(255),
 });
 
-export const submissionSetInputSchema = z.object({
-  accountId: mailAccountIdSchema,
-  ifInState: stateSchema.optional(),
-  create: z.record(z.string().min(1), submissionCreateSchema).default({}),
-  destroy: z.array(mailIdSchema).max(200).default([]),
-});
+export const submissionSetInputSchema = z
+  .object({
+    accountId: mailAccountIdSchema,
+    ifInState: stateSchema.optional(),
+    create: z.record(z.string().min(1), submissionCreateSchema).default({}),
+    destroy: z.array(mailIdSchema).max(200).default([]),
+  })
+  .superRefine(enforceSetOperationLimit);
 
 export const submissionSetResultSchema = z.object({
   accountId: mailAccountIdSchema,
@@ -58,6 +61,20 @@ export const submissionSetResultSchema = z.object({
   destroyed: z.array(mailIdSchema),
   notCreated: z.record(z.string(), setErrorSchema),
   notDestroyed: z.record(z.string(), setErrorSchema),
+});
+
+export const submissionGetResultSchema = z.object({
+  accountId: mailAccountIdSchema,
+  state: stateSchema,
+  list: z.array(submissionSchema),
+  notFound: z.array(mailIdSchema),
+});
+
+export const submissionQueryResultSchema = z.object({
+  accountId: mailAccountIdSchema,
+  state: stateSchema,
+  list: z.array(submissionSchema),
+  cursor: z.string().nullable(),
 });
 
 export const submissionChangesInputSchema = changesInputSchema;

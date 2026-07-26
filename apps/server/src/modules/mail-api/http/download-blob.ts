@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 
-import { authorizeMailAccount } from './authorize-mail-account';
+import { authorizeMailAccount, mailHttpErrorResponse } from './authorize-mail-account';
 import type { HonoContext } from '../../../ctx';
 
 const safeFilename = (value: string) =>
@@ -22,19 +22,20 @@ export async function downloadMailBlob(c: Context<HonoContext>) {
   const authorization = await authorizeMailAccount(c, accountId);
   if ('response' in authorization) return authorization.response;
   try {
+    const blobId = c.req.param('blobId') as never;
+    const blob = await authorization.runtime.core.getBlob({
+      accountId: accountId as never,
+      blobId,
+    });
     const bytes = await authorization.runtime.core.readBlob({
       accountId: accountId as never,
-      blobId: c.req.param('blobId') as never,
+      blobId,
     });
     return new Response(bytes as BodyInit, {
-      headers: safeDownloadHeaders(
-        'application/octet-stream',
-        bytes.byteLength,
-        c.req.param('filename'),
-      ),
+      headers: safeDownloadHeaders(blob.contentType, bytes.byteLength, c.req.param('filename')),
     });
-  } catch {
-    return c.json({ code: 'NOT_FOUND' }, 404);
+  } catch (error) {
+    return mailHttpErrorResponse(c, error);
   } finally {
     await authorization.runtime.close();
   }

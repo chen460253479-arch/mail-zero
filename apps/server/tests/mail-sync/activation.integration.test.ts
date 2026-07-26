@@ -53,6 +53,7 @@ describe('mail sync activation integration', () => {
           },
         },
         sanitizeHtml: (html) => html,
+        cursorSigningKey: 'mail-sync-activation-test-cursor-key',
       };
       const mailCore = createMailCore(dependencies);
       const findByConnectionId = (connectionId: string) =>

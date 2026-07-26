@@ -1,6 +1,6 @@
-import { Buffer } from 'node:buffer';
 import { z } from 'zod';
 
+import { decodeSignedCursor, encodeSignedCursor } from './signed-cursor';
 import { MailCoreError, type MailAccountId } from '../types';
 import type { CursorPayload } from './types';
 
@@ -74,24 +74,21 @@ const canonicalJson = (payload: CursorPayload): string => {
   });
 };
 
-export function encodeCursor(payload: CursorPayload): string {
+export function encodeCursor(payload: CursorPayload, signingKey: string): string {
   const parsed = cursorSchema.safeParse(payload);
   if (!parsed.success) {
     return invalidCursor();
   }
-  return Buffer.from(canonicalJson(parsed.data as CursorPayload), 'utf8').toString('base64url');
+  return encodeSignedCursor(JSON.parse(canonicalJson(parsed.data as CursorPayload)), signingKey);
 }
 
-export function decodeCursor(encoded: string, accountId: MailAccountId): CursorPayload {
+export function decodeCursor(
+  encoded: string,
+  accountId: MailAccountId,
+  signingKey: string,
+): CursorPayload {
   try {
-    if (!/^[A-Za-z0-9_-]+$/.test(encoded)) {
-      return invalidCursor();
-    }
-    const bytes = Buffer.from(encoded, 'base64url');
-    if (bytes.toString('base64url') !== encoded) {
-      return invalidCursor();
-    }
-    const parsedJson: unknown = JSON.parse(bytes.toString('utf8'));
+    const parsedJson = decodeSignedCursor(encoded, signingKey);
     const parsed = cursorSchema.safeParse(parsedJson);
     if (!parsed.success) {
       return invalidCursor();

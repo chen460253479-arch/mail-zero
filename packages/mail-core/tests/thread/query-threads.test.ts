@@ -80,24 +80,30 @@ describe('queryThreads', () => {
       limit: 1,
       cursor: null,
     });
-    const emailCursor = encodeCursor({
-      version: 1,
-      kind: 'email',
-      accountId: h.accountId,
-      sort: 'receivedAt',
-      direction: 'desc',
-      query: 'email',
-      value: { type: 'date', value: '2026-01-01T00:00:00.000Z' },
-      emailId: h.email1,
-    });
-    const crossAccountCursor = encodeCursor({
-      version: 1,
-      kind: 'thread',
-      accountId: h.otherAccountId,
-      query: 'thread',
-      latestReceivedAt: '2026-01-01T00:00:00.000Z',
-      threadId: h.threadA,
-    });
+    const emailCursor = encodeCursor(
+      {
+        version: 1,
+        kind: 'email',
+        accountId: h.accountId,
+        sort: 'receivedAt',
+        direction: 'desc',
+        query: 'email',
+        value: { type: 'date', value: '2026-01-01T00:00:00.000Z' },
+        emailId: h.email1,
+      },
+      h.dependencies.cursorSigningKey,
+    );
+    const crossAccountCursor = encodeCursor(
+      {
+        version: 1,
+        kind: 'thread',
+        accountId: h.otherAccountId,
+        query: 'thread',
+        latestReceivedAt: '2026-01-01T00:00:00.000Z',
+        threadId: h.threadA,
+      },
+      h.dependencies.cursorSigningKey,
+    );
 
     await expect(
       queryThreads(h.dependencies, {

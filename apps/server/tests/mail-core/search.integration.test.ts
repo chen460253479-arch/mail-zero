@@ -180,7 +180,11 @@ describe('PostgreSQL mail search', () => {
       });
 
       const result = await queryEmails(
-        { unitOfWork, searchStore: new PostgresSearchStore(db) },
+        {
+          unitOfWork,
+          searchStore: new PostgresSearchStore(db),
+          cursorSigningKey: 'search-integration-cursor-key',
+        },
         {
           accountId,
           filter: { text: 'orbital-marker' },

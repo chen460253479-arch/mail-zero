@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { changesInputSchema, mailAccountIdSchema, mailIdSchema } from './common';
+import { changesInputSchema, mailAccountIdSchema, mailIdSchema, stateSchema } from './common';
 
 export const threadSchema = z.object({
   id: mailIdSchema,
@@ -13,3 +13,10 @@ export const threadGetInputSchema = z.object({
 });
 
 export const threadChangesInputSchema = changesInputSchema;
+
+export const threadGetResultSchema = z.object({
+  accountId: mailAccountIdSchema,
+  state: stateSchema,
+  list: z.array(threadSchema),
+  notFound: z.array(mailIdSchema),
+});

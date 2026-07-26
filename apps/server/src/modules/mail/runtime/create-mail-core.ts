@@ -20,9 +20,12 @@ export type CreateMailCoreRuntimeInput = {
   clock: { now(): Date };
   idFactory: { next<Kind extends string>(): Id<Kind> };
   sanitizeHtml(html: string): string;
+  cursorSigningKey: string;
 };
 
-const createRuntimeDependencies = (input: CreateMailCoreRuntimeInput): MailCoreDependencies => ({
+export const createMailCoreDependencies = (
+  input: CreateMailCoreRuntimeInput,
+): MailCoreDependencies => ({
   unitOfWork: new PostgresMailUnitOfWork(input.db),
   searchStore: new PostgresSearchStore(input.db),
   blobStore: input.blobStore,
@@ -30,11 +33,12 @@ const createRuntimeDependencies = (input: CreateMailCoreRuntimeInput): MailCoreD
   clock: input.clock,
   idFactory: input.idFactory,
   sanitizeHtml: input.sanitizeHtml,
+  cursorSigningKey: input.cursorSigningKey,
 });
 
 export const createMailCoreRuntime = (input: CreateMailCoreRuntimeInput): MailCore =>
-  createMailCore(createRuntimeDependencies(input));
+  createMailCore(createMailCoreDependencies(input));
 
 export const createMailCoreMaintenanceRuntime = (
   input: CreateMailCoreRuntimeInput,
-): MailCoreMaintenance => createMailCoreMaintenance(createRuntimeDependencies(input));
+): MailCoreMaintenance => createMailCoreMaintenance(createMailCoreDependencies(input));

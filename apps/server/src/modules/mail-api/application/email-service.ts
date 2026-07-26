@@ -27,21 +27,16 @@ type EmailGetInput = z.infer<typeof emailGetInputSchema>;
 type EmailQueryInput = z.infer<typeof emailQueryInputSchema>;
 type EmailSetInput = z.infer<typeof emailSetInputSchema>;
 
-const missingEmail = (error: unknown) =>
-  error instanceof MailCoreError &&
-  ['EMAIL_NOT_FOUND', 'CROSS_ACCOUNT_REFERENCE'].includes(error.code);
-
-const applyMapPatch = <Value extends string>(
-  current: readonly Value[],
+const splitMapPatch = <Value extends string>(
   patch: Record<string, true | null> | undefined,
-): Value[] | undefined => {
+): { add: Value[]; remove: Value[] } | undefined => {
+  const add: Value[] = [];
+  const remove: Value[] = [];
   if (patch === undefined) return undefined;
-  const next = new Set<string>(current);
   for (const [id, value] of Object.entries(patch)) {
-    if (value === true) next.add(id);
-    else next.delete(id);
+    (value === true ? add : remove).push(id as Value);
   }
-  return [...next] as Value[];
+  return { add, remove };
 };
 
 const draftFields = [
@@ -99,31 +94,44 @@ async function mergeDraftContent(
 export const createEmailService = (
   core: Pick<
     MailCore,
-    'getChanges' | 'getEmail' | 'getState' | 'queryEmails' | 'readBlob' | 'setEmails'
+    | 'getChanges'
+    | 'getEmail'
+    | 'getEmails'
+    | 'getState'
+    | 'queryEmails'
+    | 'readBlob'
+    | 'readBlobRange'
+    | 'setEmails'
   >,
 ) => ({
   async get(input: EmailGetInput) {
     const accountId = input.accountId as MailAccountId;
     const state = await core.getState({ accountId, collection: 'email' });
-    const settled = await Promise.allSettled(
-      input.ids.map(async (id) => {
-        const email = await core.getEmail({ accountId, emailId: id as EmailId });
-        return toEmailDto(core, accountId, email, input);
+    const bodyReadBudget = { remainingBytes: 8_000_000 };
+    const records = await core.getEmails({
+      accountId,
+      emailIds: input.ids as EmailId[],
+    });
+    const byId = new Map(records.map((email) => [email.id, email]));
+    const list = await Promise.all(
+      input.ids.flatMap((id) => {
+        const email = byId.get(id as EmailId);
+        return email === undefined
+          ? []
+          : [toEmailDto(core, accountId, email, { ...input, bodyReadBudget })];
       }),
     );
-    for (const result of settled) {
-      if (result.status === 'rejected' && !missingEmail(result.reason)) throw result.reason;
-    }
     return {
       accountId: input.accountId,
       state,
-      list: settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : [])),
-      notFound: input.ids.filter((_, index) => settled[index]?.status === 'rejected'),
+      list,
+      notFound: input.ids.filter((id) => !byId.has(id as EmailId)),
     };
   },
 
   async query(input: EmailQueryInput) {
     const accountId = input.accountId as MailAccountId;
+    const queryState = await core.getState({ accountId, collection: 'email' });
     const result = await core.queryEmails({
       accountId,
       filter: {
@@ -148,14 +156,14 @@ export const createEmailService = (
             },
       cursor: input.cursor ?? null,
       limit: input.limit,
+      calculateTotal: input.calculateTotal,
     });
-    const queryState = await core.getState({ accountId, collection: 'email' });
     return {
       accountId: input.accountId,
       queryState,
       ids: result.emailIds,
       cursor: result.nextCursor,
-      total: input.calculateTotal && result.nextCursor === null ? result.emailIds.length : null,
+      total: input.calculateTotal ? result.total : null,
     };
   },
 
@@ -166,18 +174,28 @@ export const createEmailService = (
     for (const [rawId, patch] of Object.entries(input.update)) {
       const emailId = rawId as EmailId;
       try {
-        const current = await core.getEmail({ accountId, emailId });
         const contentPatch = hasDraftPatch(patch);
+        const current = contentPatch ? await core.getEmail({ accountId, emailId }) : null;
+        const mailboxPatch = splitMapPatch<MailboxId>(patch.mailboxIds);
+        const keywordPatch = splitMapPatch<Keyword>(patch.keywords);
         update[emailId] = {
-          mailboxIds: applyMapPatch(current.mailboxIds, patch.mailboxIds) as
-            | MailboxId[]
-            | undefined,
-          keywords: applyMapPatch(current.keywords, patch.keywords) as Keyword[] | undefined,
+          ...(mailboxPatch === undefined
+            ? {}
+            : {
+                addMailboxIds: mailboxPatch.add,
+                removeMailboxIds: mailboxPatch.remove,
+              }),
+          ...(keywordPatch === undefined
+            ? {}
+            : {
+                addKeywords: keywordPatch.add,
+                removeKeywords: keywordPatch.remove,
+              }),
           ifDraftRevision: contentPatch
-            ? (patch.ifDraftRevision ?? current.draftRevision)
+            ? (patch.ifDraftRevision ?? current!.draftRevision)
             : patch.ifDraftRevision,
           content: contentPatch
-            ? await mergeDraftContent(core, accountId, current, patch)
+            ? await mergeDraftContent(core, accountId, current!, patch)
             : undefined,
         };
       } catch (error) {

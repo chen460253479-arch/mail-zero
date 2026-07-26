@@ -40,6 +40,7 @@ describe('mailAccountProcedure', () => {
         outbound: {} as OwnedMailApiRuntime['outbound'],
         snooze: {} as OwnedMailApiRuntime['snooze'],
         db: {} as OwnedMailApiRuntime['db'],
+        cursorSigningKey: 'procedure-test-cursor-key',
         close,
       }),
     );

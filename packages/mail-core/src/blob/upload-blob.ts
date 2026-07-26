@@ -32,7 +32,7 @@ const commitPreparedUpload = async (
   dependencies: MailCoreDependencies,
   prepared: PreparedBlob,
   committedObjectKeys: string[],
-  markOperationCompleted: () => void,
+  transactionCallbackState: { completed: boolean },
 ): Promise<UploadBlobResult> =>
   dependencies.unitOfWork.run(async (tx) => {
     await tx.lockAccount(prepared.accountId);
@@ -54,7 +54,6 @@ const commitPreparedUpload = async (
         throw new MailCoreError('BLOB_INTEGRITY', { entityId: existing.id });
       }
       await verifyPreparedBlob(dependencies.blobStore, prepared, existing.objectKey, true);
-      markOperationCompleted();
       return { blob: existing, deduplicated: true };
     }
 
@@ -88,7 +87,7 @@ const commitPreparedUpload = async (
       status: 'ready',
       readyAt: now,
     });
-    markOperationCompleted();
+    transactionCallbackState.completed = true;
     return { blob: ready, deduplicated: false };
   });
 
@@ -98,13 +97,16 @@ export async function uploadBlob(
 ): Promise<UploadBlobResult> {
   const prepared = await prepareBlob(dependencies.blobStore, input);
   const committedObjectKeys: string[] = [];
-  let operationCompleted = false;
+  const transactionCallbackState = { completed: false };
   try {
-    return await commitPreparedUpload(dependencies, prepared, committedObjectKeys, () => {
-      operationCompleted = true;
-    });
+    return await commitPreparedUpload(
+      dependencies,
+      prepared,
+      committedObjectKeys,
+      transactionCallbackState,
+    );
   } catch (error) {
-    if (!operationCompleted) {
+    if (!transactionCallbackState.completed) {
       await discardCommittedBlobs(dependencies.blobStore, prepared.accountId, committedObjectKeys);
     }
     throw error;

@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import {
   changesInputSchema,
+  enforceSetOperationLimit,
   mailAccountIdSchema,
   mailIdSchema,
   setErrorSchema,
@@ -56,13 +57,15 @@ export const mailboxUpdateSchema = z.object({
   isSubscribed: z.boolean().optional(),
 });
 
-export const mailboxSetInputSchema = z.object({
-  accountId: mailAccountIdSchema,
-  ifInState: stateSchema.optional(),
-  create: z.record(z.string().min(1), mailboxCreateSchema).default({}),
-  update: z.record(mailIdSchema, mailboxUpdateSchema).default({}),
-  destroy: z.array(mailIdSchema).max(200).default([]),
-});
+export const mailboxSetInputSchema = z
+  .object({
+    accountId: mailAccountIdSchema,
+    ifInState: stateSchema.optional(),
+    create: z.record(z.string().min(1), mailboxCreateSchema).default({}),
+    update: z.record(mailIdSchema, mailboxUpdateSchema).default({}),
+    destroy: z.array(mailIdSchema).max(200).default([]),
+  })
+  .superRefine(enforceSetOperationLimit);
 
 export const mailboxSetResultSchema = z.object({
   accountId: mailAccountIdSchema,
@@ -74,6 +77,13 @@ export const mailboxSetResultSchema = z.object({
   notCreated: z.record(z.string(), setErrorSchema),
   notUpdated: z.record(z.string(), setErrorSchema),
   notDestroyed: z.record(z.string(), setErrorSchema),
+});
+
+export const mailboxGetResultSchema = z.object({
+  accountId: mailAccountIdSchema,
+  state: stateSchema,
+  list: z.array(mailboxSchema),
+  notFound: z.array(mailIdSchema),
 });
 
 export const mailboxChangesInputSchema = changesInputSchema;

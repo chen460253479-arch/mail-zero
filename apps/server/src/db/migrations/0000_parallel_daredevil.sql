@@ -868,7 +868,7 @@ CREATE TABLE "mail"."thread_snooze" (
 	"mail_account_id" text NOT NULL,
 	"thread_id" text NOT NULL,
 	"wake_at" timestamp with time zone NOT NULL,
-	"restore_mailbox_ids" text[] NOT NULL,
+	"restore_plan" jsonb NOT NULL,
 	"status" text NOT NULL,
 	"lease_owner" text,
 	"lease_expires_at" timestamp with time zone,
@@ -881,4 +881,5 @@ CREATE TABLE "mail"."thread_snooze" (
 );--> statement-breakpoint
 ALTER TABLE "mail"."thread_snooze" ADD CONSTRAINT "thread_snooze_account_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."thread_snooze" ADD CONSTRAINT "thread_snooze_thread_account_fk" FOREIGN KEY ("thread_id","mail_account_id") REFERENCES "mail"."thread"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "thread_snooze_due_idx" ON "mail"."thread_snooze" USING btree ("status","wake_at","thread_id") WHERE "mail"."thread_snooze"."status" IN ('scheduled', 'waking');
+CREATE INDEX "thread_snooze_due_idx" ON "mail"."thread_snooze" USING btree ("status","wake_at","thread_id") WHERE "mail"."thread_snooze"."status" = 'scheduled';--> statement-breakpoint
+CREATE INDEX "thread_snooze_expired_lease_idx" ON "mail"."thread_snooze" USING btree ("lease_expires_at","thread_id") WHERE "mail"."thread_snooze"."status" = 'waking';

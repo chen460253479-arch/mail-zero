@@ -13,6 +13,7 @@ import {
   destroyDraft,
   destroyEmail,
   getEmail,
+  getEmails,
   importEmail,
   queryEmails,
   setEmails,
@@ -34,9 +35,9 @@ import {
   updateMailbox,
 } from './mailbox';
 import { getThread, queryThreads, updateThreadEmails } from './thread';
+import { getBlob, readBlob, readBlobRange, uploadBlob } from './blob';
 import type { MailCoreDependencies } from './store';
 import { getChanges, getState } from './changes';
-import { readBlob, uploadBlob } from './blob';
 
 type BoundCommand<Command extends (...arguments_: never[]) => unknown> = (
   input: Parameters<Command>[1],
@@ -58,6 +59,7 @@ export type MailCore = {
   setMailboxes: BoundCommand<typeof setMailboxes>;
   importEmail: BoundCommand<typeof importEmail>;
   getEmail: BoundCommand<typeof getEmail>;
+  getEmails: BoundCommand<typeof getEmails>;
   queryEmails: BoundCommand<typeof queryEmails>;
   setEmails: BoundCommand<typeof setEmails>;
   updateEmail: BoundCommand<typeof updateEmail>;
@@ -76,7 +78,9 @@ export type MailCore = {
   getChanges: BoundCommand<typeof getChanges>;
   getState: BoundCommand<typeof getState>;
   uploadBlob: BoundCommand<typeof uploadBlob>;
+  getBlob: BoundCommand<typeof getBlob>;
   readBlob: BoundCommand<typeof readBlob>;
+  readBlobRange: BoundCommand<typeof readBlobRange>;
 };
 
 export const createMailCore = (dependencies: MailCoreDependencies): MailCore => ({
@@ -95,6 +99,7 @@ export const createMailCore = (dependencies: MailCoreDependencies): MailCore => 
   setMailboxes: (input) => setMailboxes(dependencies, input),
   importEmail: (input) => importEmail(dependencies, input),
   getEmail: (input) => getEmail(dependencies, input),
+  getEmails: (input) => getEmails(dependencies, input),
   queryEmails: (input) => queryEmails(dependencies, input),
   setEmails: (input) => setEmails(dependencies, input),
   updateEmail: (input) => updateEmail(dependencies, input),
@@ -113,5 +118,7 @@ export const createMailCore = (dependencies: MailCoreDependencies): MailCore => 
   getChanges: (input) => getChanges(dependencies, input),
   getState: (input) => getState(dependencies, input),
   uploadBlob: (input) => uploadBlob(dependencies, input),
+  getBlob: (input) => getBlob(dependencies, input),
   readBlob: (input) => readBlob(dependencies, input),
+  readBlobRange: (input) => readBlobRange(dependencies, input),
 });

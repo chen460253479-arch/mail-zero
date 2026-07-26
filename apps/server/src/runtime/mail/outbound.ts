@@ -41,6 +41,7 @@ export const createMailOutboundRuntimeForEnvironment = (
       },
     },
     sanitizeHtml: preprocessEmailHtml,
+    cursorSigningKey: runtimeEnv.BETTER_AUTH_SECRET,
   };
   const contexts = new Map<string, ReturnType<typeof createGmailCredentialContext>>();
   const getContext = (connectionId: string) => {

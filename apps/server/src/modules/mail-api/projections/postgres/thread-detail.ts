@@ -1,7 +1,8 @@
 import { and, asc, eq, isNull } from 'drizzle-orm';
 
-import { email, thread } from '../../../mail/postgres/schema';
+import { email, emailMailbox, thread } from '../../../mail/postgres/schema';
 import type { DB } from '../../../../db';
+import { exists } from 'drizzle-orm';
 
 export async function queryThreadDetail(db: DB, input: { accountId: string; threadId: string }) {
   const owner = await db
@@ -18,6 +19,17 @@ export async function queryThreadDetail(db: DB, input: { accountId: string; thre
         eq(email.mailAccountId, input.accountId),
         eq(email.threadId, input.threadId),
         isNull(email.destroyedAt),
+        exists(
+          db
+            .select({ id: emailMailbox.emailId })
+            .from(emailMailbox)
+            .where(
+              and(
+                eq(emailMailbox.mailAccountId, input.accountId),
+                eq(emailMailbox.emailId, email.id),
+              ),
+            ),
+        ),
       ),
     )
     .orderBy(asc(email.receivedAt), asc(email.id));

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, exists, inArray, isNull, lt, not, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, inArray, isNull, lt, ne, not, or, sql } from 'drizzle-orm';
 
 import {
   email,
@@ -6,20 +6,25 @@ import {
   emailMailbox,
   emailSearch,
   mailboxThread,
+  mailbox,
   thread,
 } from '../../../mail/postgres/schema';
+import { decodeSignedCursor, encodeSignedCursor, MailCoreError } from '@zero/mail-core';
 import type { ThreadPageProjectionInput, ThreadPageProjectionResult } from '../port';
 import { threadSnooze } from '../../../mail-snooze/postgres/schema';
-import { MailCoreError } from '@zero/mail-core';
 import type { DB } from '../../../../db';
+import { z } from 'zod';
 
-type Cursor = {
-  version: 1;
-  accountId: string;
-  signature: string;
-  latestReceivedAt: string;
-  threadId: string;
-};
+const cursorSchema = z
+  .object({
+    version: z.literal(1),
+    accountId: z.string().min(1),
+    query: z.string().min(1),
+    latestReceivedAt: z.string().datetime({ offset: true }),
+    threadId: z.string().min(1),
+  })
+  .strict();
+type Cursor = z.infer<typeof cursorSchema>;
 
 const signature = (input: ThreadPageProjectionInput) =>
   JSON.stringify({
@@ -30,18 +35,14 @@ const signature = (input: ThreadPageProjectionInput) =>
     snoozed: input.snoozed ?? null,
   });
 
-const encode = (cursor: Cursor) =>
-  Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+const encode = (cursor: Cursor, signingKey: string) => encodeSignedCursor(cursor, signingKey);
 
-const decode = (value: string, input: ThreadPageProjectionInput): Cursor => {
+const decode = (value: string, input: ThreadPageProjectionInput, signingKey: string): Cursor => {
   try {
-    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as Cursor;
-    if (
-      parsed.version !== 1 ||
-      parsed.accountId !== input.accountId ||
-      parsed.signature !== signature(input) ||
-      Number.isNaN(new Date(parsed.latestReceivedAt).getTime())
-    ) {
+    const result = cursorSchema.safeParse(decodeSignedCursor(value, signingKey));
+    if (!result.success) throw new Error('invalid');
+    const parsed = result.data;
+    if (parsed.accountId !== input.accountId || parsed.query !== signature(input)) {
       throw new Error('invalid');
     }
     return parsed;
@@ -53,8 +54,30 @@ const decode = (value: string, input: ThreadPageProjectionInput): Cursor => {
 export async function queryThreadPage(
   db: DB,
   input: ThreadPageProjectionInput,
+  signingKey: string,
 ): Promise<ThreadPageProjectionResult> {
-  const cursor = input.cursor === undefined ? null : decode(input.cursor, input);
+  const cursor = input.cursor === undefined ? null : decode(input.cursor, input, signingKey);
+  if (input.mailboxId !== undefined) {
+    const owned = await db
+      .select({ id: mailbox.id })
+      .from(mailbox)
+      .where(
+        and(
+          eq(mailbox.mailAccountId, input.accountId),
+          eq(mailbox.id, input.mailboxId),
+          isNull(mailbox.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (owned.length === 0) {
+      const outside = await db
+        .select({ id: mailbox.id })
+        .from(mailbox)
+        .where(and(eq(mailbox.id, input.mailboxId), ne(mailbox.mailAccountId, input.accountId)))
+        .limit(1);
+      throw new MailCoreError(outside.length > 0 ? 'CROSS_ACCOUNT_REFERENCE' : 'MAILBOX_NOT_FOUND');
+    }
+  }
   const membership =
     input.mailboxId === undefined
       ? undefined
@@ -79,6 +102,17 @@ export async function queryThreadPage(
           eq(email.mailAccountId, input.accountId),
           eq(email.threadId, thread.id),
           isNull(email.destroyedAt),
+          exists(
+            db
+              .select({ one: sql`1` })
+              .from(emailMailbox)
+              .where(
+                and(
+                  eq(emailMailbox.mailAccountId, input.accountId),
+                  eq(emailMailbox.emailId, email.id),
+                ),
+              ),
+          ),
           input.lifecycle === undefined ? undefined : eq(email.lifecycle, input.lifecycle),
           input.hasKeyword === undefined
             ? undefined
@@ -165,6 +199,17 @@ export async function queryThreadPage(
         eq(email.mailAccountId, input.accountId),
         inArray(email.threadId, threadIds),
         isNull(email.destroyedAt),
+        exists(
+          db
+            .select({ one: sql`1` })
+            .from(emailMailbox)
+            .where(
+              and(
+                eq(emailMailbox.mailAccountId, input.accountId),
+                eq(emailMailbox.emailId, email.id),
+              ),
+            ),
+        ),
       ),
     )
     .orderBy(asc(email.receivedAt), asc(email.id));
@@ -174,7 +219,8 @@ export async function queryThreadPage(
     emailIds.set(item.threadId, [...(emailIds.get(item.threadId) ?? []), item.id]);
     latest.set(item.threadId, item);
   }
-  const latestIds = [...latest.values()].map(({ id }) => id);
+  const allEmailIds = emails.map(({ id }) => id);
+  const threadByEmailId = new Map(emails.map(({ id, threadId }) => [id, threadId]));
   const [mailboxes, keywords] = await Promise.all([
     db
       .select({ emailId: emailMailbox.emailId, value: emailMailbox.mailboxId })
@@ -182,7 +228,7 @@ export async function queryThreadPage(
       .where(
         and(
           eq(emailMailbox.mailAccountId, input.accountId),
-          inArray(emailMailbox.emailId, latestIds),
+          inArray(emailMailbox.emailId, allEmailIds),
         ),
       ),
     db
@@ -191,13 +237,15 @@ export async function queryThreadPage(
       .where(
         and(
           eq(emailKeyword.mailAccountId, input.accountId),
-          inArray(emailKeyword.emailId, latestIds),
+          inArray(emailKeyword.emailId, allEmailIds),
         ),
       ),
   ]);
-  const mapValues = (rows: Array<{ emailId: string; value: string }>, id: string) =>
+  const mapValues = (rows: Array<{ emailId: string; value: string }>, threadId: string) =>
     Object.fromEntries(
-      rows.filter((row) => row.emailId === id).map(({ value }) => [value, true as const]),
+      rows
+        .filter((row) => threadByEmailId.get(row.emailId) === threadId)
+        .map(({ value }) => [value, true as const]),
     ) as Record<string, true>;
   const items = page.flatMap((row) => {
     const latestEmail = latest.get(row.id);
@@ -213,8 +261,8 @@ export async function queryThreadPage(
         preview: row.preview ?? latestEmail.preview ?? '',
         participants: row.participantSummary,
         latestReceivedAt: row.latestReceivedAt.toISOString(),
-        mailboxIds: mapValues(mailboxes, latestEmail.id),
-        keywords: mapValues(keywords, latestEmail.id),
+        mailboxIds: mapValues(mailboxes, row.id),
+        keywords: mapValues(keywords, row.id),
         latestEmail: {
           id: latestEmail.id,
           lifecycle: latestEmail.lifecycle,
@@ -228,13 +276,16 @@ export async function queryThreadPage(
     items,
     cursor:
       rows.length > input.limit && last !== undefined
-        ? encode({
-            version: 1,
-            accountId: input.accountId,
-            signature: signature(input),
-            latestReceivedAt: last.latestReceivedAt.toISOString(),
-            threadId: last.id,
-          })
+        ? encode(
+            {
+              version: 1,
+              accountId: input.accountId,
+              query: signature(input),
+              latestReceivedAt: last.latestReceivedAt.toISOString(),
+              threadId: last.id,
+            },
+            signingKey,
+          )
         : null,
   };
 }

@@ -12,6 +12,7 @@ export type MailCoreDependencies = {
   clock: { now(): Date };
   idFactory: { next<Kind extends string>(): Id<Kind> };
   sanitizeHtml(html: string): string;
+  cursorSigningKey: string;
 };
 
 export type { BlobCommitReceipt, BlobStore, BlobStoreEntry, BlobStoreListPage } from './blob-store';

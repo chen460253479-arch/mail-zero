@@ -10,9 +10,11 @@ import { emailSchema } from '../contracts/email';
 import { readBodyValue } from './body-values';
 
 export type EmailBodyProjection = {
+  properties?: string[];
   fetchTextBodyValues?: boolean;
   fetchHTMLBodyValues?: boolean;
   maxBodyValueBytes?: number;
+  bodyReadBudget?: { remainingBytes: number };
 };
 
 const idMap = (ids: readonly string[]): Record<string, true> =>
@@ -39,27 +41,40 @@ const isHtmlBody = (part: EmailPartRecord) =>
   part.kind === 'body' && part.contentType.toLocaleLowerCase('und').startsWith('text/html');
 
 export async function toEmailDto(
-  core: Pick<MailCore, 'readBlob'>,
+  core: Pick<MailCore, 'readBlob' | 'readBlobRange'>,
   accountId: MailAccountId,
   email: EmailRecord,
   projection: EmailBodyProjection = {},
 ) {
   const textBody = email.parts.filter(isTextBody);
   const htmlBody = email.parts.filter(isHtmlBody);
+  const includesBodyValues =
+    projection.properties === undefined || projection.properties.includes('bodyValues');
   const requestedParts = [
-    ...(projection.fetchTextBodyValues ? textBody : []),
-    ...(projection.fetchHTMLBodyValues ? htmlBody : []),
+    ...(includesBodyValues && projection.fetchTextBodyValues ? textBody : []),
+    ...(includesBodyValues && projection.fetchHTMLBodyValues ? htmlBody : []),
   ].filter((part): part is EmailPartRecord & { blobId: BlobId } => part.blobId !== null);
   const maxBytes = projection.maxBodyValueBytes ?? 256_000;
   const bodyValues = Object.fromEntries(
     await Promise.all(
-      requestedParts.map(async (part) => [
-        part.id,
-        await readBodyValue(core, accountId, part.blobId, maxBytes),
-      ]),
+      requestedParts.map(async (part) => {
+        const allowed =
+          projection.bodyReadBudget === undefined
+            ? maxBytes
+            : Math.min(maxBytes, projection.bodyReadBudget.remainingBytes);
+        if (projection.bodyReadBudget !== undefined) {
+          projection.bodyReadBudget.remainingBytes -= allowed;
+        }
+        return [
+          part.id,
+          allowed === 0
+            ? { value: '', isTruncated: true }
+            : await readBodyValue(core, accountId, part.blobId, allowed),
+        ];
+      }),
     ),
   );
-  return emailSchema.parse({
+  const dto = emailSchema.parse({
     id: email.id,
     threadId: email.threadId,
     blobId: email.blobId,
@@ -89,4 +104,7 @@ export async function toEmailDto(
       .map(toPartDto),
     bodyValues,
   });
+  if (projection.properties === undefined) return dto;
+  const selected = new Set(['id', ...projection.properties]);
+  return Object.fromEntries(Object.entries(dto).filter(([property]) => selected.has(property)));
 }

@@ -23,12 +23,15 @@ const submission: SubmissionRecord = {
 
 describe('Submission service', () => {
   it('accepts a submission through the outbound Spool without claiming provider success', async () => {
-    const submit = vi.fn(async () => ({ submission, delivery: {} }));
-    const getState = vi.fn(async () => '8');
-    const service = createSubmissionService(
-      { getState } as unknown as MailCore,
-      { submit, cancel: vi.fn() } as never,
-    );
+    const set = vi.fn(async () => ({
+      oldState: '8',
+      newState: '9',
+      created: { clientRequest: submission },
+      destroyed: [],
+      notCreated: {},
+      notDestroyed: {},
+    }));
+    const service = createSubmissionService({} as unknown as MailCore, { set } as never);
 
     const result = await service.set({
       accountId: submission.accountId,
@@ -43,12 +46,18 @@ describe('Submission service', () => {
       destroy: [],
     });
 
-    expect(submit).toHaveBeenCalledWith({
+    expect(set).toHaveBeenCalledWith({
       accountId: submission.accountId,
-      emailId: submission.emailId,
-      identityId: submission.identityId,
-      idempotencyKey: submission.idempotencyKey,
-      sendAt: null,
+      ifInState: undefined,
+      create: {
+        clientRequest: {
+          emailId: submission.emailId,
+          identityId: submission.identityId,
+          idempotencyKey: submission.idempotencyKey,
+          sendAt: null,
+        },
+      },
+      destroy: [],
     });
     expect(result.created.clientRequest?.status).toBe('queued');
     expect(result.created.clientRequest?.status).not.toBe('sent');
@@ -61,7 +70,7 @@ describe('Submission service', () => {
         getState: vi.fn(async () => '8'),
         getSubmission,
       } as unknown as MailCore,
-      { submit: vi.fn(), cancel: vi.fn() } as never,
+      { set: vi.fn() } as never,
     );
 
     const result = await service.get({

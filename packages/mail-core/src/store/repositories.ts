@@ -326,6 +326,7 @@ export interface FindRemoteEmailInput {
 
 export interface EmailRepository {
   findById(accountId: MailAccountId, id: EmailId): Promise<EmailRecord | null>;
+  findByIds(accountId: MailAccountId, ids: EmailId[]): Promise<EmailRecord[]>;
   existsOutsideAccount(accountId: MailAccountId, id: EmailId): Promise<boolean>;
   findByRemoteId(input: FindRemoteEmailInput): Promise<RemoteEmailRecord | null>;
   listByAccount(accountId: MailAccountId): Promise<EmailRecord[]>;

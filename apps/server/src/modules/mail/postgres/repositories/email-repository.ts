@@ -7,7 +7,7 @@ import type {
   MailAddress,
   RemoteEmailRecord,
 } from '@zero/mail-core';
-import { and, asc, eq, exists, isNotNull, isNull, ne, not, or, sql } from 'drizzle-orm';
+import { and, asc, eq, exists, inArray, isNotNull, isNull, ne, not, or, sql } from 'drizzle-orm';
 import { normalizeSearchText } from '@zero/mail-core';
 
 import {
@@ -164,6 +164,81 @@ const hydrateEmail = async (db: MailDatabase, row: EmailRow): Promise<EmailRecor
   };
 };
 
+const hydrateEmails = async (db: MailDatabase, rows: EmailRow[]): Promise<EmailRecord[]> => {
+  if (rows.length === 0) return [];
+  const accountId = rows[0]!.mailAccountId;
+  const ids = rows.map(({ id }) => id);
+  const [addresses, contents, parts, mailboxRows, restoreRows, keywordRows] = await Promise.all([
+    db
+      .select()
+      .from(emailAddress)
+      .where(and(eq(emailAddress.mailAccountId, accountId), inArray(emailAddress.emailId, ids)))
+      .orderBy(asc(emailAddress.position)),
+    db
+      .select()
+      .from(emailContent)
+      .where(and(eq(emailContent.mailAccountId, accountId), inArray(emailContent.emailId, ids))),
+    db
+      .select()
+      .from(emailPart)
+      .where(and(eq(emailPart.mailAccountId, accountId), inArray(emailPart.emailId, ids)))
+      .orderBy(asc(emailPart.position)),
+    db
+      .select()
+      .from(emailMailbox)
+      .where(and(eq(emailMailbox.mailAccountId, accountId), inArray(emailMailbox.emailId, ids)))
+      .orderBy(asc(emailMailbox.position)),
+    db
+      .select()
+      .from(emailTrashRestore)
+      .where(
+        and(
+          eq(emailTrashRestore.mailAccountId, accountId),
+          inArray(emailTrashRestore.emailId, ids),
+        ),
+      )
+      .orderBy(asc(emailTrashRestore.position)),
+    db
+      .select()
+      .from(emailKeyword)
+      .where(and(eq(emailKeyword.mailAccountId, accountId), inArray(emailKeyword.emailId, ids)))
+      .orderBy(asc(emailKeyword.position)),
+  ]);
+  return rows.map((row) => {
+    const content = requireRow(
+      contents.filter(({ emailId }) => emailId === row.id),
+      'STORAGE_FAILURE',
+    );
+    const ownAddresses = addresses.filter(({ emailId }) => emailId === row.id);
+    const ofKind = (kind: AddressKind): MailAddress[] =>
+      ownAddresses.filter((address) => address.kind === kind).map(mapAddress);
+    return {
+      ...baseEmail(row),
+      preview: content.preview ?? '',
+      sender: ofKind('sender'),
+      from: ofKind('from'),
+      replyTo: ofKind('reply_to'),
+      to: ofKind('to'),
+      cc: ofKind('cc'),
+      bcc: ofKind('bcc'),
+      textBlobId: content.textBlobId as EmailRecord['textBlobId'],
+      htmlBlobId: content.htmlBlobId as EmailRecord['htmlBlobId'],
+      parserVersion: content.parserVersion,
+      parseWarnings: content.parseWarnings ?? [],
+      parts: parts.filter(({ emailId }) => emailId === row.id).map(mapPart),
+      mailboxIds: mailboxRows
+        .filter(({ emailId }) => emailId === row.id)
+        .map(({ mailboxId }) => mailboxId as EmailRecord['mailboxIds'][number]),
+      restoreMailboxIds: restoreRows
+        .filter(({ emailId }) => emailId === row.id)
+        .map(({ mailboxId }) => mailboxId as EmailRecord['restoreMailboxIds'][number]),
+      keywords: keywordRows
+        .filter(({ emailId }) => emailId === row.id)
+        .map(({ keyword }) => keyword as Keyword),
+    };
+  });
+};
+
 const insertAddresses = async (
   db: MailDatabase,
   record: Pick<EmailRecord, 'accountId' | 'id'>,
@@ -301,6 +376,20 @@ export const createEmailRepository = (db: MailDatabase): EmailRepository => {
           .where(and(eq(email.mailAccountId, accountId), eq(email.id, id)))
           .limit(1);
         return rows[0] === undefined ? null : hydrateEmail(db, rows[0]);
+      }),
+    findByIds: (accountId, ids) =>
+      runAdapter(async () => {
+        if (ids.length === 0) return [];
+        const rows = await db
+          .select()
+          .from(email)
+          .where(and(eq(email.mailAccountId, accountId), inArray(email.id, ids)));
+        const hydrated = await hydrateEmails(db, rows);
+        const byId = new Map(hydrated.map((record) => [record.id, record]));
+        return ids.flatMap((id) => {
+          const record = byId.get(id);
+          return record === undefined ? [] : [record];
+        });
       }),
     existsOutsideAccount: (accountId, id) =>
       runAdapter(async () => {

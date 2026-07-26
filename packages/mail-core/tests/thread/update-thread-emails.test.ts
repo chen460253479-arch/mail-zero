@@ -1,5 +1,5 @@
+import { createMailCore, MailCoreError, type MailTransaction } from '../../src';
 import { describe, expect, it } from 'vitest';
-import { createMailCore } from '../../src';
 
 import { createSeededEmailHarness } from '../helpers/email-harness';
 
@@ -38,5 +38,37 @@ describe('updateThreadEmails', () => {
       removeKeywords: [],
     });
     expect(result.failed['thread-foreign']?.code).toBe('THREAD_NOT_FOUND');
+  });
+
+  it('aborts the whole transaction on an infrastructure failure', async () => {
+    const h = await createSeededEmailHarness();
+    const dependencies = {
+      ...h.deps,
+      unitOfWork: {
+        run: <Result>(operation: (tx: MailTransaction) => Promise<Result>) =>
+          h.deps.unitOfWork.run((tx) =>
+            operation({
+              ...tx,
+              threads: {
+                ...tx.threads,
+                findById: async () => {
+                  throw new MailCoreError('STORAGE_FAILURE');
+                },
+              },
+            }),
+          ),
+      },
+    };
+
+    await expect(
+      createMailCore(dependencies).updateThreadEmails({
+        accountId: h.accountId,
+        threadIds: [h.threadId],
+        addMailboxIds: [],
+        removeMailboxIds: [],
+        addKeywords: ['$seen'],
+        removeKeywords: [],
+      }),
+    ).rejects.toMatchObject({ code: 'STORAGE_FAILURE' });
   });
 });

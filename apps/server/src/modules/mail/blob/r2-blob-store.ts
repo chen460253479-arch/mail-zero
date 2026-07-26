@@ -32,7 +32,10 @@ export type R2BucketLike = {
       onlyIf?: { etagDoesNotMatch?: string };
     },
   ): Promise<unknown | null>;
-  get(key: string): Promise<R2ObjectLike | null>;
+  get(
+    key: string,
+    options?: { range?: { offset: number; length: number } },
+  ): Promise<R2ObjectLike | null>;
   delete(key: string): Promise<void>;
   list(options?: { prefix?: string; cursor?: string; limit?: number }): Promise<{
     objects: R2ListedObjectLike[];
@@ -119,6 +122,19 @@ export class R2BlobStore implements BlobStore {
   async get(input: Parameters<BlobStore['get']>[0]): Promise<Uint8Array> {
     requireObjectKeyForAccount(input.accountId, input.objectKey);
     const object = await runBucket(() => this.bucket.get(input.objectKey));
+    if (object === null) {
+      throw new MailCoreError('BLOB_NOT_FOUND');
+    }
+    return readObject(object);
+  }
+
+  async getRange(input: Parameters<BlobStore['getRange']>[0]): Promise<Uint8Array> {
+    requireObjectKeyForAccount(input.accountId, input.objectKey);
+    const object = await runBucket(() =>
+      this.bucket.get(input.objectKey, {
+        range: { offset: input.offset, length: input.length },
+      }),
+    );
     if (object === null) {
       throw new MailCoreError('BLOB_NOT_FOUND');
     }

@@ -86,14 +86,68 @@ describe('Mail API PostgreSQL Thread projection', () => {
             } satisfies EmailAggregateProjection,
             now,
           });
+          if (index === 2) {
+            const older = {
+              ...record,
+              id: 'view-email-2-older' as EmailId,
+              subject: 'Older',
+              receivedAt: new Date(now.getTime() + 500),
+              mailboxIds: [h.drafts.id],
+              keywords: ['$flagged'],
+            } satisfies EmailRecord;
+            await tx.emails.insert(older);
+            await tx.mailAggregates.applyEmailDelta({
+              accountId: h.accountId,
+              before: null,
+              after: {
+                emailId: older.id,
+                threadId,
+                mailboxIds: older.mailboxIds,
+                visible: true,
+                unread: true,
+                hasAttachment: false,
+                receivedAt: older.receivedAt,
+              } satisfies EmailAggregateProjection,
+              now,
+            });
+            await tx.emails.insert({
+              ...record,
+              id: 'view-email-2-unfiled' as EmailId,
+              subject: 'Hidden newer',
+              receivedAt: new Date(now.getTime() + 3_000),
+              mailboxIds: [],
+              keywords: ['$important'],
+            });
+          }
         }
       });
-      const projection = createPostgresMailViewProjection(db);
+      const projection = createPostgresMailViewProjection(db, 'thread-projection-cursor-key');
+      const foreign = await createPostgresMailTestHarness(db, unitOfWork, 'mail-api-view-foreign');
+      await expect(
+        projection.threadPage({
+          accountId: h.accountId,
+          mailboxId: 'missing-mailbox',
+          limit: 10,
+        }),
+      ).rejects.toMatchObject({ code: 'MAILBOX_NOT_FOUND' });
+      await expect(
+        projection.threadPage({
+          accountId: h.accountId,
+          mailboxId: foreign.inbox.id,
+          limit: 10,
+        }),
+      ).rejects.toMatchObject({ code: 'CROSS_ACCOUNT_REFERENCE' });
       await createPostgresMailSnoozeRepository(db).schedule({
         accountId: h.accountId,
         threadId: 'view-thread-2',
         wakeAt: new Date(now.getTime() + 60_000),
-        restoreMailboxIds: [h.inbox.id],
+        restorePlan: [
+          {
+            emailId: 'view-email-2',
+            addMailboxIds: [h.inbox.id],
+            removeMailboxIds: [],
+          },
+        ],
         now,
       });
       await expect(
@@ -114,8 +168,11 @@ describe('Mail API PostgreSQL Thread projection', () => {
       expect(first.items).toHaveLength(1);
       expect(first.items[0]).toMatchObject({
         id: 'view-thread-2',
+        mailboxIds: { [h.inbox.id]: true, [h.drafts.id]: true },
+        keywords: { $seen: true, $flagged: true },
         latestEmail: { id: 'view-email-2' },
       });
+      expect(first.items[0]?.emailIds).not.toContain('view-email-2-unfiled');
       expect(first.cursor).not.toBeNull();
       await expect(
         projection.threadPage({

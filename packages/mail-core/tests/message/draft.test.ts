@@ -61,6 +61,7 @@ describe('Draft Email', () => {
       deleteTemporary: (input) => delegate.deleteTemporary(input),
       delete: (input) => delegate.delete(input),
       list: (input) => delegate.list(input),
+      getRange: (input) => delegate.getRange(input),
       get: async (input) => {
         if (input.objectKey === attachment.objectKey) {
           attachmentReads += 1;

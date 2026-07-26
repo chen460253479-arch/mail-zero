@@ -7,7 +7,7 @@ export {
   type GarbageCollectBlobsResult,
 } from './garbage-collect-blobs';
 export { importEmail } from './import-email';
-export { getEmail, type GetEmailInput } from './get-email';
+export { getEmail, getEmails, type GetEmailInput, type GetEmailsInput } from './get-email';
 export {
   normalizeSearchText,
   queryEmails,
@@ -24,9 +24,13 @@ export {
   type SetEmailsResult,
 } from './set-emails';
 export {
+  applyPreparedEmailStateInTransaction,
   moveEmailToTrash,
+  prepareEmailStateReplacementInTransaction,
   restoreEmail,
   updateEmail,
+  updateEmailInTransaction,
+  type PreparedEmailStateMutation,
   type EmailStateInput,
   type EmailStateResult,
   type UpdateEmailInput,

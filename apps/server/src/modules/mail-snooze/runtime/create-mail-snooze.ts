@@ -1,14 +1,12 @@
-import type { MailCore } from '@zero/mail-core';
-
+import type { PostgresMailSnoozeCommands } from '../postgres/commands';
 import { unsnoozeThreads } from '../application/unsnooze-threads';
 import { wakeDueSnoozes } from '../application/wake-due-snoozes';
 import { snoozeThreads } from '../application/snooze-threads';
 import type { MailSnoozeRepository } from '../domain/snooze';
 
 export const createMailSnoozeRuntime = (dependencies: {
-  core: MailCore;
+  commands: PostgresMailSnoozeCommands;
   repository: MailSnoozeRepository;
-  clock: { now(): Date };
   newLeaseOwner(): string;
   leaseForMs: number;
 }) => ({

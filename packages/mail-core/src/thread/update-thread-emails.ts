@@ -4,6 +4,7 @@ import {
   type Keyword,
   type MailAccountId,
   type MailboxId,
+  type MailCoreErrorCode,
   type ThreadId,
 } from '../types';
 import {
@@ -30,13 +31,33 @@ export type UpdateThreadEmailsResult = {
   failed: Record<string, MailCoreSetError>;
 };
 
+const itemErrorCodes = new Set<MailCoreErrorCode>([
+  'INVALID_KEYWORD',
+  'INVALID_PATCH',
+  'MAILBOX_NOT_FOUND',
+  'EMAIL_NOT_FOUND',
+  'THREAD_NOT_FOUND',
+  'CROSS_ACCOUNT_REFERENCE',
+  'EMAIL_MUST_HAVE_MAILBOX',
+]);
+
 const itemError = (error: unknown): MailCoreSetError | null =>
-  error instanceof MailCoreError ? { code: error.code, details: error.details } : null;
+  error instanceof MailCoreError && itemErrorCodes.has(error.code)
+    ? { code: error.code, details: error.details }
+    : null;
 
 export async function updateThreadEmails(
   dependencies: MailCoreDependencies,
   input: UpdateThreadEmailsInput,
 ): Promise<UpdateThreadEmailsResult> {
+  const normalizedAdds = input.addKeywords.map(normalizeKeyword);
+  const normalizedRemoves = input.removeKeywords.map(normalizeKeyword);
+  if (
+    input.addMailboxIds.some((id) => input.removeMailboxIds.includes(id)) ||
+    normalizedAdds.some((keyword) => normalizedRemoves.includes(keyword))
+  ) {
+    throw new MailCoreError('INVALID_PATCH');
+  }
   return dependencies.unitOfWork.run(async (tx) => {
     await tx.lockAccount(input.accountId);
     const oldState = await assertState(tx, input.accountId, input.ifInState);

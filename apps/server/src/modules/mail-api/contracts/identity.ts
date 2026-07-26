@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import {
   changesInputSchema,
+  enforceSetOperationLimit,
   mailAccountIdSchema,
   mailIdSchema,
   setErrorSchema,
@@ -30,13 +31,15 @@ export const identityCreateSchema = z.object({
 
 export const identityUpdateSchema = identityCreateSchema.partial();
 
-export const identitySetInputSchema = z.object({
-  accountId: mailAccountIdSchema,
-  ifInState: stateSchema.optional(),
-  create: z.record(z.string().min(1), identityCreateSchema).default({}),
-  update: z.record(mailIdSchema, identityUpdateSchema).default({}),
-  destroy: z.array(mailIdSchema).max(200).default([]),
-});
+export const identitySetInputSchema = z
+  .object({
+    accountId: mailAccountIdSchema,
+    ifInState: stateSchema.optional(),
+    create: z.record(z.string().min(1), identityCreateSchema).default({}),
+    update: z.record(mailIdSchema, identityUpdateSchema).default({}),
+    destroy: z.array(mailIdSchema).max(200).default([]),
+  })
+  .superRefine(enforceSetOperationLimit);
 
 export const identitySetResultSchema = z.object({
   accountId: mailAccountIdSchema,
@@ -48,6 +51,13 @@ export const identitySetResultSchema = z.object({
   notCreated: z.record(z.string(), setErrorSchema),
   notUpdated: z.record(z.string(), setErrorSchema),
   notDestroyed: z.record(z.string(), setErrorSchema),
+});
+
+export const identityGetResultSchema = z.object({
+  accountId: mailAccountIdSchema,
+  state: stateSchema,
+  list: z.array(identitySchema),
+  notFound: z.array(mailIdSchema),
 });
 
 export const identityChangesInputSchema = changesInputSchema;

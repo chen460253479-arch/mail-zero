@@ -44,7 +44,7 @@ describe('Email Router', () => {
     vi.clearAllMocks();
   });
 
-  it('maps JMAP null/true maps into deterministic Core replacements', async () => {
+  it('passes JMAP null/true maps as transaction-safe Core deltas', async () => {
     const setEmails = vi.fn(async () => ({
       oldState: '4',
       newState: '5',
@@ -85,12 +85,15 @@ describe('Email Router', () => {
       expect.objectContaining({
         update: {
           [email.id]: expect.objectContaining({
-            keywords: ['$flagged', '$important'],
-            mailboxIds: ['mailbox-archive'],
+            addKeywords: ['$important'],
+            removeKeywords: ['$seen'],
+            addMailboxIds: ['mailbox-archive'],
+            removeMailboxIds: ['mailbox-inbox'],
           }),
         },
       }),
     );
+    expect(core.getEmail).not.toHaveBeenCalled();
     expect(runtimeMocks.close).toHaveBeenCalledOnce();
   });
 });

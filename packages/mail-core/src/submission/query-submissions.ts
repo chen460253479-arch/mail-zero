@@ -1,8 +1,8 @@
-import { Buffer } from 'node:buffer';
 import { z } from 'zod';
 
 import { MailCoreError, type EmailSubmissionId, type MailAccountId } from '../types';
 import type { MailCoreDependencies, SubmissionRecord } from '../store';
+import { decodeSignedCursor, encodeSignedCursor } from '../search';
 import type { SubmissionStatus } from './types';
 
 const MAX_PAGE_SIZE = 200;
@@ -49,23 +49,17 @@ const invalidCursor = (): never => {
   throw new MailCoreError('INVALID_CURSOR');
 };
 
-const encodeCursor = (payload: SubmissionCursor): string =>
-  Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+const encodeCursor = (payload: SubmissionCursor, signingKey: string): string =>
+  encodeSignedCursor(payload, signingKey);
 
 const decodeCursor = (
   encoded: string,
   accountId: MailAccountId,
   status: SubmissionStatus | undefined,
+  signingKey: string,
 ): SubmissionCursor => {
   try {
-    if (!/^[A-Za-z0-9_-]+$/.test(encoded)) {
-      return invalidCursor();
-    }
-    const bytes = Buffer.from(encoded, 'base64url');
-    if (bytes.toString('base64url') !== encoded) {
-      return invalidCursor();
-    }
-    const parsed = cursorSchema.safeParse(JSON.parse(bytes.toString('utf8')) as unknown);
+    const parsed = cursorSchema.safeParse(decodeSignedCursor(encoded, signingKey));
     if (!parsed.success) {
       return invalidCursor();
     }
@@ -104,14 +98,16 @@ export async function getSubmission(
 }
 
 export async function querySubmissions(
-  dependencies: Pick<MailCoreDependencies, 'unitOfWork'>,
+  dependencies: Pick<MailCoreDependencies, 'cursorSigningKey' | 'unitOfWork'>,
   input: QuerySubmissionsInput,
 ): Promise<QuerySubmissionsResult> {
   if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > MAX_PAGE_SIZE) {
     throw new MailCoreError('INVALID_QUERY');
   }
   const cursor =
-    input.cursor === null ? null : decodeCursor(input.cursor, input.accountId, input.status);
+    input.cursor === null
+      ? null
+      : decodeCursor(input.cursor, input.accountId, input.status, dependencies.cursorSigningKey);
 
   return dependencies.unitOfWork.run(async (tx) => {
     if ((await tx.accounts.findById(input.accountId)) === null) {
@@ -135,14 +131,17 @@ export async function querySubmissions(
       submissions: page,
       nextCursor:
         records.length > input.limit && last !== undefined
-          ? encodeCursor({
-              version: 1,
-              kind: 'email_submission',
-              accountId: input.accountId,
-              status: input.status ?? null,
-              createdAt: last.createdAt.toISOString(),
-              submissionId: last.id,
-            })
+          ? encodeCursor(
+              {
+                version: 1,
+                kind: 'email_submission',
+                accountId: input.accountId,
+                status: input.status ?? null,
+                createdAt: last.createdAt.toISOString(),
+                submissionId: last.id,
+              },
+              dependencies.cursorSigningKey,
+            )
           : null,
     };
   });

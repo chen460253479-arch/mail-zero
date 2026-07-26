@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   decodeCursor,
   encodeCursor,
+  encodeSignedCursor,
   MailCoreError,
   type EmailCursorPayload,
   type EmailId,
@@ -13,6 +14,7 @@ import {
 
 const accountOne = 'account-1' as MailAccountId;
 const accountTwo = 'account-2' as MailAccountId;
+const signingKey = 'cursor-test-signing-key';
 
 const emailCursor = (overrides: Partial<EmailCursorPayload> = {}): EmailCursorPayload => ({
   version: 1,
@@ -35,15 +37,17 @@ describe('search cursors', () => {
   ])('losslessly round-trips an Email %s sort value', (_label, value) => {
     const payload = emailCursor({ value });
 
-    expect(decodeCursor(encodeCursor(payload), accountOne)).toEqual(payload);
+    expect(decodeCursor(encodeCursor(payload, signingKey), accountOne, signingKey)).toEqual(
+      payload,
+    );
   });
 
   it('uses canonical unpadded base64url encoding', () => {
-    const encoded = encodeCursor(emailCursor());
+    const encoded = encodeCursor(emailCursor(), signingKey);
 
-    expect(encoded).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(encoded).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
     expect(encoded).not.toContain('=');
-    expect(encodeCursor(decodeCursor(encoded, accountOne))).toBe(encoded);
+    expect(encodeCursor(decodeCursor(encoded, accountOne, signingKey), signingKey)).toBe(encoded);
   });
 
   it.each([
@@ -70,7 +74,7 @@ describe('search cursors', () => {
   ])('rejects malformed payload %s without leaking parser details', (encoded) => {
     let error: unknown;
     try {
-      decodeCursor(encoded, accountOne);
+      decodeCursor(encoded, accountOne, signingKey);
     } catch (caught) {
       error = caught;
     }
@@ -81,18 +85,34 @@ describe('search cursors', () => {
 
   it('rejects a valid cursor from another account with a safe stable error', () => {
     expect(() =>
-      decodeCursor(encodeCursor(emailCursor({ accountId: accountTwo })), accountOne),
+      decodeCursor(
+        encodeCursor(emailCursor({ accountId: accountTwo }), signingKey),
+        accountOne,
+        signingKey,
+      ),
     ).toThrowError(expect.objectContaining({ code: 'CROSS_ACCOUNT_REFERENCE', details: {} }));
   });
 
   it('rejects unsupported versions', () => {
-    const encoded = Buffer.from(JSON.stringify({ ...emailCursor(), version: 2 })).toString(
-      'base64url',
-    );
+    const encoded = encodeSignedCursor({ ...emailCursor(), version: 2 }, signingKey);
 
-    expect(() => decodeCursor(encoded, accountOne)).toThrowError(
+    expect(() => decodeCursor(encoded, accountOne, signingKey)).toThrowError(
       expect.objectContaining({ code: 'INVALID_CURSOR', details: {} }),
     );
+  });
+
+  it('rejects a valid signed cursor after either payload or signature tampering', () => {
+    const encoded = encodeCursor(emailCursor(), signingKey);
+    const [payload, signature] = encoded.split('.');
+    const replaceLast = (value: string) =>
+      `${value.slice(0, -1)}${value.endsWith('A') ? 'B' : 'A'}`;
+
+    expect(() =>
+      decodeCursor(`${replaceLast(payload!)}.${signature}`, accountOne, signingKey),
+    ).toThrowError(expect.objectContaining({ code: 'INVALID_CURSOR', details: {} }));
+    expect(() =>
+      decodeCursor(`${payload}.${replaceLast(signature!)}`, accountOne, signingKey),
+    ).toThrowError(expect.objectContaining({ code: 'INVALID_CURSOR', details: {} }));
   });
 
   it('keeps Thread cursors independently typed and encoded', () => {
@@ -105,6 +125,8 @@ describe('search cursors', () => {
       threadId: 'thread-1' as ThreadId,
     };
 
-    expect(decodeCursor(encodeCursor(payload), accountOne)).toEqual(payload);
+    expect(decodeCursor(encodeCursor(payload, signingKey), accountOne, signingKey)).toEqual(
+      payload,
+    );
   });
 });

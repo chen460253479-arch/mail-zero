@@ -458,6 +458,12 @@ const createRepositories = (
     async findById(accountId, id) {
       return findScoped(state.emails, accountId, id);
     },
+    async findByIds(accountId, ids) {
+      return ids.flatMap((id) => {
+        const record = findScoped(state.emails, accountId, id);
+        return record === null ? [] : [record];
+      });
+    },
     async existsOutsideAccount(accountId, id) {
       return [...state.emails.values()].some(
         (candidate) => candidate.id === id && candidate.accountId !== accountId,

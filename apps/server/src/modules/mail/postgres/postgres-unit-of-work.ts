@@ -52,29 +52,31 @@ export const createPostgresMailTransaction = (
     }),
 });
 
+export async function runPostgresMailTransaction<Result>(
+  db: DB,
+  operation: (tx: MailTransaction, database: MailDatabase) => Promise<Result>,
+): Promise<Result> {
+  try {
+    return await db.transaction(async (transaction) => {
+      const allocated = new Map<MailAccountId, bigint>();
+      try {
+        return await operation(createPostgresMailTransaction(transaction, allocated), transaction);
+      } catch (error) {
+        throw new CallbackFailure(error);
+      }
+    });
+  } catch (error) {
+    if (error instanceof CallbackFailure) {
+      throw error.error;
+    }
+    return runAdapter(() => Promise.reject(error));
+  }
+}
+
 export class PostgresMailUnitOfWork implements MailUnitOfWork {
   constructor(private readonly db: DB) {}
 
   run<Result>(operation: (tx: MailTransaction) => Promise<Result>): Promise<Result> {
-    const execute = async (): Promise<Result> => {
-      try {
-        return await this.db.transaction(async (transaction) => {
-          const allocated = new Map<MailAccountId, bigint>();
-          try {
-            return (await operation(
-              createPostgresMailTransaction(transaction, allocated),
-            )) as Result;
-          } catch (error) {
-            throw new CallbackFailure(error);
-          }
-        });
-      } catch (error) {
-        if (error instanceof CallbackFailure) {
-          throw error.error;
-        }
-        return runAdapter(() => Promise.reject(error));
-      }
-    };
-    return execute();
+    return runPostgresMailTransaction(this.db, (tx) => operation(tx));
   }
 }

@@ -22,8 +22,18 @@ export const accountSchema = z.object({
   updatedAt: isoDateSchema,
 });
 
+export const accountCapabilitiesSchema = z.object({
+  mail: z.literal(true),
+  emailSubmission: z.literal(true),
+  blobUpload: z.literal(true),
+  snooze: z.literal(true),
+});
+
 export const accountListInputSchema = z.void();
 export const accountGetInputSchema = z.object({ accountId: mailAccountIdSchema });
 export const accountListResultSchema = z.object({ accounts: z.array(accountSchema) });
+export const accountGetResultSchema = accountSchema.extend({
+  capabilities: accountCapabilitiesSchema,
+});
 
 export type AccountDto = z.infer<typeof accountSchema>;

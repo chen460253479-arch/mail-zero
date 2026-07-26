@@ -58,9 +58,11 @@ const email: EmailRecord = {
 describe('Email DTO', () => {
   it('does not read body blobs unless body values were requested', async () => {
     const readBlob = vi.fn();
-    const dto = await toEmailDto({ readBlob } as never, accountId, email);
+    const readBlobRange = vi.fn();
+    const dto = await toEmailDto({ readBlob, readBlobRange } as never, accountId, email);
 
     expect(readBlob).not.toHaveBeenCalled();
+    expect(readBlobRange).not.toHaveBeenCalled();
     expect(dto).toMatchObject({
       mailboxIds: { 'mailbox-inbox': true },
       keywords: { $seen: true },
@@ -72,15 +74,31 @@ describe('Email DTO', () => {
   });
 
   it('reads only requested parts and bounds returned bytes', async () => {
-    const readBlob = vi.fn(async () => new TextEncoder().encode('0123456789'));
-    const dto = await toEmailDto({ readBlob } as never, accountId, email, {
+    const readBlobRange = vi.fn(async () => ({
+      bytes: new TextEncoder().encode('0123'),
+      isTruncated: true,
+    }));
+    const dto = await toEmailDto({ readBlobRange } as never, accountId, email, {
       fetchTextBodyValues: true,
       maxBodyValueBytes: 4,
     });
 
-    expect(readBlob).toHaveBeenCalledOnce();
+    expect(readBlobRange).toHaveBeenCalledOnce();
     expect(dto.bodyValues).toEqual({
       'part-text': { value: '0123', isTruncated: true },
     });
+  });
+
+  it('returns only requested properties and avoids an unselected body read', async () => {
+    const readBlob = vi.fn();
+    const readBlobRange = vi.fn();
+    const dto = await toEmailDto({ readBlob, readBlobRange } as never, accountId, email, {
+      properties: ['subject'],
+      fetchTextBodyValues: true,
+    });
+
+    expect(dto).toEqual({ id: email.id, subject: email.subject });
+    expect(readBlob).not.toHaveBeenCalled();
+    expect(readBlobRange).not.toHaveBeenCalled();
   });
 });

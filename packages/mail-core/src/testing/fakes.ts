@@ -18,6 +18,7 @@ export interface CreateMemoryMailCoreDependenciesOptions {
   now?: Date;
   sanitizeHtml?: (html: string) => string;
   blobReadAuditSink?: BlobReadAuditSink;
+  cursorSigningKey?: string;
 }
 
 export class MemoryClock {
@@ -152,6 +153,7 @@ export class MemorySearchStore implements SearchStore {
     return {
       emailIds: page.map(({ emailId }) => emailId),
       nextCursor: hasMore ? page.at(-1)! : null,
+      total: input.calculateTotal ? filtered.length : null,
     };
   }
 }
@@ -184,6 +186,7 @@ export const createMemoryMailCoreDependencies = (
       },
     },
     sanitizeHtml: options.sanitizeHtml ?? ((html) => html),
+    cursorSigningKey: options.cursorSigningKey ?? 'mail-core-test-cursor-signing-key',
   };
 
   return {

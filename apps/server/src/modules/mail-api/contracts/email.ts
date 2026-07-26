@@ -4,6 +4,7 @@ import {
   booleanIdMapSchema,
   cursorSchema,
   decimalStringSchema,
+  enforceSetOperationLimit,
   isoDateSchema,
   mailAccountIdSchema,
   mailAddressSchema,
@@ -82,10 +83,39 @@ export const emailPatchSchema = draftContentSchema.partial().extend({
   ifDraftRevision: z.number().int().nonnegative().optional(),
 });
 
+export const emailPropertySchema = z.enum([
+  'id',
+  'threadId',
+  'blobId',
+  'mailboxIds',
+  'keywords',
+  'lifecycle',
+  'draftRevision',
+  'messageId',
+  'inReplyTo',
+  'references',
+  'sender',
+  'from',
+  'replyTo',
+  'to',
+  'cc',
+  'bcc',
+  'subject',
+  'preview',
+  'sentAt',
+  'receivedAt',
+  'size',
+  'hasAttachment',
+  'textBody',
+  'htmlBody',
+  'attachments',
+  'bodyValues',
+]);
+
 export const emailGetInputSchema = z.object({
   accountId: mailAccountIdSchema,
   ids: z.array(mailIdSchema).min(1).max(200),
-  properties: z.array(z.string()).max(100).optional(),
+  properties: z.array(emailPropertySchema).max(27).optional(),
   fetchTextBodyValues: z.boolean().default(false),
   fetchHTMLBodyValues: z.boolean().default(false),
   maxBodyValueBytes: z.number().int().min(1).max(1_000_000).default(256_000),
@@ -128,13 +158,15 @@ export const emailChangesInputSchema = z.object({
   maxChanges: z.number().int().min(1).max(1000).default(100),
 });
 
-export const emailSetInputSchema = z.object({
-  accountId: mailAccountIdSchema,
-  ifInState: stateSchema.optional(),
-  create: z.record(z.string().min(1), draftContentSchema).default({}),
-  update: z.record(mailIdSchema, emailPatchSchema).default({}),
-  destroy: z.array(mailIdSchema).max(200).default([]),
-});
+export const emailSetInputSchema = z
+  .object({
+    accountId: mailAccountIdSchema,
+    ifInState: stateSchema.optional(),
+    create: z.record(z.string().min(1), draftContentSchema).default({}),
+    update: z.record(mailIdSchema, emailPatchSchema).default({}),
+    destroy: z.array(mailIdSchema).max(200).default([]),
+  })
+  .superRefine(enforceSetOperationLimit);
 
 export const emailSetResultSchema = z.object({
   accountId: mailAccountIdSchema,
@@ -146,4 +178,19 @@ export const emailSetResultSchema = z.object({
   notCreated: z.record(z.string(), setErrorSchema),
   notUpdated: z.record(z.string(), setErrorSchema),
   notDestroyed: z.record(z.string(), setErrorSchema),
+});
+
+export const emailGetResultSchema = z.object({
+  accountId: mailAccountIdSchema,
+  state: stateSchema,
+  list: z.array(emailSchema.partial().required({ id: true })),
+  notFound: z.array(mailIdSchema),
+});
+
+export const emailQueryResultSchema = z.object({
+  accountId: mailAccountIdSchema,
+  queryState: stateSchema,
+  ids: z.array(mailIdSchema),
+  cursor: cursorSchema.nullable(),
+  total: z.number().int().nonnegative().nullable(),
 });

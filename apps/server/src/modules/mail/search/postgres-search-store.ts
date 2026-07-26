@@ -16,6 +16,7 @@ type ResultRow = {
   id: string;
   sort_value: Date | bigint | number | string | null;
 };
+type CountRow = { total: bigint | number | string };
 
 const subjectExpression = sql`${email.normalizedSubject}`;
 
@@ -180,15 +181,27 @@ export class PostgresSearchStore implements SearchStore {
       const expression = sortExpression(input);
       const keyset = keysetPredicate(input, expression);
       const predicates = [...predicatesFor(input), ...(keyset === null ? [] : [keyset])];
+      const allPredicates = predicatesFor(input);
       const direction = input.sort.direction === 'asc' ? sql.raw('ASC') : sql.raw('DESC');
       const nulls = input.sort.property === 'sentAt' ? sql.raw(' NULLS LAST') : sql.empty();
-      const rows = (await this.db.execute(sql`
-        SELECT ${email.id} AS id, ${expression} AS sort_value
-        FROM ${email}
-        WHERE ${sql.join(predicates, sql.raw(' AND '))}
-        ORDER BY ${expression} ${direction}${nulls}, ${email.id} ASC
-        LIMIT ${input.limit + 1}
-      `)) as unknown as ResultRow[];
+      const [rowsResult, countResult] = await Promise.all([
+        this.db.execute(sql`
+          SELECT ${email.id} AS id, ${expression} AS sort_value
+          FROM ${email}
+          WHERE ${sql.join(predicates, sql.raw(' AND '))}
+          ORDER BY ${expression} ${direction}${nulls}, ${email.id} ASC
+          LIMIT ${input.limit + 1}
+        `),
+        input.calculateTotal
+          ? this.db.execute(sql`
+              SELECT count(*) AS total
+              FROM ${email}
+              WHERE ${sql.join(allPredicates, sql.raw(' AND '))}
+            `)
+          : Promise.resolve([]),
+      ]);
+      const rows = rowsResult as unknown as ResultRow[];
+      const countRows = countResult as unknown as CountRow[];
       const hasMore = rows.length > input.limit;
       const page = rows.slice(0, input.limit);
       const last = page.at(-1);
@@ -201,6 +214,7 @@ export class PostgresSearchStore implements SearchStore {
                 value: resultValue(input.sort.property, last.sort_value),
               }
             : null,
+        total: input.calculateTotal ? Number(countRows[0]?.total ?? 0) : null,
       };
     });
   }

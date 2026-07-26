@@ -1,9 +1,9 @@
-import { check, foreignKey, index, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import { check, foreignKey, index, jsonb, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
+import type { SnoozeEmailRestore, SnoozeStatus } from '../domain/snooze';
 import { mailAccount, thread } from '../../mail/postgres/schema';
 import { createMailTable } from '../../mail/postgres/table';
-import type { SnoozeStatus } from '../domain/snooze';
 
 export const threadSnooze = createMailTable(
   'thread_snooze',
@@ -11,7 +11,7 @@ export const threadSnooze = createMailTable(
     mailAccountId: text('mail_account_id').notNull(),
     threadId: text('thread_id').notNull(),
     wakeAt: timestamp('wake_at', { withTimezone: true }).notNull(),
-    restoreMailboxIds: text('restore_mailbox_ids').array().notNull(),
+    restorePlan: jsonb('restore_plan').$type<SnoozeEmailRestore[]>().notNull(),
     status: text('status').$type<SnoozeStatus>().notNull(),
     leaseOwner: text('lease_owner'),
     leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
@@ -44,6 +44,9 @@ export const threadSnooze = createMailTable(
     ),
     index('thread_snooze_due_idx')
       .on(t.status, t.wakeAt, t.threadId)
-      .where(sql`${t.status} IN ('scheduled', 'waking')`),
+      .where(sql`${t.status} = 'scheduled'`),
+    index('thread_snooze_expired_lease_idx')
+      .on(t.leaseExpiresAt, t.threadId)
+      .where(sql`${t.status} = 'waking'`),
   ],
 );

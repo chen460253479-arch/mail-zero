@@ -8,7 +8,6 @@ import {
   type SubmissionRecord,
 } from '@zero/mail-core';
 import type { MailOutboundRuntime } from '../../mail-outbound';
-import { MailOutboundError } from '../../mail-outbound';
 import type { z } from 'zod';
 
 import {
@@ -18,7 +17,7 @@ import {
   submissionSchema,
   submissionSetInputSchema,
 } from '../contracts/submission';
-import { mapSetError } from './dto';
+import { mapSetErrors } from './dto';
 
 const toSubmissionDto = (submission: SubmissionRecord) => submissionSchema.parse(submission);
 
@@ -26,21 +25,9 @@ const missingSubmission = (error: unknown) =>
   error instanceof MailCoreError &&
   ['EMAIL_SUBMISSION_NOT_FOUND', 'CROSS_ACCOUNT_REFERENCE'].includes(error.code);
 
-const outboundAsCoreError = (error: MailOutboundError): MailCoreError => {
-  if (error.code === 'DELIVERY_NOT_FOUND') {
-    return new MailCoreError('EMAIL_SUBMISSION_NOT_FOUND', { entityId: error.entityId });
-  }
-  if (error.code === 'INVALID_DELIVERY_TRANSITION') {
-    return new MailCoreError('INVALID_SUBMISSION_TRANSITION', {
-      entityId: error.entityId,
-    });
-  }
-  return new MailCoreError('STORAGE_FAILURE');
-};
-
 export const createSubmissionService = (
   core: Pick<MailCore, 'getChanges' | 'getState' | 'getSubmission' | 'querySubmissions'>,
-  outbound: Pick<MailOutboundRuntime, 'submit' | 'cancel'>,
+  outbound: Pick<MailOutboundRuntime, 'set'>,
 ) => ({
   async get(input: z.infer<typeof submissionGetInputSchema>) {
     const accountId = input.accountId as MailAccountId;
@@ -68,6 +55,7 @@ export const createSubmissionService = (
 
   async query(input: z.infer<typeof submissionQueryInputSchema>) {
     const accountId = input.accountId as MailAccountId;
+    const state = await core.getState({ accountId, collection: 'email_submission' });
     const result = await core.querySubmissions({
       accountId,
       status: input.status,
@@ -76,7 +64,7 @@ export const createSubmissionService = (
     });
     return {
       accountId: input.accountId,
-      state: await core.getState({ accountId, collection: 'email_submission' }),
+      state,
       list: result.submissions.map(toSubmissionDto),
       cursor: result.nextCursor,
     };
@@ -84,56 +72,30 @@ export const createSubmissionService = (
 
   async set(input: z.infer<typeof submissionSetInputSchema>) {
     const accountId = input.accountId as MailAccountId;
-    const oldState = await core.getState({ accountId, collection: 'email_submission' });
-    if (input.ifInState !== undefined && input.ifInState !== oldState) {
-      throw new MailCoreError('STATE_MISMATCH');
-    }
-    const created: Record<string, ReturnType<typeof toSubmissionDto>> = {};
-    const destroyed: EmailSubmissionId[] = [];
-    const notCreated: Record<string, ReturnType<typeof mapSetError>> = {};
-    const notDestroyed: Record<string, ReturnType<typeof mapSetError>> = {};
-    for (const [creationId, submission] of Object.entries(input.create)) {
-      try {
-        const result = await outbound.submit({
-          accountId,
-          emailId: submission.emailId as EmailId,
-          identityId: submission.identityId as IdentityId,
-          idempotencyKey: submission.idempotencyKey,
-          sendAt: submission.sendAt == null ? null : new Date(submission.sendAt),
-        });
-        created[creationId] = toSubmissionDto(result.submission);
-      } catch (error) {
-        if (!(error instanceof MailCoreError)) throw error;
-        notCreated[creationId] = mapSetError(error);
-      }
-    }
-    for (const rawId of input.destroy) {
-      const submissionId = rawId as EmailSubmissionId;
-      try {
-        await outbound.cancel({ accountId, submissionId });
-        destroyed.push(submissionId);
-      } catch (error) {
-        const mapped =
-          error instanceof MailOutboundError
-            ? outboundAsCoreError(error)
-            : error instanceof MailCoreError
-              ? error
-              : null;
-        if (mapped === null) throw error;
-        notDestroyed[rawId] = mapSetError(mapped);
-      }
-    }
+    const result = await outbound.set({
+      accountId,
+      ifInState: input.ifInState,
+      create: Object.fromEntries(
+        Object.entries(input.create).map(([creationId, submission]) => [
+          creationId,
+          {
+            emailId: submission.emailId as EmailId,
+            identityId: submission.identityId as IdentityId,
+            idempotencyKey: submission.idempotencyKey,
+            sendAt: submission.sendAt == null ? null : new Date(submission.sendAt),
+          },
+        ]),
+      ),
+      destroy: input.destroy as EmailSubmissionId[],
+    });
     return {
       accountId: input.accountId,
-      oldState,
-      newState: await core.getState({
-        accountId,
-        collection: 'email_submission',
-      }),
-      created,
-      destroyed,
-      notCreated,
-      notDestroyed,
+      ...result,
+      created: Object.fromEntries(
+        Object.entries(result.created).map(([id, submission]) => [id, toSubmissionDto(submission)]),
+      ),
+      notCreated: mapSetErrors(result.notCreated),
+      notDestroyed: mapSetErrors(result.notDestroyed),
     };
   },
 

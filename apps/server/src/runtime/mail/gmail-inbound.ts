@@ -55,6 +55,7 @@ const createMailCore = (db: DB, runtimeEnv: ZeroEnv) =>
       },
     },
     sanitizeHtml: preprocessEmailHtml,
+    cursorSigningKey: runtimeEnv.BETTER_AUTH_SECRET,
   });
 
 const resolveConnectionId = async (db: DB, accountId: string): Promise<string> => {

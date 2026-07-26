@@ -82,6 +82,11 @@ export class MemoryBlobStore implements BlobStore {
     return copyBytes(object.bytes);
   }
 
+  async getRange(input: Parameters<BlobStore['getRange']>[0]): Promise<Uint8Array> {
+    const bytes = await this.get(input);
+    return bytes.slice(input.offset, input.offset + input.length);
+  }
+
   async delete(input: Parameters<BlobStore['delete']>[0]): Promise<void> {
     requireObjectKeyForAccount(input.accountId, input.objectKey);
     this.objects.delete(input.objectKey);

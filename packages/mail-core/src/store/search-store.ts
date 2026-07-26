@@ -15,11 +15,13 @@ export interface SearchEmailInput {
   sort: SearchEmailSort;
   limit: number;
   cursor: SearchEmailCursor | null;
+  calculateTotal: boolean;
 }
 
 export interface SearchEmailResult {
   emailIds: EmailId[];
   nextCursor: SearchEmailCursor | null;
+  total: number | null;
 }
 
 export interface SearchStore {

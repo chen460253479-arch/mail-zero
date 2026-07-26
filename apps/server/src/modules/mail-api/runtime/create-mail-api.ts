@@ -1,12 +1,16 @@
 import type { MailAccountId, MailAccountRecord, MailCore } from '@zero/mail-core';
 
 import {
+  createMailCoreDependenciesForEnvironment,
+  createMailCoreForEnvironment,
+} from '../../../runtime/mail/core';
+import {
   createMailSnoozeRuntime,
   type MailSnoozeRuntime,
 } from '../../mail-snooze/runtime/create-mail-snooze';
 import { createPostgresMailSnoozeRepository } from '../../mail-snooze/postgres/repository';
 import { createMailOutboundRuntimeForEnvironment } from '../../../runtime/mail/outbound';
-import { createMailCoreForEnvironment } from '../../../runtime/mail/core';
+import { createPostgresMailSnoozeCommands } from '../../mail-snooze/postgres/commands';
 import type { MailOutboundRuntime } from '../../mail-outbound';
 import { MailApiError } from '../errors/mail-api-error';
 import { createDb, type DB } from '../../../db';
@@ -19,6 +23,7 @@ export type MailApiRuntime = {
   outbound: MailOutboundRuntime;
   snooze: MailSnoozeRuntime;
   db: DB;
+  cursorSigningKey: string;
 };
 
 export type OpenMailApiRuntime = MailApiRuntime & {
@@ -31,14 +36,19 @@ export type OwnedMailApiRuntime = OpenMailApiRuntime & {
 
 export function createMailApiRuntime(db: DB, runtimeEnv: MailApiEnvironment): MailApiRuntime {
   const core = createMailCoreForEnvironment(db, runtimeEnv);
+  const clock = { now: () => new Date() };
   return {
     db,
+    cursorSigningKey: runtimeEnv.BETTER_AUTH_SECRET,
     core,
     outbound: createMailOutboundRuntimeForEnvironment(db, runtimeEnv),
     snooze: createMailSnoozeRuntime({
-      core,
+      commands: createPostgresMailSnoozeCommands({
+        db,
+        mailCoreDependencies: createMailCoreDependenciesForEnvironment(db, runtimeEnv),
+        clock,
+      }),
       repository: createPostgresMailSnoozeRepository(db),
-      clock: { now: () => new Date() },
       newLeaseOwner: () => crypto.randomUUID(),
       leaseForMs: 5 * 60_000,
     }),

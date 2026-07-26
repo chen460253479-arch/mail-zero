@@ -1,10 +1,16 @@
 export type SnoozeStatus = 'scheduled' | 'waking' | 'completed' | 'canceled';
 
+export type SnoozeEmailRestore = {
+  emailId: string;
+  addMailboxIds: string[];
+  removeMailboxIds: string[];
+};
+
 export type SnoozeRecord = {
   accountId: string;
   threadId: string;
   wakeAt: Date;
-  restoreMailboxIds: string[];
+  restorePlan: SnoozeEmailRestore[];
   status: SnoozeStatus;
   leaseOwner: string | null;
   leaseExpiresAt: Date | null;
@@ -18,7 +24,7 @@ export interface MailSnoozeRepository {
     accountId: string;
     threadId: string;
     wakeAt: Date;
-    restoreMailboxIds: string[];
+    restorePlan: SnoozeEmailRestore[];
     now: Date;
   }): Promise<SnoozeRecord>;
   cancel(input: { accountId: string; threadId: string; now: Date }): Promise<void>;
@@ -41,3 +47,8 @@ export interface MailSnoozeRepository {
     now: Date;
   }): Promise<void>;
 }
+
+export type MailSnoozeTransactionRepository = Pick<
+  MailSnoozeRepository,
+  'cancel' | 'complete' | 'find' | 'schedule'
+>;

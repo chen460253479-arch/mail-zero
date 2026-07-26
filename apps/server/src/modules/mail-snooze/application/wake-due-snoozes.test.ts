@@ -1,8 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
-import type { MailCore } from '@zero/mail-core';
-
 import type { MailSnoozeRepository, SnoozeRecord } from '../domain/snooze';
 import { wakeDueSnoozes } from './wake-due-snoozes';
+import { describe, expect, it, vi } from 'vitest';
 
 describe('wakeDueSnoozes', () => {
   it('restores one claimed Snooze once and completes its lease', async () => {
@@ -11,7 +9,9 @@ describe('wakeDueSnoozes', () => {
       accountId: 'account-1',
       threadId: 'thread-1',
       wakeAt: now,
-      restoreMailboxIds: ['inbox'],
+      restorePlan: [
+        { emailId: 'email-1', addMailboxIds: ['inbox'], removeMailboxIds: ['archive'] },
+      ],
       status: 'waking',
       leaseOwner: 'worker-1',
       leaseExpiresAt: new Date(now.getTime() + 60_000),
@@ -22,23 +22,13 @@ describe('wakeDueSnoozes', () => {
       .fn<MailSnoozeRepository['claimDue']>()
       .mockResolvedValueOnce([snooze])
       .mockResolvedValueOnce([]);
-    const complete = vi.fn(async () => undefined);
     const repository = {
       claimDue,
-      complete,
       release: vi.fn(async () => undefined),
     } as unknown as MailSnoozeRepository;
-    const updateThreadEmails = vi.fn(async () => ({
-      oldState: '1',
-      newState: '2',
-      updatedThreadIds: ['thread-1'],
-      failed: {},
-    }));
+    const wakeClaimed = vi.fn(async () => true);
     const dependencies = {
-      core: {
-        updateThreadEmails,
-        listMailboxes: vi.fn(async () => [{ id: 'archive', role: 'archive' }]),
-      } as unknown as MailCore,
+      commands: { wakeClaimed },
       repository,
     };
     const input = { now, limit: 100, leaseOwner: 'worker-1', leaseForMs: 60_000 };
@@ -46,7 +36,6 @@ describe('wakeDueSnoozes', () => {
     await wakeDueSnoozes(input, dependencies);
     await wakeDueSnoozes(input, dependencies);
 
-    expect(updateThreadEmails).toHaveBeenCalledOnce();
-    expect(complete).toHaveBeenCalledOnce();
+    expect(wakeClaimed).toHaveBeenCalledOnce();
   });
 });

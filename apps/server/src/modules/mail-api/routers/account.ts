@@ -8,8 +8,12 @@ import {
   type MailApiEnvironment,
   type OpenMailApiRuntime,
 } from '../runtime/create-mail-api';
+import {
+  accountGetInputSchema,
+  accountGetResultSchema,
+  accountListResultSchema,
+} from '../contracts/account';
 import { createAccountService } from '../application/account-service';
-import { accountGetInputSchema } from '../contracts/account';
 import { router } from '../../../trpc/trpc';
 
 export type OpenMailSessionRuntime = (
@@ -18,7 +22,7 @@ export type OpenMailSessionRuntime = (
 
 export const createAccountRouter = (openRuntime: OpenMailSessionRuntime = openMailApiRuntime) =>
   router({
-    list: mailSessionProcedure.query(async ({ ctx }) => {
+    list: mailSessionProcedure.output(accountListResultSchema).query(async ({ ctx }) => {
       const runtime = await openRuntime(ctx.c.env);
       try {
         try {
@@ -32,6 +36,7 @@ export const createAccountRouter = (openRuntime: OpenMailSessionRuntime = openMa
     }),
     get: mailAccountProcedure
       .input(accountGetInputSchema)
+      .output(accountGetResultSchema)
       .query(({ ctx, input }) => createAccountService(ctx.mailApi.core).get(input)),
   });
 

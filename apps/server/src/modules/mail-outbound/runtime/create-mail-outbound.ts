@@ -5,6 +5,11 @@ import type {
   MailCoreDependencies,
 } from '@zero/mail-core';
 
+import {
+  setOutboundSubmissions,
+  type SetOutboundSubmissionsInput,
+  type SetOutboundSubmissionsResult,
+} from '../application/set-submissions';
 import type {
   MailOutboundCommand,
   OutboundConnectionStatePort,
@@ -75,6 +80,7 @@ export type CreateMailOutboundRuntimeDependencies = {
 export interface MailOutboundRuntime {
   submit(input: CreateSubmissionInput): Promise<SubmitDraftForDeliveryResult>;
   cancel(input: CancelSubmissionInput): Promise<CancelPendingDeliveryResult>;
+  set(input: SetOutboundSubmissionsInput): Promise<SetOutboundSubmissionsResult>;
   process(command: MailOutboundCommand): Promise<void>;
   enqueueDue(): Promise<{ due: number; expired: number; uncertain: number }>;
 }
@@ -142,6 +148,15 @@ export const createMailOutboundRuntime = (
       }),
     submit: async (input) =>
       await (dependencies.operations?.enqueueSubmission ?? enqueueSubmission)(input, {
+        unitOfWork: dependencies.unitOfWork,
+        mailCoreDependencies: dependencies.mailCoreDependencies,
+        clock: dependencies.clock,
+        nextId: dependencies.nextId,
+        wakeup: dependencies.wakeup,
+        onWakeupError: dependencies.onWakeupError,
+      }),
+    set: async (input) =>
+      await setOutboundSubmissions(input, {
         unitOfWork: dependencies.unitOfWork,
         mailCoreDependencies: dependencies.mailCoreDependencies,
         clock: dependencies.clock,

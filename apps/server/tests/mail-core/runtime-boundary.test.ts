@@ -44,6 +44,7 @@ describe('mail runtime boundary', () => {
         },
       },
       sanitizeHtml: (html) => html,
+      cursorSigningKey: 'runtime-boundary-cursor-key',
     });
 
     expect(Object.keys(runtime).sort()).toEqual(
@@ -62,6 +63,8 @@ describe('mail runtime boundary', () => {
         'getAccount',
         'getChanges',
         'getEmail',
+        'getEmails',
+        'getBlob',
         'getState',
         'getSubmission',
         'getThread',
@@ -73,11 +76,15 @@ describe('mail runtime boundary', () => {
         'querySubmissions',
         'queryThreads',
         'readBlob',
+        'readBlobRange',
+        'setEmails',
+        'setIdentities',
         'setMailboxes',
         'updateDraft',
         'updateEmail',
         'updateIdentity',
         'updateMailbox',
+        'updateThreadEmails',
         'uploadBlob',
       ].sort(),
     );
@@ -98,6 +105,7 @@ describe('mail runtime boundary', () => {
         },
       },
       sanitizeHtml: (html) => html,
+      cursorSigningKey: 'runtime-boundary-cursor-key',
     });
 
     expect(Object.keys(maintenance).sort()).toEqual(

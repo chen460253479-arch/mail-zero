@@ -29,6 +29,12 @@ export interface BlobStore {
   }): Promise<BlobCommitReceipt>;
   deleteTemporary(input: { accountId: MailAccountId; temporaryKey: string }): Promise<void>;
   get(input: { accountId: MailAccountId; objectKey: string }): Promise<Uint8Array>;
+  getRange(input: {
+    accountId: MailAccountId;
+    objectKey: string;
+    offset: number;
+    length: number;
+  }): Promise<Uint8Array>;
   /**
    * Permanently deletes an object. Implementations must be idempotent: an
    * already-missing object is a successful deletion, including on retries.

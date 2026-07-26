@@ -67,7 +67,7 @@ const requireAccountAndMailbox = async (
 };
 
 export async function queryThreads(
-  dependencies: Pick<MailCoreDependencies, 'unitOfWork'>,
+  dependencies: Pick<MailCoreDependencies, 'cursorSigningKey' | 'unitOfWork'>,
   input: QueryThreadsInput,
 ): Promise<ThreadQueryResult> {
   if (!Number.isInteger(input.limit) || input.limit <= 0 || input.limit > MAX_QUERY_LIMIT) {
@@ -76,7 +76,7 @@ export async function queryThreads(
   const query = signature(input.mailboxId);
   let cursor: ThreadPosition | null = null;
   if (input.cursor !== null) {
-    const payload = decodeCursor(input.cursor, input.accountId);
+    const payload = decodeCursor(input.cursor, input.accountId, dependencies.cursorSigningKey);
     if (payload.kind !== 'thread' || payload.query !== query) {
       throw new MailCoreError('INVALID_CURSOR');
     }
@@ -100,14 +100,17 @@ export async function queryThreads(
       threads: page,
       nextCursor:
         result.hasMore && last !== undefined
-          ? encodeCursor({
-              version: 1,
-              kind: 'thread',
-              accountId: input.accountId,
-              query,
-              latestReceivedAt: last.latestReceivedAt.toISOString(),
-              threadId: last.id,
-            })
+          ? encodeCursor(
+              {
+                version: 1,
+                kind: 'thread',
+                accountId: input.accountId,
+                query,
+                latestReceivedAt: last.latestReceivedAt.toISOString(),
+                threadId: last.id,
+              },
+              dependencies.cursorSigningKey,
+            )
           : null,
       appliedMailboxId: input.mailboxId ?? null,
     };

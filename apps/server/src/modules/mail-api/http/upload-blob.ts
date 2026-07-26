@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 
-import { authorizeMailAccount } from './authorize-mail-account';
+import { authorizeMailAccount, mailHttpErrorResponse } from './authorize-mail-account';
 import type { HonoContext } from '../../../ctx';
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
@@ -37,6 +37,8 @@ export async function uploadMailBlob(c: Context<HonoContext>) {
       type: blob.blob.contentType,
       size: blob.blob.sizeBytes.toString(),
     });
+  } catch (error) {
+    return mailHttpErrorResponse(c, error);
   } finally {
     await authorization.runtime.close();
   }

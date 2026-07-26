@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { mailAccountIdSchema, mailIdSchema, stateSchema } from './common';
+import { mailAccountIdSchema, mailIdSchema, setErrorSchema, stateSchema } from './common';
 
 export const updateThreadsInputSchema = z.object({
   accountId: mailAccountIdSchema,
@@ -24,4 +24,27 @@ export const unsnoozeThreadsInputSchema = z.object({
   accountId: mailAccountIdSchema,
   threadIds: z.array(mailIdSchema).min(1).max(200),
   clientMutationId: z.string().min(1).max(255),
+});
+
+export const updateThreadsResultSchema = z.object({
+  accountId: mailAccountIdSchema,
+  clientMutationId: z.string(),
+  oldState: stateSchema,
+  newState: stateSchema,
+  updatedThreadIds: z.array(mailIdSchema),
+  failed: z.record(mailIdSchema, setErrorSchema),
+});
+
+export const snoozeThreadsResultSchema = z.object({
+  accountId: mailAccountIdSchema,
+  clientMutationId: z.string(),
+  scheduled: z.array(mailIdSchema),
+  failed: z.record(mailIdSchema, setErrorSchema),
+});
+
+export const unsnoozeThreadsResultSchema = z.object({
+  accountId: mailAccountIdSchema,
+  clientMutationId: z.string(),
+  restored: z.array(mailIdSchema),
+  notFound: z.array(mailIdSchema),
 });

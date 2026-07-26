@@ -1,6 +1,7 @@
 import {
   applyPreparedEmailStateInTransaction,
   prepareEmailStateReplacementInTransaction,
+  updateEmailInTransaction,
   type PreparedEmailStateMutation,
 } from './update-email';
 import {
@@ -32,6 +33,10 @@ import { destroyEmailInTransaction } from './destroy-email';
 export type EmailSetPatch = {
   mailboxIds?: MailboxId[];
   keywords?: Keyword[];
+  addMailboxIds?: MailboxId[];
+  removeMailboxIds?: MailboxId[];
+  addKeywords?: Keyword[];
+  removeKeywords?: Keyword[];
   content?: DraftContent;
   ifDraftRevision?: number;
 };
@@ -81,12 +86,25 @@ const withoutStateVersion = (result: DraftResult): EmailRecord => {
 };
 
 const hasMetadataPatch = (patch: EmailSetPatch): boolean =>
-  patch.mailboxIds !== undefined || patch.keywords !== undefined;
+  patch.mailboxIds !== undefined ||
+  patch.keywords !== undefined ||
+  patch.addMailboxIds !== undefined ||
+  patch.removeMailboxIds !== undefined ||
+  patch.addKeywords !== undefined ||
+  patch.removeKeywords !== undefined;
 
 const validateDraftPatch = (emailId: EmailId, patch: EmailSetPatch): void => {
   if (
     (patch.content === undefined && patch.ifDraftRevision !== undefined) ||
     (patch.content !== undefined && patch.ifDraftRevision === undefined)
+  ) {
+    throw new MailCoreError('INVALID_PATCH', { entityId: emailId });
+  }
+  if (
+    (patch.mailboxIds !== undefined &&
+      (patch.addMailboxIds !== undefined || patch.removeMailboxIds !== undefined)) ||
+    (patch.keywords !== undefined &&
+      (patch.addKeywords !== undefined || patch.removeKeywords !== undefined))
   ) {
     throw new MailCoreError('INVALID_PATCH', { entityId: emailId });
   }
@@ -187,14 +205,16 @@ export async function setEmails(
         const emailId = rawEmailId as EmailId;
         if (notUpdated[emailId] !== undefined) continue;
         try {
-          const preparedMetadata: PreparedEmailStateMutation | null = hasMetadataPatch(patch)
-            ? await prepareEmailStateReplacementInTransaction(dependencies, tx, {
-                accountId: input.accountId,
-                emailId,
-                mailboxIds: patch.mailboxIds,
-                keywords: patch.keywords,
-              })
-            : null;
+          const usesReplacement = patch.mailboxIds !== undefined || patch.keywords !== undefined;
+          const preparedMetadata: PreparedEmailStateMutation | null =
+            hasMetadataPatch(patch) && usesReplacement
+              ? await prepareEmailStateReplacementInTransaction(dependencies, tx, {
+                  accountId: input.accountId,
+                  emailId,
+                  mailboxIds: patch.mailboxIds,
+                  keywords: patch.keywords,
+                })
+              : null;
           const preparedDraft = preparedUpdates.get(emailId);
           const validatedDraft =
             preparedDraft === undefined
@@ -218,6 +238,17 @@ export async function setEmails(
               await applyPreparedEmailStateInTransaction(tx, {
                 ...preparedMetadata,
                 email: current ?? preparedMetadata.email,
+              }),
+            );
+          } else if (hasMetadataPatch(patch)) {
+            current = withoutStateVersion(
+              await updateEmailInTransaction(dependencies, tx, {
+                accountId: input.accountId,
+                emailId,
+                addMailboxIds: patch.addMailboxIds,
+                removeMailboxIds: patch.removeMailboxIds,
+                addKeywords: patch.addKeywords,
+                removeKeywords: patch.removeKeywords,
               }),
             );
           }

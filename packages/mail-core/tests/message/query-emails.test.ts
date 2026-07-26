@@ -172,6 +172,27 @@ describe('queryEmails', () => {
     expect(second.emailIds).toEqual(['email-25', h.email3]);
   });
 
+  it('returns the full filtered total independently of the current page', async () => {
+    const h = await createQueryHarness();
+    const input = {
+      accountId: h.accountId,
+      filter: { mailboxId: h.inboxId },
+      sort: { property: 'receivedAt' as const, direction: 'desc' as const },
+      limit: 2,
+      cursor: null,
+      calculateTotal: true,
+    };
+
+    const first = await queryEmails(h.dependencies, input);
+    const second = await queryEmails(h.dependencies, {
+      ...input,
+      cursor: first.nextCursor,
+    });
+
+    expect(first).toMatchObject({ total: 3 });
+    expect(second).toMatchObject({ total: 3, emailIds: [h.email1] });
+  });
+
   it.each([0, -1, 1.5, 1001])(
     'rejects invalid bounded limit %j without mutation',
     async (limit) => {
@@ -234,14 +255,17 @@ describe('queryEmails', () => {
       ).rejects.toMatchObject({ code: 'INVALID_CURSOR', details: {} });
     }
 
-    const threadCursor = encodeCursor({
-      version: 1,
-      kind: 'thread',
-      accountId: h.accountId,
-      query: 'thread-query',
-      latestReceivedAt: '2026-01-01T00:00:00.000Z',
-      threadId: h.threadA,
-    });
+    const threadCursor = encodeCursor(
+      {
+        version: 1,
+        kind: 'thread',
+        accountId: h.accountId,
+        query: 'thread-query',
+        latestReceivedAt: '2026-01-01T00:00:00.000Z',
+        threadId: h.threadA,
+      },
+      h.dependencies.cursorSigningKey,
+    );
     await expect(
       queryEmails(h.dependencies, {
         accountId: h.accountId,
@@ -255,16 +279,19 @@ describe('queryEmails', () => {
 
   it('rejects a structurally valid cross-account cursor before SearchStore execution', async () => {
     const h = await createQueryHarness();
-    const cursor = encodeCursor({
-      version: 1,
-      kind: 'email',
-      accountId: h.otherAccountId,
-      sort: 'receivedAt',
-      direction: 'desc',
-      query: 'anything',
-      value: { type: 'date', value: '2026-01-01T00:00:00.000Z' },
-      emailId: 'email-other',
-    } as EmailCursorPayload);
+    const cursor = encodeCursor(
+      {
+        version: 1,
+        kind: 'email',
+        accountId: h.otherAccountId,
+        sort: 'receivedAt',
+        direction: 'desc',
+        query: 'anything',
+        value: { type: 'date', value: '2026-01-01T00:00:00.000Z' },
+        emailId: 'email-other',
+      } as EmailCursorPayload,
+      h.dependencies.cursorSigningKey,
+    );
 
     await expect(
       queryEmails(h.dependencies, {

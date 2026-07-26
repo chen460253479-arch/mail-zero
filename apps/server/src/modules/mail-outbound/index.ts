@@ -8,6 +8,7 @@ export * from './application/finalize-failed';
 export * from './application/finalize-sent';
 export * from './application/reconcile-uncertain';
 export * from './application/recover-expired-leases';
+export * from './application/set-submissions';
 export * from './domain/delivery';
 export * from './domain/errors';
 export * from './domain/ports';

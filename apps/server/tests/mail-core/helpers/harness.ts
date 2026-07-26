@@ -49,6 +49,7 @@ export const createPostgresMailTestHarness = async (
       },
     },
     sanitizeHtml: (html) => html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/giu, ''),
+    cursorSigningKey: 'postgres-mail-test-cursor-key',
   };
   const account = await createMailAccount(dependencies, {
     userId,

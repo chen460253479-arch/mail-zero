@@ -6,6 +6,25 @@ export type GetEmailInput = {
   emailId: EmailId;
 };
 
+export type GetEmailsInput = {
+  accountId: MailAccountId;
+  emailIds: EmailId[];
+};
+
+export async function getEmails(
+  dependencies: Pick<MailCoreDependencies, 'unitOfWork'>,
+  input: GetEmailsInput,
+): Promise<EmailRecord[]> {
+  return dependencies.unitOfWork.run(async (tx) => {
+    if ((await tx.accounts.findById(input.accountId)) === null) {
+      throw new MailCoreError('ACCOUNT_NOT_FOUND', { entityId: input.accountId });
+    }
+    return (await tx.emails.findByIds(input.accountId, [...new Set(input.emailIds)])).filter(
+      ({ destroyedAt, mailboxIds }) => destroyedAt === null && mailboxIds.length > 0,
+    );
+  });
+}
+
 export async function getEmail(
   dependencies: Pick<MailCoreDependencies, 'unitOfWork'>,
   input: GetEmailInput,

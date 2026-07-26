@@ -152,6 +152,16 @@ export class MemoryBlobStore implements BlobStore {
     return copyBytes(blob.bytes);
   }
 
+  async getRange(input: {
+    accountId: MailAccountId;
+    objectKey: string;
+    offset: number;
+    length: number;
+  }): Promise<Uint8Array> {
+    const bytes = await this.get(input);
+    return bytes.slice(input.offset, input.offset + input.length);
+  }
+
   async delete(input: { accountId: MailAccountId; objectKey: string }): Promise<void> {
     const blob = this.objects.get(input.objectKey);
     if (blob !== undefined && blob.accountId !== input.accountId) {

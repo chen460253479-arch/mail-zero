@@ -1,6 +1,11 @@
-import { and, asc, eq, lte, or } from 'drizzle-orm';
+import { and, asc, eq, lte, ne, or } from 'drizzle-orm';
 
-import type { MailSnoozeRepository, SnoozeRecord } from '../domain/snooze';
+import type {
+  MailSnoozeRepository,
+  MailSnoozeTransactionRepository,
+  SnoozeRecord,
+} from '../domain/snooze';
+import type { MailDatabase } from '../../mail/postgres/repositories/database';
 import { threadSnooze } from './schema';
 import type { DB } from '../../../db';
 
@@ -8,7 +13,7 @@ const map = (row: typeof threadSnooze.$inferSelect): SnoozeRecord => ({
   accountId: row.mailAccountId,
   threadId: row.threadId,
   wakeAt: row.wakeAt,
-  restoreMailboxIds: row.restoreMailboxIds,
+  restorePlan: row.restorePlan,
   status: row.status,
   leaseOwner: row.leaseOwner,
   leaseExpiresAt: row.leaseExpiresAt,
@@ -16,7 +21,9 @@ const map = (row: typeof threadSnooze.$inferSelect): SnoozeRecord => ({
   updatedAt: row.updatedAt,
 });
 
-export const createPostgresMailSnoozeRepository = (db: DB): MailSnoozeRepository => ({
+export const createPostgresMailSnoozeTransactionRepository = (
+  db: MailDatabase,
+): MailSnoozeTransactionRepository => ({
   async find(accountId, threadId) {
     const rows = await db
       .select()
@@ -32,7 +39,7 @@ export const createPostgresMailSnoozeRepository = (db: DB): MailSnoozeRepository
         mailAccountId: input.accountId,
         threadId: input.threadId,
         wakeAt: input.wakeAt,
-        restoreMailboxIds: input.restoreMailboxIds,
+        restorePlan: input.restorePlan,
         status: 'scheduled',
         leaseOwner: null,
         leaseExpiresAt: null,
@@ -43,14 +50,19 @@ export const createPostgresMailSnoozeRepository = (db: DB): MailSnoozeRepository
         target: [threadSnooze.mailAccountId, threadSnooze.threadId],
         set: {
           wakeAt: input.wakeAt,
-          restoreMailboxIds: input.restoreMailboxIds,
+          restorePlan: input.restorePlan,
           status: 'scheduled',
           leaseOwner: null,
           leaseExpiresAt: null,
           updatedAt: input.now,
         },
+        setWhere: or(
+          ne(threadSnooze.status, 'waking'),
+          lte(threadSnooze.leaseExpiresAt, input.now),
+        ),
       })
       .returning();
+    if (rows[0] === undefined) throw new Error('SNOOZE_BUSY');
     return map(rows[0]!);
   },
   async cancel(input) {
@@ -69,6 +81,28 @@ export const createPostgresMailSnoozeRepository = (db: DB): MailSnoozeRepository
         ),
       );
   },
+  async complete(input) {
+    await db
+      .update(threadSnooze)
+      .set({
+        status: 'completed',
+        leaseOwner: null,
+        leaseExpiresAt: null,
+        updatedAt: input.now,
+      })
+      .where(
+        and(
+          eq(threadSnooze.mailAccountId, input.accountId),
+          eq(threadSnooze.threadId, input.threadId),
+          eq(threadSnooze.status, 'waking'),
+          eq(threadSnooze.leaseOwner, input.leaseOwner),
+        ),
+      );
+  },
+});
+
+export const createPostgresMailSnoozeRepository = (db: DB): MailSnoozeRepository => ({
+  ...createPostgresMailSnoozeTransactionRepository(db),
   async claimDue(input) {
     const leaseExpiresAt = new Date(input.now.getTime() + input.leaseForMs);
     return db.transaction(async (tx) => {
@@ -108,24 +142,6 @@ export const createPostgresMailSnoozeRepository = (db: DB): MailSnoozeRepository
       }
       return claimed;
     });
-  },
-  async complete(input) {
-    await db
-      .update(threadSnooze)
-      .set({
-        status: 'completed',
-        leaseOwner: null,
-        leaseExpiresAt: null,
-        updatedAt: input.now,
-      })
-      .where(
-        and(
-          eq(threadSnooze.mailAccountId, input.accountId),
-          eq(threadSnooze.threadId, input.threadId),
-          eq(threadSnooze.status, 'waking'),
-          eq(threadSnooze.leaseOwner, input.leaseOwner),
-        ),
-      );
   },
   async release(input) {
     await db

@@ -1,5 +1,23 @@
 import { z } from 'zod';
 
+export const MAX_SET_OPERATIONS = 200;
+
+export const enforceSetOperationLimit = (
+  value: { create: Record<string, unknown>; update?: Record<string, unknown>; destroy: string[] },
+  context: z.RefinementCtx,
+) => {
+  const count =
+    Object.keys(value.create).length +
+    Object.keys(value.update ?? {}).length +
+    value.destroy.length;
+  if (count > MAX_SET_OPERATIONS) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `A Set request may contain at most ${MAX_SET_OPERATIONS} operations`,
+    });
+  }
+};
+
 export const mailIdSchema = z.string().min(1).max(255);
 export const mailAccountIdSchema = mailIdSchema;
 export const stateSchema = z.string().min(1).max(255);

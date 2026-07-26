@@ -7,7 +7,7 @@ import { MailApiError } from '../errors/mail-api-error';
 import { toEmailDto } from './email-dto';
 
 export const createThreadViewService = (
-  core: Pick<MailCore, 'getEmail' | 'getState' | 'readBlob'>,
+  core: Pick<MailCore, 'getEmails' | 'getState' | 'readBlob' | 'readBlobRange'>,
   projection: MailViewProjection,
 ) => ({
   async threadPage(input: z.infer<typeof threadPageInputSchema>) {
@@ -28,15 +28,13 @@ export const createThreadViewService = (
         requestId: crypto.randomUUID(),
       });
     }
+    const records = await core.getEmails({
+      accountId,
+      emailIds: detail.emailIds as EmailId[],
+    });
+    const bodyReadBudget = { remainingBytes: 8_000_000 };
     const emails = await Promise.all(
-      detail.emailIds.map(async (id) =>
-        toEmailDto(
-          core,
-          accountId,
-          await core.getEmail({ accountId, emailId: id as EmailId }),
-          input,
-        ),
-      ),
+      records.map((email) => toEmailDto(core, accountId, email, { ...input, bodyReadBudget })),
     );
     return {
       accountId: input.accountId,

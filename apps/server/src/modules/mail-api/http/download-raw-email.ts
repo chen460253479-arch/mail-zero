@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 
-import { authorizeMailAccount } from './authorize-mail-account';
+import { authorizeMailAccount, mailHttpErrorResponse } from './authorize-mail-account';
 import { safeDownloadHeaders } from './download-blob';
 import type { HonoContext } from '../../../ctx';
 
@@ -21,8 +21,8 @@ export async function downloadRawEmail(c: Context<HonoContext>) {
     return new Response(bytes as BodyInit, {
       headers: safeDownloadHeaders('message/rfc822', bytes.byteLength, `${email.id}.eml`),
     });
-  } catch {
-    return c.json({ code: 'NOT_FOUND' }, 404);
+  } catch (error) {
+    return mailHttpErrorResponse(c, error);
   } finally {
     await authorization.runtime.close();
   }

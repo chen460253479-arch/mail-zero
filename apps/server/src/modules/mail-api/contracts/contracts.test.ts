@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import { emailSchema, emailSetInputSchema } from './email';
+import { submissionSetInputSchema } from './submission';
 import { mailboxSchema } from './mailbox';
 import { accountSchema } from './account';
-import { emailSchema } from './email';
 
 describe('Mail API contracts', () => {
   it('serializes account bigint and Date fields to stable public strings', () => {
@@ -92,5 +93,49 @@ describe('Mail API contracts', () => {
     expect(parsed).not.toHaveProperty('provider');
     expect(parsed).not.toHaveProperty('objectKey');
     expect(parsed).not.toHaveProperty('restoreMailboxIds');
+  });
+
+  it('caps the combined mutation count of every Set request', () => {
+    const create = Object.fromEntries(
+      Array.from({ length: 101 }, (_, index) => [
+        `create-${index}`,
+        {
+          identityId: 'identity-1',
+          replyToEmailId: null,
+          to: [],
+          cc: [],
+          bcc: [],
+          subject: '',
+          textBody: '',
+          htmlBody: '',
+          attachmentBlobIds: [],
+        },
+      ]),
+    );
+    const destroy = Array.from({ length: 100 }, (_, index) => `email-${index}`);
+
+    expect(
+      emailSetInputSchema.safeParse({
+        accountId: 'account-1',
+        create,
+        destroy,
+      }).success,
+    ).toBe(false);
+    expect(
+      submissionSetInputSchema.safeParse({
+        accountId: 'account-1',
+        create: Object.fromEntries(
+          Array.from({ length: 101 }, (_, index) => [
+            `submission-${index}`,
+            {
+              emailId: `email-${index}`,
+              identityId: 'identity-1',
+              idempotencyKey: `key-${index}`,
+            },
+          ]),
+        ),
+        destroy: Array.from({ length: 100 }, (_, index) => `submission-${index}`),
+      }).success,
+    ).toBe(false);
   });
 });

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MailCoreError } from '@zero/mail-core';
 import { Hono } from 'hono';
 
 const runtimeMocks = vi.hoisted(() => ({
@@ -39,7 +40,9 @@ describe('Mail Blob HTTP routes', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('returns 404 when the account is not owned by the session user', async () => {
-    runtimeMocks.openOwned.mockRejectedValue(new Error('not owned'));
+    runtimeMocks.openOwned.mockRejectedValue(
+      new MailCoreError('ACCOUNT_NOT_FOUND', { accountId: 'foreign' }),
+    );
 
     const response = await createApp().request('/mail/accounts/foreign/blobs/blob-1/file.bin');
 
@@ -49,6 +52,7 @@ describe('Mail Blob HTTP routes', () => {
   it('sets safe download headers and closes the account runtime', async () => {
     runtimeMocks.openOwned.mockResolvedValue({
       core: {
+        getBlob: vi.fn(async () => ({ contentType: 'application/pdf' })),
         readBlob: vi.fn(async () => new Uint8Array([1, 2, 3])),
       },
       close: runtimeMocks.close,
@@ -62,6 +66,7 @@ describe('Mail Blob HTTP routes', () => {
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
     expect(response.headers.get('content-disposition')).toBe('attachment; filename="a___evil.bin"');
     expect(response.headers.get('content-length')).toBe('3');
+    expect(response.headers.get('content-type')).toBe('application/pdf');
     expect(runtimeMocks.close).toHaveBeenCalledOnce();
   });
 
@@ -74,5 +79,17 @@ describe('Mail Blob HTTP routes', () => {
 
     expect(response.status).toBe(413);
     expect(runtimeMocks.openOwned).not.toHaveBeenCalled();
+  });
+
+  it('does not disguise infrastructure failures as missing resources', async () => {
+    runtimeMocks.openOwned.mockRejectedValue(new Error('database unavailable'));
+
+    const response = await createApp().request('/mail/accounts/account-1/blobs/blob-1/file.bin');
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      code: 'STORAGE_FAILURE',
+      retryable: true,
+    });
   });
 });
