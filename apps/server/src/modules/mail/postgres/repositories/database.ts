@@ -59,6 +59,8 @@ const errorForConstraint = (constraint: string | undefined): MailCoreErrorCode |
     case 'email_trash_restore_mailbox_account_fk':
     case 'remote_email_email_account_fk':
     case 'mailbox_parent_account_fk':
+    case 'mailbox_thread_mailbox_account_fk':
+    case 'mailbox_thread_thread_account_fk':
     case 'email_search_email_account_fk':
     case 'email_submission_email_account_fk':
     case 'email_submission_identity_account_fk':

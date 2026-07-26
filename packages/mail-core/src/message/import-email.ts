@@ -28,7 +28,9 @@ import {
 } from '../types';
 import { calculateThreadDecision, createThreadReferenceKeys, normalizeSubject } from '../thread';
 import type { ImportEmailInput, ImportEmailResult, ParsedEmail } from './types';
+import { applyEmailAggregateDelta } from './email-aggregates';
 import { createEmailSearchDocument } from './search-document';
+import type { PendingMailChange } from '../changes';
 import { parseRawEmail } from './mime';
 
 type ImportValidation = {
@@ -230,9 +232,6 @@ const participantSummaryFrom = (parsed: Pick<ParsedEmail, 'cc' | 'from' | 'to'>)
   return participants.length === 0 ? null : participants.slice(0, 3).join(', ');
 };
 
-const isUnread = (email: Pick<EmailRecord, 'keywords'>): boolean =>
-  !email.keywords.includes('$seen');
-
 const buildThreadRecord = (
   id: ThreadId,
   input: ImportEmailInput,
@@ -264,6 +263,7 @@ const decideThread = async (
   destroyedThreadIds: ThreadId[];
   retainedThreadIds: ThreadId[];
   movedEmailIds: EmailId[];
+  movedEmails: { before: EmailRecord; after: EmailRecord }[];
 }> => {
   const normalizedSubject = normalizeSubject(parsed.subject);
   const referenceKeys = await createThreadReferenceKeys({
@@ -298,6 +298,7 @@ const decideThread = async (
       destroyedThreadIds: [],
       retainedThreadIds: [],
       movedEmailIds: [],
+      movedEmails: [],
     };
   }
 
@@ -308,16 +309,32 @@ const decideThread = async (
       destroyedThreadIds: [],
       retainedThreadIds: [],
       movedEmailIds: [],
+      movedEmails: [],
     };
   }
 
   const movedEmailIds: EmailId[] = [];
+  const movedEmails: { before: EmailRecord; after: EmailRecord }[] = [];
   const destroyedThreadIds: ThreadId[] = [];
   const retainedThreadIds: ThreadId[] = [];
   for (const loserThreadId of decision.loserThreadIds) {
-    movedEmailIds.push(
-      ...(await tx.emails.moveThread(input.accountId, loserThreadId, decision.winnerThreadId, now)),
+    const moved = await tx.emails.moveThread(
+      input.accountId,
+      loserThreadId,
+      decision.winnerThreadId,
+      now,
     );
+    movedEmailIds.push(...moved);
+    for (const emailId of moved) {
+      const after = await tx.emails.findById(input.accountId, emailId);
+      if (after === null) {
+        throw new MailCoreError('EMAIL_NOT_FOUND', { entityId: emailId });
+      }
+      movedEmails.push({
+        before: { ...after, threadId: loserThreadId },
+        after,
+      });
+    }
     await tx.threadReferences.moveThread(input.accountId, loserThreadId, decision.winnerThreadId);
     const ownsRetainedEmail = await tx.emails.hasRetainedEmailInThread(
       input.accountId,
@@ -326,7 +343,6 @@ const decideThread = async (
     if (ownsRetainedEmail) {
       retainedThreadIds.push(loserThreadId);
     } else {
-      await tx.threads.delete(input.accountId, loserThreadId);
       destroyedThreadIds.push(loserThreadId);
     }
   }
@@ -336,97 +352,8 @@ const decideThread = async (
     destroyedThreadIds,
     retainedThreadIds,
     movedEmailIds,
+    movedEmails,
   };
-};
-
-const updateThreadAggregate = async (
-  tx: MailTransaction,
-  input: ImportEmailInput,
-  threadId: ThreadId,
-  now: Date,
-): Promise<string[]> => {
-  const thread = await tx.threads.findById(input.accountId, threadId);
-  if (thread === null) {
-    throw new MailCoreError('THREAD_NOT_FOUND', { entityId: threadId });
-  }
-  const emails = (await tx.emails.listByThread(input.accountId, threadId)).filter(
-    ({ destroyedAt, mailboxIds }) => destroyedAt === null && mailboxIds.length > 0,
-  );
-  const latest = emails.reduce<EmailRecord | null>(
-    (current, email) =>
-      current === null ||
-      email.receivedAt > current.receivedAt ||
-      (email.receivedAt.getTime() === current.receivedAt.getTime() &&
-        email.id.localeCompare(current.id) > 0)
-        ? email
-        : current,
-    null,
-  );
-  const next = {
-    latestReceivedAt: latest?.receivedAt ?? thread.latestReceivedAt,
-    emailCount: emails.length,
-    unreadCount: emails.filter(isUnread).length,
-    hasAttachment: emails.some(({ hasAttachment }) => hasAttachment),
-    participantSummary:
-      latest === null
-        ? null
-        : (participantSummaryFrom({
-            from: latest.from,
-            to: latest.to,
-            cc: latest.cc,
-          }) ?? null),
-    preview: latest?.preview ?? null,
-  };
-  const changedProperties = [
-    ...(thread.latestReceivedAt.getTime() === next.latestReceivedAt.getTime()
-      ? []
-      : ['latestReceivedAt']),
-    ...(thread.emailCount === next.emailCount ? [] : ['emailCount']),
-    ...(thread.unreadCount === next.unreadCount ? [] : ['unreadCount']),
-    ...(thread.hasAttachment === next.hasAttachment ? [] : ['hasAttachment']),
-    ...(thread.participantSummary === next.participantSummary ? [] : ['participantSummary']),
-    ...(thread.preview === next.preview ? [] : ['preview']),
-  ];
-  await tx.threads.update(input.accountId, threadId, {
-    ...next,
-    updatedAt: now,
-  });
-  return changedProperties;
-};
-
-const updateMailboxAggregates = async (
-  tx: MailTransaction,
-  input: ImportEmailInput,
-  now: Date,
-): Promise<{ mailboxId: MailboxId; changedProperties: string[] }[]> => {
-  const changes: { mailboxId: MailboxId; changedProperties: string[] }[] = [];
-  const emails = await tx.emails.listByAccount(input.accountId);
-  for (const mailbox of await tx.mailboxes.listByAccount(input.accountId)) {
-    const mailboxEmails = emails.filter(({ mailboxIds }) => mailboxIds.includes(mailbox.id));
-    const totalEmails = mailboxEmails.length;
-    const unreadEmails = mailboxEmails.filter(isUnread).length;
-    const totalThreads = new Set(mailboxEmails.map(({ threadId }) => threadId)).size;
-    const unreadThreads = new Set(mailboxEmails.filter(isUnread).map(({ threadId }) => threadId))
-      .size;
-    const changedProperties = [
-      ...(mailbox.totalEmails === totalEmails ? [] : ['totalEmails']),
-      ...(mailbox.unreadEmails === unreadEmails ? [] : ['unreadEmails']),
-      ...(mailbox.totalThreads === totalThreads ? [] : ['totalThreads']),
-      ...(mailbox.unreadThreads === unreadThreads ? [] : ['unreadThreads']),
-    ];
-    if (changedProperties.length === 0) {
-      continue;
-    }
-    await tx.mailboxes.update(input.accountId, mailbox.id, {
-      totalEmails,
-      unreadEmails,
-      totalThreads,
-      unreadThreads,
-      updatedAt: now,
-    });
-    changes.push({ mailboxId: mailbox.id, changedProperties });
-  }
-  return changes;
 };
 
 const buildEmailParts = (
@@ -624,9 +551,23 @@ export async function importEmail(
       }
 
       const thread = await decideThread(dependencies, tx, input, parsed, now);
+      const aggregateChanges: PendingMailChange[] = [];
+      for (const moved of thread.movedEmails) {
+        aggregateChanges.push(
+          ...(await applyEmailAggregateDelta(tx, {
+            accountId: input.accountId,
+            before: moved.before,
+            after: moved.after,
+            now,
+          })),
+        );
+      }
+      for (const threadId of thread.destroyedThreadIds) {
+        await tx.threads.delete(input.accountId, threadId);
+      }
       const emailId = dependencies.idFactory.next<'Email'>() as EmailId;
       const rawBlobId = blobIdByDigest.get(digestKey(rawBlob!))!;
-      await tx.emails.insert({
+      const stored = await tx.emails.insert({
         id: emailId,
         accountId: input.accountId,
         identityId: null,
@@ -662,6 +603,14 @@ export async function importEmail(
         restoreMailboxIds: [],
         keywords: validation.keywords,
       });
+      aggregateChanges.push(
+        ...(await applyEmailAggregateDelta(tx, {
+          accountId: input.accountId,
+          before: null,
+          after: stored,
+          now,
+        })),
+      );
       for (const reference of await createThreadReferenceKeys({
         subject: parsed.subject,
         messageIds: parsed.messageId === null ? [] : [parsed.messageId],
@@ -702,21 +651,30 @@ export async function importEmail(
         firstSeenAt: now,
         lastSeenAt: now,
       });
-      const threadChangedProperties = await updateThreadAggregate(tx, input, thread.threadId, now);
-      const retainedThreadChanges: {
-        threadId: ThreadId;
-        changedProperties: string[];
-      }[] = [];
-      for (const retainedThreadId of thread.retainedThreadIds) {
-        const changedProperties = await updateThreadAggregate(tx, input, retainedThreadId, now);
-        if (changedProperties.length > 0) {
-          retainedThreadChanges.push({
-            threadId: retainedThreadId,
-            changedProperties,
-          });
+      const propertiesByEntity = (collection: 'mailbox' | 'thread'): Map<string, string[]> => {
+        const result = new Map<string, string[]>();
+        for (const change of aggregateChanges) {
+          if (change.collection !== collection) continue;
+          result.set(change.entityId, [
+            ...new Set([
+              ...(result.get(change.entityId) ?? []),
+              ...(change.changedProperties ?? []),
+            ]),
+          ]);
         }
-      }
-      const mailboxChanges = await updateMailboxAggregates(tx, input, now);
+        return result;
+      };
+      const threadProperties = propertiesByEntity('thread');
+      const mailboxProperties = propertiesByEntity('mailbox');
+      const threadChangedProperties = threadProperties.get(thread.threadId) ?? [];
+      const retainedThreadChanges = thread.retainedThreadIds.flatMap((threadId) => {
+        const changedProperties = threadProperties.get(threadId) ?? [];
+        return changedProperties.length === 0 ? [] : [{ threadId, changedProperties }];
+      });
+      const mailboxChanges = [...mailboxProperties].map(([mailboxId, changedProperties]) => ({
+        mailboxId: mailboxId as MailboxId,
+        changedProperties,
+      }));
 
       for (const { blobId, prepared: pending, record } of newBlobs) {
         const receipt = await commitPreparedBlob(dependencies.blobStore, pending, record.objectKey);

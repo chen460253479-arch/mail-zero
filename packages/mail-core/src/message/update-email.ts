@@ -6,14 +6,9 @@ import {
   type MailAccountId,
   type MailboxId,
 } from '../types';
-import type {
-  EmailRecord,
-  MailboxRecord,
-  MailCoreDependencies,
-  MailTransaction,
-  ThreadRecord,
-} from '../store';
-import { recordChanges, type PendingMailChange } from '../changes';
+import type { EmailRecord, MailCoreDependencies, MailTransaction } from '../store';
+import { applyEmailAggregateDelta } from './email-aggregates';
+import { recordChanges } from '../changes';
 
 export type UpdateEmailInput = {
   accountId: MailAccountId;
@@ -111,143 +106,6 @@ const requireMailboxReferences = async (
   }
 };
 
-const visibleEmails = async (
-  tx: MailTransaction,
-  accountId: MailAccountId,
-): Promise<EmailRecord[]> =>
-  (await tx.emails.listByAccount(accountId)).filter(
-    ({ destroyedAt, mailboxIds }) => destroyedAt === null && mailboxIds.length > 0,
-  );
-
-const isUnread = ({ keywords }: EmailRecord): boolean => !keywords.includes('$seen');
-
-const mailboxCounterProperties = (
-  mailbox: MailboxRecord,
-  next: Pick<MailboxRecord, 'totalEmails' | 'unreadEmails' | 'totalThreads' | 'unreadThreads'>,
-): string[] => [
-  ...(mailbox.totalEmails === next.totalEmails ? [] : ['totalEmails']),
-  ...(mailbox.unreadEmails === next.unreadEmails ? [] : ['unreadEmails']),
-  ...(mailbox.totalThreads === next.totalThreads ? [] : ['totalThreads']),
-  ...(mailbox.unreadThreads === next.unreadThreads ? [] : ['unreadThreads']),
-];
-
-export async function updateMailboxCounters(
-  tx: MailTransaction,
-  accountId: MailAccountId,
-  now: Date,
-): Promise<PendingMailChange[]> {
-  const emails = await visibleEmails(tx, accountId);
-  const changes: PendingMailChange[] = [];
-  for (const mailbox of await tx.mailboxes.listByAccount(accountId)) {
-    if (mailbox.deletedAt !== null) {
-      continue;
-    }
-    const mailboxEmails = emails.filter(({ mailboxIds }) => mailboxIds.includes(mailbox.id));
-    const unreadEmails = mailboxEmails.filter(isUnread);
-    const next = {
-      totalEmails: mailboxEmails.length,
-      unreadEmails: unreadEmails.length,
-      totalThreads: new Set(mailboxEmails.map(({ threadId }) => threadId)).size,
-      unreadThreads: new Set(unreadEmails.map(({ threadId }) => threadId)).size,
-    };
-    const changedProperties = mailboxCounterProperties(mailbox, next);
-    if (changedProperties.length === 0) {
-      continue;
-    }
-    await tx.mailboxes.update(accountId, mailbox.id, {
-      ...next,
-      updatedAt: now,
-    });
-    changes.push({
-      collection: 'mailbox',
-      entityId: mailbox.id,
-      changeType: 'updated',
-      changedProperties,
-    });
-  }
-  return changes;
-}
-
-const participantSummaryFrom = (email: Pick<EmailRecord, 'cc' | 'from' | 'to'>): string | null => {
-  const participants = Array.from(
-    new Set(
-      [...email.from, ...email.to, ...email.cc].map(
-        ({ email: address, name }) => name?.trim() || address,
-      ),
-    ),
-  );
-  return participants.length === 0 ? null : participants.slice(0, 3).join(', ');
-};
-
-const threadAggregateProperties = (
-  thread: ThreadRecord,
-  next: Pick<
-    ThreadRecord,
-    | 'latestReceivedAt'
-    | 'emailCount'
-    | 'unreadCount'
-    | 'hasAttachment'
-    | 'participantSummary'
-    | 'preview'
-  >,
-): string[] => [
-  ...(thread.latestReceivedAt.getTime() === next.latestReceivedAt.getTime()
-    ? []
-    : ['latestReceivedAt']),
-  ...(thread.emailCount === next.emailCount ? [] : ['emailCount']),
-  ...(thread.unreadCount === next.unreadCount ? [] : ['unreadCount']),
-  ...(thread.hasAttachment === next.hasAttachment ? [] : ['hasAttachment']),
-  ...(thread.participantSummary === next.participantSummary ? [] : ['participantSummary']),
-  ...(thread.preview === next.preview ? [] : ['preview']),
-];
-
-export async function updateThreadCounters(
-  tx: MailTransaction,
-  accountId: MailAccountId,
-  threadId: EmailRecord['threadId'],
-  now: Date,
-): Promise<PendingMailChange | null> {
-  const thread = await tx.threads.findById(accountId, threadId);
-  if (thread === null) {
-    throw new MailCoreError('THREAD_NOT_FOUND', { entityId: threadId });
-  }
-  const emails = (await tx.emails.listByThread(accountId, threadId)).filter(
-    ({ destroyedAt, mailboxIds }) => destroyedAt === null && mailboxIds.length > 0,
-  );
-  const latest = emails.reduce<EmailRecord | null>(
-    (current, email) =>
-      current === null ||
-      email.receivedAt > current.receivedAt ||
-      (email.receivedAt.getTime() === current.receivedAt.getTime() &&
-        email.id.localeCompare(current.id) > 0)
-        ? email
-        : current,
-    null,
-  );
-  const next = {
-    latestReceivedAt: latest?.receivedAt ?? thread.latestReceivedAt,
-    emailCount: emails.length,
-    unreadCount: emails.filter(isUnread).length,
-    hasAttachment: emails.some(({ hasAttachment }) => hasAttachment),
-    participantSummary: latest === null ? null : participantSummaryFrom(latest),
-    preview: latest?.preview ?? null,
-  };
-  const changedProperties = threadAggregateProperties(thread, next);
-  if (changedProperties.length === 0) {
-    return null;
-  }
-  await tx.threads.update(accountId, threadId, {
-    ...next,
-    updatedAt: now,
-  });
-  return {
-    collection: 'thread',
-    entityId: threadId,
-    changeType: 'updated',
-    changedProperties,
-  };
-}
-
 const withStateVersion = (email: EmailRecord, stateVersion: bigint): EmailStateResult => ({
   ...email,
   stateVersion,
@@ -287,8 +145,12 @@ const applyEmailState = async (
       updatedAt: now,
     });
     const updated = (await tx.emails.findById(input.accountId, input.emailId))!;
-    const mailboxChanges = await updateMailboxCounters(tx, input.accountId, now);
-    const threadChange = await updateThreadCounters(tx, input.accountId, email.threadId, now);
+    const aggregateChanges = await applyEmailAggregateDelta(tx, {
+      accountId: input.accountId,
+      before: email,
+      after: updated,
+      now,
+    });
     const stateVersion = await recordChanges(tx, {
       accountId: input.accountId,
       changes: [
@@ -298,8 +160,7 @@ const applyEmailState = async (
           changeType: 'updated',
           changedProperties: next.changedProperties,
         },
-        ...(threadChange === null ? [] : [threadChange]),
-        ...mailboxChanges,
+        ...aggregateChanges,
       ],
       createdAt: now,
     });

@@ -13,6 +13,7 @@ import type {
 } from '../types';
 import type { SubmissionAttemptOutcome, SubmissionStatus } from '../submission/types';
 import type { ChangeCollection, MailChange } from '../changes/types';
+import type { EmailAggregateProjection } from '../mailbox';
 
 export type AccountStatus = 'active' | 'suspended' | 'deleting';
 export type EmailLifecycle = 'draft' | 'received' | 'sent';
@@ -307,6 +308,18 @@ export interface ThreadReferenceRepository {
   insert(record: ThreadReferenceRecord): Promise<void>;
   moveThread(accountId: MailAccountId, fromThreadId: ThreadId, toThreadId: ThreadId): Promise<void>;
   deleteByEmail(accountId: MailAccountId, emailId: EmailId): Promise<void>;
+}
+
+export interface MailAggregateRepository {
+  applyEmailDelta(input: {
+    accountId: MailAccountId;
+    before: EmailAggregateProjection | null;
+    after: EmailAggregateProjection | null;
+    now: Date;
+  }): Promise<{
+    threadChanges: { threadId: ThreadId; changedProperties: string[] }[];
+    mailboxChanges: { mailboxId: MailboxId; changedProperties: string[] }[];
+  }>;
 }
 
 export interface FindRemoteEmailInput {

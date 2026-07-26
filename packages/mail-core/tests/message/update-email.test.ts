@@ -5,11 +5,55 @@ import {
   createIdentity,
   createMailAccount,
   updateEmail,
+  type MailTransaction,
+  type MailUnitOfWork,
   type UpdateEmailInput,
 } from '../../src';
 import { createSeededEmailHarness } from '../helpers/email-harness';
 
 describe('updateEmail', () => {
+  it('does not scan account-wide Email or Mailbox repositories to maintain aggregates', async () => {
+    const h = await createSeededEmailHarness();
+    const repositoryCalls = { emailListByAccount: 0, mailboxListByAccount: 0 };
+    const unitOfWork: MailUnitOfWork = {
+      run<Result>(operation: (transaction: MailTransaction) => Promise<Result>): Promise<Result> {
+        return h.deps.unitOfWork.run((tx) =>
+          operation({
+            ...tx,
+            emails: {
+              ...tx.emails,
+              listByAccount: (accountId) => {
+                repositoryCalls.emailListByAccount += 1;
+                return tx.emails.listByAccount(accountId);
+              },
+            },
+            mailboxes: {
+              ...tx.mailboxes,
+              listByAccount: (accountId) => {
+                repositoryCalls.mailboxListByAccount += 1;
+                return tx.mailboxes.listByAccount(accountId);
+              },
+            },
+          }),
+        );
+      },
+    };
+
+    await updateEmail(
+      { ...h.deps, unitOfWork },
+      {
+        accountId: h.accountId,
+        emailId: h.emailId,
+        addKeywords: ['$seen'],
+      },
+    );
+
+    expect(repositoryCalls).toEqual({
+      emailListByAccount: 0,
+      mailboxListByAccount: 0,
+    });
+  });
+
   it('patches normalized Mailboxes and Keywords with one state version', async () => {
     const h = await createSeededEmailHarness({ keywords: [] });
     const before = await h.inspect.stateVersion();

@@ -1,6 +1,7 @@
 import type { MailTransaction } from '@zero/mail-core';
 
 import { createThreadReferenceRepository } from './thread-reference-repository';
+import { createMailAggregateRepository } from './mail-aggregate-repository';
 import { createThreadQueryRepository } from './thread-query-repository';
 import { createSubmissionRepository } from './submission-repository';
 import { createIdentityRepository } from './identity-repository';
@@ -22,6 +23,7 @@ export const createPostgresRepositories = (
   threadReferences: createThreadReferenceRepository(db),
   threadQueries: createThreadQueryRepository(db),
   emails: createEmailRepository(db),
+  mailAggregates: createMailAggregateRepository(db),
   identities: createIdentityRepository(db),
   submissions: createSubmissionRepository(db),
   changes: createChangeRepository(db),
@@ -33,6 +35,7 @@ export { createChangeRepository } from './change-repository';
 export { createEmailRepository } from './email-repository';
 export { createIdentityRepository } from './identity-repository';
 export { createMailboxRepository } from './mailbox-repository';
+export { createMailAggregateRepository } from './mail-aggregate-repository';
 export { createSubmissionRepository } from './submission-repository';
 export { createThreadRepository } from './thread-repository';
 export { createThreadQueryRepository } from './thread-query-repository';

@@ -24,7 +24,7 @@ import {
   type ThreadId,
 } from '../types';
 import type { CreateDraftInput, DraftAttachment, DraftContent, DraftResult } from './draft-types';
-import { updateMailboxCounters, updateThreadCounters } from './update-email';
+import { applyEmailAggregateDelta } from './email-aggregates';
 import { createEmailSearchDocument } from './search-document';
 import { renderDraft } from './render-draft';
 import { normalizeSubject } from '../thread';
@@ -692,8 +692,12 @@ export async function createDraft(
         now,
         committedObjectKeys,
       );
-      const threadChange = await updateThreadCounters(tx, input.accountId, threadId, now);
-      const mailboxChanges = await updateMailboxCounters(tx, input.accountId, now);
+      const aggregateChanges = await applyEmailAggregateDelta(tx, {
+        accountId: input.accountId,
+        before: null,
+        after: stored,
+        now,
+      });
       const stateVersion = await recordChanges(tx, {
         accountId: input.accountId,
         changes: [
@@ -712,10 +716,11 @@ export async function createDraft(
                   changedProperties: null,
                 },
               ]
-            : threadChange === null
-              ? []
-              : [threadChange]),
-          ...mailboxChanges,
+            : []),
+          ...aggregateChanges.filter(
+            ({ collection, entityId }) =>
+              !(newThread && collection === 'thread' && entityId === threadId),
+          ),
         ],
         createdAt: now,
       });

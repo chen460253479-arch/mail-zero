@@ -16,8 +16,8 @@ import {
 } from './create-draft';
 import type { EmailRecord, MailCoreDependencies, MailTransaction } from '../store';
 import { discardCommittedBlobs, discardTemporaryBlobs } from './blob-lifecycle';
-import { updateMailboxCounters, updateThreadCounters } from './update-email';
 import type { DraftResult, UpdateDraftInput } from './draft-types';
+import { applyEmailAggregateDelta } from './email-aggregates';
 import { createEmailSearchDocument } from './search-document';
 import { renderDraft } from './render-draft';
 import { normalizeSubject } from '../thread';
@@ -228,11 +228,14 @@ export async function updateDraft(
         content.subject,
         now,
       );
-      const aggregateThreadChange = await updateThreadCounters(
-        tx,
-        input.accountId,
-        current.threadId,
+      const aggregateChanges = await applyEmailAggregateDelta(tx, {
+        accountId: input.accountId,
+        before: current,
+        after: updated,
         now,
+      });
+      const aggregateThreadChange = aggregateChanges.find(
+        ({ collection, entityId }) => collection === 'thread' && entityId === current.threadId,
       );
       const threadChange = normalizedSubjectChanged
         ? {
@@ -240,12 +243,13 @@ export async function updateDraft(
             entityId: current.threadId,
             changeType: 'updated' as const,
             changedProperties: [
-              'normalizedSubject',
-              ...(aggregateThreadChange?.changedProperties ?? []),
+              ...new Set([
+                'normalizedSubject',
+                ...(aggregateThreadChange?.changedProperties ?? []),
+              ]),
             ],
           }
         : aggregateThreadChange;
-      const mailboxChanges = await updateMailboxCounters(tx, input.accountId, now);
       const stateVersion = await recordChanges(tx, {
         accountId: input.accountId,
         changes: [
@@ -255,8 +259,11 @@ export async function updateDraft(
             changeType: 'updated',
             changedProperties: changedDraftProperties(current, updated),
           },
-          ...(threadChange === null ? [] : [threadChange]),
-          ...mailboxChanges,
+          ...(threadChange === undefined ? [] : [threadChange]),
+          ...aggregateChanges.filter(
+            ({ collection, entityId }) =>
+              !(collection === 'thread' && entityId === current.threadId),
+          ),
         ],
         createdAt: now,
       });

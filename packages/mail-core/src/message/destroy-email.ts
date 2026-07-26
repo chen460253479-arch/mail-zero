@@ -1,5 +1,6 @@
-import { updateMailboxCounters, updateThreadCounters, type EmailStateInput } from './update-email';
+import { applyEmailAggregateDelta } from './email-aggregates';
 import { MailCoreError, type EmailId } from '../types';
+import type { EmailStateInput } from './update-email';
 import type { MailCoreDependencies } from '../store';
 import { recordChanges } from '../changes';
 
@@ -34,7 +35,7 @@ export async function destroyEmail(
       };
     }
 
-    await tx.emails.update(input.accountId, input.emailId, {
+    const destroyed = await tx.emails.update(input.accountId, input.emailId, {
       destroyedAt: now,
       updatedAt: now,
       identityId: null,
@@ -63,8 +64,12 @@ export async function destroyEmail(
     });
     await tx.emails.deleteSearchDocument(input.accountId, input.emailId);
     await tx.threadReferences.deleteByEmail(input.accountId, input.emailId);
-    const mailboxChanges = await updateMailboxCounters(tx, input.accountId, now);
-    const threadChange = await updateThreadCounters(tx, input.accountId, email.threadId, now);
+    const aggregateChanges = await applyEmailAggregateDelta(tx, {
+      accountId: input.accountId,
+      before: email,
+      after: destroyed,
+      now,
+    });
     const stateVersion = await recordChanges(tx, {
       accountId: input.accountId,
       changes: [
@@ -74,8 +79,7 @@ export async function destroyEmail(
           changeType: 'destroyed',
           changedProperties: null,
         },
-        ...(threadChange === null ? [] : [threadChange]),
-        ...mailboxChanges,
+        ...aggregateChanges,
       ],
       createdAt: now,
     });

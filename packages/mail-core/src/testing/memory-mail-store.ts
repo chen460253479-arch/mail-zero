@@ -11,6 +11,7 @@ import type {
   IdentityRepository,
   InsertMailAccount,
   MailAccountRecord,
+  MailAggregateRepository,
   MailboxRecord,
   MailboxRepository,
   MailChangeRecord,
@@ -36,6 +37,7 @@ import type {
   ThreadId,
 } from '../types';
 import type { ThreadQueryProjection, ThreadQueryRepository } from '../store/thread-query-store';
+import { calculateEmailAggregateDelta } from '../mailbox/email-aggregate-delta';
 import type { MailTransaction, MailUnitOfWork } from '../store/unit-of-work';
 import { MailCoreError } from '../types';
 
@@ -45,6 +47,16 @@ export interface MemoryMailState {
   blobs: Map<string, BlobRecord>;
   threads: Map<string, ThreadRecord>;
   threadReferences: Map<string, ThreadReferenceRecord>;
+  mailboxThreads: Map<
+    string,
+    {
+      accountId: MailAccountId;
+      mailboxId: MailboxId;
+      threadId: ThreadId;
+      emailCount: number;
+      unreadCount: number;
+    }
+  >;
   emails: Map<string, EmailRecord>;
   emailSearchDocuments: Map<string, EmailSearchDocument>;
   remoteEmails: Map<string, RemoteEmailRecord>;
@@ -95,6 +107,7 @@ const createEmptyState = (): MemoryMailState => ({
   blobs: new Map(),
   threads: new Map(),
   threadReferences: new Map(),
+  mailboxThreads: new Map(),
   emails: new Map(),
   emailSearchDocuments: new Map(),
   remoteEmails: new Map(),
@@ -529,6 +542,185 @@ const createRepositories = (
     },
   };
 
+  const aggregateProjectionEmails = (accountId: MailAccountId, threadId: ThreadId): EmailRecord[] =>
+    [...state.emails.values()]
+      .filter(
+        (email) =>
+          email.accountId === accountId &&
+          email.threadId === threadId &&
+          email.destroyedAt === null &&
+          email.mailboxIds.length > 0,
+      )
+      .sort(
+        (left, right) =>
+          left.receivedAt.getTime() - right.receivedAt.getTime() || left.id.localeCompare(right.id),
+      );
+
+  const summaryFrom = (email: EmailRecord): string | null => {
+    const participants = [
+      ...new Set(
+        [...email.from, ...email.to, ...email.cc].map(
+          ({ email: address, name }) => name?.trim() || address,
+        ),
+      ),
+    ];
+    return participants.length === 0 ? null : participants.slice(0, 3).join(', ');
+  };
+
+  const mailAggregates: MailAggregateRepository = {
+    async applyEmailDelta(input) {
+      const delta = calculateEmailAggregateDelta(input.before, input.after);
+      const originalThreads = new Map<string, ThreadRecord>();
+      const originalMailboxes = new Map<string, MailboxRecord>();
+      const rememberThread = (threadId: ThreadId): ThreadRecord => {
+        const key = entityKey(input.accountId, threadId);
+        const current = state.threads.get(key);
+        if (current === undefined) {
+          throw new MailCoreError('THREAD_NOT_FOUND', { entityId: threadId });
+        }
+        originalThreads.set(key, originalThreads.get(key) ?? copy(current));
+        return current;
+      };
+      const rememberMailbox = (mailboxId: MailboxId): MailboxRecord => {
+        const key = entityKey(input.accountId, mailboxId);
+        const current = state.mailboxes.get(key);
+        if (current === undefined) {
+          throw new MailCoreError('MAILBOX_NOT_FOUND', { entityId: mailboxId });
+        }
+        originalMailboxes.set(key, originalMailboxes.get(key) ?? copy(current));
+        return current;
+      };
+      for (const change of delta.threadDeltas) {
+        const current = rememberThread(change.threadId);
+        const visible = aggregateProjectionEmails(input.accountId, change.threadId);
+        const latest = visible.at(-1);
+        const next = {
+          ...current,
+          emailCount: current.emailCount + change.emailDelta,
+          unreadCount: current.unreadCount + change.unreadDelta,
+          hasAttachment: visible.some(({ hasAttachment }) => hasAttachment),
+          latestReceivedAt: latest?.receivedAt ?? current.latestReceivedAt,
+          participantSummary: latest === undefined ? null : summaryFrom(latest),
+          preview: latest?.preview ?? null,
+          updatedAt: input.now,
+        };
+        if (next.emailCount < 0 || next.unreadCount < 0 || next.unreadCount > next.emailCount) {
+          throw new MailCoreError('STORAGE_FAILURE');
+        }
+        state.threads.set(entityKey(input.accountId, change.threadId), copy(next));
+      }
+      for (const change of delta.mailboxDeltas) {
+        const current = rememberMailbox(change.mailboxId);
+        state.mailboxes.set(
+          entityKey(input.accountId, change.mailboxId),
+          copy({
+            ...current,
+            totalEmails: current.totalEmails + change.emailDelta,
+            unreadEmails: current.unreadEmails + change.unreadDelta,
+            updatedAt: input.now,
+          }),
+        );
+      }
+      for (const change of delta.mailboxThreadDeltas) {
+        const key = [input.accountId, change.mailboxId, change.threadId].join('\u0000');
+        const current = state.mailboxThreads.get(key) ?? {
+          accountId: input.accountId,
+          mailboxId: change.mailboxId,
+          threadId: change.threadId,
+          emailCount: 0,
+          unreadCount: 0,
+        };
+        const next = {
+          ...current,
+          emailCount: current.emailCount + change.emailDelta,
+          unreadCount: current.unreadCount + change.unreadDelta,
+        };
+        if (next.emailCount < 0 || next.unreadCount < 0 || next.unreadCount > next.emailCount) {
+          throw new MailCoreError('STORAGE_FAILURE');
+        }
+        const mailbox = rememberMailbox(change.mailboxId);
+        const currentMailbox = state.mailboxes.get(entityKey(input.accountId, change.mailboxId))!;
+        state.mailboxes.set(
+          entityKey(input.accountId, change.mailboxId),
+          copy({
+            ...currentMailbox,
+            totalThreads:
+              currentMailbox.totalThreads +
+              (current.emailCount === 0 && next.emailCount > 0
+                ? 1
+                : current.emailCount > 0 && next.emailCount === 0
+                  ? -1
+                  : 0),
+            unreadThreads:
+              currentMailbox.unreadThreads +
+              (current.unreadCount === 0 && next.unreadCount > 0
+                ? 1
+                : current.unreadCount > 0 && next.unreadCount === 0
+                  ? -1
+                  : 0),
+            updatedAt: input.now,
+          }),
+        );
+        void mailbox;
+        if (next.emailCount === 0) {
+          state.mailboxThreads.delete(key);
+        } else {
+          state.mailboxThreads.set(key, copy(next));
+        }
+      }
+      const properties = <RecordType extends object>(
+        before: RecordType,
+        after: RecordType,
+        keys: (keyof RecordType)[],
+      ): string[] =>
+        keys
+          .filter((key) => {
+            const left = before[key];
+            const right = after[key];
+            return left instanceof Date && right instanceof Date
+              ? left.getTime() !== right.getTime()
+              : !Object.is(left, right);
+          })
+          .map(String);
+      return {
+        threadChanges: [...originalThreads].map(([key, before]) => {
+          const after = state.threads.get(key)!;
+          return {
+            threadId: after.id,
+            changedProperties: properties(before, after, [
+              'latestReceivedAt',
+              'emailCount',
+              'unreadCount',
+              'hasAttachment',
+              'participantSummary',
+              'preview',
+            ]),
+          };
+        }),
+        mailboxChanges: [...originalMailboxes].map(([key, before]) => {
+          const after = state.mailboxes.get(key)!;
+          if (
+            after.totalEmails < 0 ||
+            after.unreadEmails < 0 ||
+            after.totalThreads < 0 ||
+            after.unreadThreads < 0
+          ) {
+            throw new MailCoreError('STORAGE_FAILURE');
+          }
+          return {
+            mailboxId: after.id,
+            changedProperties: properties(before, after, [
+              'totalEmails',
+              'unreadEmails',
+              'totalThreads',
+              'unreadThreads',
+            ]),
+          };
+        }),
+      };
+    },
+  };
+
   const identities: IdentityRepository = {
     async findById(accountId, id) {
       return findScoped(state.identities, accountId, id);
@@ -664,6 +856,7 @@ const createRepositories = (
     threadReferences,
     threadQueries,
     emails,
+    mailAggregates,
     identities,
     submissions,
     changes,
