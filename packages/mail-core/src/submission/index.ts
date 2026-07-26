@@ -1,4 +1,9 @@
-export { createSubmission } from './create-submission';
+export { createSubmission, createSubmissionInTransaction } from './create-submission';
+export {
+  finalizeSubmissionSent,
+  finalizeSubmissionSentInTransaction,
+  type FinalizeSubmissionSentResult,
+} from './finalize-submission-sent';
 export { calculateRetryAt } from './retry-policy';
 export {
   allowedSubmissionTransitions,
@@ -8,6 +13,7 @@ export {
 export type {
   CancelSubmissionInput,
   CreateSubmissionInput,
+  FinalizeSubmissionSentInput,
   FailedSubmissionOutcome,
   SentSubmissionOutcome,
   SubmissionAttemptOutcome,

@@ -21,6 +21,7 @@ describe('createMailCore', () => {
         'destroyEmail',
         'destroyIdentity',
         'destroyMailbox',
+        'finalizeSubmissionSent',
         'getChanges',
         'getEmail',
         'getThread',

@@ -9,8 +9,8 @@ import {
   updateEmail,
 } from './message';
 import { createIdentity, createMailAccount, destroyIdentity, updateIdentity } from './account';
+import { cancelSubmission, createSubmission, finalizeSubmissionSent } from './submission';
 import { createMailbox, destroyMailbox, listMailboxes, updateMailbox } from './mailbox';
-import { cancelSubmission, createSubmission } from './submission';
 import type { MailCoreDependencies } from './store';
 import { getThread, queryThreads } from './thread';
 import { getChanges } from './changes';
@@ -38,6 +38,7 @@ export type MailCore = {
   updateDraft: BoundCommand<typeof updateDraft>;
   destroyDraft: BoundCommand<typeof destroyDraft>;
   createSubmission: BoundCommand<typeof createSubmission>;
+  finalizeSubmissionSent: BoundCommand<typeof finalizeSubmissionSent>;
   cancelSubmission: BoundCommand<typeof cancelSubmission>;
   getThread: BoundCommand<typeof getThread>;
   queryThreads: BoundCommand<typeof queryThreads>;
@@ -63,6 +64,7 @@ export const createMailCore = (dependencies: MailCoreDependencies): MailCore => 
   updateDraft: (input) => updateDraft(dependencies, input),
   destroyDraft: (input) => destroyDraft(dependencies, input),
   createSubmission: (input) => createSubmission(dependencies, input),
+  finalizeSubmissionSent: (input) => finalizeSubmissionSent(dependencies, input),
   cancelSubmission: (input) => cancelSubmission(dependencies, input),
   getThread: (input) => getThread(dependencies, input),
   queryThreads: (input) => queryThreads(dependencies, input),

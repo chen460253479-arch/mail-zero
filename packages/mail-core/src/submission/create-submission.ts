@@ -95,8 +95,9 @@ const requireFrozenBlob = async (
   };
 };
 
-export async function createSubmission(
+export async function createSubmissionInTransaction(
   dependencies: MailCoreDependencies,
+  tx: MailTransaction,
   input: CreateSubmissionInput,
 ): Promise<SubmissionRecord> {
   const requestedSendAt = normalizeRequestedSendAt(input.sendAt);
@@ -104,108 +105,112 @@ export async function createSubmission(
     throw new MailCoreError('IDEMPOTENCY_CONFLICT');
   }
 
-  return dependencies.unitOfWork.run(async (tx) => {
-    await tx.lockAccount(input.accountId);
-    const now = dependencies.clock.now();
-    const sendAt = requestedSendAt === null ? new Date(now) : requestedSendAt;
-    const email = await tx.emails.findById(input.accountId, input.emailId);
-    if (email === null) {
-      return throwMissingOrCrossAccount(tx, input, 'email');
-    }
-    const identity = await tx.identities.findById(input.accountId, input.identityId);
-    if (identity === null) {
-      return throwMissingOrCrossAccount(tx, input, 'identity');
-    }
+  await tx.lockAccount(input.accountId);
+  const now = dependencies.clock.now();
+  const sendAt = requestedSendAt === null ? new Date(now) : requestedSendAt;
+  const email = await tx.emails.findById(input.accountId, input.emailId);
+  if (email === null) {
+    return throwMissingOrCrossAccount(tx, input, 'email');
+  }
+  const identity = await tx.identities.findById(input.accountId, input.identityId);
+  if (identity === null) {
+    return throwMissingOrCrossAccount(tx, input, 'identity');
+  }
 
-    const existing = await tx.submissions.findByIdempotencyKey(
-      input.accountId,
-      input.idempotencyKey,
+  const existing = await tx.submissions.findByIdempotencyKey(input.accountId, input.idempotencyKey);
+  if (existing !== null) {
+    if (isExactRetry(existing, input, requestedSendAt)) {
+      return existing;
+    }
+    throw new MailCoreError('IDEMPOTENCY_CONFLICT', { entityId: existing.id });
+  }
+
+  if (
+    email.destroyedAt !== null ||
+    email.mailboxIds.length === 0 ||
+    email.lifecycle !== 'draft' ||
+    email.identityId !== identity.id
+  ) {
+    throw new MailCoreError(
+      email.destroyedAt !== null || email.mailboxIds.length === 0
+        ? 'EMAIL_NOT_FOUND'
+        : 'INVALID_EMAIL',
+      { entityId: email.id },
     );
-    if (existing !== null) {
-      if (isExactRetry(existing, input, requestedSendAt)) {
-        return existing;
-      }
-      throw new MailCoreError('IDEMPOTENCY_CONFLICT', { entityId: existing.id });
-    }
+  }
+  if (email.blobId === null) {
+    throw new MailCoreError('BLOB_NOT_FOUND', { entityId: email.id });
+  }
+  const frozenParts = email.parts.filter(
+    (part): part is typeof part & { blobId: NonNullable<typeof part.blobId> } =>
+      part.kind !== 'body' && part.blobId !== null,
+  );
+  const frozenBlobs = (
+    await Promise.all([
+      requireFrozenBlob(tx, input.accountId, email.blobId, 'raw', 0, 'message/rfc822'),
+      requireFrozenBlob(
+        tx,
+        input.accountId,
+        email.textBlobId,
+        'text',
+        0,
+        'text/plain; charset=utf-8',
+      ),
+      requireFrozenBlob(
+        tx,
+        input.accountId,
+        email.htmlBlobId,
+        'html',
+        0,
+        'text/html; charset=utf-8',
+      ),
+      ...frozenParts.map((part, position) =>
+        requireFrozenBlob(tx, input.accountId, part.blobId, 'part', position, part.contentType),
+      ),
+    ])
+  ).filter((blob): blob is SubmissionBlobReference => blob !== null);
+  if (email.to.length + email.cc.length + email.bcc.length === 0) {
+    throw new MailCoreError('INVALID_EMAIL', { entityId: email.id });
+  }
+  requireValidRecipients(email);
 
-    if (
-      email.destroyedAt !== null ||
-      email.mailboxIds.length === 0 ||
-      email.lifecycle !== 'draft' ||
-      email.identityId !== identity.id
-    ) {
-      throw new MailCoreError(
-        email.destroyedAt !== null || email.mailboxIds.length === 0
-          ? 'EMAIL_NOT_FOUND'
-          : 'INVALID_EMAIL',
-        { entityId: email.id },
-      );
-    }
-    if (email.blobId === null) {
-      throw new MailCoreError('BLOB_NOT_FOUND', { entityId: email.id });
-    }
-    const frozenParts = email.parts.filter(
-      (part): part is typeof part & { blobId: NonNullable<typeof part.blobId> } =>
-        part.kind !== 'body' && part.blobId !== null,
-    );
-    const frozenBlobs = (
-      await Promise.all([
-        requireFrozenBlob(tx, input.accountId, email.blobId, 'raw', 0, 'message/rfc822'),
-        requireFrozenBlob(
-          tx,
-          input.accountId,
-          email.textBlobId,
-          'text',
-          0,
-          'text/plain; charset=utf-8',
-        ),
-        requireFrozenBlob(
-          tx,
-          input.accountId,
-          email.htmlBlobId,
-          'html',
-          0,
-          'text/html; charset=utf-8',
-        ),
-        ...frozenParts.map((part, position) =>
-          requireFrozenBlob(tx, input.accountId, part.blobId, 'part', position, part.contentType),
-        ),
-      ])
-    ).filter((blob): blob is SubmissionBlobReference => blob !== null);
-    if (email.to.length + email.cc.length + email.bcc.length === 0) {
-      throw new MailCoreError('INVALID_EMAIL', { entityId: email.id });
-    }
-    requireValidRecipients(email);
-
-    const submission = await tx.submissions.insert({
-      id: dependencies.idFactory.next<'EmailSubmission'>() as EmailSubmissionId,
-      accountId: input.accountId,
-      emailId: email.id,
-      identityId: identity.id,
-      status: sendAt.getTime() <= now.getTime() ? 'queued' : 'scheduled',
-      sendAt,
-      idempotencyKey: input.idempotencyKey,
-      draftRevision: email.draftRevision,
-      frozenBlobs,
-      attemptCount: 0,
-      nextAttemptAt: null,
-      providerMessageId: null,
-      lastErrorCode: null,
-      lastErrorMessage: null,
-      createdAt: new Date(now),
-      updatedAt: new Date(now),
-      sentAt: null,
-    });
-    const stateVersion = await tx.nextStateVersion(input.accountId);
-    await tx.changes.recordChange({
-      accountId: input.accountId,
-      stateVersion,
-      collection: 'email_submission',
-      entityId: submission.id,
-      changeType: 'created',
-      changedProperties: null,
-      createdAt: now,
-    });
-    return submission;
+  const submission = await tx.submissions.insert({
+    id: dependencies.idFactory.next<'EmailSubmission'>() as EmailSubmissionId,
+    accountId: input.accountId,
+    emailId: email.id,
+    identityId: identity.id,
+    status: sendAt.getTime() <= now.getTime() ? 'queued' : 'scheduled',
+    sendAt,
+    idempotencyKey: input.idempotencyKey,
+    draftRevision: email.draftRevision,
+    frozenBlobs,
+    attemptCount: 0,
+    nextAttemptAt: null,
+    providerMessageId: null,
+    lastErrorCode: null,
+    lastErrorMessage: null,
+    createdAt: new Date(now),
+    updatedAt: new Date(now),
+    sentAt: null,
   });
+  const stateVersion = await tx.nextStateVersion(input.accountId);
+  await tx.changes.recordChange({
+    accountId: input.accountId,
+    stateVersion,
+    collection: 'email_submission',
+    entityId: submission.id,
+    changeType: 'created',
+    changedProperties: null,
+    createdAt: now,
+  });
+  return submission;
+}
+
+export async function createSubmission(
+  dependencies: MailCoreDependencies,
+  input: CreateSubmissionInput,
+): Promise<SubmissionRecord> {
+  return dependencies.unitOfWork.run((tx) =>
+    createSubmissionInTransaction(dependencies, tx, input),
+  );
 }

@@ -32,6 +32,15 @@ export type CreateSubmissionInput = {
   sendAt: Date | null;
 };
 
+export type FinalizeSubmissionSentInput = {
+  accountId: MailAccountId;
+  submissionId: EmailSubmissionId;
+  provider: string;
+  remoteMessageId: string;
+  remoteThreadId: string | null;
+  acceptedAt: Date;
+};
+
 export type SentSubmissionOutcome = {
   type: 'sent';
   providerMessageId?: string | null;
