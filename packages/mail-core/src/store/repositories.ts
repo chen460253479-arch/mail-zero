@@ -87,6 +87,15 @@ export interface ThreadRecord {
   updatedAt: Date;
 }
 
+export interface ThreadReferenceRecord {
+  accountId: MailAccountId;
+  normalizedSubjectHash: string;
+  messageIdHash: string;
+  emailId: EmailId;
+  threadId: ThreadId;
+  createdAt: Date;
+}
+
 export interface EmailPartRecord {
   id: string;
   parentPartId: string | null;
@@ -287,6 +296,17 @@ export interface ThreadRepository {
     patch: MutableFields<ThreadRecord, 'id' | 'accountId'>,
   ): Promise<ThreadRecord>;
   delete(accountId: MailAccountId, id: ThreadId): Promise<void>;
+}
+
+export interface ThreadReferenceRepository {
+  findCandidates(input: {
+    accountId: MailAccountId;
+    normalizedSubjectHash: string;
+    messageIdHashes: string[];
+  }): Promise<ThreadReferenceRecord[]>;
+  insert(record: ThreadReferenceRecord): Promise<void>;
+  moveThread(accountId: MailAccountId, fromThreadId: ThreadId, toThreadId: ThreadId): Promise<void>;
+  deleteByEmail(accountId: MailAccountId, emailId: EmailId): Promise<void>;
 }
 
 export interface FindRemoteEmailInput {

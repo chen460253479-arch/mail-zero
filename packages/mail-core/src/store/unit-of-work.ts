@@ -6,6 +6,7 @@ import type {
   IdentityRepository,
   MailboxRepository,
   SubmissionRepository,
+  ThreadReferenceRepository,
   ThreadRepository,
 } from './repositories';
 import type { ThreadQueryRepository } from './thread-query-store';
@@ -16,6 +17,7 @@ export interface MailTransaction {
   mailboxes: MailboxRepository;
   blobs: BlobRepository;
   threads: ThreadRepository;
+  threadReferences: ThreadReferenceRepository;
   threadQueries: ThreadQueryRepository;
   emails: EmailRepository;
   identities: IdentityRepository;

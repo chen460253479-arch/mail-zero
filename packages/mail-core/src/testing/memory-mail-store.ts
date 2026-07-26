@@ -20,6 +20,8 @@ import type {
   SubmissionRecord,
   SubmissionRepository,
   ThreadRecord,
+  ThreadReferenceRecord,
+  ThreadReferenceRepository,
   ThreadRepository,
 } from '../store/repositories';
 import type {
@@ -42,6 +44,7 @@ export interface MemoryMailState {
   mailboxes: Map<string, MailboxRecord>;
   blobs: Map<string, BlobRecord>;
   threads: Map<string, ThreadRecord>;
+  threadReferences: Map<string, ThreadReferenceRecord>;
   emails: Map<string, EmailRecord>;
   emailSearchDocuments: Map<string, EmailSearchDocument>;
   remoteEmails: Map<string, RemoteEmailRecord>;
@@ -66,6 +69,11 @@ const changeKey = (record: MailChangeRecord): string =>
 const attemptKey = (record: SubmissionAttemptRecord): string =>
   `${record.accountId}\u0000${record.submissionId}\u0000${record.attemptNumber}`;
 
+const threadReferenceKey = (record: ThreadReferenceRecord): string =>
+  [record.accountId, record.normalizedSubjectHash, record.messageIdHash, record.emailId].join(
+    '\u0000',
+  );
+
 const searchDocumentFromEmail = (record: EmailRecord): EmailSearchDocument => ({
   subject: record.subject,
   addressText: [
@@ -86,6 +94,7 @@ const createEmptyState = (): MemoryMailState => ({
   mailboxes: new Map(),
   blobs: new Map(),
   threads: new Map(),
+  threadReferences: new Map(),
   emails: new Map(),
   emailSearchDocuments: new Map(),
   remoteEmails: new Map(),
@@ -375,6 +384,45 @@ const createRepositories = (
     },
   };
 
+  const threadReferences: ThreadReferenceRepository = {
+    async findCandidates(input) {
+      const messageIdHashes = new Set(input.messageIdHashes);
+      if (messageIdHashes.size === 0) {
+        return [];
+      }
+      return [...state.threadReferences.values()]
+        .filter(
+          (record) =>
+            record.accountId === input.accountId &&
+            record.normalizedSubjectHash === input.normalizedSubjectHash &&
+            messageIdHashes.has(record.messageIdHash),
+        )
+        .sort(
+          (left, right) =>
+            left.messageIdHash.localeCompare(right.messageIdHash) ||
+            left.emailId.localeCompare(right.emailId),
+        )
+        .map(copy);
+    },
+    async insert(record) {
+      state.threadReferences.set(threadReferenceKey(record), copy(record));
+    },
+    async moveThread(accountId, fromThreadId, toThreadId) {
+      for (const [key, record] of state.threadReferences) {
+        if (record.accountId === accountId && record.threadId === fromThreadId) {
+          state.threadReferences.set(key, copy({ ...record, threadId: toThreadId }));
+        }
+      }
+    },
+    async deleteByEmail(accountId, emailId) {
+      for (const [key, record] of state.threadReferences) {
+        if (record.accountId === accountId && record.emailId === emailId) {
+          state.threadReferences.delete(key);
+        }
+      }
+    },
+  };
+
   const emails: EmailRepository = {
     async findById(accountId, id) {
       return findScoped(state.emails, accountId, id);
@@ -590,6 +638,7 @@ const createRepositories = (
     mailboxes,
     blobs,
     threads,
+    threadReferences,
     threadQueries,
     emails,
     identities,
