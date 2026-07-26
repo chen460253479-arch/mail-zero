@@ -3,7 +3,7 @@ import {
   type PubSubIamPolicy,
 } from '../../mail-channel/gmail/inbound/pubsub-policy';
 import { BaseSubscriptionFactory, type SubscriptionData } from './base-subscription.factory';
-import { activateGmailInboundForConnection } from '../mail-channel/gmail/ingress-runtime';
+import { activateGmailInboundForConnection } from '../../runtime/mail/gmail-inbound';
 import { c, getNotificationsUrl } from '../../lib/utils';
 import { resetConnection } from '../server-utils';
 import jwt from '@tsndr/cloudflare-worker-jwt';

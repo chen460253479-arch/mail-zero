@@ -1,15 +1,17 @@
 import { z } from 'zod';
 
 import {
+  createNangoIntegrationService,
+  type NangoIntegrationService,
+} from '../../integrations/nango/service';
+import {
   GmailOAuthService,
   gmailOAuthRedirectUris,
 } from '../../lib/integrations/gmail-oauth-service';
 import { NangoChannelMappingService } from '../../modules/mail-accounts/application/nango-channel-mapping';
 import { GoogleGmailOAuthGateway } from '../../mail-channel/gmail/auth/google-oauth-gateway';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
-import { NangoIntegrationService } from '../../integrations/nango/service';
 import { getMailChannel } from '../../lib/mail-channel/registry';
-import { NangoClient } from '../../integrations/nango/client';
 import { mapIntegrationError } from './integration-errors';
 import { getZeroDB } from '../../lib/server-utils';
 import { adminProcedure, router } from '../trpc';
@@ -30,10 +32,10 @@ const withIntegrationServices = async <T>(
   const { db, conn } = createDb(env.HYPERDRIVE.connectionString);
   try {
     const repository = createSystemIntegrationRepository(db);
-    const nango = new NangoIntegrationService({
+    const nango = createNangoIntegrationService({
       repository,
       encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
-      createClient: (config) => new NangoClient({ ...config, fetch }),
+      fetch,
       now: () => new Date(),
     });
     return await run({

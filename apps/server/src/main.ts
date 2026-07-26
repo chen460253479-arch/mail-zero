@@ -23,15 +23,12 @@ import {
   providerIdToChannelId,
 } from './lib/mail-channel/registry';
 import {
-  enqueueDueMailIngressWork,
-  runMailIngressCommand,
-} from './lib/mail-channel/gmail/ingress-runtime';
-import {
   toAttachmentFiles,
   type SerializedAttachment,
   type AttachmentFile,
 } from './lib/attachments';
 import { assertAuthorizationCanBeAttached } from './modules/mail-accounts/application/disconnect-mailbox';
+import { enqueueDueMailIngressWork, runMailIngressCommand } from './runtime/mail/gmail-inbound';
 import { SyncThreadsCoordinatorWorkflow } from './workflows/sync-threads-coordinator-workflow';
 import { normalizeMailboxEmail } from './modules/mail-accounts/application/mailbox-identity';
 import { createZeroOAuthSnapshot } from './modules/mail-accounts/credentials/zero-oauth';

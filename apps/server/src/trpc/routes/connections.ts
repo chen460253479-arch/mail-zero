@@ -8,13 +8,14 @@ import {
   listSafeNangoConnections,
   NangoBindingError,
 } from '../../modules/mail-accounts/application/bind-nango-mailbox';
-import { withNangoRuntime, type NangoRuntime } from '../../modules/mail-accounts/runtime/nango';
 import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router } from '../trpc';
+import { withNangoRuntime, type NangoRuntime } from '../../modules/mail-accounts/runtime/nango';
 import { resolveFetchedNangoCredential } from '../../modules/mail-accounts/credentials/nango';
 import { resolveGmailConnectMode } from '../../lib/integrations/gmail-connection-options';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import { findMailChannel, getMailChannel } from '../../lib/mail-channel/registry';
 import { deleteConnectionLocalData, getZeroDB } from '../../lib/server-utils';
+import { defaultMailChannelRegistry } from '../../mail-channel/registry';
 import { NangoIntegrationError } from '../../integrations/nango/errors';
 import { disableBrainFunction } from '../../lib/brain';
 import { Ratelimit } from '@upstash/ratelimit';
@@ -148,7 +149,7 @@ export const connectionsRouter = router({
           message: 'MAIL_CHANNEL_UNAVAILABLE',
         });
       }
-      const channel = getMailChannel('gmail');
+      const channel = defaultMailChannelRegistry.get('gmail');
       const connections = await listSafeNangoConnections(
         mapping.externalIntegrationId,
         runtime.client,
@@ -161,14 +162,7 @@ export const connectionsRouter = router({
           if (resolved.credential.type !== 'oauth2') {
             throw new Error('Unsupported Nango credential');
           }
-          const identity = await channel.resolveIdentity({
-            auth: {
-              userId: ctx.sessionUser.id,
-              accessToken: resolved.credential.accessToken,
-              refreshToken: '',
-              email: '',
-            },
-          });
+          const identity = await channel.resolveIdentity({ credential: resolved.credential });
           return { email: identity.email, displayName: identity.name };
         },
       );
@@ -200,7 +194,7 @@ export const connectionsRouter = router({
             },
             {
               client: runtime.client,
-              getChannel: getMailChannel,
+              getChannel: (channelId) => defaultMailChannelRegistry.get(channelId),
               isIntegrationAvailable: async (channelId, candidateIntegrationId) =>
                 channelId === 'gmail' && candidateIntegrationId === integrationId,
               repository: {

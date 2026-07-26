@@ -10,7 +10,7 @@ import {
 } from '../../infrastructure/security/credential-encryption';
 import { mapNangoClientError, NangoIntegrationError } from './errors';
 import type { NangoIntegration } from './schemas';
-import type { NangoClient } from './client';
+import { NangoClient } from './client';
 
 type NangoClientLike = Pick<NangoClient, 'listIntegrations' | 'listConnections' | 'getConnection'>;
 
@@ -173,3 +173,16 @@ export class NangoIntegrationService {
 }
 
 export { NangoIntegrationError } from './errors';
+
+export const createNangoIntegrationService = (input: {
+  repository: SystemIntegrationRepository;
+  encryptionKey: string;
+  fetch: typeof fetch;
+  now(): Date;
+}): NangoIntegrationService =>
+  new NangoIntegrationService({
+    repository: input.repository,
+    encryptionKey: input.encryptionKey,
+    createClient: (config) => new NangoClient({ ...config, fetch: input.fetch }),
+    now: input.now,
+  });
