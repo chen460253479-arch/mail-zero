@@ -7,5 +7,5 @@ export default {
     url: process.env.DATABASE_URL!,
   },
   out: './src/db/migrations',
-  tablesFilter: ['mail0_*'],
+  schemaFilter: ['auth', 'app', 'integration', 'mail'],
 } satisfies Config;

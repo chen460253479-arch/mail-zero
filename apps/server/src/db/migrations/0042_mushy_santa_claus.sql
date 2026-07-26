@@ -1,1 +1,0 @@
-CREATE INDEX "blob_account_object_key_idx" ON "mail0_blob" USING btree ("mail_account_id","object_key");
