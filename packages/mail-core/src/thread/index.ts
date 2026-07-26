@@ -19,3 +19,8 @@ export {
   type ThreadQueryItem,
   type ThreadQueryResult,
 } from './query-threads';
+export {
+  updateThreadEmails,
+  type UpdateThreadEmailsInput,
+  type UpdateThreadEmailsResult,
+} from './update-thread-emails';

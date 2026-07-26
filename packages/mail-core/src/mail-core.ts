@@ -33,8 +33,8 @@ import {
   setMailboxes,
   updateMailbox,
 } from './mailbox';
+import { getThread, queryThreads, updateThreadEmails } from './thread';
 import type { MailCoreDependencies } from './store';
-import { getThread, queryThreads } from './thread';
 import { getChanges, getState } from './changes';
 import { readBlob, uploadBlob } from './blob';
 
@@ -72,6 +72,7 @@ export type MailCore = {
   cancelSubmission: BoundCommand<typeof cancelSubmission>;
   getThread: BoundCommand<typeof getThread>;
   queryThreads: BoundCommand<typeof queryThreads>;
+  updateThreadEmails: BoundCommand<typeof updateThreadEmails>;
   getChanges: BoundCommand<typeof getChanges>;
   getState: BoundCommand<typeof getState>;
   uploadBlob: BoundCommand<typeof uploadBlob>;
@@ -108,6 +109,7 @@ export const createMailCore = (dependencies: MailCoreDependencies): MailCore => 
   cancelSubmission: (input) => cancelSubmission(dependencies, input),
   getThread: (input) => getThread(dependencies, input),
   queryThreads: (input) => queryThreads(dependencies, input),
+  updateThreadEmails: (input) => updateThreadEmails(dependencies, input),
   getChanges: (input) => getChanges(dependencies, input),
   getState: (input) => getState(dependencies, input),
   uploadBlob: (input) => uploadBlob(dependencies, input),
