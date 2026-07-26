@@ -4,7 +4,7 @@ import {
   type NangoCredentialResolverOptions,
 } from './nango';
 import { decryptCredential } from '../../../infrastructure/security/credential-encryption';
-import type { ResolvedCredential } from '../../../lib/mail-channel/types';
+import type { ResolvedCredential } from '../../../mail-channel/contracts';
 import { readZeroOAuthSnapshot } from './zero-oauth';
 
 type AuthSource = 'zero_oauth' | 'nango' | 'manual';

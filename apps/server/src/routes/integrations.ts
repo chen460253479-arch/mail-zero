@@ -5,8 +5,8 @@ import {
   GmailOAuthService,
   gmailOAuthRedirectUris,
 } from '../lib/integrations/gmail-oauth-service';
+import { GoogleGmailOAuthGateway } from '../mail-channel/gmail/auth/google-oauth-gateway';
 import { createSystemIntegrationRepository } from '../integrations/core/repository';
-import { GoogleGmailOAuthGateway } from '../lib/integrations/google-gmail-oauth';
 import { assertAdministrator } from '../integrations/core/permissions';
 import { getZeroDB } from '../lib/server-utils';
 import type { HonoContext } from '../ctx';

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { createGmailInboundAdapterFactory, createGmailIngressAdapter } from './ingress-adapter';
+import { createGmailInboundAdapterFactory, createGmailIngressAdapter } from './adapter';
 import { MailSyncError, parseIngressScope } from '../../../modules/mail-sync';
-import type { GmailApiClient } from './gmail-api-client';
+import type { GmailApiClient } from '../shared/api-client';
 
 const createClient = (overrides: Partial<GmailApiClient> = {}): GmailApiClient => ({
   getProfile: async () => ({

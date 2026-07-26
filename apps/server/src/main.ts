@@ -38,10 +38,10 @@ import { createZeroOAuthSnapshot } from './modules/mail-accounts/credentials/zer
 import { encryptCredential } from './infrastructure/security/credential-encryption';
 import { parseMailIngressCommand } from './modules/mail-sync/application/commands';
 import { WorkerEntrypoint, DurableObject, RpcTarget } from 'cloudflare:workers';
+import { handleGmailPush } from './mail-channel/gmail/inbound/handle-push';
 // import { instrument, type ResolveConfigFn } from '@microlabs/otel-cf-workers';
 import { getZeroAgent, getZeroDB, verifyToken } from './lib/server-utils';
 import { SyncThreadsWorkflow } from './workflows/sync-threads-workflow';
-import { handleGmailPush } from './lib/mail-channel/gmail/handle-push';
 import { ShardRegistry, ZeroAgent, ZeroDriver } from './routes/agent';
 import { ThreadSyncWorker } from './routes/agent/sync-worker';
 import type { MailChannelId } from './lib/mail-channel/types';

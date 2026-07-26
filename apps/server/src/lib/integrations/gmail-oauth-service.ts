@@ -12,30 +12,17 @@ import {
   decryptCredential,
   encryptCredential,
 } from '../../infrastructure/security/credential-encryption';
+import type {
+  GmailOAuthGateway,
+  GmailOAuthRuntimeConfig,
+} from '../../mail-channel/gmail/auth/types';
 import { createZeroOAuthSnapshot } from '../../modules/mail-accounts/credentials/zero-oauth';
 
-export type GmailOAuthRuntimeConfig = {
-  clientId: string;
-  clientSecret: string;
-  redirectUri: string;
-};
-
-export type GmailOAuthTokens = {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: Date;
-  scope: string;
-};
-
-export interface GmailOAuthGateway {
-  createAuthorizationUrl(input: GmailOAuthRuntimeConfig & { state: string }): string;
-  exchangeCode(config: GmailOAuthRuntimeConfig, code: string): Promise<GmailOAuthTokens>;
-  resolveIdentity(
-    config: GmailOAuthRuntimeConfig,
-    tokens: GmailOAuthTokens,
-  ): Promise<{ email: string; name: string; picture: string }>;
-  revokeToken(config: GmailOAuthRuntimeConfig, token: string): Promise<void>;
-}
+export type {
+  GmailOAuthGateway,
+  GmailOAuthRuntimeConfig,
+  GmailOAuthTokens,
+} from '../../mail-channel/gmail/auth/types';
 
 type GmailMailbox = {
   email: string;

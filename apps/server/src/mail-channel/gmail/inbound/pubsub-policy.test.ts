@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ensurePubSubPublisher } from './pubsub-policy';
 
-describe('Gmail Pub/Sub IAM policy', () => {
+describe('Gmail inbound Pub/Sub IAM policy', () => {
   it('adds the Gmail publisher once and preserves unrelated bindings', () => {
     const initial = {
       bindings: [

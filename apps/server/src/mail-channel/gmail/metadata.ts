@@ -1,4 +1,4 @@
-export const gmailNangoProviders: readonly string[] = ['google-mail', 'google'];
+export const gmailNangoProviders = ['google-mail', 'google'] as const;
 
 export const gmailOAuthScopes: readonly string[] = [
   'https://mail.google.com/',

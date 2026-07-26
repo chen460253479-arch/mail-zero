@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { mapGmailHistoryPage } from './history-mapper';
 
-describe('Gmail history mapper', () => {
+describe('Gmail inbound history mapper', () => {
   it('maps only newly added Inbox messages and deduplicates their IDs', () => {
     expect(
       mapGmailHistoryPage([

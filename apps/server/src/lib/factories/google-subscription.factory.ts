@@ -1,4 +1,7 @@
-import { ensurePubSubPublisher, type PubSubIamPolicy } from '../mail-channel/gmail/pubsub-policy';
+import {
+  ensurePubSubPublisher,
+  type PubSubIamPolicy,
+} from '../../mail-channel/gmail/inbound/pubsub-policy';
 import { BaseSubscriptionFactory, type SubscriptionData } from './base-subscription.factory';
 import { activateGmailInboundForConnection } from '../mail-channel/gmail/ingress-runtime';
 import { c, getNotificationsUrl } from '../../lib/utils';

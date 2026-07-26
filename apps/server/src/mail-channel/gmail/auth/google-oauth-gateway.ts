@@ -2,12 +2,8 @@ import { OAuth2Client } from 'google-auth-library';
 import { people } from '@googleapis/people';
 import { gmail } from '@googleapis/gmail';
 
-import type {
-  GmailOAuthGateway,
-  GmailOAuthRuntimeConfig,
-  GmailOAuthTokens,
-} from './gmail-oauth-service';
-import { gmailOAuthScopes } from '../mail-channel/gmail-metadata';
+import type { GmailOAuthGateway, GmailOAuthRuntimeConfig, GmailOAuthTokens } from './types';
+import { gmailOAuthScopes } from '../metadata';
 
 const createClient = (config: GmailOAuthRuntimeConfig): OAuth2Client =>
   new OAuth2Client(config.clientId, config.clientSecret, config.redirectUri);

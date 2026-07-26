@@ -1,7 +1,7 @@
 import type { SystemIntegrationRepository } from '../../../integrations/core/repository';
 import type { NangoIntegration } from '../../../integrations/nango/schemas';
 import { NangoIntegrationError } from '../../../integrations/nango/errors';
-import type { MailChannelId } from '../../../lib/mail-channel/types';
+import type { MailChannelId } from '../../../mail-channel/contracts';
 
 type NangoChannelDescriptor = {
   id: MailChannelId;

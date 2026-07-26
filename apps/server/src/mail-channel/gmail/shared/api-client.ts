@@ -1,4 +1,4 @@
-import type { GmailHistoryRecord } from './history-mapper';
+import type { GmailHistoryRecord } from '../inbound/history-mapper';
 
 type GmailProfileData = {
   emailAddress?: string | null;

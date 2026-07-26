@@ -1,6 +1,6 @@
 import { createNangoCredentialSnapshot, resolveFetchedNangoCredential } from '../credentials/nango';
 import { encryptCredential } from '../../../infrastructure/security/credential-encryption';
-import type { MailboxChannel, MailChannelId } from '../../../lib/mail-channel/types';
+import type { MailChannelId, MailChannelPlugin } from '../../../mail-channel/contracts';
 import type { NangoConnectionSummary } from '../../../integrations/nango/schemas';
 import type { NangoClient } from '../../../integrations/nango/client';
 import { normalizeMailboxEmail } from './mailbox-identity';
@@ -67,7 +67,7 @@ export type BindNangoMailboxInput = {
 
 type BindNangoMailboxDependencies = {
   client: Pick<NangoClient, 'getConnection'>;
-  getChannel(channelId: MailChannelId): MailboxChannel;
+  getChannel(channelId: MailChannelId): MailChannelPlugin;
   isIntegrationAvailable(channelId: MailChannelId, integrationId: string): Promise<boolean>;
   repository: NangoBindingRepository;
   encryptionKey: string;
@@ -77,7 +77,7 @@ type BindNangoMailboxDependencies = {
 const getChannel = (
   channelId: MailChannelId,
   lookup: BindNangoMailboxDependencies['getChannel'],
-): MailboxChannel => {
+): MailChannelPlugin => {
   try {
     return lookup(channelId);
   } catch {
@@ -120,15 +120,7 @@ export const bindNangoMailbox = async (
     throw new NangoBindingError('MAIL_CHANNEL_UNAVAILABLE');
   }
 
-  const managerConfig = {
-    auth: {
-      userId: input.userId,
-      accessToken: resolved.credential.accessToken,
-      refreshToken: '',
-      email: '',
-    },
-  };
-  const identity = await channel.resolveIdentity(managerConfig).catch(() => {
+  const identity = await channel.resolveIdentity({ credential: resolved.credential }).catch(() => {
     throw new NangoBindingError('NANGO_CONNECTION_INVALID');
   });
 

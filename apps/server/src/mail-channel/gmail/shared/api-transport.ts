@@ -1,6 +1,6 @@
 import type { gmail_v1 } from '@googleapis/gmail';
 
-import type { GmailApiTransport } from './gmail-api-client';
+import type { GmailApiTransport } from './api-client';
 
 export interface GmailApiExecutor {
   runGmailApi<Result>(operation: (client: gmail_v1.Gmail) => Promise<Result>): Promise<Result>;

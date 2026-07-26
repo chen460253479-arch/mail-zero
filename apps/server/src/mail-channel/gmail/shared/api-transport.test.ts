@@ -1,9 +1,9 @@
 import type { gmail_v1 } from '@googleapis/gmail';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createGmailTransportFromExecutor, type GmailApiExecutor } from './driver-transport';
+import { createGmailTransportFromExecutor, type GmailApiExecutor } from './api-transport';
 
-describe('Gmail driver transport', () => {
+describe('Gmail API transport', () => {
   it('executes every ingress API call through the credential-aware driver boundary', async () => {
     const api = {
       users: {

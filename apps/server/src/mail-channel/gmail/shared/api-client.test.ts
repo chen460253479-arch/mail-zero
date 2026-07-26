@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createGmailApiClient, type GmailApiTransport } from './gmail-api-client';
+import { createGmailApiClient, type GmailApiTransport } from './api-client';
 
 describe('Gmail API client boundary', () => {
   it('restricts History discovery to Inbox and preserves pagination data', async () => {

@@ -1,4 +1,4 @@
-import type { MailboxChannel, MailChannelId } from '../../../lib/mail-channel/types';
+import type { MailChannelDescriptor, MailChannelId } from '../../../mail-channel/contracts';
 import type { NangoIntegration } from '../../../integrations/nango/schemas';
 
 export type AvailableNangoChannel = {
@@ -12,7 +12,7 @@ export type AvailableNangoChannel = {
 
 export const listAvailableNangoChannels = (
   integrations: readonly NangoIntegration[],
-  channels: readonly MailboxChannel[],
+  channels: readonly MailChannelDescriptor[],
 ): AvailableNangoChannel[] =>
   channels
     .flatMap((channel) => {

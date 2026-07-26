@@ -7,16 +7,20 @@ import {
   processMailIngressCommand,
   type MailIngressRuntime,
 } from '../../../modules/mail-sync/runtime/create-mail-sync';
+import {
+  createGmailTransportFromExecutor,
+  type GmailApiExecutor,
+} from '../../../mail-channel/gmail/shared/api-transport';
 import { createPostgresMailSyncRepository } from '../../../modules/mail-sync/postgres/sync-repository';
 import { bootstrapLocalMailAccount } from '../../../modules/mail-sync/application/bootstrap-account';
-import { createGmailTransportFromExecutor, type GmailApiExecutor } from './driver-transport';
+import { createGmailInboundAdapterFactory } from '../../../mail-channel/gmail/inbound/adapter';
 import { PostgresMailUnitOfWork } from '../../../modules/mail/postgres/postgres-unit-of-work';
 import type { MailIngressCommand } from '../../../modules/mail-sync/application/commands';
 import { connectionToDriver, findConnectionWithAuthorization } from '../../server-utils';
 import type { IngressScope } from '../../../modules/mail-sync/domain/ingress-adapter';
 import { activateInboundSync } from '../../../modules/mail-sync/application/activate';
+import { createGmailApiClient } from '../../../mail-channel/gmail/shared/api-client';
 import { connection, inboundSync, mailAccount, mailbox } from '../../../db/schema';
-import { createGmailApiClient, createGmailInboundAdapterFactory } from './channel';
 import { createMailCoreRuntime, R2BlobStore } from '../../../modules/mail';
 import { preprocessEmailHtml } from '../../email-processor';
 import { createDb, type DB } from '../../../db';

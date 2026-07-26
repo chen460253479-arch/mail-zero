@@ -9,8 +9,8 @@ import {
   type InboundMailAdapterFactory,
   type VersionedProviderState,
 } from '../../../modules/mail-sync';
-import { classifyGmailError, gmailErrorStatus } from './errors';
-import type { GmailApiClient } from './gmail-api-client';
+import { classifyGmailError, gmailErrorStatus } from '../shared/errors';
+import type { GmailApiClient } from '../shared/api-client';
 import { mapGmailHistoryPage } from './history-mapper';
 
 type GmailCheckpoint = {

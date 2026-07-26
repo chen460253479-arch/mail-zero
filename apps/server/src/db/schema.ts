@@ -11,7 +11,7 @@ import {
   check,
 } from 'drizzle-orm/pg-core';
 import { appSchema, authSchema, integrationSchema } from './pg-schemas';
-import type { MailChannelId } from '../lib/mail-channel/types';
+import type { MailChannelId } from '../mail-channel/contracts';
 import { defaultUserSettings } from '../lib/schemas';
 import { sql } from 'drizzle-orm';
 

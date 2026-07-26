@@ -5,8 +5,8 @@ import {
   gmailOAuthRedirectUris,
 } from '../../lib/integrations/gmail-oauth-service';
 import { NangoChannelMappingService } from '../../modules/mail-accounts/application/nango-channel-mapping';
+import { GoogleGmailOAuthGateway } from '../../mail-channel/gmail/auth/google-oauth-gateway';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
-import { GoogleGmailOAuthGateway } from '../../lib/integrations/google-gmail-oauth';
 import { NangoIntegrationService } from '../../integrations/nango/service';
 import { getMailChannel } from '../../lib/mail-channel/registry';
 import { NangoClient } from '../../integrations/nango/client';

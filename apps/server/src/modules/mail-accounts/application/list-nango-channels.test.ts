@@ -1,11 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
-
-vi.mock('../../../lib/driver/google', () => ({
-  GoogleMailManager: class {},
-}));
+import { describe, expect, it } from 'vitest';
 
 import type { NangoIntegration } from '../../../integrations/nango/schemas';
-import { listMailChannels } from '../../../lib/mail-channel/registry';
+import { defaultMailChannelRegistry } from '../../../mail-channel/registry';
 import { listAvailableNangoChannels } from './list-nango-channels';
 
 const integration = (
@@ -22,7 +18,7 @@ describe('Nango mail channel catalog', () => {
   it('shows Gmail when Nango has Google Mail and Gmail is registered', () => {
     const result = listAvailableNangoChannels(
       [integration('gmail-primary', 'Company Gmail', 'google-mail')],
-      listMailChannels(),
+      defaultMailChannelRegistry.list(),
     );
 
     expect(result).toEqual([
@@ -37,7 +33,7 @@ describe('Nango mail channel catalog', () => {
   it('does not show Zoho when no Zoho channel plugin is registered', () => {
     const result = listAvailableNangoChannels(
       [integration('zoho-primary', 'Zoho Mail', 'zoho-mail')],
-      listMailChannels(),
+      defaultMailChannelRegistry.list(),
     );
 
     expect(result).toEqual([]);
@@ -46,7 +42,7 @@ describe('Nango mail channel catalog', () => {
   it('does not expose non-mail Nango integrations', () => {
     const result = listAvailableNangoChannels(
       [integration('slack-primary', 'Slack', 'slack')],
-      listMailChannels(),
+      defaultMailChannelRegistry.list(),
     );
 
     expect(result).toEqual([]);
@@ -58,7 +54,7 @@ describe('Nango mail channel catalog', () => {
         integration('gmail-secondary', 'Secondary', 'google'),
         integration('gmail-primary', 'Primary', 'google-mail'),
       ],
-      listMailChannels(),
+      defaultMailChannelRegistry.list(),
     );
 
     expect(result).toHaveLength(1);

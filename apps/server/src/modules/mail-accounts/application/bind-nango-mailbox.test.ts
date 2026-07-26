@@ -7,8 +7,8 @@ import {
   type NangoBindingRepository,
 } from './bind-nango-mailbox';
 import { decryptCredential } from '../../../infrastructure/security/credential-encryption';
+import type { MailChannelPlugin } from '../../../mail-channel/contracts';
 import type { NangoClient } from '../../../integrations/nango/client';
-import type { MailboxChannel } from '../../../lib/mail-channel/types';
 
 const encryptionKey = Buffer.alloc(32, 6).toString('base64');
 
@@ -32,19 +32,15 @@ const createChannel = () =>
     id: 'gmail',
     providerKey: 'gmail',
     displayName: 'Gmail',
-    legacyProviderId: 'google',
     nangoProviders: ['google-mail'],
     capabilities: new Set(),
     credentialTypes: new Set(['oauth2']),
-    createClient: vi.fn(),
     resolveIdentity: vi.fn().mockResolvedValue({
       email: 'Owner@Example.com',
       name: 'Mailbox Owner',
       picture: 'https://example.com/avatar.png',
     }),
-    getScope: vi.fn().mockReturnValue('mail'),
-    revoke: vi.fn(),
-  }) satisfies MailboxChannel;
+  }) satisfies MailChannelPlugin;
 
 const createRepository = (): NangoBindingRepository => ({
   findMailboxByNormalizedEmail: vi.fn().mockResolvedValue(null),
@@ -83,11 +79,11 @@ describe('Nango mailbox binding', () => {
     await bindNangoMailbox(input, dependencies);
 
     expect(channel.resolveIdentity).toHaveBeenCalledWith({
-      auth: {
-        userId: 'user-1',
+      credential: {
+        type: 'oauth2',
         accessToken: 'nango-access-token',
-        refreshToken: '',
-        email: '',
+        expiresAt: new Date('2026-07-24T15:00:00.000Z'),
+        scope: '',
       },
     });
     expect(repository.save).toHaveBeenCalledWith(

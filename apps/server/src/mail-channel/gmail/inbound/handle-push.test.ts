@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { handleGmailPush } from './handle-push';
 
-describe('Gmail push handler', () => {
+describe('Gmail inbound push handler', () => {
   it('turns a valid Gmail notification into a generic signal command', async () => {
     const commands: unknown[] = [];
 

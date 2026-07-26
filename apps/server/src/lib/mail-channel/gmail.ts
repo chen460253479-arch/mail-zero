@@ -1,4 +1,4 @@
-import { gmailNangoProviders } from './gmail-metadata';
+import { gmailNangoProviders } from '../../mail-channel/gmail/metadata';
 import { GoogleMailManager } from '../driver/google';
 import { gmailSyncAdapter } from './gmail-sync';
 import type { MailboxChannel } from './types';

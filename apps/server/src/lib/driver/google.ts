@@ -11,7 +11,7 @@ import {
 import { mapGoogleLabelColor, mapToGoogleLabelColor } from './google-label-color-map';
 import { parseAddressList, parseFrom, wasSentWithTLS } from '../email-utils';
 import type { IOutgoingMessage, Label, ParsedMessage } from '../../types';
-import { gmailOAuthScopes } from '../mail-channel/gmail-metadata';
+import { gmailOAuthScopes } from '../../mail-channel/gmail/metadata';
 import { sanitizeTipTapHtml } from '../sanitize-tip-tap-html';
 import { mapGmailHistory } from '../mail-channel/gmail-sync';
 import { type gmail_v1, gmail } from '@googleapis/gmail';

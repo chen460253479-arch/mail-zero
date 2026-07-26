@@ -5,7 +5,7 @@ import {
   encryptCredential,
 } from '../../../infrastructure/security/credential-encryption';
 import type { NangoCredential } from '../../../integrations/nango/schemas';
-import type { ResolvedCredential } from '../../../lib/mail-channel/types';
+import type { ResolvedCredential } from '../../../mail-channel/contracts';
 import type { NangoClient } from '../../../integrations/nango/client';
 import { authorizationBinding } from '../../../db/schema';
 import { eq, sql } from 'drizzle-orm';
