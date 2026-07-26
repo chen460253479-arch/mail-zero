@@ -23,17 +23,23 @@ import {
   providerIdToChannelId,
 } from './lib/mail-channel/registry';
 import {
+  enqueueDueMailIngressWork,
+  runMailIngressCommand,
+} from './lib/mail-channel/gmail/ingress-runtime';
+import {
   toAttachmentFiles,
   type SerializedAttachment,
   type AttachmentFile,
 } from './lib/attachments';
 import { SyncThreadsCoordinatorWorkflow } from './workflows/sync-threads-coordinator-workflow';
+import { parseMailIngressCommand } from './modules/mail-sync/application/commands';
 import { WorkerEntrypoint, DurableObject, RpcTarget } from 'cloudflare:workers';
 import { assertAuthorizationCanBeAttached } from './lib/connection-lifecycle';
 import { normalizeMailboxEmail } from './lib/mail-channel/mailbox-identity';
 // import { instrument, type ResolveConfigFn } from '@microlabs/otel-cf-workers';
 import { getZeroAgent, getZeroDB, verifyToken } from './lib/server-utils';
 import { SyncThreadsWorkflow } from './workflows/sync-threads-workflow';
+import { handleGmailPush } from './lib/mail-channel/gmail/handle-push';
 import { createZeroOAuthSnapshot } from './lib/credentials/zero-oauth';
 import { ShardRegistry, ZeroAgent, ZeroDriver } from './routes/agent';
 import { encryptCredential } from './lib/credentials/encryption';
@@ -43,6 +49,7 @@ import { oAuthDiscoveryMetadata } from 'better-auth/plugins';
 import { EProviders, type IEmailSendBatch } from './types';
 import { eq, and, desc, asc, inArray } from 'drizzle-orm';
 import { ThinkingMCP } from './lib/sequential-thinking';
+import { MailSyncError } from './modules/mail-sync';
 
 import { ensureConfiguredAdmin } from './lib/admin-provisioning';
 import { integrationOAuthRouter } from './routes/integrations';
@@ -1175,17 +1182,13 @@ const app = new Hono<HonoContext>()
         span.setAttributes({ 'auth.status': 'missing' });
         return c.json({ error: 'Unauthorized' }, { status: 401 });
       }
-      if (env.DISABLE_WORKFLOWS === 'true') {
-        span.setAttributes({ 'workflows.disabled': true });
-        return c.json({ message: 'OK' }, { status: 200 });
-      }
       const providerId = c.req.param('providerId');
       if (providerId === EProviders.google) {
-        const body = await c.req.json<{ historyId: string }>();
+        const body = await c.req.json<{ emailAddress?: string; historyId?: string }>();
         const subHeader = c.req.header('x-goog-pubsub-subscription-name');
 
         span.setAttributes({
-          'history.id': body.historyId,
+          'history.id': body.historyId ?? 'missing',
           'subscription.name': subHeader || 'missing',
         });
 
@@ -1203,22 +1206,12 @@ const app = new Hono<HonoContext>()
 
         span.setAttributes({ 'auth.status': 'valid' });
 
-        try {
-          await env.thread_queue.send({
-            providerId,
-            historyId: body.historyId,
-            subscriptionName: subHeader,
-          });
-          span.setAttributes({ 'queue.message_sent': true });
-        } catch (error) {
-          console.error('Error sending to thread queue', error, {
-            providerId,
-            historyId: body.historyId,
-            subscriptionName: subHeader,
-          });
-          span.recordException(error as Error);
-          span.setStatus({ code: 2, message: (error as Error).message });
-        }
+        const handled = await handleGmailPush(body, {
+          enqueue: (command) => env.MAIL_INGRESS_QUEUE.send(command),
+        });
+        span.setAttributes({
+          'queue.message_sent': handled.accepted,
+        });
         return c.json({ message: 'OK' }, { status: 200 });
       }
     } catch (error) {
@@ -1263,10 +1256,34 @@ export default class Entry extends WorkerEntrypoint<ZeroEnv> {
     batch: MessageBatch<unknown> | { queue: string; messages: Array<{ body: IEmailSendBatch }> },
   ) {
     switch (true) {
+      case batch.queue.startsWith('mail-ingress-queue'): {
+        const messages = batch.messages as Message<unknown>[];
+        await Promise.all(
+          messages.map(async (message) => {
+            try {
+              const command = parseMailIngressCommand(message.body);
+              await runMailIngressCommand(this.env, command);
+              message.ack();
+            } catch (error) {
+              console.error('[MAIL_INGRESS_QUEUE] command failed', error);
+              if (error instanceof MailSyncError && error.classification === 'permanent') {
+                message.ack();
+              } else {
+                message.retry({ delaySeconds: 60 });
+              }
+            }
+          }),
+        );
+        return;
+      }
       case batch.queue.startsWith('subscribe-queue'): {
         console.log('batch', batch);
+        const messages = batch.messages as Message<{
+          connectionId: string;
+          providerId: EProviders;
+        }>[];
         await Promise.all(
-          batch.messages.map(async (msg: any) => {
+          messages.map(async (msg) => {
             const connectionId = msg.body.connectionId;
             const providerId = msg.body.providerId;
             try {
@@ -1276,6 +1293,7 @@ export default class Entry extends WorkerEntrypoint<ZeroEnv> {
                 `Failed to enable brain function for connection ${connectionId}:`,
                 error,
               );
+              msg.retry?.({ delaySeconds: 60 });
             }
           }),
         );
@@ -1398,6 +1416,8 @@ export default class Entry extends WorkerEntrypoint<ZeroEnv> {
     console.log('Running scheduled tasks...');
 
     await this.processScheduledEmails();
+
+    await enqueueDueMailIngressWork(this.env);
 
     await this.processExpiredSubscriptions();
   }

@@ -9,10 +9,14 @@ import { env } from '../env';
 export const enableBrainFunction = async (connection: { id: string; providerId: EProviders }) => {
   try {
     const subscriptionFactory = getSubscriptionFactory(connection.providerId);
-    await subscriptionFactory.subscribe({ body: { connectionId: connection.id } });
+    const response = await subscriptionFactory.subscribe({ body: { connectionId: connection.id } });
+    if (!response.ok) {
+      throw new Error(`Subscription activation failed with status ${response.status}`);
+    }
   } catch (error) {
     console.error(`Failed to enable brain function: ${error}`);
     await resetConnection(connection.id);
+    throw error;
   }
 };
 

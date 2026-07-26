@@ -92,6 +92,10 @@
             "binding": "subscribe_queue",
           },
           {
+            "queue": "mail-ingress-queue",
+            "binding": "MAIL_INGRESS_QUEUE",
+          },
+          {
             "queue": "send-email-queue",
             "binding": "send_email_queue",
           },
@@ -99,6 +103,11 @@
         "consumers": [
           {
             "queue": "subscribe-queue",
+          },
+          {
+            "queue": "mail-ingress-queue",
+            "max_batch_size": 10,
+            "max_retries": 5,
           },
           {
             "queue": "thread-queue",
@@ -145,7 +154,6 @@
           "tag": "v9",
           "new_sqlite_classes": ["ShardRegistry"],
         },
-
       ],
 
       "observability": {
@@ -284,7 +292,6 @@
             "name": "SHARD_REGISTRY",
             "class_name": "ShardRegistry",
           },
-
         ],
       },
       "workflows": [
@@ -316,6 +323,10 @@
             "binding": "subscribe_queue",
           },
           {
+            "queue": "mail-ingress-queue-staging",
+            "binding": "MAIL_INGRESS_QUEUE",
+          },
+          {
             "queue": "send-email-queue-staging",
             "binding": "send_email_queue",
           },
@@ -323,6 +334,11 @@
         "consumers": [
           {
             "queue": "subscribe-queue-staging",
+          },
+          {
+            "queue": "mail-ingress-queue-staging",
+            "max_batch_size": 10,
+            "max_retries": 5,
           },
           {
             "queue": "thread-queue-staging",
@@ -373,7 +389,6 @@
           "tag": "v10",
           "new_sqlite_classes": ["ShardRegistry"],
         },
-
       ],
       "observability": {
         "enabled": true,
@@ -515,7 +530,6 @@
             "name": "SHARD_REGISTRY",
             "class_name": "ShardRegistry",
           },
-
         ],
       },
       "workflows": [
@@ -541,6 +555,10 @@
             "binding": "subscribe_queue",
           },
           {
+            "queue": "mail-ingress-queue-prod",
+            "binding": "MAIL_INGRESS_QUEUE",
+          },
+          {
             "queue": "send-email-queue-prod",
             "binding": "send_email_queue",
           },
@@ -548,6 +566,11 @@
         "consumers": [
           {
             "queue": "subscribe-queue-prod",
+          },
+          {
+            "queue": "mail-ingress-queue-prod",
+            "max_batch_size": 10,
+            "max_retries": 5,
           },
           {
             "queue": "thread-queue-prod",
@@ -598,7 +621,6 @@
           "tag": "v10",
           "new_sqlite_classes": ["ShardRegistry"],
         },
-
       ],
       "vars": {
         "NODE_ENV": "production",

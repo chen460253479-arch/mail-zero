@@ -1,5 +1,5 @@
 {
-  "id": "ed091913-00af-4fdc-b282-72f54090e292",
+  "id": "71f5b13c-e075-4deb-8b4c-c9d74cfd5257",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -6213,6 +6213,28 @@
           "method": "btree",
           "with": {}
         },
+        "inbound_sync_item_due_pending_idx": {
+          "name": "inbound_sync_item_due_pending_idx",
+          "columns": [
+            {
+              "expression": "next_attempt_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sync_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"integration\".\"inbound_sync_item\".\"status\" = 'pending'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "inbound_sync_item_lease_idx": {
           "name": "inbound_sync_item_lease_idx",
           "columns": [
@@ -6268,9 +6290,13 @@
           "name": "inbound_sync_item_lease_pair_chk",
           "value": "(\"integration\".\"inbound_sync_item\".\"lease_owner\" IS NULL) = (\"integration\".\"inbound_sync_item\".\"lease_expires_at\" IS NULL)"
         },
+        "inbound_sync_item_processing_lease_chk": {
+          "name": "inbound_sync_item_processing_lease_chk",
+          "value": "(\"integration\".\"inbound_sync_item\".\"status\" = 'processing') = (\"integration\".\"inbound_sync_item\".\"lease_owner\" IS NOT NULL)"
+        },
         "inbound_sync_item_imported_state_chk": {
           "name": "inbound_sync_item_imported_state_chk",
-          "value": "\"integration\".\"inbound_sync_item\".\"status\" <> 'imported' OR (\n        \"integration\".\"inbound_sync_item\".\"local_email_id\" IS NOT NULL AND \"integration\".\"inbound_sync_item\".\"imported_at\" IS NOT NULL\n      )"
+          "value": "(\"integration\".\"inbound_sync_item\".\"status\" = 'imported') = (\n        \"integration\".\"inbound_sync_item\".\"local_email_id\" IS NOT NULL AND \"integration\".\"inbound_sync_item\".\"imported_at\" IS NOT NULL\n      )"
         }
       },
       "isRLSEnabled": false

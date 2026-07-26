@@ -174,6 +174,8 @@ export const importPendingMessages = async (
           errorCode,
           errorMessage,
         });
+        result.failed += 1;
+        break;
       }
       result.failed += 1;
       continue;

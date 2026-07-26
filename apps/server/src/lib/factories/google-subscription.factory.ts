@@ -1,13 +1,11 @@
+import { ensurePubSubPublisher, type PubSubIamPolicy } from '../mail-channel/gmail/pubsub-policy';
 import { BaseSubscriptionFactory, type SubscriptionData } from './base-subscription.factory';
-import { findConnectionWithAuthorization, resetConnection } from '../server-utils';
-import { readGmailOAuthRuntimeConfig } from '../integrations/gmail-oauth-service';
-import { createSystemIntegrationRepository } from '../integrations/repository';
-import { resolveConnectionCredential } from '../credentials/resolve';
+import { activateGmailInboundForConnection } from '../mail-channel/gmail/ingress-runtime';
 import { c, getNotificationsUrl } from '../../lib/utils';
+import { resetConnection } from '../server-utils';
 import jwt from '@tsndr/cloudflare-worker-jwt';
 import { connection } from '../../db/schema';
 import { EProviders } from '../../types';
-import { createDb } from '../../db';
 import { env } from '../../env';
 
 interface GoogleServiceAccount {
@@ -17,10 +15,6 @@ interface GoogleServiceAccount {
   private_key: string;
   client_email: string;
   client_id: string;
-}
-
-interface IamPolicy {
-  bindings?: { role: string; members: string[] }[];
 }
 
 export const getServiceAccount = (): GoogleServiceAccount => {
@@ -149,12 +143,10 @@ class GoogleSubscriptionFactory extends BaseSubscriptionFactory {
       throw new Error(`Failed to fetch IAM policy: ${await policyResponse.text()}`);
     }
 
-    const policy: IamPolicy = await policyResponse.json();
-    policy.bindings = policy.bindings || [];
-    policy.bindings.push({
-      role: 'roles/pubsub.publisher',
-      members: [this.pubsubServiceAccount],
-    });
+    const policy = ensurePubSubPublisher(
+      (await policyResponse.json()) as PubSubIamPolicy,
+      this.pubsubServiceAccount,
+    );
 
     // Update policy
     const updateResponse = await this.makeAuthenticatedRequest(`${baseUrl}:setIamPolicy`, {
@@ -203,58 +195,11 @@ class GoogleSubscriptionFactory extends BaseSubscriptionFactory {
     connectionData: typeof connection.$inferSelect,
     topicName: string,
   ): Promise<void> {
-    const { db, conn } = createDb(env.HYPERDRIVE.connectionString);
-    let accessToken: string;
-    try {
-      const record = await findConnectionWithAuthorization(db, connectionData.id);
-      if (!record || record.authorization?.authSource !== 'zero_oauth') {
-        throw new Error('Gmail watch requires a Zero OAuth authorization');
-      }
-      const credential = await resolveConnectionCredential(record, env.CREDENTIAL_ENCRYPTION_KEY);
-      if (credential.type !== 'oauth2' || !credential.refreshToken) {
-        throw new Error('Gmail watch requires an OAuth refresh token');
-      }
-      const oauth = await readGmailOAuthRuntimeConfig({
-        repository: createSystemIntegrationRepository(db),
-        encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
-        redirectUri: `${env.VITE_PUBLIC_BACKEND_URL.replace(/\/+$/, '')}/api/integrations/gmail/connect/callback`,
-      });
-      const { OAuth2Client } = await import('google-auth-library');
-      const auth = new OAuth2Client(oauth.clientId, oauth.clientSecret, oauth.redirectUri);
-      auth.setCredentials({
-        refresh_token: credential.refreshToken,
-        scope: credential.scope,
-      });
-      const { credentials } = await auth.refreshAccessToken();
-      accessToken = credentials.access_token ?? '';
-      if (!accessToken) throw new Error('Google did not return an access token');
-    } finally {
-      await conn.end();
-    }
-
-    // Setup Gmail watch using direct API call instead of heavy googleapis package
     const serviceAccount = getServiceAccount();
-
-    console.log(
-      `[SUBSCRIPTION] Setting up Gmail watch for connection: ${connectionData.id} ${topicName} projects/${serviceAccount.project_id}/topics/${topicName}`,
-    );
-    console.log(`[SUBSCRIPTION] Service Account: ${serviceAccount.client_email}`, serviceAccount);
-
-    const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/watch', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        labelIds: ['INBOX'],
-        topicName: `projects/${serviceAccount.project_id}/topics/${topicName}`,
-      }),
+    await activateGmailInboundForConnection(env, {
+      connectionId: connectionData.id,
+      topicName: `projects/${serviceAccount.project_id}/topics/${topicName}`,
     });
-
-    if (!response.ok) {
-      throw new Error(`Failed to setup Gmail watch: ${await response.text()}`);
-    }
   }
 
   public async subscribe(data: { body: SubscriptionData }): Promise<Response> {

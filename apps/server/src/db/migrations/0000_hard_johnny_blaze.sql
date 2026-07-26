@@ -664,7 +664,8 @@ CREATE TABLE "integration"."inbound_sync_item" (
 	CONSTRAINT "inbound_sync_item_status_chk" CHECK ("integration"."inbound_sync_item"."status" IN ('pending', 'processing', 'imported', 'failed')),
 	CONSTRAINT "inbound_sync_item_attempt_count_chk" CHECK ("integration"."inbound_sync_item"."attempt_count" >= 0),
 	CONSTRAINT "inbound_sync_item_lease_pair_chk" CHECK (("integration"."inbound_sync_item"."lease_owner" IS NULL) = ("integration"."inbound_sync_item"."lease_expires_at" IS NULL)),
-	CONSTRAINT "inbound_sync_item_imported_state_chk" CHECK ("integration"."inbound_sync_item"."status" <> 'imported' OR (
+	CONSTRAINT "inbound_sync_item_processing_lease_chk" CHECK (("integration"."inbound_sync_item"."status" = 'processing') = ("integration"."inbound_sync_item"."lease_owner" IS NOT NULL)),
+	CONSTRAINT "inbound_sync_item_imported_state_chk" CHECK (("integration"."inbound_sync_item"."status" = 'imported') = (
         "integration"."inbound_sync_item"."local_email_id" IS NOT NULL AND "integration"."inbound_sync_item"."imported_at" IS NOT NULL
       ))
 );
@@ -810,4 +811,5 @@ CREATE INDEX "inbound_sync_lease_idx" ON "integration"."inbound_sync" USING btre
 CREATE UNIQUE INDEX "inbound_sync_attempt_item_number_uidx" ON "integration"."inbound_sync_attempt" USING btree ("item_id","attempt_number");--> statement-breakpoint
 CREATE UNIQUE INDEX "inbound_sync_item_remote_message_uidx" ON "integration"."inbound_sync_item" USING btree ("sync_id","remote_message_id");--> statement-breakpoint
 CREATE INDEX "inbound_sync_item_pending_idx" ON "integration"."inbound_sync_item" USING btree ("sync_id","next_attempt_at","id") WHERE "integration"."inbound_sync_item"."status" = 'pending';--> statement-breakpoint
+CREATE INDEX "inbound_sync_item_due_pending_idx" ON "integration"."inbound_sync_item" USING btree ("next_attempt_at","sync_id") WHERE "integration"."inbound_sync_item"."status" = 'pending';--> statement-breakpoint
 CREATE INDEX "inbound_sync_item_lease_idx" ON "integration"."inbound_sync_item" USING btree ("lease_expires_at","id") WHERE "integration"."inbound_sync_item"."lease_expires_at" IS NOT NULL;

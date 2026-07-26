@@ -114,8 +114,12 @@ export const createGmailIngressAdapter = (client: GmailApiClient): InboundMailAd
     parseIngressScope(scope);
     parseGmailCheckpoint(checkpoint);
     const subscription = await client.watchInbox(parseTopicName(target));
+    const expiresAt = parseInternalDate(subscription.expiration);
+    if (expiresAt === null) {
+      throw new MailSyncError('GMAIL_WATCH_EXPIRATION_MISSING', 'retryable');
+    }
     return {
-      expiresAt: parseInternalDate(subscription.expiration),
+      expiresAt,
     };
   },
 

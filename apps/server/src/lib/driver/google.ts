@@ -67,6 +67,11 @@ export class GoogleMailManager implements MailClient {
   public getScope(): string {
     return gmailOAuthScopes.join(' ');
   }
+  public runGmailApi<Result>(
+    operation: (client: gmail_v1.Gmail) => Promise<Result>,
+  ): Promise<Result> {
+    return this.withErrorHandler('runGmailApi', () => operation(this.gmail));
+  }
   public async listChanges(cursor: string) {
     return this.withErrorHandler(
       'listChanges',

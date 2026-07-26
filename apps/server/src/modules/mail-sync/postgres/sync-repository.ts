@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, eq, exists, gt, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import type {
@@ -16,7 +16,9 @@ import type {
 } from './types';
 import { parseIngressScope, parseVersionedProviderState } from '../domain/sync-state';
 import { inboundSync, inboundSyncAttempt, inboundSyncItem } from './schema';
+import { mailAccount } from '../../mail/postgres/schema/accounts';
 import { MailSyncError } from '../domain/errors';
+import { connection } from '../../../db/schema';
 import type { DB } from '../../../db';
 
 type RepositoryOptions = {
@@ -213,6 +215,7 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
           .set({
             checkpoint,
             lastDiscoveredAt: sql`now()`,
+            lastReconciledAt: sql`now()`,
             lastErrorCode: null,
             lastErrorMessage: null,
             updatedAt: sql`now()`,
@@ -230,12 +233,17 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
       }
 
       return db.transaction(async (transaction) => {
+        const activeStream = transaction
+          .select({ id: inboundSync.id })
+          .from(inboundSync)
+          .where(and(eq(inboundSync.id, input.syncId), eq(inboundSync.status, 'active')));
         const candidates = await transaction
           .select({ id: inboundSyncItem.id })
           .from(inboundSyncItem)
           .where(
             and(
               eq(inboundSyncItem.syncId, input.syncId),
+              exists(activeStream),
               or(
                 and(
                   eq(inboundSyncItem.status, 'pending'),
@@ -424,6 +432,128 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
           lastErrorMessage: input.errorMessage,
           leaseOwner: null,
           leaseExpiresAt: null,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(inboundSync.id, input.syncId),
+            eq(inboundSync.status, 'active'),
+            eq(inboundSync.leaseOwner, input.owner),
+            gt(inboundSync.leaseExpiresAt, sql`now()`),
+          ),
+        )
+        .returning({ id: inboundSync.id });
+      if (rows.length === 0) {
+        leaseLost();
+      }
+    },
+
+    recordSignal: async (input: {
+      provider: string;
+      externalAccount: string;
+      cursorHint?: string;
+    }): Promise<string[]> => {
+      void input.cursorHint;
+      return db.transaction(async (transaction) => {
+        const matches = await transaction
+          .select({ id: inboundSync.id })
+          .from(inboundSync)
+          .innerJoin(mailAccount, eq(mailAccount.id, inboundSync.accountId))
+          .innerJoin(connection, eq(connection.id, mailAccount.connectionId))
+          .where(
+            and(
+              eq(inboundSync.status, 'active'),
+              eq(inboundSync.provider, input.provider),
+              eq(connection.normalizedEmail, input.externalAccount),
+            ),
+          );
+        if (matches.length === 0) {
+          return [];
+        }
+        const ids = matches.map(({ id }) => id);
+        await transaction
+          .update(inboundSync)
+          .set({ lastSignalAt: sql`now()`, updatedAt: sql`now()` })
+          .where(inArray(inboundSync.id, ids));
+        return ids;
+      });
+    },
+
+    findDueReconciliations: async (input: { before: Date; limit: number }): Promise<string[]> => {
+      requirePositiveInteger(input.limit, 'MAIL_SYNC_INVALID_DUE_LIMIT');
+      return (
+        await db
+          .select({ id: inboundSync.id })
+          .from(inboundSync)
+          .where(
+            and(
+              eq(inboundSync.status, 'active'),
+              or(
+                isNull(inboundSync.lastReconciledAt),
+                lte(inboundSync.lastReconciledAt, input.before),
+              ),
+            ),
+          )
+          .orderBy(sql`${inboundSync.lastReconciledAt} ASC NULLS FIRST`, asc(inboundSync.id))
+          .limit(input.limit)
+      ).map(({ id }) => id);
+    },
+
+    findDueRenewals: async (input: { before: Date; limit: number }): Promise<string[]> => {
+      requirePositiveInteger(input.limit, 'MAIL_SYNC_INVALID_DUE_LIMIT');
+      return (
+        await db
+          .select({ id: inboundSync.id })
+          .from(inboundSync)
+          .where(
+            and(
+              eq(inboundSync.status, 'active'),
+              lte(inboundSync.subscriptionExpiresAt, input.before),
+            ),
+          )
+          .orderBy(asc(inboundSync.subscriptionExpiresAt), asc(inboundSync.id))
+          .limit(input.limit)
+      ).map(({ id }) => id);
+    },
+
+    findSyncsWithDueItems: async (input: { before: Date; limit: number }): Promise<string[]> => {
+      requirePositiveInteger(input.limit, 'MAIL_SYNC_INVALID_DUE_LIMIT');
+      return (
+        await db
+          .selectDistinct({ id: inboundSyncItem.syncId })
+          .from(inboundSyncItem)
+          .innerJoin(inboundSync, eq(inboundSync.id, inboundSyncItem.syncId))
+          .where(
+            and(
+              eq(inboundSync.status, 'active'),
+              or(
+                and(
+                  eq(inboundSyncItem.status, 'pending'),
+                  lte(inboundSyncItem.nextAttemptAt, input.before),
+                ),
+                and(
+                  eq(inboundSyncItem.status, 'processing'),
+                  lte(inboundSyncItem.leaseExpiresAt, input.before),
+                ),
+              ),
+            ),
+          )
+          .orderBy(asc(inboundSyncItem.syncId))
+          .limit(input.limit)
+      ).map(({ id }) => id);
+    },
+
+    updateSubscription: async (input: {
+      syncId: string;
+      owner: string;
+      subscriptionExpiresAt: Date | null;
+    }): Promise<void> => {
+      const rows = await db
+        .update(inboundSync)
+        .set({
+          subscriptionExpiresAt: input.subscriptionExpiresAt,
+          lastErrorCode: null,
+          lastErrorMessage: null,
           updatedAt: sql`now()`,
         })
         .where(

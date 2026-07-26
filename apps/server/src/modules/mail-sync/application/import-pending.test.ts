@@ -231,4 +231,77 @@ describe('pending inbound message import', () => {
       }),
     ]);
   });
+
+  it('stops the claimed batch after the first authentication failure', async () => {
+    const fetched: string[] = [];
+    const failed: string[] = [];
+    const adapter: InboundMailAdapter = {
+      provider: 'gmail',
+      establishCheckpoint: async () => {
+        throw new Error('unused');
+      },
+      discover: async () => {
+        throw new Error('unused');
+      },
+      fetchRawMessage: async ({ remoteMessageId }) => {
+        fetched.push(remoteMessageId);
+        throw new Error('unauthorized');
+      },
+      classifyError: () => 'authentication',
+    };
+
+    const result = await importPendingMessages(
+      {
+        syncId: 'sync-1',
+        owner: 'worker-1',
+        limit: 10,
+        leaseForMs: 60_000,
+        maxAttempts: 3,
+        baseRetryDelayMs: 1_000,
+      },
+      {
+        clock: { now: () => new Date('2026-01-01T00:00:00.000Z') },
+        resolveContext: async () => context,
+        getAdapterFactory: () => ({ create: async () => adapter }),
+        repository: {
+          claimPendingItems: async () => [
+            {
+              id: 'item-1',
+              remoteMessageId: 'message-1',
+              remoteThreadId: null,
+              attemptCount: 1,
+              leaseOwner: 'worker-1',
+            },
+            {
+              id: 'item-2',
+              remoteMessageId: 'message-2',
+              remoteThreadId: null,
+              attemptCount: 1,
+              leaseOwner: 'worker-1',
+            },
+          ],
+          markImported: async () => undefined,
+          scheduleRetry: async () => undefined,
+          markFailed: async ({ itemId }) => {
+            failed.push(itemId);
+          },
+        },
+        mailCore: {
+          importEmail: async () => {
+            throw new Error('must not reach MailCore');
+          },
+        },
+        onAuthenticationError: async () => undefined,
+      },
+    );
+
+    expect(result).toEqual({
+      claimed: 2,
+      imported: 0,
+      retried: 0,
+      failed: 1,
+    });
+    expect(fetched).toEqual(['message-1']);
+    expect(failed).toEqual(['item-1']);
+  });
 });

@@ -40,6 +40,7 @@ describe('mail sync database schema', () => {
           'inbound_sync_due_renewal_idx',
           'inbound_sync_lease_idx',
           'inbound_sync_item_pending_idx',
+          'inbound_sync_item_due_pending_idx',
           'inbound_sync_item_lease_idx',
         ]),
       );
@@ -151,6 +152,25 @@ describe('mail sync database schema', () => {
           ) VALUES ('item-3', 'sync-1', 'message-3', 'imported')
         `,
       ).rejects.toThrow(/inbound_sync_item_imported_state_chk/u);
+
+      await expect(
+        sql`
+          INSERT INTO integration.inbound_sync_item (
+            id, sync_id, remote_message_id, status
+          ) VALUES ('item-4', 'sync-1', 'message-4', 'processing')
+        `,
+      ).rejects.toThrow(/inbound_sync_item_processing_lease_chk/u);
+
+      await expect(
+        sql`
+          INSERT INTO integration.inbound_sync_item (
+            id, sync_id, remote_message_id, status, lease_owner, lease_expires_at
+          ) VALUES (
+            'item-5', 'sync-1', 'message-5', 'pending',
+            'worker-1', now() + interval '1 minute'
+          )
+        `,
+      ).rejects.toThrow(/inbound_sync_item_processing_lease_chk/u);
     });
   });
 });

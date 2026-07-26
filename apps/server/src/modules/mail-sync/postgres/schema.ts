@@ -129,13 +129,20 @@ export const inboundSyncItem = createIntegrationTable(
       sql`(${t.leaseOwner} IS NULL) = (${t.leaseExpiresAt} IS NULL)`,
     ),
     check(
+      'inbound_sync_item_processing_lease_chk',
+      sql`(${t.status} = 'processing') = (${t.leaseOwner} IS NOT NULL)`,
+    ),
+    check(
       'inbound_sync_item_imported_state_chk',
-      sql`${t.status} <> 'imported' OR (
+      sql`(${t.status} = 'imported') = (
         ${t.localEmailId} IS NOT NULL AND ${t.importedAt} IS NOT NULL
       )`,
     ),
     index('inbound_sync_item_pending_idx')
       .on(t.syncId, t.nextAttemptAt, t.id)
+      .where(sql`${t.status} = 'pending'`),
+    index('inbound_sync_item_due_pending_idx')
+      .on(t.nextAttemptAt, t.syncId)
       .where(sql`${t.status} = 'pending'`),
     index('inbound_sync_item_lease_idx')
       .on(t.leaseExpiresAt, t.id)

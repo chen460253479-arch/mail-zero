@@ -154,6 +154,30 @@ describe('Gmail inbound adapter', () => {
     });
   });
 
+  it('rejects a Watch response without a valid expiration', async () => {
+    const adapter = createGmailIngressAdapter(
+      createClient({
+        watchInbox: async () => ({
+          historyId: '100',
+          expiration: null,
+        }),
+      }),
+    );
+
+    await expect(
+      adapter.subscribe!({
+        scope: parseIngressScope(),
+        checkpoint: { version: 1, historyId: '100' },
+        target: {
+          version: 1,
+          topicName: 'projects/zero/topics/gmail',
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'GMAIL_WATCH_EXPIRATION_MISSING',
+    });
+  });
+
   it('classifies Gmail authentication, throttling, server, and permanent failures', () => {
     const adapter = createGmailIngressAdapter(createClient());
 
