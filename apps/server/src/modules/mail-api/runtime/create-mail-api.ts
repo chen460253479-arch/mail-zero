@@ -1,5 +1,4 @@
-import type { Id, MailAccountId, MailAccountRecord, MailCore } from '@zero/mail-core';
-import { ulid } from 'ulid';
+import type { MailAccountId, MailAccountRecord, MailCore } from '@zero/mail-core';
 
 import {
   createMailSnoozeRuntime,
@@ -7,8 +6,7 @@ import {
 } from '../../mail-snooze/runtime/create-mail-snooze';
 import { createPostgresMailSnoozeRepository } from '../../mail-snooze/postgres/repository';
 import { createMailOutboundRuntimeForEnvironment } from '../../../runtime/mail/outbound';
-import { preprocessEmailHtml } from '../../../lib/email-processor';
-import { createMailCoreRuntime, R2BlobStore } from '../../mail';
+import { createMailCoreForEnvironment } from '../../../runtime/mail/core';
 import type { MailOutboundRuntime } from '../../mail-outbound';
 import { MailApiError } from '../errors/mail-api-error';
 import { createDb, type DB } from '../../../db';
@@ -32,18 +30,7 @@ export type OwnedMailApiRuntime = OpenMailApiRuntime & {
 };
 
 export function createMailApiRuntime(db: DB, runtimeEnv: MailApiEnvironment): MailApiRuntime {
-  const core = createMailCoreRuntime({
-    db,
-    blobStore: new R2BlobStore(runtimeEnv.THREADS_BUCKET),
-    blobReadAuditSink: { record: async () => undefined },
-    clock: { now: () => new Date() },
-    idFactory: {
-      next<Kind extends string>() {
-        return ulid() as Id<Kind>;
-      },
-    },
-    sanitizeHtml: preprocessEmailHtml,
-  });
+  const core = createMailCoreForEnvironment(db, runtimeEnv);
   return {
     db,
     core,

@@ -46,6 +46,7 @@ import { ShardRegistry, ZeroAgent, ZeroDriver } from './routes/agent';
 import { ThreadSyncWorker } from './routes/agent/sync-worker';
 import type { MailChannelId } from './lib/mail-channel/types';
 import { oAuthDiscoveryMetadata } from 'better-auth/plugins';
+import { registerMailBlobRoutes } from './modules/mail-api';
 import { EProviders, type IEmailSendBatch } from './types';
 import { eq, and, desc, asc, inArray } from 'drizzle-orm';
 import { ThinkingMCP } from './lib/sequential-thinking';
@@ -1041,6 +1042,8 @@ const api = new Hono<HonoContext>()
       500,
     );
   });
+
+registerMailBlobRoutes(api);
 
 const app = new Hono<HonoContext>()
   .use(

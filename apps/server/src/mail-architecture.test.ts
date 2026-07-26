@@ -11,6 +11,8 @@ const canonicalRoots = [
   'modules/mail-accounts',
   'modules/mail-sync',
   'modules/mail-outbound',
+  'modules/mail-api',
+  'modules/mail-snooze',
   'mail-channel',
   'integrations',
   'infrastructure/security',
@@ -127,6 +129,36 @@ describe('mail server architecture', () => {
           specifier === '@googleapis/gmail' || target?.includes('integrations/nango/client'),
       );
 
+    expect(violations).toEqual([]);
+  });
+
+  it('keeps the public Mail API independent from provider and credential implementations', () => {
+    const forbidden = [
+      'mail-channel',
+      'integrations/nango',
+      'mail-accounts/credentials',
+      'lib/driver',
+      '/gmail',
+    ];
+    const violations = importsBelow('modules/mail-api').filter(({ target }) =>
+      target === null ? false : forbidden.some((fragment) => target.includes(fragment)),
+    );
+    expect(violations).toEqual([]);
+  });
+
+  it('prevents server code from importing Mail API internals instead of its facade', () => {
+    const violations = collectTypeScriptFiles(srcRoot)
+      .filter((file) => !normalizePath(relative(srcRoot, file)).startsWith('modules/mail-api/'))
+      .flatMap((file) =>
+        readImports(file).map((specifier) => ({
+          file: normalizePath(relative(srcRoot, file)),
+          target: resolveLocalImport(file, specifier),
+        })),
+      )
+      .filter(
+        ({ target }) =>
+          target?.startsWith('modules/mail-api/') && !target.endsWith('modules/mail-api'),
+      );
     expect(violations).toEqual([]);
   });
 });
