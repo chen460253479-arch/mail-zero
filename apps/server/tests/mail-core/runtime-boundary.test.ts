@@ -77,6 +77,7 @@ describe('mail runtime boundary', () => {
         'updateEmail',
         'updateIdentity',
         'updateMailbox',
+        'uploadBlob',
       ].sort(),
     );
   });

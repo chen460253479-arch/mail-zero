@@ -8,6 +8,7 @@ export const mailCoreErrorCodes = [
   'INVALID_STATE',
   'STATE_MISMATCH',
   'ACCOUNT_NOT_FOUND',
+  'ACCOUNT_NOT_ACTIVE',
   'MAILBOX_NOT_FOUND',
   'EMAIL_NOT_FOUND',
   'THREAD_NOT_FOUND',

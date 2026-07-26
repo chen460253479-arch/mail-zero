@@ -7,7 +7,7 @@ import {
   prepareBlob,
   type PreparedBlob,
   verifyPreparedBlob,
-} from './blob-lifecycle';
+} from '../blob/blob-lifecycle';
 import type {
   BlobRecord,
   EmailPartRecord,

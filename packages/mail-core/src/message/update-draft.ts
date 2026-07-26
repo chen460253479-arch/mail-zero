@@ -14,8 +14,8 @@ import {
   requireStableReferences,
   type DraftReferences,
 } from './create-draft';
+import { discardCommittedBlobs, discardTemporaryBlobs } from '../blob/blob-lifecycle';
 import type { EmailRecord, MailCoreDependencies, MailTransaction } from '../store';
-import { discardCommittedBlobs, discardTemporaryBlobs } from './blob-lifecycle';
 import type { DraftResult, UpdateDraftInput } from './draft-types';
 import { applyEmailAggregateDelta } from './email-aggregates';
 import { createEmailSearchDocument } from './search-document';

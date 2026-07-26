@@ -1,5 +1,5 @@
 import { MailCoreError, type BlobId, type MailAccountId } from '../types';
-import { verifyPreparedBlob } from '../message/blob-lifecycle';
+import { verifyPreparedBlob } from './blob-lifecycle';
 import type { MailCoreDependencies } from '../store';
 
 export type ReadBlobInput = {

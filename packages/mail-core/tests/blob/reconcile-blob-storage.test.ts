@@ -5,7 +5,7 @@ import {
   discardCommittedBlobs,
   discardTemporaryBlobs,
   type PreparedBlob,
-} from '../../src/message/blob-lifecycle';
+} from '../../src/blob/blob-lifecycle';
 import {
   createMailAccount,
   reconcileBlobStorage,

@@ -1,6 +1,6 @@
 import type { BlobRecord, EmailRecord, MailCoreDependencies } from '../store';
 import { MailCoreError, type BlobId, type MailAccountId } from '../types';
-import { contentAddressedObjectKey } from './blob-lifecycle';
+import { contentAddressedObjectKey } from '../blob/blob-lifecycle';
 
 const MAX_GC_BATCH = 1000;
 

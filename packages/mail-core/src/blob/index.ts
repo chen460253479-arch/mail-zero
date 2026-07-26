@@ -4,6 +4,7 @@ export {
   type BlobReadAuditSink,
   type ReadBlobInput,
 } from './read-blob';
+export { uploadBlob, type UploadBlobInput, type UploadBlobResult } from './upload-blob';
 export {
   reconcileBlobStorage,
   type ReconcileBlobStorageCursor,

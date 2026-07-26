@@ -2,8 +2,15 @@ import { createHash } from 'node:crypto';
 
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
+import {
+  createMailAccount,
+  createMailCore,
+  MailCoreError,
+  type BlobStore,
+  type MailAccountId,
+} from '@zero/mail-core';
+import { createMemoryMailCoreDependencies } from '../../../../packages/mail-core/src/testing/fakes';
 import { MemoryBlobStore, R2BlobStore, type R2BucketLike } from '../../src/modules/mail';
-import { MailCoreError, type BlobStore, type MailAccountId } from '@zero/mail-core';
 
 type StoredObject = {
   bytes: Uint8Array;
@@ -147,6 +154,34 @@ exerciseBlobStoreContract('MemoryBlobStore', () => new MemoryBlobStore());
 exerciseBlobStoreContract('R2BlobStore', () => new R2BlobStore(new FakeR2Bucket()));
 
 describe('R2BlobStore', () => {
+  it('supports durable Mail Core upload and account-scoped deduplication', async () => {
+    const bucket = new FakeR2Bucket();
+    const blobStore = new R2BlobStore(bucket);
+    const base = createMemoryMailCoreDependencies();
+    const dependencies = { ...base, blobStore };
+    const account = await createMailAccount(dependencies, {
+      userId: 'r2-upload-user',
+      connectionId: 'r2-upload-connection',
+      timezone: 'UTC',
+      storageQuotaBytes: null,
+    });
+    const core = createMailCore(dependencies);
+
+    const first = await core.uploadBlob({
+      accountId: account.id,
+      contentType: 'text/plain',
+      bytes,
+    });
+    const second = await core.uploadBlob({
+      accountId: account.id,
+      contentType: 'application/octet-stream',
+      bytes,
+    });
+
+    expect(second).toEqual({ blob: first.blob, deduplicated: true });
+    expect([...bucket.objects.keys()]).toEqual([first.blob.objectKey]);
+  });
+
   it('accepts the generated Cloudflare R2 bucket contract', () => {
     expectTypeOf<R2Bucket>().toMatchTypeOf<R2BucketLike>();
   });

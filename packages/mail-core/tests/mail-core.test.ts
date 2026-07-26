@@ -40,6 +40,7 @@ describe('createMailCore', () => {
         'updateEmail',
         'updateIdentity',
         'updateMailbox',
+        'uploadBlob',
       ].sort(),
     );
     expect(core).not.toHaveProperty('garbageCollectBlobs');

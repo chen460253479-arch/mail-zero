@@ -1,6 +1,6 @@
 import { MailCoreError, type BlobId, type MailAccountId } from '../types';
-import { contentAddressedObjectKey } from '../message/blob-lifecycle';
 import type { BlobStoreEntry, MailCoreDependencies } from '../store';
+import { contentAddressedObjectKey } from './blob-lifecycle';
 
 const MAX_MAINTENANCE_BATCH = 1000;
 const LIST_PAGE_SIZE = 1000;
