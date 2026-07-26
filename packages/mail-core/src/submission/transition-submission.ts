@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 
 import type { CancelSubmissionInput, SubmissionStatus, TransitionSubmissionInput } from './types';
-import type { MailCoreDependencies, SubmissionRecord } from '../store';
+import type { MailCoreDependencies, MailTransaction, SubmissionRecord } from '../store';
 import { submissionSafeResponses } from './types';
 import { MailCoreError } from '../types';
 
@@ -73,55 +73,60 @@ const submissionChangedProperties = (
   );
 };
 
-export async function transitionSubmission(
+export async function transitionSubmissionInTransaction(
   dependencies: MailCoreDependencies,
+  tx: MailTransaction,
   input: TransitionSubmissionInput,
 ): Promise<SubmissionRecord> {
-  return dependencies.unitOfWork.run(async (tx) => {
-    await tx.lockAccount(input.accountId);
-    const now = dependencies.clock.now();
-    const submission = await tx.submissions.findById(input.accountId, input.submissionId);
-    if (submission === null) {
-      throw new MailCoreError('EMAIL_SUBMISSION_NOT_FOUND', {
-        entityId: input.submissionId,
-      });
-    }
-    if (
-      !(allowedSubmissionTransitions[submission.status] as readonly SubmissionStatus[]).includes(
-        input.to,
-      )
-    ) {
-      return invalidTransition(submission.id);
-    }
-    if (
-      submission.status === 'scheduled' &&
-      input.to === 'queued' &&
-      submission.sendAt.getTime() > now.getTime()
-    ) {
-      return invalidTransition(submission.id);
-    }
-
-    const patch =
-      input.to === 'sent' || input.to === 'failed'
-        ? completionPatch(submission, input, now)
-        : input.outcome === null
-          ? { status: input.to, updatedAt: new Date(now) }
-          : invalidTransition(submission.id);
-    const changedProperties = submissionChangedProperties(submission, patch);
-    const updated = await tx.submissions.update(input.accountId, submission.id, patch);
-    const stateVersion = await tx.nextStateVersion(input.accountId);
-    await tx.changes.recordChange({
-      accountId: input.accountId,
-      stateVersion,
-      collection: 'email_submission',
-      entityId: submission.id,
-      changeType: 'updated',
-      changedProperties,
-      createdAt: now,
+  await tx.lockAccount(input.accountId);
+  const now = dependencies.clock.now();
+  const submission = await tx.submissions.findById(input.accountId, input.submissionId);
+  if (submission === null) {
+    throw new MailCoreError('EMAIL_SUBMISSION_NOT_FOUND', {
+      entityId: input.submissionId,
     });
-    return updated;
+  }
+  if (
+    !(allowedSubmissionTransitions[submission.status] as readonly SubmissionStatus[]).includes(
+      input.to,
+    )
+  ) {
+    return invalidTransition(submission.id);
+  }
+  if (
+    submission.status === 'scheduled' &&
+    input.to === 'queued' &&
+    submission.sendAt.getTime() > now.getTime()
+  ) {
+    return invalidTransition(submission.id);
+  }
+
+  const patch =
+    input.to === 'sent' || input.to === 'failed'
+      ? completionPatch(submission, input, now)
+      : input.outcome === null
+        ? { status: input.to, updatedAt: new Date(now) }
+        : invalidTransition(submission.id);
+  const changedProperties = submissionChangedProperties(submission, patch);
+  const updated = await tx.submissions.update(input.accountId, submission.id, patch);
+  const stateVersion = await tx.nextStateVersion(input.accountId);
+  await tx.changes.recordChange({
+    accountId: input.accountId,
+    stateVersion,
+    collection: 'email_submission',
+    entityId: submission.id,
+    changeType: 'updated',
+    changedProperties,
+    createdAt: now,
   });
+  return updated;
 }
+
+export const transitionSubmission = (
+  dependencies: MailCoreDependencies,
+  input: TransitionSubmissionInput,
+): Promise<SubmissionRecord> =>
+  dependencies.unitOfWork.run((tx) => transitionSubmissionInTransaction(dependencies, tx, input));
 
 export async function cancelSubmission(
   dependencies: MailCoreDependencies,

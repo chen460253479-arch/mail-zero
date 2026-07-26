@@ -8,6 +8,7 @@ export {
   allowedSubmissionTransitions,
   cancelSubmission,
   transitionSubmission,
+  transitionSubmissionInTransaction,
 } from './transition-submission';
 export type {
   CancelSubmissionInput,
