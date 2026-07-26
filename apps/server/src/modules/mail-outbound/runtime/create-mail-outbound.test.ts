@@ -12,6 +12,10 @@ const createDependencies = () => {
   const enqueue = vi.fn(async () => undefined);
   const deliverClaimed = vi.fn(async () => 'sent' as const);
   const reconcileUncertain = vi.fn(async () => 'sent' as const);
+  const cancelPending = vi.fn(async () => ({
+    submission: { id: 'submission-a', status: 'canceled' },
+    delivery: { id: 'delivery-a', status: 'canceled' },
+  }));
   const tx = {
     outbound: {
       claimById,
@@ -27,6 +31,7 @@ const createDependencies = () => {
       enqueue,
       deliverClaimed,
       reconcileUncertain,
+      cancelPending,
     },
     dependencies: {
       unitOfWork: {
@@ -49,6 +54,7 @@ const createDependencies = () => {
         enqueueSubmission: vi.fn(),
         deliverClaimed,
         reconcileUncertain,
+        cancelPending,
         finalizeAccepted: vi.fn(),
         finalizeFailed: vi.fn(),
       },
@@ -101,6 +107,27 @@ describe('createMailOutboundRuntime', () => {
         leaseForMs: 60_000,
       },
       expect.any(Object),
+    );
+  });
+
+  it('exposes atomic pending cancellation without provider knowledge', async () => {
+    const { dependencies, values } = createDependencies();
+    const runtime = createMailOutboundRuntime(dependencies as never);
+
+    await runtime.cancel({
+      accountId: 'account-a',
+      submissionId: 'submission-a',
+    } as never);
+
+    expect(values.cancelPending).toHaveBeenCalledWith(
+      {
+        accountId: 'account-a',
+        submissionId: 'submission-a',
+      },
+      expect.objectContaining({
+        unitOfWork: dependencies.unitOfWork,
+        mailCoreDependencies: dependencies.mailCoreDependencies,
+      }),
     );
   });
 });

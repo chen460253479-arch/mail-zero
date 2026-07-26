@@ -1,4 +1,9 @@
-import type { BlobStore, CreateSubmissionInput, MailCoreDependencies } from '@zero/mail-core';
+import type {
+  BlobStore,
+  CancelSubmissionInput,
+  CreateSubmissionInput,
+  MailCoreDependencies,
+} from '@zero/mail-core';
 
 import type {
   MailOutboundCommand,
@@ -26,6 +31,10 @@ import {
   enqueueSubmission,
   type SubmitDraftForDeliveryResult,
 } from '../application/enqueue-submission';
+import {
+  cancelPendingDelivery,
+  type CancelPendingDeliveryResult,
+} from '../application/cancel-delivery';
 import { finalizeAcceptedDelivery, type FinalizeAcceptedInput } from '../application/finalize-sent';
 import { finalizeFailedDelivery, type FinalizeFailedInput } from '../application/finalize-failed';
 import { deliverClaimed, type DeliverDependencies } from '../application/deliver';
@@ -42,6 +51,7 @@ type RuntimeOperations = {
   reconcileUncertain: typeof reconcileUncertainDelivery;
   finalizeAccepted(input: FinalizeAcceptedInput): Promise<void>;
   finalizeFailed(input: FinalizeFailedInput): Promise<void>;
+  cancelPending: typeof cancelPendingDelivery;
 };
 
 export type CreateMailOutboundRuntimeDependencies = {
@@ -64,6 +74,7 @@ export type CreateMailOutboundRuntimeDependencies = {
 
 export interface MailOutboundRuntime {
   submit(input: CreateSubmissionInput): Promise<SubmitDraftForDeliveryResult>;
+  cancel(input: CancelSubmissionInput): Promise<CancelPendingDeliveryResult>;
   process(command: MailOutboundCommand): Promise<void>;
   enqueueDue(): Promise<{ due: number; expired: number; uncertain: number }>;
 }
@@ -123,6 +134,12 @@ export const createMailOutboundRuntime = (
   };
 
   return {
+    cancel: async (input) =>
+      await (dependencies.operations?.cancelPending ?? cancelPendingDelivery)(input, {
+        unitOfWork: dependencies.unitOfWork,
+        mailCoreDependencies: dependencies.mailCoreDependencies,
+        clock: dependencies.clock,
+      }),
     submit: async (input) =>
       await (dependencies.operations?.enqueueSubmission ?? enqueueSubmission)(input, {
         unitOfWork: dependencies.unitOfWork,

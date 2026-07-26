@@ -17,8 +17,7 @@ describe('Thread reference keys', () => {
 
     expect(keys).toEqual([
       {
-        normalizedSubjectHash:
-          '073c1634c496cdb649d1afe0a312bbb4b7e1741b271542e4a436c3b8824b1761',
+        normalizedSubjectHash: '073c1634c496cdb649d1afe0a312bbb4b7e1741b271542e4a436c3b8824b1761',
         messageIdHash: '00480d6521bbfb6ac7fed22abccae9094ec97f01c87c56489440557c40e239b2',
       },
     ]);

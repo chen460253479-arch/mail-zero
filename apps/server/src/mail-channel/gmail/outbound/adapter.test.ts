@@ -107,4 +107,30 @@ describe('Gmail outbound adapter', () => {
     });
     expect(sendRawMessage).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['rateLimitExceeded', 'rate_limited'],
+    ['userRateLimitExceeded', 'rate_limited'],
+    ['quotaExceeded', 'quota_exceeded'],
+    ['dailyLimitExceeded', 'quota_exceeded'],
+    ['invalidRecipient', 'invalid_recipient'],
+    ['domainPolicy', 'policy_rejected'],
+  ] as const)('maps Gmail reason %s to %s', (reason, kind) => {
+    const adapter = createGmailOutboundAdapter(client(vi.fn()), {
+      now: () => new Date('2026-01-01T00:00:05.000Z'),
+    });
+
+    expect(
+      adapter.classifyError({
+        response: {
+          status: 403,
+          data: {
+            error: {
+              errors: [{ reason }],
+            },
+          },
+        },
+      }),
+    ).toMatchObject({ kind });
+  });
 });

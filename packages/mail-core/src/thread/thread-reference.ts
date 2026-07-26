@@ -1,6 +1,6 @@
-import { MailCoreError } from '../types';
 import { normalizeSubject } from './normalize-subject';
 import { normalizeMessageId } from './thread-keys';
+import { MailCoreError } from '../types';
 
 export type ThreadReferenceKey = {
   normalizedSubjectHash: string;
@@ -31,7 +31,9 @@ export async function createThreadReferenceKeys(input: {
   messageIds: string[];
 }): Promise<ThreadReferenceKey[]> {
   const normalizedMessageIds = [
-    ...new Set(input.messageIds.map(normalizeMessageId).filter((messageId) => messageId.length > 0)),
+    ...new Set(
+      input.messageIds.map(normalizeMessageId).filter((messageId) => messageId.length > 0),
+    ),
   ];
   if (normalizedMessageIds.length === 0) {
     return [];

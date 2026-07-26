@@ -187,7 +187,7 @@ const seedPlannerFixtures = async (
     await connection`
       INSERT INTO mail.submission (
         id, mail_account_id, email_id, identity_id, status, send_at,
-        idempotency_key, draft_revision, attempt_count, created_at, updated_at
+        idempotency_key, draft_revision, created_at, updated_at
       )
       SELECT
         'plan-submission-' || lpad(value::text, 4, '0'),
@@ -197,7 +197,6 @@ const seedPlannerFixtures = async (
         'queued',
         now(),
         'plan-idempotency-' || value,
-        0,
         0,
         now() + value * interval '1 second',
         now()

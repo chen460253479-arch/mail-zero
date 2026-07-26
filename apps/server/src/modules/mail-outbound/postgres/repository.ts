@@ -97,7 +97,9 @@ export type FailDeliveryInput = LeaseIdentity & {
   error: OutboundErrorClassification;
 };
 
-export type CancelDeliveryInput = LeaseIdentity & {
+export type CancelPendingDeliveryInput = {
+  mailAccountId: string;
+  submissionId: string;
   now: Date;
 };
 
@@ -114,6 +116,7 @@ export interface MailOutboundRepository {
   findBySubmission(accountId: string, submissionId: string): Promise<OutboundDeliveryRecord | null>;
   listDue(input: { now: Date; limit: number }): Promise<string[]>;
   listDueUncertain(input: { now: Date; limit: number }): Promise<string[]>;
+  cancelPending(input: CancelPendingDeliveryInput): Promise<OutboundDeliveryRecord | null>;
   claimById(input: ClaimDeliveryInput): Promise<ClaimedDelivery | null>;
   recoverExpiredLeases(input: { now: Date; limit: number }): Promise<string[]>;
   loadMessage(input: LeaseIdentity): Promise<OutboundMessageSnapshot>;
@@ -123,7 +126,6 @@ export interface MailOutboundRepository {
   scheduleReconciliation(input: ScheduleReconciliationInput): Promise<void>;
   scheduleResend(input: ScheduleResendInput): Promise<void>;
   markFailed(input: FailDeliveryInput): Promise<void>;
-  markCanceled(input: CancelDeliveryInput): Promise<void>;
   markCompleted(input: CompleteDeliveryInput): Promise<void>;
 }
 
@@ -315,6 +317,24 @@ export const createMailOutboundRepository = (
           .orderBy(asc(outboundDelivery.availableAt), asc(outboundDelivery.id))
           .limit(limit)
       ).map(({ id }) => id);
+    }),
+  cancelPending: (input) =>
+    runOutboundAdapter(async () => {
+      const rows = await db
+        .update(outboundDelivery)
+        .set({
+          status: 'canceled',
+          updatedAt: input.now,
+        })
+        .where(
+          and(
+            eq(outboundDelivery.mailAccountId, input.mailAccountId),
+            eq(outboundDelivery.submissionId, input.submissionId),
+            inArray(outboundDelivery.status, ['scheduled', 'ready', 'retry_wait']),
+          ),
+        )
+        .returning();
+      return rows[0] === undefined ? null : mapDelivery(rows[0]);
     }),
   claimById: (input) =>
     runOutboundAdapter(async () => {
@@ -658,19 +678,6 @@ export const createMailOutboundRepository = (
         outcome: 'permanent_failure',
         providerCode: input.error.providerCode,
         safeResponse: input.error.safeResponse,
-      });
-    }),
-  markCanceled: (input) =>
-    runOutboundAdapter(async () => {
-      await transitionLeased(db, input, {
-        status: 'canceled',
-        updatedAt: input.now,
-        ...clearLease,
-      });
-      await finishAttemptRows(db, {
-        ...input,
-        finishedAt: input.now,
-        outcome: 'permanent_failure',
       });
     }),
   markCompleted: (input) =>

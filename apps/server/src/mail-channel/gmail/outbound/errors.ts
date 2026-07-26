@@ -32,6 +32,38 @@ const retryAfter = (error: unknown, now: Date): Date | null => {
     : null;
 };
 
+const gmailReasons = (error: unknown): Set<string> => {
+  if (typeof error !== 'object' || error === null) return new Set();
+  const root = error as Record<string, unknown>;
+  const response =
+    typeof root.response === 'object' && root.response !== null
+      ? (root.response as Record<string, unknown>)
+      : {};
+  const data =
+    typeof response.data === 'object' && response.data !== null
+      ? (response.data as Record<string, unknown>)
+      : {};
+  const apiError =
+    typeof data.error === 'object' && data.error !== null
+      ? (data.error as Record<string, unknown>)
+      : {};
+  const details = [root.errors, data.errors, apiError.errors].flatMap((candidate) =>
+    Array.isArray(candidate) ? candidate : [],
+  );
+  return new Set(
+    details.flatMap((detail) =>
+      typeof detail === 'object' &&
+      detail !== null &&
+      typeof (detail as Record<string, unknown>).reason === 'string'
+        ? [(detail as Record<string, string>).reason.toLowerCase()]
+        : [],
+    ),
+  );
+};
+
+const hasAnyReason = (reasons: Set<string>, expected: readonly string[]): boolean =>
+  expected.some((reason) => reasons.has(reason.toLowerCase()));
+
 export const classifyGmailOutboundError = (
   error: unknown,
   now: Date,
@@ -45,20 +77,49 @@ export const classifyGmailOutboundError = (
     };
   }
   const status = gmailErrorStatus(error);
-  if (status === 401 || status === 403) {
+  const reasons = gmailReasons(error);
+  if (status === 429 || hasAnyReason(reasons, ['rateLimitExceeded', 'userRateLimitExceeded'])) {
+    return {
+      kind: 'rate_limited',
+      providerCode: status === null ? null : String(status),
+      safeResponse: 'rate_limited',
+      retryAfter: retryAfter(error, now),
+    };
+  }
+  if (hasAnyReason(reasons, ['quotaExceeded', 'dailyLimitExceeded'])) {
+    return {
+      kind: 'quota_exceeded',
+      providerCode: status === null ? null : String(status),
+      safeResponse: 'quota_exceeded',
+      retryAfter: retryAfter(error, now),
+    };
+  }
+  if (hasAnyReason(reasons, ['invalidRecipient'])) {
+    return {
+      kind: 'invalid_recipient',
+      providerCode: status === null ? null : String(status),
+      safeResponse: 'invalid_recipient',
+      retryAfter: null,
+    };
+  }
+  if (hasAnyReason(reasons, ['domainPolicy', 'forbidden'])) {
+    return {
+      kind: 'policy_rejected',
+      providerCode: status === null ? null : String(status),
+      safeResponse: 'policy_rejected',
+      retryAfter: null,
+    };
+  }
+  if (
+    status === 401 ||
+    status === 403 ||
+    hasAnyReason(reasons, ['authError', 'insufficientPermissions'])
+  ) {
     return {
       kind: 'authentication_required',
       providerCode: String(status),
       safeResponse: 'authentication_required',
       retryAfter: null,
-    };
-  }
-  if (status === 429) {
-    return {
-      kind: 'rate_limited',
-      providerCode: '429',
-      safeResponse: 'rate_limited',
-      retryAfter: retryAfter(error, now),
     };
   }
   if (status === 413) {

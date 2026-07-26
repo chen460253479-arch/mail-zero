@@ -34,16 +34,11 @@ describe('memory mail unit of work', () => {
         userId: 'user-1',
         connectionId: 'connection-1',
       });
-      return [
-        await tx.nextStateVersion(accountId),
-        await tx.nextStateVersion(accountId),
-      ];
+      return [await tx.nextStateVersion(accountId), await tx.nextStateVersion(accountId)];
     });
     expect(versions).toEqual([1n, 1n]);
 
-    const nextVersion = await deps.unitOfWork.run((tx) =>
-      tx.nextStateVersion(accountId),
-    );
+    const nextVersion = await deps.unitOfWork.run((tx) => tx.nextStateVersion(accountId));
     expect(nextVersion).toBe(2n);
   });
 

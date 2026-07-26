@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  inspectZeroSchemas,
-  resetZeroSchemas,
-} from '../../src/db/push-development-database';
+import { inspectZeroSchemas, resetZeroSchemas } from '../../src/db/push-development-database';
 import { withMailTestDatabase } from './helpers/database';
 
 describe('development database push protection', () => {

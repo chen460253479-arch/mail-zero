@@ -58,6 +58,7 @@ describe('mail runtime boundary', () => {
         'destroyEmail',
         'destroyIdentity',
         'destroyMailbox',
+        'finalizeSubmissionSent',
         'getChanges',
         'getEmail',
         'getThread',

@@ -1,4 +1,5 @@
 export * from './application/commands';
+export * from './application/cancel-delivery';
 export * from './application/deliver';
 export * from './application/dispatch-due-deliveries';
 export * from './application/dispatch-due-reconciliations';
