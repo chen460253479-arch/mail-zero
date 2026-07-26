@@ -15,6 +15,8 @@ import {
   queryEmails,
   type BlobId,
   type MailAccountId,
+  type MailTransaction,
+  type MailUnitOfWork,
 } from '../../src';
 import { createSeededImportDependencies } from '../helpers/import-harness';
 import { createMemoryMailCoreDependencies } from '../../src/testing/fakes';
@@ -911,14 +913,48 @@ describe('importEmail', () => {
     const secondThreadId = (await deps.inspect.email(second.emailId))!.threadId;
     expect(firstThreadId).not.toBe(secondThreadId);
 
-    const bridge = await importRaw(
-      'remote-bridge',
-      makeRaw(
-        'message-bridge@example.test',
-        ['message-a@example.test', 'message-b@example.test'],
-        'Re: Merge topic',
-      ),
+    const repositoryCalls = { emailUpdate: 0, threadListByAccount: 0 };
+    const unitOfWork: MailUnitOfWork = {
+      run<Result>(operation: (transaction: MailTransaction) => Promise<Result>): Promise<Result> {
+        return deps.unitOfWork.run((tx) =>
+          operation({
+            ...tx,
+            emails: {
+              ...tx.emails,
+              update: (...args) => {
+                repositoryCalls.emailUpdate += 1;
+                return tx.emails.update(...args);
+              },
+            },
+            threads: {
+              ...tx.threads,
+              listByAccount: (accountId) => {
+                repositoryCalls.threadListByAccount += 1;
+                return tx.threads.listByAccount(accountId);
+              },
+            },
+          }),
+        );
+      },
+    };
+    const bridge = await importEmail(
+      { ...deps, unitOfWork },
+      {
+        accountId: account.id,
+        provider: 'fixture',
+        remoteEmailId: 'remote-bridge',
+        remoteThreadId: null,
+        raw: makeRaw(
+          'message-bridge@example.test',
+          ['message-a@example.test', 'message-b@example.test'],
+          'Re: Merge topic',
+        ),
+        mailboxIds: [inbox.id],
+        keywords: [],
+        receivedAt: new Date('2026-01-01T12:00:00Z'),
+      },
     );
+    expect(repositoryCalls).toEqual({ emailUpdate: 0, threadListByAccount: 0 });
 
     const winningThreadId = [firstThreadId, secondThreadId].sort()[0]!;
     const losingThreadId = [firstThreadId, secondThreadId].sort()[1]!;

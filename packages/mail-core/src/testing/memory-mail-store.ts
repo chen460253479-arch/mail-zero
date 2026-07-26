@@ -442,6 +442,29 @@ const createRepositories = (
     async listByThread(accountId, threadId) {
       return listScoped(state.emails, accountId).filter((email) => email.threadId === threadId);
     },
+    async moveThread(accountId, fromThreadId, toThreadId, updatedAt) {
+      const movedEmailIds: EmailId[] = [];
+      for (const [key, email] of state.emails) {
+        if (
+          email.accountId === accountId &&
+          email.threadId === fromThreadId &&
+          email.destroyedAt === null &&
+          email.mailboxIds.length > 0
+        ) {
+          state.emails.set(key, copy({ ...email, threadId: toThreadId, updatedAt }));
+          movedEmailIds.push(email.id);
+        }
+      }
+      return movedEmailIds.sort();
+    },
+    async hasRetainedEmailInThread(accountId, threadId) {
+      return [...state.emails.values()].some(
+        (email) =>
+          email.accountId === accountId &&
+          email.threadId === threadId &&
+          (email.destroyedAt !== null || email.mailboxIds.length === 0),
+      );
+    },
     async insert(record) {
       const stored = copy(record);
       state.emails.set(entityKey(record.accountId, record.id), stored);

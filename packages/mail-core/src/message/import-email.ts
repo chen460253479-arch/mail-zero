@@ -26,7 +26,7 @@ import {
   type MailboxId,
   type ThreadId,
 } from '../types';
-import { calculateThreadDecision, normalizeMessageId, normalizeSubject } from '../thread';
+import { calculateThreadDecision, createThreadReferenceKeys, normalizeSubject } from '../thread';
 import type { ImportEmailInput, ImportEmailResult, ParsedEmail } from './types';
 import { createEmailSearchDocument } from './search-document';
 import { parseRawEmail } from './mime';
@@ -257,7 +257,6 @@ const decideThread = async (
   tx: MailTransaction,
   input: ImportEmailInput,
   parsed: ParsedEmail,
-  existingEmails: EmailRecord[],
   now: Date,
 ): Promise<{
   threadId: ThreadId;
@@ -266,36 +265,28 @@ const decideThread = async (
   retainedThreadIds: ThreadId[];
   movedEmailIds: EmailId[];
 }> => {
-  const threadingEmails = existingEmails.filter(
-    ({ destroyedAt, mailboxIds }) => destroyedAt === null && mailboxIds.length > 0,
-  );
   const normalizedSubject = normalizeSubject(parsed.subject);
-  const referenceIds = Array.from(
-    new Set([...parsed.inReplyTo, ...parsed.references].map(normalizeMessageId)),
-  );
-  const referenceIdSet = new Set(referenceIds);
-  const threads = await tx.threads.listByAccount(input.accountId);
-  const threadById = new Map(threads.map((thread) => [thread.id, thread]));
-  const candidates = threadingEmails.flatMap((email) => {
-    if (email.messageId === null) {
-      return [];
-    }
-    const messageId = normalizeMessageId(email.messageId);
-    const thread = threadById.get(email.threadId);
-    return thread === undefined || !referenceIdSet.has(messageId)
-      ? []
-      : [
-          {
-            threadId: email.threadId,
-            normalizedSubject: thread.normalizedSubject,
-            matchedReference: messageId,
-          },
-        ];
+  const referenceKeys = await createThreadReferenceKeys({
+    subject: parsed.subject,
+    messageIds: [...parsed.inReplyTo, ...parsed.references],
   });
+  const normalizedSubjectHash = referenceKeys[0]?.normalizedSubjectHash;
+  const candidates =
+    normalizedSubjectHash === undefined
+      ? []
+      : await tx.threadReferences.findCandidates({
+          accountId: input.accountId,
+          normalizedSubjectHash,
+          messageIdHashes: referenceKeys.map(({ messageIdHash }) => messageIdHash),
+        });
   const decision = calculateThreadDecision({
     normalizedSubject,
-    referenceIds,
-    candidates,
+    referenceIds: referenceKeys.map(({ messageIdHash }) => messageIdHash),
+    candidates: candidates.map(({ threadId, messageIdHash }) => ({
+      threadId,
+      normalizedSubject,
+      matchedReference: messageIdHash,
+    })),
   });
 
   if (decision.type === 'create') {
@@ -324,16 +315,13 @@ const decideThread = async (
   const destroyedThreadIds: ThreadId[] = [];
   const retainedThreadIds: ThreadId[] = [];
   for (const loserThreadId of decision.loserThreadIds) {
-    for (const email of threadingEmails.filter(({ threadId }) => threadId === loserThreadId)) {
-      await tx.emails.update(input.accountId, email.id, {
-        threadId: decision.winnerThreadId,
-        updatedAt: now,
-      });
-      movedEmailIds.push(email.id);
-    }
-    const ownsRetainedEmail = existingEmails.some(
-      ({ threadId, destroyedAt, mailboxIds }) =>
-        threadId === loserThreadId && (destroyedAt !== null || mailboxIds.length === 0),
+    movedEmailIds.push(
+      ...(await tx.emails.moveThread(input.accountId, loserThreadId, decision.winnerThreadId, now)),
+    );
+    await tx.threadReferences.moveThread(input.accountId, loserThreadId, decision.winnerThreadId);
+    const ownsRetainedEmail = await tx.emails.hasRetainedEmailInThread(
+      input.accountId,
+      loserThreadId,
     );
     if (ownsRetainedEmail) {
       retainedThreadIds.push(loserThreadId);
@@ -635,7 +623,7 @@ export async function importEmail(
         await tx.blobs.insert(record);
       }
 
-      const thread = await decideThread(dependencies, tx, input, parsed, existingEmails, now);
+      const thread = await decideThread(dependencies, tx, input, parsed, now);
       const emailId = dependencies.idFactory.next<'Email'>() as EmailId;
       const rawBlobId = blobIdByDigest.get(digestKey(rawBlob!))!;
       await tx.emails.insert({
@@ -674,6 +662,19 @@ export async function importEmail(
         restoreMailboxIds: [],
         keywords: validation.keywords,
       });
+      for (const reference of await createThreadReferenceKeys({
+        subject: parsed.subject,
+        messageIds: parsed.messageId === null ? [] : [parsed.messageId],
+      })) {
+        await tx.threadReferences.insert({
+          accountId: input.accountId,
+          normalizedSubjectHash: reference.normalizedSubjectHash,
+          messageIdHash: reference.messageIdHash,
+          emailId,
+          threadId: thread.threadId,
+          createdAt: now,
+        });
+      }
       await tx.emails.publishSearchDocument(
         input.accountId,
         emailId,

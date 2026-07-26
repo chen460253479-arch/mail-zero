@@ -12,6 +12,56 @@ const raw = new Uint8Array(
 );
 
 describe('PostgreSQL import integration', () => {
+  it('merges bridged Threads through indexed references and one bounded Email move', () =>
+    withMailTestDatabase(async ({ db, unitOfWork }) => {
+      const harness = await createPostgresMailTestHarness(db, unitOfWork, 'thread-merge');
+      const makeRaw = (messageId: string, references: string[]) =>
+        new TextEncoder().encode(
+          [
+            'From: sender@example.test',
+            'To: recipient@example.test',
+            `Message-ID: <${messageId}>`,
+            ...(references.length === 0
+              ? []
+              : [
+                  `In-Reply-To: <${references.at(-1)}>`,
+                  `References: ${references.map((id) => `<${id}>`).join(' ')}`,
+                ]),
+            'Date: Thu, 1 Jan 2026 10:00:00 +0000',
+            'Subject: PostgreSQL merge',
+            'Content-Type: text/plain; charset=utf-8',
+            '',
+            'merge',
+          ].join('\r\n'),
+        );
+      const importRaw = (remoteEmailId: string, messageId: string, references: string[]) =>
+        importEmail(harness.dependencies, {
+          accountId: harness.accountId,
+          provider: 'fixture-provider',
+          remoteEmailId,
+          remoteThreadId: null,
+          raw: makeRaw(messageId, references),
+          mailboxIds: [harness.inbox.id],
+          keywords: [],
+          receivedAt: new Date('2026-01-01T10:00:00.000Z'),
+        });
+      const first = await importRaw('thread-merge-first', 'thread-merge-first@example.test', []);
+      const second = await importRaw('thread-merge-second', 'thread-merge-second@example.test', []);
+      const bridge = await importRaw('thread-merge-bridge', 'thread-merge-bridge@example.test', [
+        'thread-merge-first@example.test',
+        'thread-merge-second@example.test',
+      ]);
+
+      await unitOfWork.run(async (tx) => {
+        const emails = await tx.emails.listByAccount(harness.accountId);
+        expect(emails.map(({ id }) => id)).toEqual(
+          expect.arrayContaining([first.emailId, second.emailId, bridge.emailId]),
+        );
+        expect(new Set(emails.map(({ threadId }) => threadId))).toHaveLength(1);
+        expect(await tx.threads.listByAccount(harness.accountId)).toHaveLength(1);
+      });
+    }));
+
   it('uses the deterministic Email ID tie-break for equal-time Thread projections', () =>
     withMailTestDatabase(async ({ db, unitOfWork }) => {
       const harness = await createPostgresMailTestHarness(db, unitOfWork, 'thread-tie-break');

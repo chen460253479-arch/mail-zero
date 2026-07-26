@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createMailbox,
+  createThreadReferenceKeys,
   destroyEmail,
   destroyMailbox,
   importEmail,
@@ -12,6 +13,41 @@ import {
 import { createSeededEmailHarness } from '../helpers/email-harness';
 
 describe('Email Trash and destruction', () => {
+  it('removes the destroyed Email from indexed Thread matching', async () => {
+    const h = await createSeededEmailHarness();
+    const [key] = await createThreadReferenceKeys({
+      subject: 'Simple fixture',
+      messageIds: ['simple-message@example.test'],
+    });
+    if (key === undefined) {
+      throw new Error('expected Thread reference key');
+    }
+    await expect(
+      h.deps.unitOfWork.run((tx) =>
+        tx.threadReferences.findCandidates({
+          accountId: h.accountId,
+          normalizedSubjectHash: key.normalizedSubjectHash,
+          messageIdHashes: [key.messageIdHash],
+        }),
+      ),
+    ).resolves.toHaveLength(1);
+
+    await destroyEmail(h.deps, {
+      accountId: h.accountId,
+      emailId: h.emailId,
+    });
+
+    await expect(
+      h.deps.unitOfWork.run((tx) =>
+        tx.threadReferences.findCandidates({
+          accountId: h.accountId,
+          normalizedSubjectHash: key.normalizedSubjectHash,
+          messageIdHashes: [key.messageIdHash],
+        }),
+      ),
+    ).resolves.toEqual([]);
+  });
+
   it('moves to Trash, preserves the restore projection, and restores it', async () => {
     const h = await createSeededEmailHarness();
     const custom = await createMailbox(h.deps, {

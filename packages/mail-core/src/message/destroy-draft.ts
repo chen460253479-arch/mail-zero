@@ -54,6 +54,7 @@ export async function destroyDraft(
       parts: [],
     });
     await tx.emails.deleteSearchDocument(input.accountId, input.emailId);
+    await tx.threadReferences.deleteByEmail(input.accountId, input.emailId);
     const threadChange = await updateThreadCounters(tx, input.accountId, email.threadId, now);
     const mailboxChanges = await updateMailboxCounters(tx, input.accountId, now);
     const stateVersion = await recordChanges(tx, {

@@ -1,12 +1,13 @@
 import type {
   EmailPartRecord,
+  EmailId,
   EmailRecord,
   EmailRepository,
   Keyword,
   MailAddress,
   RemoteEmailRecord,
 } from '@zero/mail-core';
-import { and, asc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, exists, isNotNull, isNull, ne, not, or, sql } from 'drizzle-orm';
 
 import {
   email,
@@ -339,6 +340,62 @@ export const createEmailRepository = (db: MailDatabase): EmailRepository => {
           .where(and(eq(email.mailAccountId, accountId), eq(email.threadId, threadId)))
           .orderBy(asc(email.receivedAt), asc(email.id));
         return Promise.all(rows.map((row) => hydrateEmail(db, row)));
+      }),
+    moveThread: (accountId, fromThreadId, toThreadId, updatedAt) =>
+      runAdapter(async () => {
+        const hasMailbox = exists(
+          db
+            .select({ emailId: emailMailbox.emailId })
+            .from(emailMailbox)
+            .where(
+              and(
+                eq(emailMailbox.mailAccountId, email.mailAccountId),
+                eq(emailMailbox.emailId, email.id),
+              ),
+            ),
+        );
+        return (
+          await db
+            .update(email)
+            .set({ threadId: toThreadId, updatedAt })
+            .where(
+              and(
+                eq(email.mailAccountId, accountId),
+                eq(email.threadId, fromThreadId),
+                isNull(email.destroyedAt),
+                hasMailbox,
+              ),
+            )
+            .returning({ id: email.id })
+        )
+          .map(({ id }) => id as EmailId)
+          .sort();
+      }),
+    hasRetainedEmailInThread: (accountId, threadId) =>
+      runAdapter(async () => {
+        const hasMailbox = exists(
+          db
+            .select({ emailId: emailMailbox.emailId })
+            .from(emailMailbox)
+            .where(
+              and(
+                eq(emailMailbox.mailAccountId, email.mailAccountId),
+                eq(emailMailbox.emailId, email.id),
+              ),
+            ),
+        );
+        const rows = await db
+          .select({ id: email.id })
+          .from(email)
+          .where(
+            and(
+              eq(email.mailAccountId, accountId),
+              eq(email.threadId, threadId),
+              or(isNotNull(email.destroyedAt), not(hasMailbox)),
+            ),
+          )
+          .limit(1);
+        return rows.length > 0;
       }),
     insert: (record) =>
       runAdapter(async () => {

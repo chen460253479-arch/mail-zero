@@ -321,6 +321,13 @@ export interface EmailRepository {
   findByRemoteId(input: FindRemoteEmailInput): Promise<RemoteEmailRecord | null>;
   listByAccount(accountId: MailAccountId): Promise<EmailRecord[]>;
   listByThread(accountId: MailAccountId, threadId: ThreadId): Promise<EmailRecord[]>;
+  moveThread(
+    accountId: MailAccountId,
+    fromThreadId: ThreadId,
+    toThreadId: ThreadId,
+    updatedAt: Date,
+  ): Promise<EmailId[]>;
+  hasRetainedEmailInThread(accountId: MailAccountId, threadId: ThreadId): Promise<boolean>;
   insert(record: EmailRecord): Promise<EmailRecord>;
   update(
     accountId: MailAccountId,
