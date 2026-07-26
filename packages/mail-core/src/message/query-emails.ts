@@ -38,6 +38,15 @@ const normalizeFilter = (filter: EmailQueryFilter | undefined): EmailQueryFilter
   if (filter?.hasKeyword !== undefined) {
     normalized.hasKeyword = normalizeKeyword(filter.hasKeyword);
   }
+  if (filter?.notKeyword !== undefined) {
+    normalized.notKeyword = normalizeKeyword(filter.notKeyword);
+  }
+  if (filter?.lifecycle !== undefined) {
+    if (!['draft', 'received', 'sent'].includes(filter.lifecycle)) {
+      throw new MailCoreError('INVALID_QUERY');
+    }
+    normalized.lifecycle = filter.lifecycle;
+  }
   if (filter?.after !== undefined) {
     if (!(filter.after instanceof Date) || !validDate(filter.after)) {
       throw new MailCoreError('INVALID_QUERY');
@@ -105,6 +114,8 @@ const querySignature = (filter: EmailQueryFilter): string =>
   JSON.stringify({
     mailboxId: filter.mailboxId ?? null,
     hasKeyword: filter.hasKeyword ?? null,
+    notKeyword: filter.notKeyword ?? null,
+    lifecycle: filter.lifecycle ?? null,
     after: filter.after?.toISOString() ?? null,
     before: filter.before?.toISOString() ?? null,
     address: filter.address ?? null,

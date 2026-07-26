@@ -74,6 +74,8 @@ export class MemorySearchStore implements SearchStore {
         return (
           (filter.mailboxId === undefined || email.mailboxIds.includes(filter.mailboxId)) &&
           (filter.hasKeyword === undefined || email.keywords.includes(filter.hasKeyword)) &&
+          (filter.notKeyword === undefined || !email.keywords.includes(filter.notKeyword)) &&
+          (filter.lifecycle === undefined || email.lifecycle === filter.lifecycle) &&
           (filter.after === undefined || email.receivedAt > filter.after) &&
           (filter.before === undefined || email.receivedAt < filter.before) &&
           matchesAddress(addressFields(email), filter.address) &&

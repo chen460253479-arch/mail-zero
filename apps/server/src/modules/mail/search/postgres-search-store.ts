@@ -107,6 +107,17 @@ const predicatesFor = (input: SearchEmailInput): SQL[] => {
               AND ${emailKeyword.keyword} = ${filter.hasKeyword}
           )`,
         ]),
+    ...(filter.notKeyword === undefined
+      ? []
+      : [
+          sql`NOT EXISTS (
+            SELECT 1 FROM ${emailKeyword}
+            WHERE ${emailKeyword.mailAccountId} = ${input.accountId}
+              AND ${emailKeyword.emailId} = ${email.id}
+              AND ${emailKeyword.keyword} = ${filter.notKeyword}
+          )`,
+        ]),
+    ...(filter.lifecycle === undefined ? [] : [sql`${email.lifecycle} = ${filter.lifecycle}`]),
     ...(filter.after === undefined
       ? []
       : [sql`${email.receivedAt} > ${filter.after.toISOString()}`]),

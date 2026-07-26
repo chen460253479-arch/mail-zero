@@ -42,6 +42,8 @@ describe('queryEmails', () => {
   it.each([
     ['mailbox', { mailboxId: 'mailbox-inbox' as MailboxId }, ['email-1', 'email-2', 'email-3']],
     ['keyword', { hasKeyword: '$seen' }, ['email-1', 'email-2', 'email-3', 'email-6']],
+    ['negative keyword', { notKeyword: '$seen' }, ['email-4']],
+    ['lifecycle', { lifecycle: 'sent' }, ['email-4']],
     [
       'exclusive after',
       { after: new Date('2026-01-01T00:00:00.000Z') },
@@ -212,6 +214,14 @@ describe('queryEmails', () => {
       {
         filter: { mailboxId: h.inboxId },
         sort: { property: 'receivedAt' as const, direction: 'asc' as const },
+      },
+      {
+        filter: { mailboxId: h.inboxId, notKeyword: '$seen' },
+        sort: { property: 'receivedAt' as const, direction: 'desc' as const },
+      },
+      {
+        filter: { mailboxId: h.inboxId, lifecycle: 'sent' as const },
+        sort: { property: 'receivedAt' as const, direction: 'desc' as const },
       },
     ]) {
       await expect(

@@ -93,11 +93,39 @@ export const emailGetInputSchema = z.object({
 
 export const emailQueryInputSchema = z.object({
   accountId: mailAccountIdSchema,
-  filter: z.record(z.string(), z.unknown()).default({}),
-  sort: z.array(z.record(z.string(), z.unknown())).max(10).default([]),
+  filter: z
+    .object({
+      inMailbox: mailIdSchema.optional(),
+      hasKeyword: z.string().min(1).optional(),
+      notKeyword: z.string().min(1).optional(),
+      lifecycle: emailLifecycleSchema.optional(),
+      after: isoDateSchema.optional(),
+      before: isoDateSchema.optional(),
+      address: z.string().min(1).optional(),
+      from: z.string().min(1).optional(),
+      to: z.string().min(1).optional(),
+      hasAttachment: z.boolean().optional(),
+      text: z.string().min(1).optional(),
+    })
+    .default({}),
+  sort: z
+    .array(
+      z.object({
+        property: z.enum(['receivedAt', 'sentAt', 'size', 'subject']),
+        isAscending: z.boolean().default(false),
+      }),
+    )
+    .max(1)
+    .default([]),
   cursor: cursorSchema.optional(),
   limit: z.number().int().min(1).max(200).default(50),
   calculateTotal: z.boolean().default(false),
+});
+
+export const emailChangesInputSchema = z.object({
+  accountId: mailAccountIdSchema,
+  sinceState: stateSchema,
+  maxChanges: z.number().int().min(1).max(1000).default(100),
 });
 
 export const emailSetInputSchema = z.object({

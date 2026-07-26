@@ -263,6 +263,7 @@ describe('PostgreSQL mail search', () => {
           sender: [{ email: 'target@example.test' }],
           mailboxIds: [harness.drafts.id],
           keywords: ['$flagged'],
+          lifecycle: 'draft',
         }),
       ];
       await unitOfWork.run(async (tx) => {
@@ -307,6 +308,8 @@ describe('PostgreSQL mail search', () => {
       for (const [label, filter, expected] of [
         ['mailbox', { mailboxId: harness.inbox.id }, ['email-a', 'email-b']],
         ['keyword', { hasKeyword: '$flagged' }, ['email-c']],
+        ['negative keyword', { notKeyword: '$seen' }, ['email-c']],
+        ['lifecycle', { lifecycle: 'draft' }, ['email-c']],
         ['after', { after: at(1) }, ['email-b', 'email-c']],
         ['before', { before: at(2) }, ['email-a']],
         ['address', { address: ' TARGET@EXAMPLE.TEST ' }, ['email-a', 'email-b', 'email-c']],

@@ -1,4 +1,5 @@
 import type { EmailId, Keyword, MailAccountId, MailboxId, ThreadId } from '../types';
+import type { EmailLifecycle } from '../store/repositories';
 
 export type QueryDirection = 'asc' | 'desc';
 export type EmailSortProperty = 'receivedAt' | 'sentAt' | 'size' | 'subject';
@@ -6,6 +7,8 @@ export type EmailSortProperty = 'receivedAt' | 'sentAt' | 'size' | 'subject';
 export type EmailQueryFilter = {
   mailboxId?: MailboxId;
   hasKeyword?: Keyword;
+  notKeyword?: Keyword;
+  lifecycle?: EmailLifecycle;
   after?: Date;
   before?: Date;
   address?: string;

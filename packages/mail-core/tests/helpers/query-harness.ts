@@ -212,6 +212,7 @@ export const createQueryHarness = async () => {
         sizeBytes: 20n,
         mailboxIds: [queryArchiveId],
         keywords: ['$flagged'],
+        lifecycle: 'sent',
         to: [{ email: 'sender@example.test' }],
       }),
     );
