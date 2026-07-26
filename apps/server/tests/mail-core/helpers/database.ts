@@ -7,12 +7,19 @@ import postgres, { type Sql } from 'postgres';
 import { PostgresMailUnitOfWork } from '../../../src/modules/mail/postgres/postgres-unit-of-work';
 import { createDrizzle, type DB } from '../../../src/db';
 
-const SAFE_SCHEMA = /^mail_core_test_[a-f0-9]{32}$/;
+const SAFE_DATABASE = /^mail_core_test_[a-f0-9]{32}$/;
 
-const requireSafeSchema = (schemaName: string): void => {
-  if (!SAFE_SCHEMA.test(schemaName)) {
-    throw new Error('Unsafe mail-core test schema name');
+export const requireSafeDatabase = (databaseName: string): void => {
+  if (!SAFE_DATABASE.test(databaseName)) {
+    throw new Error('Unsafe mail-core test database name');
   }
+};
+
+export const databaseUrlFor = (databaseUrl: string, databaseName: string): string => {
+  requireSafeDatabase(databaseName);
+  const isolatedUrl = new URL(databaseUrl);
+  isolatedUrl.pathname = `/${databaseName}`;
+  return isolatedUrl.toString();
 };
 
 const parseDatabaseUrl = (contents: string): string | undefined => {
@@ -54,15 +61,10 @@ const migrationTags = (migrationsFolder: string): string[] => {
   });
 };
 
-const applyGeneratedMigrations = async (connection: Sql, schemaName: string): Promise<void> => {
-  requireSafeSchema(schemaName);
+const applyGeneratedMigrations = async (connection: Sql): Promise<void> => {
   const migrationsFolder = resolve(import.meta.dirname, '../../../src/db/migrations');
-  const quotedSchema = `"${schemaName}".`;
   for (const tag of migrationTags(migrationsFolder)) {
-    const migration = readFileSync(resolve(migrationsFolder, `${tag}.sql`), 'utf8').replaceAll(
-      '"public".',
-      quotedSchema,
-    );
+    const migration = readFileSync(resolve(migrationsFolder, `${tag}.sql`), 'utf8');
     for (const statement of migration.split('--> statement-breakpoint')) {
       if (statement.trim().length > 0) {
         await connection.unsafe(statement);
@@ -89,36 +91,28 @@ export const runFailureIndependentCleanup = async (
 };
 
 export const withMailTestDatabase = async (
-  test: (input: {
-    db: DB;
-    unitOfWork: PostgresMailUnitOfWork;
-    schemaName: string;
-  }) => Promise<void>,
+  test: (input: { db: DB; unitOfWork: PostgresMailUnitOfWork }) => Promise<void>,
 ): Promise<void> => {
   const databaseUrl = resolveDatabaseUrl();
-  const schemaName = `mail_core_test_${randomBytes(16).toString('hex')}`;
-  requireSafeSchema(schemaName);
+  const databaseName = `mail_core_test_${randomBytes(16).toString('hex')}`;
+  requireSafeDatabase(databaseName);
   const admin = postgres(databaseUrl, { max: 1, onnotice: () => undefined });
   let isolated: Sql | null = null;
   let created = false;
   let primaryFailure = false;
   try {
-    requireSafeSchema(schemaName);
-    await admin.unsafe(`CREATE SCHEMA "${schemaName}"`);
+    requireSafeDatabase(databaseName);
+    await admin.unsafe(`CREATE DATABASE "${databaseName}"`);
     created = true;
-    const isolatedUrl = new URL(databaseUrl);
-    const existingOptions = isolatedUrl.searchParams.get('options');
-    isolatedUrl.searchParams.set(
-      'options',
-      `${existingOptions === null ? '' : `${existingOptions} `}-csearch_path=${schemaName}`,
-    );
-    isolated = postgres(isolatedUrl.toString(), { max: 10, onnotice: () => undefined });
-    await applyGeneratedMigrations(isolated, schemaName);
+    isolated = postgres(databaseUrlFor(databaseUrl, databaseName), {
+      max: 10,
+      onnotice: () => undefined,
+    });
+    await applyGeneratedMigrations(isolated);
     const db = createDrizzle(isolated);
     await test({
       db,
       unitOfWork: new PostgresMailUnitOfWork(db),
-      schemaName,
     });
   } catch (error) {
     primaryFailure = true;
@@ -133,8 +127,8 @@ export const withMailTestDatabase = async (
         },
         async () => {
           if (created) {
-            requireSafeSchema(schemaName);
-            await admin.unsafe(`DROP SCHEMA "${schemaName}" CASCADE`);
+            requireSafeDatabase(databaseName);
+            await admin.unsafe(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
           }
         },
         () => admin.end(),
