@@ -60,3 +60,10 @@ export const sanitizedDatabaseTarget = (databaseUrl: string): string => {
   const parsed = new URL(databaseUrl);
   return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
 };
+
+const ANSI_SEQUENCE = /\u001b\[[0-?]*[ -/]*[@-~]/gu;
+const PUSH_ERROR =
+  /\bPostgresError\b|\bERR_PNPM\b|\bELIFECYCLE\b|(?:^|\n)\s*(?:error|cause):/iu;
+
+export const pushOutputContainsError = (output: string): boolean =>
+  PUSH_ERROR.test(output.replace(ANSI_SEQUENCE, ''));

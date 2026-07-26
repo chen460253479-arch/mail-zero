@@ -91,7 +91,7 @@ export const runFailureIndependentCleanup = async (
 };
 
 export const withMailTestDatabase = async (
-  test: (input: { db: DB; unitOfWork: PostgresMailUnitOfWork }) => Promise<void>,
+  test: (input: { db: DB; sql: Sql; unitOfWork: PostgresMailUnitOfWork }) => Promise<void>,
 ): Promise<void> => {
   const databaseUrl = resolveDatabaseUrl();
   const databaseName = `mail_core_test_${randomBytes(16).toString('hex')}`;
@@ -112,6 +112,7 @@ export const withMailTestDatabase = async (
     const db = createDrizzle(isolated);
     await test({
       db,
+      sql: isolated,
       unitOfWork: new PostgresMailUnitOfWork(db),
     });
   } catch (error) {

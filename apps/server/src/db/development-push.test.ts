@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DevelopmentPushError,
   decideDevelopmentPush,
+  pushOutputContainsError,
   sanitizedDatabaseTarget,
   type ExistingSchema,
 } from './development-push';
@@ -98,5 +99,14 @@ describe('development database push policy', () => {
     expect(target).not.toContain('mail_user');
     expect(target).not.toContain('p%40ss');
     expect(target).not.toContain('sslmode');
+  });
+
+  it('recognizes a PostgreSQL failure even when Drizzle reports exit code zero', () => {
+    expect(
+      pushOutputContainsError(
+        'PostgresError: cannot drop constraint example because other objects depend on it',
+      ),
+    ).toBe(true);
+    expect(pushOutputContainsError('No schema changes, nothing to migrate 😴')).toBe(false);
   });
 });
