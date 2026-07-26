@@ -594,6 +594,79 @@ CREATE TABLE "mail"."thread_reference" (
 	CONSTRAINT "thread_reference_pk" PRIMARY KEY("mail_account_id","normalized_subject_hash","message_id_hash","email_id")
 );
 --> statement-breakpoint
+CREATE TABLE "integration"."inbound_sync" (
+	"id" text PRIMARY KEY NOT NULL,
+	"account_id" text NOT NULL,
+	"provider" text NOT NULL,
+	"scope_key" text NOT NULL,
+	"scope" jsonb NOT NULL,
+	"checkpoint" jsonb,
+	"status" text DEFAULT 'activating' NOT NULL,
+	"subscription_expires_at" timestamp with time zone,
+	"last_signal_at" timestamp with time zone,
+	"last_discovered_at" timestamp with time zone,
+	"last_reconciled_at" timestamp with time zone,
+	"lease_owner" text,
+	"lease_expires_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "inbound_sync_status_chk" CHECK ("integration"."inbound_sync"."status" IN ('activating', 'active', 'paused', 'auth_error')),
+	CONSTRAINT "inbound_sync_scope_version_chk" CHECK (CASE
+        WHEN jsonb_typeof("integration"."inbound_sync"."scope"->'version') = 'number'
+        THEN ("integration"."inbound_sync"."scope"->>'version')::numeric >= 1
+          AND mod(("integration"."inbound_sync"."scope"->>'version')::numeric, 1) = 0
+        ELSE false
+      END),
+	CONSTRAINT "inbound_sync_checkpoint_version_chk" CHECK ("integration"."inbound_sync"."checkpoint" IS NULL OR (
+        CASE
+          WHEN jsonb_typeof("integration"."inbound_sync"."checkpoint"->'version') = 'number'
+          THEN ("integration"."inbound_sync"."checkpoint"->>'version')::numeric >= 1
+            AND mod(("integration"."inbound_sync"."checkpoint"->>'version')::numeric, 1) = 0
+          ELSE false
+        END
+      )),
+	CONSTRAINT "inbound_sync_active_checkpoint_chk" CHECK ("integration"."inbound_sync"."status" <> 'active' OR "integration"."inbound_sync"."checkpoint" IS NOT NULL),
+	CONSTRAINT "inbound_sync_lease_pair_chk" CHECK (("integration"."inbound_sync"."lease_owner" IS NULL) = ("integration"."inbound_sync"."lease_expires_at" IS NULL))
+);
+--> statement-breakpoint
+CREATE TABLE "integration"."inbound_sync_attempt" (
+	"id" text PRIMARY KEY NOT NULL,
+	"item_id" text NOT NULL,
+	"attempt_number" integer NOT NULL,
+	"outcome" text NOT NULL,
+	"error_code" text,
+	"error_message" text,
+	"started_at" timestamp with time zone NOT NULL,
+	"finished_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "inbound_sync_attempt_outcome_chk" CHECK ("integration"."inbound_sync_attempt"."outcome" IN ('retry', 'imported', 'failed')),
+	CONSTRAINT "inbound_sync_attempt_finished_chk" CHECK ("integration"."inbound_sync_attempt"."finished_at" >= "integration"."inbound_sync_attempt"."started_at")
+);
+--> statement-breakpoint
+CREATE TABLE "integration"."inbound_sync_item" (
+	"id" text PRIMARY KEY NOT NULL,
+	"sync_id" text NOT NULL,
+	"remote_message_id" text NOT NULL,
+	"remote_thread_id" text,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"attempt_count" integer DEFAULT 0 NOT NULL,
+	"next_attempt_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"lease_owner" text,
+	"lease_expires_at" timestamp with time zone,
+	"local_email_id" text,
+	"last_error_code" text,
+	"last_error_message" text,
+	"discovered_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"imported_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "inbound_sync_item_status_chk" CHECK ("integration"."inbound_sync_item"."status" IN ('pending', 'processing', 'imported', 'failed')),
+	CONSTRAINT "inbound_sync_item_attempt_count_chk" CHECK ("integration"."inbound_sync_item"."attempt_count" >= 0),
+	CONSTRAINT "inbound_sync_item_lease_pair_chk" CHECK (("integration"."inbound_sync_item"."lease_owner" IS NULL) = ("integration"."inbound_sync_item"."lease_expires_at" IS NULL)),
+	CONSTRAINT "inbound_sync_item_imported_state_chk" CHECK ("integration"."inbound_sync_item"."status" <> 'imported' OR (
+        "integration"."inbound_sync_item"."local_email_id" IS NOT NULL AND "integration"."inbound_sync_item"."imported_at" IS NOT NULL
+      ))
+);
+--> statement-breakpoint
 ALTER TABLE "auth"."account" ADD CONSTRAINT "account_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."authorization_binding" ADD CONSTRAINT "authorization_binding_connection_id_connection_id_fk" FOREIGN KEY ("connection_id") REFERENCES "integration"."connection"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."connection" ADD CONSTRAINT "connection_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -656,6 +729,9 @@ ALTER TABLE "mail"."thread" ADD CONSTRAINT "thread_mail_account_id_account_id_fk
 ALTER TABLE "mail"."thread_reference" ADD CONSTRAINT "thread_reference_mail_account_id_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."thread_reference" ADD CONSTRAINT "thread_reference_email_account_fk" FOREIGN KEY ("email_id","mail_account_id") REFERENCES "mail"."email"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."thread_reference" ADD CONSTRAINT "thread_reference_thread_account_fk" FOREIGN KEY ("thread_id","mail_account_id") REFERENCES "mail"."thread"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "integration"."inbound_sync" ADD CONSTRAINT "inbound_sync_account_fk" FOREIGN KEY ("account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "integration"."inbound_sync_attempt" ADD CONSTRAINT "inbound_sync_attempt_item_fk" FOREIGN KEY ("item_id") REFERENCES "integration"."inbound_sync_item"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "integration"."inbound_sync_item" ADD CONSTRAINT "inbound_sync_item_sync_fk" FOREIGN KEY ("sync_id") REFERENCES "integration"."inbound_sync"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "account_user_id_idx" ON "auth"."account" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "account_provider_user_id_idx" ON "auth"."account" USING btree ("provider_id","user_id");--> statement-breakpoint
 CREATE INDEX "account_expires_at_idx" ON "auth"."account" USING btree ("access_token_expires_at");--> statement-breakpoint
@@ -724,4 +800,12 @@ CREATE UNIQUE INDEX "email_submission_account_idempotency_uidx" ON "mail"."submi
 CREATE INDEX "submission_blob_account_blob_idx" ON "mail"."submission_blob" USING btree ("mail_account_id","blob_id");--> statement-breakpoint
 CREATE INDEX "thread_account_latest_id_idx" ON "mail"."thread" USING btree ("mail_account_id","latest_received_at" DESC NULLS LAST,"id");--> statement-breakpoint
 CREATE INDEX "thread_reference_account_thread_idx" ON "mail"."thread_reference" USING btree ("mail_account_id","thread_id");--> statement-breakpoint
-CREATE INDEX "thread_reference_account_email_idx" ON "mail"."thread_reference" USING btree ("mail_account_id","email_id");
+CREATE INDEX "thread_reference_account_email_idx" ON "mail"."thread_reference" USING btree ("mail_account_id","email_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "inbound_sync_account_provider_scope_uidx" ON "integration"."inbound_sync" USING btree ("account_id","provider","scope_key");--> statement-breakpoint
+CREATE INDEX "inbound_sync_due_reconcile_idx" ON "integration"."inbound_sync" USING btree ("last_reconciled_at","id") WHERE "integration"."inbound_sync"."status" = 'active';--> statement-breakpoint
+CREATE INDEX "inbound_sync_due_renewal_idx" ON "integration"."inbound_sync" USING btree ("subscription_expires_at","id") WHERE "integration"."inbound_sync"."status" = 'active' AND "integration"."inbound_sync"."subscription_expires_at" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "inbound_sync_lease_idx" ON "integration"."inbound_sync" USING btree ("lease_expires_at","id") WHERE "integration"."inbound_sync"."lease_expires_at" IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "inbound_sync_attempt_item_number_uidx" ON "integration"."inbound_sync_attempt" USING btree ("item_id","attempt_number");--> statement-breakpoint
+CREATE UNIQUE INDEX "inbound_sync_item_remote_message_uidx" ON "integration"."inbound_sync_item" USING btree ("sync_id","remote_message_id");--> statement-breakpoint
+CREATE INDEX "inbound_sync_item_pending_idx" ON "integration"."inbound_sync_item" USING btree ("sync_id","next_attempt_at","id") WHERE "integration"."inbound_sync_item"."status" = 'pending';--> statement-breakpoint
+CREATE INDEX "inbound_sync_item_lease_idx" ON "integration"."inbound_sync_item" USING btree ("lease_expires_at","id") WHERE "integration"."inbound_sync_item"."lease_expires_at" IS NOT NULL;

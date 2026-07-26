@@ -1,5 +1,5 @@
 {
-  "id": "0910672f-4df8-4301-b109-20d78dc2717f",
+  "id": "d3f7d8f5-576f-486b-aae1-4ccc587e8bf7",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -5699,6 +5699,568 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "integration.inbound_sync": {
+      "name": "inbound_sync",
+      "schema": "integration",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scope_key": {
+          "name": "scope_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scope": {
+          "name": "scope",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "checkpoint": {
+          "name": "checkpoint",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'activating'"
+        },
+        "subscription_expires_at": {
+          "name": "subscription_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_signal_at": {
+          "name": "last_signal_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_discovered_at": {
+          "name": "last_discovered_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_reconciled_at": {
+          "name": "last_reconciled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_owner": {
+          "name": "lease_owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "inbound_sync_account_provider_scope_uidx": {
+          "name": "inbound_sync_account_provider_scope_uidx",
+          "columns": [
+            {
+              "expression": "account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "scope_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "inbound_sync_due_reconcile_idx": {
+          "name": "inbound_sync_due_reconcile_idx",
+          "columns": [
+            {
+              "expression": "last_reconciled_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"integration\".\"inbound_sync\".\"status\" = 'active'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "inbound_sync_due_renewal_idx": {
+          "name": "inbound_sync_due_renewal_idx",
+          "columns": [
+            {
+              "expression": "subscription_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"integration\".\"inbound_sync\".\"status\" = 'active' AND \"integration\".\"inbound_sync\".\"subscription_expires_at\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "inbound_sync_lease_idx": {
+          "name": "inbound_sync_lease_idx",
+          "columns": [
+            {
+              "expression": "lease_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"integration\".\"inbound_sync\".\"lease_expires_at\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "inbound_sync_account_fk": {
+          "name": "inbound_sync_account_fk",
+          "tableFrom": "inbound_sync",
+          "tableTo": "account",
+          "schemaTo": "mail",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "inbound_sync_status_chk": {
+          "name": "inbound_sync_status_chk",
+          "value": "\"integration\".\"inbound_sync\".\"status\" IN ('activating', 'active', 'paused', 'auth_error')"
+        },
+        "inbound_sync_scope_version_chk": {
+          "name": "inbound_sync_scope_version_chk",
+          "value": "CASE\n        WHEN jsonb_typeof(\"integration\".\"inbound_sync\".\"scope\"->'version') = 'number'\n        THEN (\"integration\".\"inbound_sync\".\"scope\"->>'version')::numeric >= 1\n          AND mod((\"integration\".\"inbound_sync\".\"scope\"->>'version')::numeric, 1) = 0\n        ELSE false\n      END"
+        },
+        "inbound_sync_checkpoint_version_chk": {
+          "name": "inbound_sync_checkpoint_version_chk",
+          "value": "\"integration\".\"inbound_sync\".\"checkpoint\" IS NULL OR (\n        CASE\n          WHEN jsonb_typeof(\"integration\".\"inbound_sync\".\"checkpoint\"->'version') = 'number'\n          THEN (\"integration\".\"inbound_sync\".\"checkpoint\"->>'version')::numeric >= 1\n            AND mod((\"integration\".\"inbound_sync\".\"checkpoint\"->>'version')::numeric, 1) = 0\n          ELSE false\n        END\n      )"
+        },
+        "inbound_sync_active_checkpoint_chk": {
+          "name": "inbound_sync_active_checkpoint_chk",
+          "value": "\"integration\".\"inbound_sync\".\"status\" <> 'active' OR \"integration\".\"inbound_sync\".\"checkpoint\" IS NOT NULL"
+        },
+        "inbound_sync_lease_pair_chk": {
+          "name": "inbound_sync_lease_pair_chk",
+          "value": "(\"integration\".\"inbound_sync\".\"lease_owner\" IS NULL) = (\"integration\".\"inbound_sync\".\"lease_expires_at\" IS NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "integration.inbound_sync_attempt": {
+      "name": "inbound_sync_attempt",
+      "schema": "integration",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "item_id": {
+          "name": "item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attempt_number": {
+          "name": "attempt_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "inbound_sync_attempt_item_number_uidx": {
+          "name": "inbound_sync_attempt_item_number_uidx",
+          "columns": [
+            {
+              "expression": "item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "attempt_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "inbound_sync_attempt_item_fk": {
+          "name": "inbound_sync_attempt_item_fk",
+          "tableFrom": "inbound_sync_attempt",
+          "tableTo": "inbound_sync_item",
+          "schemaTo": "integration",
+          "columnsFrom": [
+            "item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "inbound_sync_attempt_outcome_chk": {
+          "name": "inbound_sync_attempt_outcome_chk",
+          "value": "\"integration\".\"inbound_sync_attempt\".\"outcome\" IN ('retry', 'imported', 'failed')"
+        },
+        "inbound_sync_attempt_finished_chk": {
+          "name": "inbound_sync_attempt_finished_chk",
+          "value": "\"integration\".\"inbound_sync_attempt\".\"finished_at\" >= \"integration\".\"inbound_sync_attempt\".\"started_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "integration.inbound_sync_item": {
+      "name": "inbound_sync_item",
+      "schema": "integration",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "sync_id": {
+          "name": "sync_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "remote_message_id": {
+          "name": "remote_message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "remote_thread_id": {
+          "name": "remote_thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "attempt_count": {
+          "name": "attempt_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "next_attempt_at": {
+          "name": "next_attempt_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "lease_owner": {
+          "name": "lease_owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "local_email_id": {
+          "name": "local_email_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_code": {
+          "name": "last_error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_message": {
+          "name": "last_error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "discovered_at": {
+          "name": "discovered_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "imported_at": {
+          "name": "imported_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "inbound_sync_item_remote_message_uidx": {
+          "name": "inbound_sync_item_remote_message_uidx",
+          "columns": [
+            {
+              "expression": "sync_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "remote_message_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "inbound_sync_item_pending_idx": {
+          "name": "inbound_sync_item_pending_idx",
+          "columns": [
+            {
+              "expression": "sync_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "next_attempt_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"integration\".\"inbound_sync_item\".\"status\" = 'pending'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "inbound_sync_item_lease_idx": {
+          "name": "inbound_sync_item_lease_idx",
+          "columns": [
+            {
+              "expression": "lease_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"integration\".\"inbound_sync_item\".\"lease_expires_at\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "inbound_sync_item_sync_fk": {
+          "name": "inbound_sync_item_sync_fk",
+          "tableFrom": "inbound_sync_item",
+          "tableTo": "inbound_sync",
+          "schemaTo": "integration",
+          "columnsFrom": [
+            "sync_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "inbound_sync_item_status_chk": {
+          "name": "inbound_sync_item_status_chk",
+          "value": "\"integration\".\"inbound_sync_item\".\"status\" IN ('pending', 'processing', 'imported', 'failed')"
+        },
+        "inbound_sync_item_attempt_count_chk": {
+          "name": "inbound_sync_item_attempt_count_chk",
+          "value": "\"integration\".\"inbound_sync_item\".\"attempt_count\" >= 0"
+        },
+        "inbound_sync_item_lease_pair_chk": {
+          "name": "inbound_sync_item_lease_pair_chk",
+          "value": "(\"integration\".\"inbound_sync_item\".\"lease_owner\" IS NULL) = (\"integration\".\"inbound_sync_item\".\"lease_expires_at\" IS NULL)"
+        },
+        "inbound_sync_item_imported_state_chk": {
+          "name": "inbound_sync_item_imported_state_chk",
+          "value": "\"integration\".\"inbound_sync_item\".\"status\" <> 'imported' OR (\n        \"integration\".\"inbound_sync_item\".\"local_email_id\" IS NOT NULL AND \"integration\".\"inbound_sync_item\".\"imported_at\" IS NOT NULL\n      )"
+        }
+      },
       "isRLSEnabled": false
     }
   },
