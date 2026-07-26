@@ -1,6 +1,7 @@
 import type { InboundMailAdapter } from '../../modules/mail-sync/domain/ingress-adapter';
 
 import type { MailCredentialType, ResolvedCredential } from './credentials';
+import type { OutboundMailAdapter } from './outbound';
 
 export const mailChannelIds = ['gmail', 'outlook', 'zoho_mail', 'imap_smtp'] as const;
 export type MailChannelId = (typeof mailChannelIds)[number];
@@ -38,10 +39,18 @@ export type MailChannelInboundCapability = {
   }): Promise<InboundMailAdapter>;
 };
 
+export type MailChannelOutboundCapability = {
+  createAdapter(input: {
+    connectionId: string;
+    credential: ResolvedCredential;
+  }): Promise<OutboundMailAdapter>;
+};
+
 export interface MailChannelPlugin extends MailChannelDescriptor {
   resolveIdentity(input: {
     connectionId?: string;
     credential: ResolvedCredential;
   }): Promise<MailChannelIdentity>;
   readonly inbound?: MailChannelInboundCapability;
+  readonly outbound?: MailChannelOutboundCapability;
 }

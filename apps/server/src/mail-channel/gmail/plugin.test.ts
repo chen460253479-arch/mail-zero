@@ -11,7 +11,7 @@ const credential = {
 };
 
 describe('Gmail channel plugin', () => {
-  it('declares one provider-neutral inbound capability', async () => {
+  it('declares provider-neutral inbound support and send capability metadata', async () => {
     const plugin = createGmailPlugin({
       createExecutor: async () =>
         ({
@@ -34,6 +34,7 @@ describe('Gmail channel plugin', () => {
     expect(plugin.id).toBe('gmail');
     expect(plugin.credentialTypes).toEqual(new Set(['oauth2']));
     expect(plugin.nangoProviders).toEqual(['google-mail', 'google']);
+    expect(plugin.capabilities).toContain('send_messages');
     expect(plugin).not.toHaveProperty('createClient');
     expect(plugin).not.toHaveProperty('sync');
     expect(plugin).not.toHaveProperty('legacyProviderId');

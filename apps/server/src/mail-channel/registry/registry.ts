@@ -2,6 +2,7 @@ import type {
   MailCapability,
   MailChannelId,
   MailChannelInboundCapability,
+  MailChannelOutboundCapability,
   MailChannelPlugin,
 } from '../contracts';
 
@@ -15,7 +16,7 @@ export class UnsupportedMailChannelError extends Error {
 export class MailChannelCapabilityError extends Error {
   constructor(
     public readonly channelId: string,
-    public readonly capability: MailCapability | 'inbound',
+    public readonly capability: MailCapability | 'inbound' | 'outbound',
   ) {
     super(`Mail channel ${channelId} does not support ${capability}`);
     this.name = 'MailChannelCapabilityError';
@@ -27,6 +28,7 @@ export type MailChannelRegistry = {
   find(channelId: MailChannelId | (string & {})): MailChannelPlugin | undefined;
   get(channelId: MailChannelId | (string & {})): MailChannelPlugin;
   getInbound(channelId: MailChannelId | (string & {})): MailChannelInboundCapability;
+  getOutbound(channelId: MailChannelId | (string & {})): MailChannelOutboundCapability;
 };
 
 export const createMailChannelRegistry = (
@@ -58,6 +60,13 @@ export const createMailChannelRegistry = (
         throw new MailChannelCapabilityError(plugin.id, 'inbound');
       }
       return plugin.inbound;
+    },
+    getOutbound: (channelId) => {
+      const plugin = get(channelId);
+      if (!plugin.outbound) {
+        throw new MailChannelCapabilityError(plugin.id, 'outbound');
+      }
+      return plugin.outbound;
     },
   };
 };

@@ -7,6 +7,25 @@ import {
 } from './registry';
 import type { MailChannelPlugin } from '../contracts';
 
+const outbound = {
+  createAdapter: async () => ({
+    provider: 'gmail',
+    send: async () => ({
+      remoteMessageId: 'message-1',
+      remoteThreadId: null,
+      acceptedAt: new Date('2026-07-26T12:00:00.000Z'),
+      providerCode: '200',
+      safeResponse: 'accepted' as const,
+    }),
+    classifyError: () => ({
+      kind: 'permanent_failure' as const,
+      providerCode: null,
+      safeResponse: 'permanent_failure' as const,
+      retryAfter: null,
+    }),
+  }),
+};
+
 const gmail = {
   id: 'gmail',
   providerKey: 'gmail',
@@ -36,6 +55,7 @@ const gmail = {
       classifyError: () => 'permanent',
     }),
   },
+  outbound,
 } satisfies MailChannelPlugin;
 
 const outlook = {
@@ -72,11 +92,25 @@ describe('mail channel registry', () => {
     expect(registry.getInbound('gmail')).toBe(gmail.inbound);
   });
 
+  it('returns the registered provider-neutral outbound capability', () => {
+    const registry = createMailChannelRegistry([gmail]);
+
+    expect(registry.getOutbound('gmail')).toBe(outbound);
+  });
+
   it('rejects a channel that does not implement inbound mail', () => {
     const registry = createMailChannelRegistry([outlook]);
 
     expect(() => registry.getInbound('outlook')).toThrowError(
       new MailChannelCapabilityError('outlook', 'inbound'),
+    );
+  });
+
+  it('rejects a channel that does not implement outbound mail', () => {
+    const registry = createMailChannelRegistry([outlook]);
+
+    expect(() => registry.getOutbound('outlook')).toThrowError(
+      new MailChannelCapabilityError('outlook', 'outbound'),
     );
   });
 

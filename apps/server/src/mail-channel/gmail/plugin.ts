@@ -28,7 +28,7 @@ export const createGmailPlugin = (
   providerKey: 'gmail',
   displayName: 'Gmail',
   credentialTypes: new Set(['oauth2']),
-  capabilities: new Set(['read_messages', 'push_sync']),
+  capabilities: new Set(['read_messages', 'send_messages', 'push_sync']),
   nangoProviders: gmailNangoProviders,
   resolveIdentity: async (input) => await dependencies.resolveIdentity(input),
   inbound: {
