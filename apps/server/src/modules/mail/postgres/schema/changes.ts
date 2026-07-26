@@ -1,4 +1,4 @@
-import { bigint, check, index, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, check, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 import { createMailTable } from '../table';
@@ -30,11 +30,5 @@ export const mailChange = createMailTable(
       name: 'mail_change_pk',
       columns: [t.mailAccountId, t.stateVersion, t.collection, t.entityId],
     }),
-    index('mail_change_account_state_collection_entity_idx').on(
-      t.mailAccountId,
-      t.stateVersion,
-      t.collection,
-      t.entityId,
-    ),
   ],
 );

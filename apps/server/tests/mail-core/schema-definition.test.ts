@@ -171,6 +171,15 @@ describe('local mail schema', () => {
     },
   );
 
+  it('does not duplicate primary-key coverage with ordinary indexes', () => {
+    expect(getTableConfig(schema.mailChange).indexes.map(({ config }) => config.name)).not.toContain(
+      'mail_change_account_state_collection_entity_idx',
+    );
+    expect(
+      getTableConfig(schema.threadReference).indexes.map(({ config }) => config.name),
+    ).not.toContain('thread_reference_account_subject_message_idx');
+  });
+
   it('exports every local mail collection', () => {
     expect(Object.keys(schema)).toEqual(
       expect.arrayContaining([

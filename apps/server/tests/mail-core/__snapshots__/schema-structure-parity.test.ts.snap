@@ -2832,19 +2832,7 @@ exports[`database structural parity > preserves every field, constraint, index, 
         "onUpdate": "no action",
       },
     ],
-    "indexes": [
-      {
-        "columns": [
-          "mail_account_id",
-          "state_version",
-          "collection",
-          "entity_id",
-        ],
-        "method": "btree",
-        "unique": false,
-        "where": undefined,
-      },
-    ],
+    "indexes": [],
     "primaryKeys": [
       [
         "mail_account_id",
@@ -4805,16 +4793,6 @@ exports[`database structural parity > preserves every field, constraint, index, 
       },
     ],
     "indexes": [
-      {
-        "columns": [
-          "mail_account_id",
-          "normalized_subject_hash",
-          "message_id_hash",
-        ],
-        "method": "btree",
-        "unique": false,
-        "where": undefined,
-      },
       {
         "columns": [
           "mail_account_id",

@@ -32,11 +32,6 @@ export const threadReference = createMailTable(
       columns: [t.threadId, t.mailAccountId],
       foreignColumns: [thread.id, thread.mailAccountId],
     }).onDelete('cascade'),
-    index('thread_reference_account_subject_message_idx').on(
-      t.mailAccountId,
-      t.normalizedSubjectHash,
-      t.messageIdHash,
-    ),
     index('thread_reference_account_thread_idx').on(t.mailAccountId, t.threadId),
     index('thread_reference_account_email_idx').on(t.mailAccountId, t.emailId),
   ],
