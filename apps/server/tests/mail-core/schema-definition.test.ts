@@ -49,6 +49,128 @@ describe('local mail schema', () => {
     );
   });
 
+  it.each([
+    [
+      'active Identity list',
+      schema.mailIdentity,
+      'mail_identity_account_created_active_idx',
+      ['mail_account_id', 'created_at', 'id'],
+      true,
+    ],
+    [
+      'active Mailbox list',
+      schema.mailbox,
+      'mailbox_account_sort_active_idx',
+      ['mail_account_id', 'sort_order', 'id'],
+      true,
+    ],
+    [
+      'Blob account list',
+      schema.blob,
+      'blob_account_created_id_idx',
+      ['mail_account_id', 'created_at', 'id'],
+      false,
+    ],
+    [
+      'Submission account list',
+      schema.emailSubmission,
+      'email_submission_account_created_id_idx',
+      ['mail_account_id', 'created_at', 'id'],
+      false,
+    ],
+    [
+      'Submission Identity list',
+      schema.emailSubmission,
+      'email_submission_account_identity_created_id_idx',
+      ['mail_account_id', 'identity_id', 'created_at', 'id'],
+      false,
+    ],
+    [
+      'Email Blob FK',
+      schema.email,
+      'email_blob_account_idx',
+      ['blob_id', 'mail_account_id'],
+      false,
+    ],
+    [
+      'Email Identity FK',
+      schema.email,
+      'email_identity_account_idx',
+      ['identity_id', 'mail_account_id'],
+      false,
+    ],
+    [
+      'Email reply FK',
+      schema.email,
+      'email_reply_account_idx',
+      ['reply_to_email_id', 'mail_account_id'],
+      false,
+    ],
+    [
+      'Email text Blob FK',
+      schema.emailContent,
+      'email_content_text_blob_account_idx',
+      ['text_blob_id', 'mail_account_id'],
+      false,
+    ],
+    [
+      'Email HTML Blob FK',
+      schema.emailContent,
+      'email_content_html_blob_account_idx',
+      ['html_blob_id', 'mail_account_id'],
+      false,
+    ],
+    [
+      'Email Part parent FK',
+      schema.emailPart,
+      'email_part_parent_email_account_idx',
+      ['parent_part_id', 'email_id', 'mail_account_id'],
+      false,
+    ],
+    [
+      'Email Part Blob FK',
+      schema.emailPart,
+      'email_part_blob_account_idx',
+      ['blob_id', 'mail_account_id'],
+      false,
+    ],
+    [
+      'Remote Email reverse FK',
+      schema.remoteEmail,
+      'remote_email_email_account_idx',
+      ['email_id', 'mail_account_id'],
+      false,
+    ],
+    [
+      'Submission Email FK',
+      schema.emailSubmission,
+      'email_submission_email_account_idx',
+      ['email_id', 'mail_account_id'],
+      false,
+    ],
+    [
+      'Submission Identity FK',
+      schema.emailSubmission,
+      'email_submission_identity_account_idx',
+      ['identity_id', 'mail_account_id'],
+      false,
+    ],
+  ] as const)(
+    'declares supporting index %s',
+    (_label, table, indexName, expectedColumns, partial) => {
+      const tableIndex = getTableConfig(table).indexes.find(
+        ({ config }) => config.name === indexName,
+      );
+      expect(tableIndex, indexName).toBeDefined();
+      expect(
+        tableIndex?.config.columns.map((column) =>
+          column instanceof IndexedColumn ? column.name : undefined,
+        ),
+      ).toEqual([...expectedColumns]);
+      expect(tableIndex?.config.where !== undefined).toBe(partial);
+    },
+  );
+
   it('exports every local mail collection', () => {
     expect(Object.keys(schema)).toEqual(
       expect.arrayContaining([

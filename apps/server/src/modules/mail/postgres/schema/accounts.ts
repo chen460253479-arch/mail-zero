@@ -75,5 +75,8 @@ export const mailIdentity = createMailTable(
     uniqueIndex('mail_identity_account_default_active_uidx')
       .on(t.mailAccountId)
       .where(sql`${t.isDefault} = true AND ${t.deletedAt} IS NULL`),
+    index('mail_identity_account_created_active_idx')
+      .on(t.mailAccountId, t.createdAt, t.id)
+      .where(sql`${t.deletedAt} IS NULL`),
   ],
 );

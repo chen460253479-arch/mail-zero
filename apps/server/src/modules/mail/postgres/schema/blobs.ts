@@ -32,6 +32,7 @@ export const blob = createMailTable(
     unique('blob_id_account_uidx').on(t.id, t.mailAccountId),
     uniqueIndex('blob_account_sha_size_uidx').on(t.mailAccountId, t.sha256, t.sizeBytes),
     index('blob_account_object_key_idx').on(t.mailAccountId, t.objectKey),
+    index('blob_account_created_id_idx').on(t.mailAccountId, t.createdAt, t.id),
     index('blob_account_status_content_created_idx').on(
       t.mailAccountId,
       t.status,

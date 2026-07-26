@@ -100,7 +100,7 @@ export const createMailboxRepository = (db: MailDatabase): MailboxRepository => 
         await db
           .select()
           .from(mailbox)
-          .where(eq(mailbox.mailAccountId, accountId))
+          .where(and(eq(mailbox.mailAccountId, accountId), isNull(mailbox.deletedAt)))
           .orderBy(asc(mailbox.sortOrder), asc(mailbox.id))
       ).map(mapMailbox),
     ),

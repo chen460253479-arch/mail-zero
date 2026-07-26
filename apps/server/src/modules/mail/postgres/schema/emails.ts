@@ -76,6 +76,9 @@ export const email = createMailTable(
     index('email_account_sent_id_idx').on(t.mailAccountId, t.sentAt, t.id),
     index('email_account_size_id_idx').on(t.mailAccountId, t.sizeBytes, t.id),
     index('email_account_normalized_subject_id_idx').on(t.mailAccountId, t.normalizedSubject, t.id),
+    index('email_blob_account_idx').on(t.blobId, t.mailAccountId),
+    index('email_identity_account_idx').on(t.identityId, t.mailAccountId),
+    index('email_reply_account_idx').on(t.replyToEmailId, t.mailAccountId),
     index('email_account_thread_received_id_idx').on(
       t.mailAccountId,
       t.threadId,
@@ -282,6 +285,8 @@ export const emailContent = createMailTable(
       columns: [t.htmlBlobId, t.mailAccountId],
       foreignColumns: [blob.id, blob.mailAccountId],
     }).onDelete('restrict'),
+    index('email_content_text_blob_account_idx').on(t.textBlobId, t.mailAccountId),
+    index('email_content_html_blob_account_idx').on(t.htmlBlobId, t.mailAccountId),
   ],
 );
 
@@ -332,6 +337,12 @@ export const emailPart = createMailTable(
       columns: [t.blobId, t.mailAccountId],
       foreignColumns: [blob.id, blob.mailAccountId],
     }).onDelete('restrict'),
+    index('email_part_parent_email_account_idx').on(
+      t.parentPartId,
+      t.emailId,
+      t.mailAccountId,
+    ),
+    index('email_part_blob_account_idx').on(t.blobId, t.mailAccountId),
   ],
 );
 
@@ -360,5 +371,6 @@ export const remoteEmail = createIntegrationTable(
       t.provider,
       t.remoteEmailId,
     ),
+    index('remote_email_email_account_idx').on(t.emailId, t.mailAccountId),
   ],
 );

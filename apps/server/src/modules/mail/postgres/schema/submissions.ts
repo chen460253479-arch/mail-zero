@@ -61,6 +61,15 @@ export const emailSubmission = createMailTable(
       foreignColumns: [mailIdentity.id, mailIdentity.mailAccountId],
     }).onDelete('restrict'),
     index('email_submission_account_status_send_idx').on(t.mailAccountId, t.status, t.sendAt),
+    index('email_submission_account_created_id_idx').on(t.mailAccountId, t.createdAt, t.id),
+    index('email_submission_account_identity_created_id_idx').on(
+      t.mailAccountId,
+      t.identityId,
+      t.createdAt,
+      t.id,
+    ),
+    index('email_submission_email_account_idx').on(t.emailId, t.mailAccountId),
+    index('email_submission_identity_account_idx').on(t.identityId, t.mailAccountId),
     uniqueIndex('email_submission_account_idempotency_uidx').on(t.mailAccountId, t.idempotencyKey),
   ],
 );

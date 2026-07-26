@@ -2,6 +2,7 @@ import {
   boolean,
   check,
   foreignKey,
+  index,
   integer,
   text,
   timestamp,
@@ -68,5 +69,8 @@ export const mailbox = createMailTable(
     uniqueIndex('mailbox_active_root_name_uidx')
       .on(t.mailAccountId, t.normalizedName)
       .where(sql`${t.parentId} IS NULL AND ${t.deletedAt} IS NULL`),
+    index('mailbox_account_sort_active_idx')
+      .on(t.mailAccountId, t.sortOrder, t.id)
+      .where(sql`${t.deletedAt} IS NULL`),
   ],
 );

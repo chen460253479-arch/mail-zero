@@ -436,6 +436,16 @@ exports[`database structural parity > preserves every field, constraint, index, 
       {
         "columns": [
           "mail_account_id",
+          "created_at",
+          "id",
+        ],
+        "method": "btree",
+        "unique": false,
+        "where": undefined,
+      },
+      {
+        "columns": [
+          "mail_account_id",
           "status",
           "content_type",
           "created_at",
@@ -1098,6 +1108,33 @@ exports[`database structural parity > preserves every field, constraint, index, 
       },
       {
         "columns": [
+          "blob_id",
+          "mail_account_id",
+        ],
+        "method": "btree",
+        "unique": false,
+        "where": undefined,
+      },
+      {
+        "columns": [
+          "identity_id",
+          "mail_account_id",
+        ],
+        "method": "btree",
+        "unique": false,
+        "where": undefined,
+      },
+      {
+        "columns": [
+          "reply_to_email_id",
+          "mail_account_id",
+        ],
+        "method": "btree",
+        "unique": false,
+        "where": undefined,
+      },
+      {
+        "columns": [
           "mail_account_id",
           "thread_id",
           "received_at",
@@ -1365,7 +1402,26 @@ exports[`database structural parity > preserves every field, constraint, index, 
         "onUpdate": "no action",
       },
     ],
-    "indexes": [],
+    "indexes": [
+      {
+        "columns": [
+          "text_blob_id",
+          "mail_account_id",
+        ],
+        "method": "btree",
+        "unique": false,
+        "where": undefined,
+      },
+      {
+        "columns": [
+          "html_blob_id",
+          "mail_account_id",
+        ],
+        "method": "btree",
+        "unique": false,
+        "where": undefined,
+      },
+    ],
     "primaryKeys": [
       [
         "mail_account_id",
@@ -1764,7 +1820,27 @@ exports[`database structural parity > preserves every field, constraint, index, 
         "onUpdate": "no action",
       },
     ],
-    "indexes": [],
+    "indexes": [
+      {
+        "columns": [
+          "parent_part_id",
+          "email_id",
+          "mail_account_id",
+        ],
+        "method": "btree",
+        "unique": false,
+        "where": undefined,
+      },
+      {
+        "columns": [
+          "blob_id",
+          "mail_account_id",
+        ],
+        "method": "btree",
+        "unique": false,
+        "where": undefined,
+      },
+    ],
     "primaryKeys": [],
     "uniqueConstraints": [
       [
@@ -2059,6 +2135,45 @@ exports[`database structural parity > preserves every field, constraint, index, 
           "mail_account_id",
           "status",
           "send_at",
+        ],
+        "method": "btree",
+        "unique": false,
+        "where": undefined,
+      },
+      {
+        "columns": [
+          "mail_account_id",
+          "created_at",
+          "id",
+        ],
+        "method": "btree",
+        "unique": false,
+        "where": undefined,
+      },
+      {
+        "columns": [
+          "mail_account_id",
+          "identity_id",
+          "created_at",
+          "id",
+        ],
+        "method": "btree",
+        "unique": false,
+        "where": undefined,
+      },
+      {
+        "columns": [
+          "email_id",
+          "mail_account_id",
+        ],
+        "method": "btree",
+        "unique": false,
+        "where": undefined,
+      },
+      {
+        "columns": [
+          "identity_id",
+          "mail_account_id",
         ],
         "method": "btree",
         "unique": false,
@@ -2847,6 +2962,16 @@ exports[`database structural parity > preserves every field, constraint, index, 
         "unique": true,
         "where": ""<table>"."is_default" = true AND "<table>"."deleted_at" IS NULL",
       },
+      {
+        "columns": [
+          "mail_account_id",
+          "created_at",
+          "id",
+        ],
+        "method": "btree",
+        "unique": false,
+        "where": ""<table>"."deleted_at" IS NULL",
+      },
     ],
     "primaryKeys": [],
     "uniqueConstraints": [
@@ -3076,6 +3201,16 @@ exports[`database structural parity > preserves every field, constraint, index, 
         "method": "btree",
         "unique": true,
         "where": ""<table>"."parent_id" IS NULL AND "<table>"."deleted_at" IS NULL",
+      },
+      {
+        "columns": [
+          "mail_account_id",
+          "sort_order",
+          "id",
+        ],
+        "method": "btree",
+        "unique": false,
+        "where": ""<table>"."deleted_at" IS NULL",
       },
     ],
     "primaryKeys": [],
@@ -3799,6 +3934,15 @@ exports[`database structural parity > preserves every field, constraint, index, 
         ],
         "method": "btree",
         "unique": true,
+        "where": undefined,
+      },
+      {
+        "columns": [
+          "email_id",
+          "mail_account_id",
+        ],
+        "method": "btree",
+        "unique": false,
         "where": undefined,
       },
     ],
