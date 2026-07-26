@@ -3,7 +3,7 @@ import type {
   SubmissionRecord,
   SubmissionRepository,
 } from '@zero/mail-core';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, gt, ne, or } from 'drizzle-orm';
 
 import { requireRow, runAdapter, type MailDatabase } from './database';
 import { emailSubmission, submissionBlob } from '../schema';
@@ -77,6 +77,15 @@ export const createSubmissionRepository = (db: MailDatabase): SubmissionReposito
         .limit(1);
       return rows[0] === undefined ? null : hydrateSubmission(db, rows[0]);
     }),
+  existsOutsideAccount: (accountId, id) =>
+    runAdapter(async () => {
+      const rows = await db
+        .select({ id: emailSubmission.id })
+        .from(emailSubmission)
+        .where(and(eq(emailSubmission.id, id), ne(emailSubmission.mailAccountId, accountId)))
+        .limit(1);
+      return rows.length > 0;
+    }),
   findByIdempotencyKey: (accountId, idempotencyKey) =>
     runAdapter(async () => {
       const rows = await db
@@ -120,6 +129,35 @@ export const createSubmissionRepository = (db: MailDatabase): SubmissionReposito
         ).map((row) => hydrateSubmission(db, row)),
       ),
     ),
+  queryPage: (input) =>
+    runAdapter(async () => {
+      const after =
+        input.after === null
+          ? undefined
+          : or(
+              gt(emailSubmission.createdAt, input.after.createdAt),
+              and(
+                eq(emailSubmission.createdAt, input.after.createdAt),
+                gt(emailSubmission.id, input.after.submissionId),
+              ),
+            );
+      return Promise.all(
+        (
+          await db
+            .select()
+            .from(emailSubmission)
+            .where(
+              and(
+                eq(emailSubmission.mailAccountId, input.accountId),
+                input.status === undefined ? undefined : eq(emailSubmission.status, input.status),
+                after,
+              ),
+            )
+            .orderBy(asc(emailSubmission.createdAt), asc(emailSubmission.id))
+            .limit(input.limit)
+        ).map((row) => hydrateSubmission(db, row)),
+      );
+    }),
   insert: (record) =>
     runAdapter(async () => {
       const { frozenBlobs, accountId, ...submission } = record;

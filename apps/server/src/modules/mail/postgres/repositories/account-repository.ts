@@ -1,5 +1,5 @@
 import type { AccountRepository, InsertMailAccount, MailAccountRecord } from '@zero/mail-core';
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 
 import { requireRow, runAdapter, type MailDatabase } from './database';
 import { mailAccount } from '../schema';
@@ -31,6 +31,16 @@ export const createAccountRepository = (db: MailDatabase): AccountRepository => 
         .limit(1);
       return rows[0] === undefined ? null : mapAccount(rows[0]);
     }),
+  listByUser: (userId) =>
+    runAdapter(async () =>
+      (
+        await db
+          .select()
+          .from(mailAccount)
+          .where(eq(mailAccount.userId, userId))
+          .orderBy(asc(mailAccount.createdAt), asc(mailAccount.id))
+      ).map(mapAccount),
+    ),
   insert: (input: InsertMailAccount) =>
     runAdapter(async () => {
       const rows = await db.insert(mailAccount).values(input).returning();

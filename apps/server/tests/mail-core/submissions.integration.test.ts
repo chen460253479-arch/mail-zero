@@ -1,6 +1,8 @@
 import {
+  cancelSubmission,
   createDraft,
   createIdentity,
+  createMailCore,
   createSubmission,
   destroyIdentity,
   finalizeSubmissionSent,
@@ -79,6 +81,58 @@ describe('PostgreSQL Submission integration', () => {
       });
       const acceptedRemoteMessageId = completions.find((result) => result.status === 'fulfilled')!
         .value.submission.providerMessageId;
+      const secondDraft = await createDraft(harness.dependencies, {
+        accountId: harness.accountId,
+        identityId: identity.id,
+        replyToEmailId: null,
+        to: [{ email: 'second-recipient@example.test' }],
+        cc: [],
+        bcc: [],
+        subject: 'Submit me second',
+        textBody: 'Second submission body.',
+        htmlBody: '',
+        attachmentBlobIds: [],
+      });
+      const secondSubmission = await createSubmission(harness.dependencies, {
+        accountId: harness.accountId,
+        emailId: secondDraft.id,
+        identityId: identity.id,
+        idempotencyKey: 'submission-idempotency-2',
+        sendAt: null,
+      });
+      const core = createMailCore(harness.dependencies);
+      const firstPage = await core.querySubmissions({
+        accountId: harness.accountId,
+        limit: 1,
+        cursor: null,
+      });
+      expect(firstPage.submissions.map(({ id }) => id)).toEqual([first.id]);
+      expect(firstPage.nextCursor).not.toBeNull();
+      await expect(
+        core.querySubmissions({
+          accountId: harness.accountId,
+          limit: 1,
+          cursor: firstPage.nextCursor,
+        }),
+      ).resolves.toEqual({
+        submissions: [secondSubmission],
+        nextCursor: null,
+      });
+      await expect(
+        core.querySubmissions({
+          accountId: harness.accountId,
+          status: 'queued',
+          limit: 20,
+          cursor: null,
+        }),
+      ).resolves.toEqual({
+        submissions: [secondSubmission],
+        nextCursor: null,
+      });
+      await cancelSubmission(harness.dependencies, {
+        accountId: harness.accountId,
+        submissionId: secondSubmission.id,
+      });
       await createIdentity(harness.dependencies, {
         accountId: harness.accountId,
         name: 'Replacement Sender',

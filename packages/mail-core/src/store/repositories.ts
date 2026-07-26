@@ -218,6 +218,7 @@ type MutableFields<RecordType, Immutable extends keyof RecordType> = Partial<
 export interface AccountRepository {
   findById(id: MailAccountId): Promise<MailAccountRecord | null>;
   findByConnectionId(connectionId: string): Promise<MailAccountRecord | null>;
+  listByUser(userId: string): Promise<MailAccountRecord[]>;
   insert(input: InsertMailAccount): Promise<MailAccountRecord>;
   update(
     id: MailAccountId,
@@ -376,14 +377,26 @@ export interface IdentityRepository {
   delete(accountId: MailAccountId, id: IdentityId): Promise<void>;
 }
 
+export interface QuerySubmissionPageInput {
+  accountId: MailAccountId;
+  status?: SubmissionStatus;
+  after: {
+    createdAt: Date;
+    submissionId: EmailSubmissionId;
+  } | null;
+  limit: number;
+}
+
 export interface SubmissionRepository {
   findById(accountId: MailAccountId, id: EmailSubmissionId): Promise<SubmissionRecord | null>;
+  existsOutsideAccount(accountId: MailAccountId, id: EmailSubmissionId): Promise<boolean>;
   findByIdempotencyKey(
     accountId: MailAccountId,
     idempotencyKey: string,
   ): Promise<SubmissionRecord | null>;
   listByIdentity(accountId: MailAccountId, identityId: IdentityId): Promise<SubmissionRecord[]>;
   listByAccount(accountId: MailAccountId): Promise<SubmissionRecord[]>;
+  queryPage(input: QuerySubmissionPageInput): Promise<SubmissionRecord[]>;
   insert(record: SubmissionRecord): Promise<SubmissionRecord>;
   update(
     accountId: MailAccountId,

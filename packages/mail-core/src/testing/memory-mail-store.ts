@@ -17,6 +17,7 @@ import type {
   MailboxRepository,
   MailChangeRecord,
   QueryChangesInput,
+  QuerySubmissionPageInput,
   RemoteEmailRecord,
   SubmissionRecord,
   SubmissionRepository,
@@ -155,6 +156,7 @@ const updateScoped = <RecordType extends { id: string; accountId: MailAccountId 
 const createRepositories = (
   state: MemoryMailState,
   observeChangeQuery: (input: QueryChangesInput) => void,
+  observeSubmissionQuery: (input: QuerySubmissionPageInput) => void,
 ): Omit<MailTransaction, 'lockAccount' | 'nextStateVersion'> => {
   const accounts: AccountRepository = {
     async findById(id) {
@@ -166,6 +168,15 @@ const createRepositories = (
         (candidate) => candidate.connectionId === connectionId,
       );
       return record === undefined ? null : copy(record);
+    },
+    async listByUser(userId) {
+      return [...state.accounts.values()]
+        .filter((candidate) => candidate.userId === userId)
+        .sort(
+          (left, right) =>
+            left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id),
+        )
+        .map(copy);
     },
     async insert(input: InsertMailAccount) {
       const createdAt = input.createdAt ?? new Date(0);
@@ -913,6 +924,11 @@ const createRepositories = (
     async findById(accountId, id) {
       return findScoped(state.submissions, accountId, id);
     },
+    async existsOutsideAccount(accountId, id) {
+      return [...state.submissions.values()].some(
+        (candidate) => candidate.id === id && candidate.accountId !== accountId,
+      );
+    },
     async findByIdempotencyKey(accountId, idempotencyKey) {
       const record = [...state.submissions.values()].find(
         (candidate) =>
@@ -927,6 +943,23 @@ const createRepositories = (
     },
     async listByAccount(accountId) {
       return listScoped(state.submissions, accountId);
+    },
+    async queryPage(input) {
+      observeSubmissionQuery(copy(input));
+      return listScoped(state.submissions, input.accountId)
+        .filter((record) => input.status === undefined || record.status === input.status)
+        .sort(
+          (left, right) =>
+            left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id),
+        )
+        .filter(
+          (record) =>
+            input.after === null ||
+            record.createdAt > input.after.createdAt ||
+            (record.createdAt.getTime() === input.after.createdAt.getTime() &&
+              record.id.localeCompare(input.after.submissionId) > 0),
+        )
+        .slice(0, input.limit);
     },
     async insert(record) {
       const stored = copy(record);
@@ -1001,6 +1034,7 @@ const createRepositories = (
 export class MemoryMailUnitOfWork implements MailUnitOfWork {
   private state = createEmptyState();
   private readonly changeQueries: QueryChangesInput[] = [];
+  private readonly submissionQueries: QuerySubmissionPageInput[] = [];
   private tail: Promise<void> = Promise.resolve();
   private commitAcknowledgementsBeforeFailure: number | null = null;
   private commitsBeforeRollbackFailure: number | null = null;
@@ -1024,9 +1058,15 @@ export class MemoryMailUnitOfWork implements MailUnitOfWork {
   ): Promise<Result> {
     const transactionState = copy(this.state);
     const allocatedVersions = new Map<MailAccountId, bigint>();
-    const repositories = createRepositories(transactionState, (input) => {
-      this.changeQueries.push(input);
-    });
+    const repositories = createRepositories(
+      transactionState,
+      (input) => {
+        this.changeQueries.push(input);
+      },
+      (input) => {
+        this.submissionQueries.push(input);
+      },
+    );
     const transaction: MailTransaction = {
       ...repositories,
       lockAccount: async (accountId) => {
@@ -1105,6 +1145,10 @@ export class MemoryMailUnitOfWork implements MailUnitOfWork {
   observedChangeQueries(): QueryChangesInput[] {
     return copy(this.changeQueries);
   }
+
+  observedSubmissionQueries(): QuerySubmissionPageInput[] {
+    return copy(this.submissionQueries);
+  }
 }
 
 export interface MemoryMailInspector {
@@ -1123,6 +1167,7 @@ export interface MemoryMailInspector {
   identity(id: IdentityId): Promise<IdentityRecord | null>;
   submissions(accountId?: MailAccountId): Promise<SubmissionRecord[]>;
   submission(id: EmailSubmissionId): Promise<SubmissionRecord | null>;
+  submissionQueries(): QuerySubmissionPageInput[];
   changes(accountId?: MailAccountId): Promise<MailChangeRecord[]>;
   changeQueries(): Promise<QueryChangesInput[]>;
   stateVersion(accountId: MailAccountId): Promise<bigint>;
@@ -1196,6 +1241,9 @@ export const createMemoryMailInspector = (
   },
   async submission(id) {
     return findById(unitOfWork.snapshot().submissions.values(), id);
+  },
+  submissionQueries() {
+    return unitOfWork.observedSubmissionQueries();
   },
   async changes(accountId) {
     return filterByAccount(unitOfWork.snapshot().changes.values(), accountId);

@@ -10,6 +10,13 @@ export {
   transitionSubmission,
   transitionSubmissionInTransaction,
 } from './transition-submission';
+export {
+  getSubmission,
+  querySubmissions,
+  type GetSubmissionInput,
+  type QuerySubmissionsInput,
+  type QuerySubmissionsResult,
+} from './query-submissions';
 export type {
   CancelSubmissionInput,
   CreateSubmissionInput,

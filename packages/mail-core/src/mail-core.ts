@@ -1,4 +1,13 @@
 import {
+  createIdentity,
+  createMailAccount,
+  destroyIdentity,
+  getMailAccount,
+  listIdentities,
+  listMailAccounts,
+  updateIdentity,
+} from './account';
+import {
   createDraft,
   destroyDraft,
   destroyEmail,
@@ -8,12 +17,17 @@ import {
   updateDraft,
   updateEmail,
 } from './message';
-import { createIdentity, createMailAccount, destroyIdentity, updateIdentity } from './account';
-import { cancelSubmission, createSubmission, finalizeSubmissionSent } from './submission';
+import {
+  cancelSubmission,
+  createSubmission,
+  finalizeSubmissionSent,
+  getSubmission,
+  querySubmissions,
+} from './submission';
 import { createMailbox, destroyMailbox, listMailboxes, updateMailbox } from './mailbox';
 import type { MailCoreDependencies } from './store';
 import { getThread, queryThreads } from './thread';
-import { getChanges } from './changes';
+import { getChanges, getState } from './changes';
 import { readBlob } from './blob';
 
 type BoundCommand<Command extends (...arguments_: never[]) => unknown> = (
@@ -22,7 +36,10 @@ type BoundCommand<Command extends (...arguments_: never[]) => unknown> = (
 
 export type MailCore = {
   createAccount: BoundCommand<typeof createMailAccount>;
+  listAccounts: BoundCommand<typeof listMailAccounts>;
+  getAccount: BoundCommand<typeof getMailAccount>;
   createIdentity: BoundCommand<typeof createIdentity>;
+  listIdentities: BoundCommand<typeof listIdentities>;
   updateIdentity: BoundCommand<typeof updateIdentity>;
   destroyIdentity: BoundCommand<typeof destroyIdentity>;
   createMailbox: BoundCommand<typeof createMailbox>;
@@ -38,17 +55,23 @@ export type MailCore = {
   updateDraft: BoundCommand<typeof updateDraft>;
   destroyDraft: BoundCommand<typeof destroyDraft>;
   createSubmission: BoundCommand<typeof createSubmission>;
+  getSubmission: BoundCommand<typeof getSubmission>;
+  querySubmissions: BoundCommand<typeof querySubmissions>;
   finalizeSubmissionSent: BoundCommand<typeof finalizeSubmissionSent>;
   cancelSubmission: BoundCommand<typeof cancelSubmission>;
   getThread: BoundCommand<typeof getThread>;
   queryThreads: BoundCommand<typeof queryThreads>;
   getChanges: BoundCommand<typeof getChanges>;
+  getState: BoundCommand<typeof getState>;
   readBlob: BoundCommand<typeof readBlob>;
 };
 
 export const createMailCore = (dependencies: MailCoreDependencies): MailCore => ({
   createAccount: (input) => createMailAccount(dependencies, input),
+  listAccounts: (input) => listMailAccounts(dependencies, input),
+  getAccount: (input) => getMailAccount(dependencies, input),
   createIdentity: (input) => createIdentity(dependencies, input),
+  listIdentities: (input) => listIdentities(dependencies, input),
   updateIdentity: (input) => updateIdentity(dependencies, input),
   destroyIdentity: (input) => destroyIdentity(dependencies, input),
   createMailbox: (input) => createMailbox(dependencies, input),
@@ -64,10 +87,13 @@ export const createMailCore = (dependencies: MailCoreDependencies): MailCore => 
   updateDraft: (input) => updateDraft(dependencies, input),
   destroyDraft: (input) => destroyDraft(dependencies, input),
   createSubmission: (input) => createSubmission(dependencies, input),
+  getSubmission: (input) => getSubmission(dependencies, input),
+  querySubmissions: (input) => querySubmissions(dependencies, input),
   finalizeSubmissionSent: (input) => finalizeSubmissionSent(dependencies, input),
   cancelSubmission: (input) => cancelSubmission(dependencies, input),
   getThread: (input) => getThread(dependencies, input),
   queryThreads: (input) => queryThreads(dependencies, input),
   getChanges: (input) => getChanges(dependencies, input),
+  getState: (input) => getState(dependencies, input),
   readBlob: (input) => readBlob(dependencies, input),
 });
