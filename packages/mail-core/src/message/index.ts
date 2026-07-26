@@ -8,7 +8,12 @@ export {
 } from './garbage-collect-blobs';
 export { importEmail } from './import-email';
 export { getEmail, type GetEmailInput } from './get-email';
-export { queryEmails, type EmailQueryResult, type QueryEmailsInput } from './query-emails';
+export {
+  normalizeSearchText,
+  queryEmails,
+  type EmailQueryResult,
+  type QueryEmailsInput,
+} from './query-emails';
 export { parseRawEmail } from './mime';
 export { renderDraft } from './render-draft';
 export { updateDraft } from './update-draft';

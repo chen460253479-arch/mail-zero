@@ -35,6 +35,7 @@ export const email = createMailTable(
     inReplyTo: text('in_reply_to').array(),
     references: text('references').array(),
     subject: text('subject'),
+    normalizedSubject: text('normalized_subject').notNull(),
     preview: text('preview'),
     sentAt: timestamp('sent_at', { withTimezone: true }),
     receivedAt: timestamp('received_at', { withTimezone: true }).notNull(),
@@ -72,6 +73,9 @@ export const email = createMailTable(
       foreignColumns: [blob.id, blob.mailAccountId],
     }).onDelete('restrict'),
     index('email_account_received_id_idx').on(t.mailAccountId, t.receivedAt.desc(), t.id.desc()),
+    index('email_account_sent_id_idx').on(t.mailAccountId, t.sentAt, t.id),
+    index('email_account_size_id_idx').on(t.mailAccountId, t.sizeBytes, t.id),
+    index('email_account_normalized_subject_id_idx').on(t.mailAccountId, t.normalizedSubject, t.id),
     index('email_account_thread_received_id_idx').on(
       t.mailAccountId,
       t.threadId,
@@ -121,6 +125,7 @@ export const emailAddress = createMailTable(
     position: integer('position').notNull(),
     name: text('name'),
     address: text('email').notNull(),
+    normalizedEmail: text('normalized_email').notNull(),
   },
   (t) => [
     check(
@@ -137,6 +142,12 @@ export const emailAddress = createMailTable(
       columns: [t.emailId, t.mailAccountId],
       foreignColumns: [email.id, email.mailAccountId],
     }).onDelete('cascade'),
+    index('email_address_account_normalized_kind_email_idx').on(
+      t.mailAccountId,
+      t.normalizedEmail,
+      t.kind,
+      t.emailId,
+    ),
   ],
 );
 

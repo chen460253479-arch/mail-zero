@@ -25,7 +25,7 @@ export type EmailQueryResult = {
   appliedSort: EmailQuerySort;
 };
 
-const normalizeText = (value: string): string =>
+export const normalizeSearchText = (value: string): string =>
   value.trim().normalize('NFC').toLocaleLowerCase('und');
 
 const validDate = (value: Date): boolean => !Number.isNaN(value.getTime());
@@ -58,7 +58,7 @@ const normalizeFilter = (filter: EmailQueryFilter | undefined): EmailQueryFilter
     throw new MailCoreError('INVALID_QUERY');
   }
   if (filter?.address !== undefined) {
-    const address = normalizeText(filter.address);
+    const address = normalizeSearchText(filter.address);
     if (address.length === 0) {
       throw new MailCoreError('INVALID_QUERY');
     }
@@ -68,7 +68,7 @@ const normalizeFilter = (filter: EmailQueryFilter | undefined): EmailQueryFilter
     if (filter?.[property] === undefined) {
       continue;
     }
-    const address = normalizeText(filter[property]);
+    const address = normalizeSearchText(filter[property]);
     if (address.length === 0) {
       throw new MailCoreError('INVALID_QUERY');
     }
@@ -81,7 +81,7 @@ const normalizeFilter = (filter: EmailQueryFilter | undefined): EmailQueryFilter
     normalized.hasAttachment = filter.hasAttachment;
   }
   if (filter?.text !== undefined) {
-    const text = normalizeText(filter.text);
+    const text = normalizeSearchText(filter.text);
     if (text.length === 0) {
       throw new MailCoreError('INVALID_QUERY');
     }

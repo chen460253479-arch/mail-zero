@@ -17,7 +17,7 @@ type ResultRow = {
   sort_value: Date | bigint | number | string | null;
 };
 
-const subjectExpression = sql`lower(normalize(btrim(coalesce(${email.subject}, '')), NFC))`;
+const subjectExpression = sql`${email.normalizedSubject}`;
 
 const sortExpression = (input: SearchEmailInput): SQL => {
   switch (input.sort.property) {
@@ -120,7 +120,7 @@ const predicatesFor = (input: SearchEmailInput): SQL[] => {
             SELECT 1 FROM ${emailAddress}
             WHERE ${emailAddress.mailAccountId} = ${input.accountId}
               AND ${emailAddress.emailId} = ${email.id}
-              AND lower(normalize(btrim(${emailAddress.address}), NFC)) = ${filter.address}
+              AND ${emailAddress.normalizedEmail} = ${filter.address}
           )`,
         ]),
     ...(filter.from === undefined
@@ -131,7 +131,7 @@ const predicatesFor = (input: SearchEmailInput): SQL[] => {
             WHERE ${emailAddress.mailAccountId} = ${input.accountId}
               AND ${emailAddress.emailId} = ${email.id}
               AND ${emailAddress.kind} IN ('sender', 'from')
-              AND lower(normalize(btrim(${emailAddress.address}), NFC)) = ${filter.from}
+              AND ${emailAddress.normalizedEmail} = ${filter.from}
           )`,
         ]),
     ...(filter.to === undefined
@@ -142,7 +142,7 @@ const predicatesFor = (input: SearchEmailInput): SQL[] => {
             WHERE ${emailAddress.mailAccountId} = ${input.accountId}
               AND ${emailAddress.emailId} = ${email.id}
               AND ${emailAddress.kind} = 'to'
-              AND lower(normalize(btrim(${emailAddress.address}), NFC)) = ${filter.to}
+              AND ${emailAddress.normalizedEmail} = ${filter.to}
           )`,
         ]),
     ...(filter.hasAttachment === undefined

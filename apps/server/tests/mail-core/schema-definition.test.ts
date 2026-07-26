@@ -101,6 +101,23 @@ describe('local mail schema', () => {
     expect(schema.email.references.getSQLType()).toBe('text[]');
   });
 
+  it('persists and indexes normalized Email query fields', () => {
+    const emailConfig = getTableConfig(schema.email);
+    const addressConfig = getTableConfig(schema.emailAddress);
+    expect(emailConfig.columns.map(({ name }) => name)).toContain('normalized_subject');
+    expect(addressConfig.columns.map(({ name }) => name)).toContain('normalized_email');
+    expect(emailConfig.indexes.map(({ config }) => config.name)).toEqual(
+      expect.arrayContaining([
+        'email_account_sent_id_idx',
+        'email_account_size_id_idx',
+        'email_account_normalized_subject_id_idx',
+      ]),
+    );
+    expect(addressConfig.indexes.map(({ config }) => config.name)).toContain(
+      'email_address_account_normalized_kind_email_idx',
+    );
+  });
+
   it.each([
     [
       'Account',

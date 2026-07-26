@@ -8,6 +8,7 @@ import type {
   RemoteEmailRecord,
 } from '@zero/mail-core';
 import { and, asc, eq, exists, isNotNull, isNull, ne, not, or, sql } from 'drizzle-orm';
+import { normalizeSearchText } from '@zero/mail-core';
 
 import {
   email,
@@ -178,6 +179,7 @@ const insertAddresses = async (
       position,
       name: name ?? null,
       address,
+      normalizedEmail: normalizeSearchText(address),
     })),
   );
 };
@@ -265,6 +267,7 @@ const baseInsert = (record: EmailRecord): typeof email.$inferInsert => ({
   inReplyTo: record.inReplyTo,
   references: record.references,
   subject: record.subject,
+  normalizedSubject: normalizeSearchText(record.subject),
   preview: record.preview,
   sentAt: record.sentAt,
   receivedAt: record.receivedAt,
@@ -419,7 +422,10 @@ export const createEmailRepository = (db: MailDatabase): EmailRepository => {
         if ('replyToEmailId' in patch) set('replyToEmailId', patch.replyToEmailId);
         if ('inReplyTo' in patch) set('inReplyTo', patch.inReplyTo);
         if ('references' in patch) set('references', patch.references);
-        if ('subject' in patch) set('subject', patch.subject);
+        if ('subject' in patch) {
+          set('subject', patch.subject);
+          set('normalizedSubject', normalizeSearchText(patch.subject ?? ''));
+        }
         if ('preview' in patch) set('preview', patch.preview);
         if ('sentAt' in patch) set('sentAt', patch.sentAt);
         if ('receivedAt' in patch) set('receivedAt', patch.receivedAt);
