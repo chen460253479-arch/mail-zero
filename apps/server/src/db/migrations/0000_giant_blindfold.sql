@@ -1,10 +1,10 @@
-CREATE SCHEMA IF NOT EXISTS "auth";
+CREATE SCHEMA "app";
 --> statement-breakpoint
-CREATE SCHEMA IF NOT EXISTS "app";
+CREATE SCHEMA "auth";
 --> statement-breakpoint
-CREATE SCHEMA IF NOT EXISTS "integration";
+CREATE SCHEMA "integration";
 --> statement-breakpoint
-CREATE SCHEMA IF NOT EXISTS "mail";
+CREATE SCHEMA "mail";
 --> statement-breakpoint
 CREATE TABLE "auth"."account" (
 	"id" text PRIMARY KEY NOT NULL,

@@ -24,7 +24,7 @@ describe('development database baseline', () => {
 
     const migrationSql = readFileSync(resolve(migrationRoot, sqlFiles[0]!), 'utf8');
     for (const schemaName of ['auth', 'app', 'integration', 'mail']) {
-      expect(migrationSql).toContain(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
+      expect(migrationSql).toContain(`CREATE SCHEMA "${schemaName}"`);
     }
     expect(migrationSql).not.toContain('mail0_');
     expect(migrationSql).not.toMatch(/\bINSERT\s+INTO\b/iu);
