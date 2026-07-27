@@ -61,6 +61,7 @@ describe('mail server architecture', () => {
   it('prevents canonical mail modules from importing the retired remote-mail implementation', () => {
     const forbiddenFragments = [
       'lib/driver',
+      'lib/brain',
       'lib/factories',
       'pipelines',
       'workflows/sync-threads-',
@@ -159,6 +160,15 @@ describe('mail server architecture', () => {
         ({ target }) =>
           target?.startsWith('modules/mail-api/') && !target.endsWith('modules/mail-api'),
       );
+    expect(violations).toEqual([]);
+  });
+
+  it('keeps mailbox binding routes independent from the retired subscription queue', () => {
+    const entrypoints = ['routes/integrations.ts', 'trpc/routes/connections.ts'];
+    const violations = entrypoints.filter((file) =>
+      readFileSync(resolve(srcRoot, file), 'utf8').includes('subscribe_queue'),
+    );
+
     expect(violations).toEqual([]);
   });
 });

@@ -123,6 +123,10 @@ export const createGmailIngressAdapter = (client: GmailApiClient): InboundMailAd
     };
   },
 
+  unsubscribe: async () => {
+    await client.stopWatch();
+  },
+
   classifyError: classifyGmailError,
 });
 

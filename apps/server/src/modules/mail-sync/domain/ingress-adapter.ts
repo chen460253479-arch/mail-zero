@@ -24,6 +24,7 @@ export interface InboundMailAdapter {
     checkpoint: VersionedProviderState;
     target: VersionedProviderState;
   }): Promise<{ expiresAt: Date | null }>;
+  unsubscribe?(): Promise<void>;
   classifyError(error: unknown): MailSyncErrorClassification;
 }
 

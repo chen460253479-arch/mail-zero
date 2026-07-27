@@ -66,6 +66,7 @@ export interface GmailApiTransport {
       labelFilterBehavior: 'include';
     };
   }): Promise<{ data: GmailWatchData }>;
+  stop(request: { userId: 'me' }): Promise<{ data: unknown }>;
   sendMessage(request: {
     userId: 'me';
     requestBody: { raw: string; threadId?: string };
@@ -107,6 +108,7 @@ export interface GmailApiClient {
     historyId: string | null;
     expiration: string | null;
   }>;
+  stopWatch(): Promise<void>;
   sendRawMessage(input: {
     raw: Uint8Array;
     remoteThreadId: string | null;
@@ -165,6 +167,9 @@ export const createGmailApiClient = (transport: GmailApiTransport): GmailApiClie
       historyId: data.historyId ?? null,
       expiration: data.expiration ?? null,
     };
+  },
+  stopWatch: async () => {
+    await transport.stop({ userId: 'me' });
   },
   sendRawMessage: async ({ raw, remoteThreadId }) => {
     const request = buildGmailSendRequest(raw, remoteThreadId);

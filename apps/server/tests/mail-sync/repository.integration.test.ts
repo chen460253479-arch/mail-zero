@@ -528,4 +528,97 @@ describe('PostgreSQL mail sync repository', () => {
       );
     });
   });
+
+  it('pauses every sync owned by one connection and clears active leases', async () => {
+    await withMailSyncTestDatabase(async ({ db, sql }) => {
+      await insertMailSyncAccountFixture(sql);
+      await sql`
+        INSERT INTO auth.user_account (
+          id, name, email, email_verified, role, created_at, updated_at
+        ) VALUES (
+          'user-2', 'Other User', 'other@example.com', true, 'admin', now(), now()
+        )
+      `;
+      await sql`
+        INSERT INTO integration.connection (
+          id, user_id, email, normalized_email, channel_id, status,
+          provider_key, created_at, updated_at
+        ) VALUES (
+          'connection-2', 'user-2', 'other@example.com', 'other@example.com',
+          'gmail', 'connected', 'gmail', now(), now()
+        )
+      `;
+      await sql`
+        INSERT INTO mail.account (id, connection_id, user_id)
+        VALUES ('account-2', 'connection-2', 'user-2')
+      `;
+      const repository = createRepository(db);
+      const createActiveSync = async (accountId: string) => {
+        const sync = await repository.createActivatingSync({
+          accountId,
+          provider: 'gmail',
+          scopeKey: 'inbox',
+          scope,
+        });
+        await repository.storeActivationCheckpoint({
+          syncId: sync.id,
+          checkpoint: { version: 1, historyId: '100' },
+        });
+        await repository.activate({ syncId: sync.id, subscriptionExpiresAt: null });
+        await repository.acquireSyncLease({
+          syncId: sync.id,
+          owner: `worker-${accountId}`,
+          leaseForMs: 60_000,
+        });
+        return sync;
+      };
+      const ownedSync = await createActiveSync('account-1');
+      const otherSync = await createActiveSync('account-2');
+
+      await expect(
+        repository.pauseConnectionSyncs({
+          userId: 'user-1',
+          connectionId: 'connection-1',
+          errorCode: 'MAILBOX_DISCONNECTED',
+          errorMessage: 'Mailbox authorization was disconnected',
+        }),
+      ).resolves.toBe(1);
+
+      const states = await sql<
+        {
+          id: string;
+          status: string;
+          lease_owner: string | null;
+          lease_expires_at: Date | null;
+        }[]
+      >`
+        SELECT id, status, lease_owner, lease_expires_at
+        FROM integration.inbound_sync
+        ORDER BY id
+      `;
+      expect(states).toEqual(
+        expect.arrayContaining([
+          {
+            id: ownedSync.id,
+            status: 'paused',
+            lease_owner: null,
+            lease_expires_at: null,
+          },
+          expect.objectContaining({
+            id: otherSync.id,
+            status: 'active',
+            lease_owner: 'worker-account-2',
+          }),
+        ]),
+      );
+
+      await expect(repository.prepareActivation({ syncId: ownedSync.id })).resolves.toMatchObject({
+        id: ownedSync.id,
+        status: 'activating',
+        checkpoint: { version: 1, historyId: '100' },
+        leaseOwner: null,
+        leaseExpiresAt: null,
+      });
+    });
+  });
 });

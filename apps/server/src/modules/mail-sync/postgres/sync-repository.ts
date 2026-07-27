@@ -81,6 +81,35 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
       return existing[0] ?? syncNotFound();
     },
 
+    prepareActivation: async (input: { syncId: string }): Promise<InboundSyncRecord> => {
+      const rows = await db
+        .update(inboundSync)
+        .set({
+          status: 'activating',
+          subscriptionExpiresAt: null,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          leaseOwner: null,
+          leaseExpiresAt: null,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(inboundSync.id, input.syncId),
+            inArray(inboundSync.status, ['paused', 'auth_error']),
+          ),
+        )
+        .returning();
+      if (rows[0] !== undefined) {
+        return rows[0];
+      }
+      const existing = await findSync(input.syncId);
+      if (existing?.status === 'active' || existing?.status === 'activating') {
+        return existing;
+      }
+      return syncNotFound();
+    },
+
     storeActivationCheckpoint: async (
       input: StoreActivationCheckpointInput,
     ): Promise<InboundSyncRecord> => {
@@ -447,6 +476,42 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
         leaseLost();
       }
     },
+
+    pauseConnectionSyncs: async (input: {
+      userId: string;
+      connectionId: string;
+      errorCode: string;
+      errorMessage: string;
+    }): Promise<number> =>
+      await db.transaction(async (transaction) => {
+        const accounts = await transaction
+          .select({ id: mailAccount.id })
+          .from(mailAccount)
+          .innerJoin(connection, eq(connection.id, mailAccount.connectionId))
+          .where(and(eq(connection.id, input.connectionId), eq(connection.userId, input.userId)));
+        if (accounts.length === 0) {
+          return 0;
+        }
+        const rows = await transaction
+          .update(inboundSync)
+          .set({
+            status: 'paused',
+            subscriptionExpiresAt: null,
+            lastErrorCode: input.errorCode,
+            lastErrorMessage: input.errorMessage,
+            leaseOwner: null,
+            leaseExpiresAt: null,
+            updatedAt: sql`now()`,
+          })
+          .where(
+            inArray(
+              inboundSync.accountId,
+              accounts.map(({ id }) => id),
+            ),
+          )
+          .returning({ id: inboundSync.id });
+        return rows.length;
+      }),
 
     recordSignal: async (input: {
       provider: string;

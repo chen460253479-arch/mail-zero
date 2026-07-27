@@ -122,6 +122,9 @@ describe('inbound synchronization activation', () => {
               checkpoint: null,
             };
           },
+          prepareActivation: async () => {
+            throw new Error('must not prepare a new sync');
+          },
           storeActivationCheckpoint: async ({ checkpoint }) => {
             calls.push('store-baseline');
             storedCheckpoint = checkpoint as typeof storedCheckpoint;
@@ -180,6 +183,9 @@ describe('inbound synchronization activation', () => {
             status: 'active',
             checkpoint: { version: 1, historyId: '101' },
           }),
+          prepareActivation: async () => {
+            throw new Error('must not prepare an active sync');
+          },
           storeActivationCheckpoint: async () => {
             throw new Error('must not store');
           },
@@ -192,5 +198,79 @@ describe('inbound synchronization activation', () => {
 
     expect(result).toMatchObject({ id: 'sync-1', status: 'active' });
     expect(adapterCreations).toBe(0);
+  });
+
+  it('reactivates a paused sync from its retained checkpoint without historical import', async () => {
+    const calls: string[] = [];
+
+    const result = await activateInboundSync(
+      {
+        accountId: 'account-1',
+        connectionId: 'connection-1',
+        provider: 'gmail',
+        scopeKey: 'inbox',
+        scope,
+        subscriptionTarget: {
+          version: 1,
+          topicName: 'projects/zero/topics/inbound',
+        },
+      },
+      {
+        adapterFactory: {
+          create: async () => ({
+            provider: 'gmail',
+            establishCheckpoint: async () => {
+              throw new Error('must retain the existing checkpoint');
+            },
+            discover: async () => {
+              throw new Error('unused');
+            },
+            fetchRawMessage: async () => {
+              throw new Error('unused');
+            },
+            subscribe: async ({ checkpoint }) => {
+              calls.push('watch');
+              expect(checkpoint).toEqual({ version: 1, historyId: '100' });
+              return { expiresAt: new Date('2026-08-02T00:00:00.000Z') };
+            },
+            classifyError: () => 'permanent',
+          }),
+        },
+        repository: {
+          createActivatingSync: async () => ({
+            id: 'sync-1',
+            status: 'paused',
+            checkpoint: { version: 1, historyId: '100' },
+          }),
+          prepareActivation: async ({ syncId }) => {
+            calls.push('prepare');
+            expect(syncId).toBe('sync-1');
+            return {
+              id: 'sync-1',
+              status: 'activating',
+              checkpoint: { version: 1, historyId: '100' },
+            };
+          },
+          storeActivationCheckpoint: async () => {
+            throw new Error('must not replace the retained checkpoint');
+          },
+          activate: async ({ subscriptionExpiresAt }) => {
+            calls.push('activate');
+            return {
+              id: 'sync-1',
+              status: 'active',
+              checkpoint: { version: 1, historyId: '100' },
+              subscriptionExpiresAt,
+            };
+          },
+        },
+      },
+    );
+
+    expect(calls).toEqual(['prepare', 'watch', 'activate']);
+    expect(result).toMatchObject({
+      status: 'active',
+      checkpoint: { version: 1, historyId: '100' },
+    });
   });
 });

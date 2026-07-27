@@ -8,9 +8,10 @@ describe('Gmail API client boundary', () => {
     uploadMessage: async () => ({ data: {} }),
     listMessages: async () => ({ data: {} }),
     getMessageMetadata: async () => ({ data: {} }),
+    stop: async () => ({ data: {} }),
   } satisfies Pick<
     GmailApiTransport,
-    'sendMessage' | 'uploadMessage' | 'listMessages' | 'getMessageMetadata'
+    'sendMessage' | 'uploadMessage' | 'listMessages' | 'getMessageMetadata' | 'stop'
   >;
 
   it('restricts History discovery to Inbox and preserves pagination data', async () => {
@@ -84,6 +85,25 @@ describe('Gmail API client boundary', () => {
     });
   });
 
+  it('stops only the authenticated mailbox Watch', async () => {
+    let received: unknown;
+    const transport: GmailApiTransport = {
+      getProfile: async () => ({ data: {} }),
+      listHistory: async () => ({ data: {} }),
+      getMessage: async () => ({ data: {} }),
+      watch: async () => ({ data: {} }),
+      ...outboundNoops,
+      stop: async (request) => {
+        received = request;
+        return { data: {} };
+      },
+    };
+
+    await createGmailApiClient(transport).stopWatch();
+
+    expect(received).toEqual({ userId: 'me' });
+  });
+
   it('exhausts Sent pagination and verifies exact Message-ID metadata', async () => {
     const listRequests: unknown[] = [];
     const metadataRequests: unknown[] = [];
@@ -92,6 +112,7 @@ describe('Gmail API client boundary', () => {
       listHistory: async () => ({ data: {} }),
       getMessage: async () => ({ data: {} }),
       watch: async () => ({ data: {} }),
+      stop: async () => ({ data: {} }),
       sendMessage: async () => ({ data: {} }),
       uploadMessage: async () => ({ data: {} }),
       listMessages: async (request) => {

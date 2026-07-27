@@ -1,6 +1,32 @@
-import type { MailIngressCommand } from '../../../modules/mail-sync/application/commands';
+import { toByteArray } from 'base64-js';
+
+type GmailSignal = {
+  provider: 'gmail';
+  externalAccount: string;
+  cursorHint: string;
+};
+
+const unwrapPubSubPayload = (payload: unknown): unknown => {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+    return payload;
+  }
+  const message = (payload as Record<string, unknown>).message;
+  if (message === null || typeof message !== 'object' || Array.isArray(message)) {
+    return payload;
+  }
+  const data = (message as Record<string, unknown>).data;
+  if (typeof data !== 'string' || data.length === 0) {
+    return payload;
+  }
+  try {
+    return JSON.parse(new TextDecoder().decode(toByteArray(data))) as unknown;
+  } catch {
+    return null;
+  }
+};
 
 const parseGmailPush = (payload: unknown): { emailAddress: string; historyId: string } | null => {
+  payload = unwrapPubSubPayload(payload);
   if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
     return null;
   }
@@ -19,18 +45,25 @@ const parseGmailPush = (payload: unknown): { emailAddress: string; historyId: st
 export const handleGmailPush = async (
   payload: unknown,
   dependencies: {
-    enqueue(command: MailIngressCommand): Promise<void>;
+    recordSignal(signal: GmailSignal): Promise<string[]>;
+    enqueueDiscover(syncId: string): Promise<void>;
   },
-): Promise<{ accepted: boolean }> => {
+): Promise<{ accepted: boolean; matched: number; queued: number }> => {
   const notification = parseGmailPush(payload);
   if (notification === null) {
-    return { accepted: false };
+    return { accepted: false, matched: 0, queued: 0 };
   }
-  await dependencies.enqueue({
-    type: 'signal',
+  const syncIds = await dependencies.recordSignal({
     provider: 'gmail',
     externalAccount: notification.emailAddress,
     cursorHint: notification.historyId,
   });
-  return { accepted: true };
+  const wakeups = await Promise.allSettled(
+    syncIds.map((syncId) => dependencies.enqueueDiscover(syncId)),
+  );
+  return {
+    accepted: true,
+    matched: syncIds.length,
+    queued: wakeups.filter(({ status }) => status === 'fulfilled').length,
+  };
 };

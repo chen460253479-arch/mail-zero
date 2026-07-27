@@ -225,6 +225,9 @@ describe('local mail schema', () => {
   it('keeps provider credentials out of plugin-neutral Connections', () => {
     const connectionConfig = getTableConfig(schema.connection);
     const connectionColumns = connectionConfig.columns.map(({ name }) => name);
+    const activeMailboxIdentity = connectionConfig.indexes.find(
+      ({ config }) => config.name === 'connection_channel_email_active_uidx',
+    );
 
     expect(connectionColumns).toContain('provider_key');
     expect(connectionColumns).not.toEqual(
@@ -244,6 +247,13 @@ describe('local mail schema', () => {
     expect(connectionConfig.checks.map(({ name }) => name)).toEqual(
       expect.arrayContaining(['connection_status_chk', 'connection_provider_key_chk']),
     );
+    expect(activeMailboxIdentity?.config.unique).toBe(true);
+    expect(
+      activeMailboxIdentity?.config.columns.map((column) =>
+        column instanceof IndexedColumn ? column.name : undefined,
+      ),
+    ).toEqual(['channel_id', 'normalized_email']);
+    expect(activeMailboxIdentity?.config.where).toBeDefined();
   });
 
   it('constrains stable Authorization Binding discriminators without OAuth-only requirements', () => {

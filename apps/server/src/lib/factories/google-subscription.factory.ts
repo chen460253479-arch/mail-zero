@@ -194,14 +194,9 @@ class GoogleSubscriptionFactory extends BaseSubscriptionFactory {
     }
   }
 
-  private async setupGmailWatch(
-    connectionData: typeof connection.$inferSelect,
-    topicName: string,
-  ): Promise<void> {
-    const serviceAccount = getServiceAccount();
+  private async setupGmailWatch(connectionData: typeof connection.$inferSelect): Promise<void> {
     await activateGmailInboundForConnection(env, {
       connectionId: connectionData.id,
-      topicName: `projects/${serviceAccount.project_id}/topics/${topicName}`,
     });
   }
 
@@ -235,7 +230,7 @@ class GoogleSubscriptionFactory extends BaseSubscriptionFactory {
         console.log(
           `[SUBSCRIPTION] Setting up Gmail watch for connection: ${connectionData.id} ${pubSubName}`,
         );
-        await this.setupGmailWatch(connectionData, pubSubName).catch(async (error) => {
+        await this.setupGmailWatch(connectionData).catch(async (error) => {
           console.error('[SUBSCRIPTION] Error setting up Gmail watch:', { error });
           await resetConnection(connectionData.id);
           throw error;

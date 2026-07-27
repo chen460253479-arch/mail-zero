@@ -1,16 +1,15 @@
-import { resolveConnectionCredential } from '../modules/mail-accounts/credentials/resolve';
-import { channelIdToProviderId, getMailChannel } from './mail-channel/registry';
+import { createMailboxLifecycleForDatabase } from '../modules/mail-accounts/runtime/lifecycle-environment';
 import { createAuthMiddleware, jwt, bearer, mcp } from 'better-auth/plugins';
 import { getBrowserTimezone, isValidTimezone } from './timezones';
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { dubAnalytics } from '@dub/better-auth';
 import { defaultUserSettings } from './schemas';
-import { disableBrainFunction } from './brain';
 import { APIError } from 'better-auth/api';
 import { getZeroDB } from './server-utils';
 import { redis, resend } from './services';
-import { type EProviders } from '../types';
+import { connection } from '../db/schema';
+import { eq } from 'drizzle-orm';
 import { createDb } from '../db';
 import { env } from '../env';
 import { Dub } from 'dub';
@@ -56,51 +55,23 @@ export const createAuth = () => {
         },
         beforeDelete: async (user, request) => {
           if (!request) throw new APIError('BAD_REQUEST', { message: 'Request object is missing' });
-          const db = await getZeroDB(user.id);
-          const connections = await db.findManyConnections();
-
-          const revokedAccounts = (
-            await Promise.allSettled(
-              connections.map(async (connection) => {
-                await disableBrainFunction({
-                  id: connection.id,
-                  providerId: channelIdToProviderId(connection.channelId) as EProviders,
-                });
-                const record = await db.findConnectionWithAuthorization(connection.id);
-                if (!record) return false;
-                if (record.authorization?.authSource === 'nango') return true;
-                const credential = await resolveConnectionCredential(
-                  record,
-                  env.CREDENTIAL_ENCRYPTION_KEY,
-                );
-                if (credential.type !== 'oauth2') return false;
-                const channel = getMailChannel(connection.channelId);
-                const managerConfig = {
-                  auth: {
-                    accessToken: credential.accessToken,
-                    refreshToken: credential.refreshToken ?? '',
-                    userId: user.id,
-                    email: connection.email,
-                  },
-                };
-                return await channel.revoke(
-                  managerConfig,
-                  credential.refreshToken ?? credential.accessToken,
-                );
-              }),
-            )
-          ).map((result) => {
-            if (result.status === 'fulfilled') {
-              return result.value;
+          const database = createDb(env.HYPERDRIVE.connectionString);
+          try {
+            const connections = await database.db
+              .select({ id: connection.id })
+              .from(connection)
+              .where(eq(connection.userId, user.id));
+            const lifecycle = createMailboxLifecycleForDatabase(database.db, env);
+            for (const mailbox of connections) {
+              await lifecycle.disconnect({
+                userId: user.id,
+                connectionId: mailbox.id,
+                deleteLocalData: true,
+              });
             }
-            return false;
-          });
-
-          if (!revokedAccounts.every((value) => !!value)) {
-            console.log('Failed to revoke some accounts');
+          } finally {
+            await database.conn.end();
           }
-
-          await db.deleteUser();
         },
       },
     },

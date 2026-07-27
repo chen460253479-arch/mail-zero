@@ -22,6 +22,7 @@ const createClient = (overrides: Partial<GmailApiClient> = {}): GmailApiClient =
     historyId: '100',
     expiration: '1785542400000',
   }),
+  stopWatch: async () => undefined,
   sendRawMessage: async () => ({ id: null, threadId: null }),
   findSentByMessageId: async () => [],
   ...overrides,
@@ -178,6 +179,20 @@ describe('Gmail inbound adapter', () => {
     ).rejects.toMatchObject({
       code: 'GMAIL_WATCH_EXPIRATION_MISSING',
     });
+  });
+
+  it('stops the authenticated mailbox Watch without touching shared Pub/Sub resources', async () => {
+    let stopped = false;
+    const adapter = createGmailIngressAdapter(
+      createClient({
+        stopWatch: async () => {
+          stopped = true;
+        },
+      }),
+    );
+
+    await expect(adapter.unsubscribe!()).resolves.toBeUndefined();
+    expect(stopped).toBe(true);
   });
 
   it('classifies Gmail authentication, throttling, server, and permanent failures', () => {

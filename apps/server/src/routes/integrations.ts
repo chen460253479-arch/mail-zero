@@ -1,12 +1,14 @@
 import { Hono } from 'hono';
 
+import { createPostgresConnectionRepository } from '../modules/mail-accounts/postgres/connection-repository';
+import { provisionGmailMailboxInDatabase } from '../modules/mail-accounts/runtime/provision-gmail-mailbox';
+import { normalizeMailboxEmail } from '../modules/mail-accounts/application/mailbox-identity';
 import { GmailOAuthError } from '../modules/mail-accounts/application/connect-gmail-oauth';
 import { createSystemIntegrationRepository } from '../integrations/core/repository';
 import { createGmailOAuthApplication } from '../runtime/mail/gmail-oauth';
 import { assertAdministrator } from '../integrations/core/permissions';
-import { getZeroDB } from '../lib/server-utils';
 import type { HonoContext } from '../ctx';
-import { createDb } from '../db';
+import { createDb, type DB } from '../db';
 
 const integrationOAuthRouter = new Hono<HonoContext>();
 
@@ -30,12 +32,31 @@ const getOAuthInput = (url: string): { state: string; code: string } | null => {
 
 const createService = (c: {
   env: HonoContext['Bindings'];
+  db: DB;
   repository: ReturnType<typeof createSystemIntegrationRepository>;
 }) =>
   createGmailOAuthApplication({
     repository: c.repository,
-    saveMailbox: async (userId, mailbox, authorization) =>
-      await (await getZeroDB(userId)).createMailboxWithAuthorization(mailbox, authorization),
+    saveMailbox: async (userId, mailbox, authorization) => {
+      const result = await createPostgresConnectionRepository(c.db).saveBinding({
+        userId,
+        existingMailboxId: null,
+        mailbox: {
+          ...mailbox,
+          normalizedEmail: normalizeMailboxEmail(mailbox.email),
+        },
+        authorization,
+      });
+      await provisionGmailMailboxInDatabase(c.db, c.env, {
+        userId,
+        connectionId: result.id,
+        identity: {
+          email: mailbox.email,
+          name: mailbox.name,
+        },
+      });
+      return result;
+    },
     encryptionKey: c.env.CREDENTIAL_ENCRYPTION_KEY,
     backendUrl: c.env.VITE_PUBLIC_BACKEND_URL,
   });
@@ -48,6 +69,7 @@ integrationOAuthRouter.get('/gmail/connect/start', async (c) => {
   try {
     const result = await createService({
       env: c.env,
+      db,
       repository: createSystemIntegrationRepository(db),
     }).startMailboxAuthorization(sessionUser.id);
     return c.redirect(result.authorizationUrl);
@@ -75,16 +97,11 @@ integrationOAuthRouter.get('/gmail/connect/callback', async (c) => {
 
   const { db, conn } = createDb(c.env.HYPERDRIVE.connectionString);
   try {
-    const result = await createService({
+    await createService({
       env: c.env,
+      db,
       repository: createSystemIntegrationRepository(db),
     }).completeMailboxAuthorization({ ...input, userId: sessionUser.id });
-    if (c.env.GOOGLE_S_ACCOUNT && c.env.GOOGLE_S_ACCOUNT !== '{}') {
-      await c.env.subscribe_queue.send({
-        connectionId: result.id,
-        providerId: 'google',
-      });
-    }
     return c.redirect(
       resultRedirect(
         c.env.VITE_PUBLIC_APP_URL,
@@ -124,6 +141,7 @@ integrationOAuthRouter.get('/gmail/validation/callback', async (c) => {
   try {
     await createService({
       env: c.env,
+      db,
       repository: createSystemIntegrationRepository(db),
     }).completeValidation({ ...input, adminId: sessionUser.id });
     return c.redirect(

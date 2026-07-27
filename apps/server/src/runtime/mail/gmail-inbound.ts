@@ -14,11 +14,13 @@ import type { MailIngressCommand } from '../../modules/mail-sync/application/com
 import type { IngressScope } from '../../modules/mail-sync/domain/ingress-adapter';
 import { activateInboundSync } from '../../modules/mail-sync/application/activate';
 import { connection, inboundSync, mailAccount, mailbox } from '../../db/schema';
+import { handleGmailPush } from '../../mail-channel/gmail/inbound/handle-push';
 import { createGmailCredentialContext } from './gmail-credential-context';
 import { defaultMailChannelRegistry } from '../../mail-channel/registry';
 import { createMailCoreRuntime, R2BlobStore } from '../../modules/mail';
 import { createGmailPlugin } from '../../mail-channel/gmail/plugin';
 import { preprocessEmailHtml } from '../../lib/email-processor';
+import { readGmailInboundConfig } from './gmail-inbound-config';
 import { createDb, type DB } from '../../db';
 import type { ZeroEnv } from '../../env';
 
@@ -103,19 +105,33 @@ const resolveImportContext = async (db: DB, syncId: string) => {
   };
 };
 
-const topicNameFor = (runtimeEnv: ZeroEnv, connectionId: string): string => {
-  const serviceAccount = JSON.parse(runtimeEnv.GOOGLE_S_ACCOUNT) as {
-    project_id?: unknown;
-  };
-  if (typeof serviceAccount.project_id !== 'string' || serviceAccount.project_id.length === 0) {
-    throw new Error('Google service account project_id is required');
-  }
-  return `projects/${serviceAccount.project_id}/topics/notifications__${connectionId}`;
+export const activateGmailInboundForAccount = async (
+  db: DB,
+  runtimeEnv: ZeroEnv,
+  input: { connectionId: string; accountId: string },
+): Promise<void> => {
+  await activateInboundSync(
+    {
+      accountId: input.accountId,
+      connectionId: input.connectionId,
+      provider: 'gmail',
+      scopeKey: 'inbox',
+      scope: INBOX_SCOPE,
+      subscriptionTarget: {
+        version: 1,
+        topicName: readGmailInboundConfig(runtimeEnv).topicName,
+      },
+    },
+    {
+      adapterFactory: createAdapterFactory(db, runtimeEnv),
+      repository: createPostgresMailSyncRepository(db),
+    },
+  );
 };
 
 export const activateGmailInboundForConnection = async (
   runtimeEnv: ZeroEnv,
-  input: { connectionId: string; topicName: string },
+  input: { connectionId: string },
 ): Promise<void> => {
   const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
   try {
@@ -138,26 +154,25 @@ export const activateGmailInboundForConnection = async (
         createAccount: (createInput) => mailCore.createAccount(createInput),
       },
     );
-    await activateInboundSync(
-      {
-        accountId: account.id,
-        connectionId: connectionRecord.id,
-        provider: 'gmail',
-        scopeKey: 'inbox',
-        scope: INBOX_SCOPE,
-        subscriptionTarget: {
-          version: 1,
-          topicName: input.topicName,
-        },
-      },
-      {
-        adapterFactory: createAdapterFactory(db, runtimeEnv),
-        repository: createPostgresMailSyncRepository(db),
-      },
-    );
+    await activateGmailInboundForAccount(db, runtimeEnv, {
+      accountId: account.id,
+      connectionId: connectionRecord.id,
+    });
   } finally {
     await conn.end();
   }
+};
+
+export const stopGmailWatchForConnection = async (
+  db: DB,
+  runtimeEnv: ZeroEnv,
+  connectionId: string,
+): Promise<void> => {
+  const adapter = await createAdapterFactory(db, runtimeEnv).create(connectionId);
+  if (!adapter.unsubscribe) {
+    throw new Error('Gmail inbound adapter does not support Watch cancellation');
+  }
+  await adapter.unsubscribe();
 };
 
 const createRuntime = (db: DB, runtimeEnv: ZeroEnv): MailIngressRuntime => {
@@ -178,13 +193,10 @@ const createRuntime = (db: DB, runtimeEnv: ZeroEnv): MailIngressRuntime => {
     getAdapterFactory,
     resolveConnectionId: (accountId) => resolveConnectionId(db, accountId),
     resolveImportContext: (syncId) => resolveImportContext(db, syncId),
-    resolveSubscriptionTarget: async (syncId) => {
-      const context = await resolveImportContext(db, syncId);
-      return {
-        version: 1,
-        topicName: topicNameFor(runtimeEnv, context.connectionId),
-      };
-    },
+    resolveSubscriptionTarget: async () => ({
+      version: 1,
+      topicName: readGmailInboundConfig(runtimeEnv).topicName,
+    }),
     mailCore,
     onAuthenticationError: async ({ syncId, errorCode, errorMessage }) => {
       await db
@@ -210,6 +222,22 @@ export const runMailIngressCommand = async (
   const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
   try {
     await processMailIngressCommand(command, createRuntime(db, runtimeEnv));
+  } finally {
+    await conn.end();
+  }
+};
+
+export const recordGmailPushSignal = async (
+  runtimeEnv: ZeroEnv,
+  payload: unknown,
+): Promise<{ accepted: boolean; matched: number; queued: number }> => {
+  const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
+  try {
+    const repository = createPostgresMailSyncRepository(db);
+    return await handleGmailPush(payload, {
+      recordSignal: (signal) => repository.recordSignal(signal),
+      enqueueDiscover: (syncId) => runtimeEnv.MAIL_INGRESS_QUEUE.send({ type: 'discover', syncId }),
+    });
   } finally {
     await conn.end();
   }

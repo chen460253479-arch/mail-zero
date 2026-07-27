@@ -95,6 +95,11 @@ describe('Nango mailbox binding', () => {
         }),
       }),
     );
+    expect(repository.findMailboxByNormalizedEmail).toHaveBeenCalledWith(
+      'user-1',
+      'gmail',
+      'owner@example.com',
+    );
   });
 
   it('rejects an already-connected normalized email', async () => {

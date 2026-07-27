@@ -9,10 +9,11 @@ import {
 
 const connection = {
   id: 'connection-1',
+  channelId: 'gmail' as const,
   status: 'connected' as const,
 };
 
-const createDependencies = (status: 'connected' | 'disconnected' = 'connected') => {
+const createDependencies = (status: 'connected' | 'disconnected' | 'deleting' = 'connected') => {
   const calls: string[] = [];
   const repository = {
     getConnection: vi.fn().mockResolvedValue({ ...connection, status }),
@@ -36,6 +37,9 @@ const createDependencies = (status: 'connected' | 'disconnected' = 'connected') 
     stopMailboxTasks: vi.fn(async () => {
       calls.push('stopMailboxTasks');
     }),
+    revokeAuthorization: vi.fn(async () => {
+      calls.push('revokeAuthorization');
+    }),
     cleanupLocalData: vi.fn(async () => {
       calls.push('cleanupLocalData');
     }),
@@ -56,30 +60,48 @@ describe('connection lifecycle', () => {
   });
 
   it('disconnects by deleting credentials and retaining mailbox data', async () => {
-    const { calls, dependencies } = createDependencies();
+    const { calls, dependencies, repository } = createDependencies();
 
     await expect(
       disconnectAuthorization(
-        { connectionId: connection.id, deleteLocalData: false },
+        { userId: 'user-1', connectionId: connection.id, deleteLocalData: false },
         dependencies,
       ),
     ).resolves.toEqual({ status: 'disconnected' });
-    expect(calls).toEqual(['stopMailboxTasks', 'removeAuthorizationBinding', 'markDisconnected']);
+    expect(calls).toEqual([
+      'stopMailboxTasks',
+      'revokeAuthorization',
+      'removeAuthorizationBinding',
+      'markDisconnected',
+    ]);
+    expect(repository.getConnection).toHaveBeenCalledWith('user-1', connection.id);
+    expect(repository.removeAuthorizationBinding).toHaveBeenCalledWith('user-1', connection.id);
+    expect(repository.markDisconnected).toHaveBeenCalledWith(
+      'user-1',
+      connection.id,
+      new Date('2026-07-24T00:00:00.000Z'),
+    );
   });
 
   it('stops external work before marking the mailbox deleting', async () => {
-    const { calls, dependencies } = createDependencies();
+    const { calls, dependencies, repository } = createDependencies();
 
     await expect(
-      disconnectAuthorization({ connectionId: connection.id, deleteLocalData: true }, dependencies),
+      disconnectAuthorization(
+        { userId: 'user-1', connectionId: connection.id, deleteLocalData: true },
+        dependencies,
+      ),
     ).resolves.toEqual({ status: 'deleted' });
     expect(calls).toEqual([
       'stopMailboxTasks',
+      'revokeAuthorization',
       'markDeleting',
       'removeAuthorizationBinding',
       'cleanupLocalData',
       'deleteMailbox',
     ]);
+    expect(repository.markDeleting).toHaveBeenCalledWith('user-1', connection.id);
+    expect(repository.deleteMailbox).toHaveBeenCalledWith('user-1', connection.id);
   });
 
   it('does not persist deleting when external task cleanup fails', async () => {
@@ -89,7 +111,10 @@ describe('connection lifecycle', () => {
     );
 
     await expect(
-      disconnectAuthorization({ connectionId: connection.id, deleteLocalData: true }, dependencies),
+      disconnectAuthorization(
+        { userId: 'user-1', connectionId: connection.id, deleteLocalData: true },
+        dependencies,
+      ),
     ).rejects.toThrow('provider task cleanup failed');
     expect(repository.markDeleting).not.toHaveBeenCalled();
   });
@@ -98,7 +123,7 @@ describe('connection lifecycle', () => {
     const { dependencies, repository } = createDependencies();
 
     await disconnectAuthorization(
-      { connectionId: connection.id, deleteLocalData: false },
+      { userId: 'user-1', connectionId: connection.id, deleteLocalData: false },
       dependencies,
     );
 
@@ -107,21 +132,54 @@ describe('connection lifecycle', () => {
 
   it('allows retained data cleanup only for a disconnected mailbox', async () => {
     const connected = createDependencies();
-    await expect(deleteRetainedMailboxData(connection.id, connected.dependencies)).rejects.toThrow(
-      'Mailbox must be disconnected',
-    );
+    await expect(
+      deleteRetainedMailboxData(
+        { userId: 'user-1', connectionId: connection.id },
+        connected.dependencies,
+      ),
+    ).rejects.toThrow('Mailbox must be disconnected');
 
     const disconnected = createDependencies('disconnected');
     await expect(
-      deleteRetainedMailboxData(connection.id, disconnected.dependencies),
+      deleteRetainedMailboxData(
+        { userId: 'user-1', connectionId: connection.id },
+        disconnected.dependencies,
+      ),
     ).resolves.toEqual({ status: 'deleted' });
+  });
+
+  it('can retry retained data cleanup after an object-store failure left it deleting', async () => {
+    const deleting = createDependencies('deleting');
+
+    await expect(
+      deleteRetainedMailboxData(
+        { userId: 'user-1', connectionId: connection.id },
+        deleting.dependencies,
+      ),
+    ).resolves.toEqual({ status: 'deleted' });
+  });
+
+  it('keeps the deleting database record when object cleanup fails', async () => {
+    const { dependencies, repository } = createDependencies();
+    vi.mocked(dependencies.cleanupLocalData).mockRejectedValueOnce(
+      new Error('object store unavailable'),
+    );
+
+    await expect(
+      disconnectAuthorization(
+        { userId: 'user-1', connectionId: connection.id, deleteLocalData: true },
+        dependencies,
+      ),
+    ).rejects.toThrow('object store unavailable');
+    expect(repository.markDeleting).toHaveBeenCalledWith('user-1', connection.id);
+    expect(repository.deleteMailbox).not.toHaveBeenCalled();
   });
 
   it('does not expose an operation that updates authSource in place', async () => {
     const { dependencies, repository } = createDependencies();
 
     await disconnectAuthorization(
-      { connectionId: connection.id, deleteLocalData: false },
+      { userId: 'user-1', connectionId: connection.id, deleteLocalData: false },
       dependencies,
     );
 

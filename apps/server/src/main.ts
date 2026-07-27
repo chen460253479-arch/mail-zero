@@ -23,12 +23,16 @@ import {
   providerIdToChannelId,
 } from './lib/mail-channel/registry';
 import {
+  enqueueDueMailIngressWork,
+  recordGmailPushSignal,
+  runMailIngressCommand,
+} from './runtime/mail/gmail-inbound';
+import {
   toAttachmentFiles,
   type SerializedAttachment,
   type AttachmentFile,
 } from './lib/attachments';
 import { assertAuthorizationCanBeAttached } from './modules/mail-accounts/application/disconnect-mailbox';
-import { enqueueDueMailIngressWork, runMailIngressCommand } from './runtime/mail/gmail-inbound';
 import { SyncThreadsCoordinatorWorkflow } from './workflows/sync-threads-coordinator-workflow';
 import { normalizeMailboxEmail } from './modules/mail-accounts/application/mailbox-identity';
 import { enqueueDueMailOutboundWork, runMailOutboundCommand } from './runtime/mail/outbound';
@@ -38,14 +42,15 @@ import { encryptCredential } from './infrastructure/security/credential-encrypti
 import { parseMailIngressCommand } from './modules/mail-sync/application/commands';
 import { WorkerEntrypoint, DurableObject, RpcTarget } from 'cloudflare:workers';
 import { wakeDueMailSnoozes } from './modules/mail-snooze/runtime/environment';
-import { handleGmailPush } from './mail-channel/gmail/inbound/handle-push';
-// import { instrument, type ResolveConfigFn } from '@microlabs/otel-cf-workers';
-import { getZeroAgent, getZeroDB, verifyToken } from './lib/server-utils';
+import { authenticateGmailPush } from './mail-channel/gmail/inbound/push-auth';
+import { readGmailInboundConfig } from './runtime/mail/gmail-inbound-config';
 import { SyncThreadsWorkflow } from './workflows/sync-threads-workflow';
 import { ShardRegistry, ZeroAgent, ZeroDriver } from './routes/agent';
 import { ThreadSyncWorker } from './routes/agent/sync-worker';
 import type { MailChannelId } from './lib/mail-channel/types';
 import { oAuthDiscoveryMetadata } from 'better-auth/plugins';
+// import { instrument, type ResolveConfigFn } from '@microlabs/otel-cf-workers';
+import { getZeroAgent, getZeroDB } from './lib/server-utils';
 import { registerMailBlobRoutes } from './modules/mail-api';
 import { EProviders, type IEmailSendBatch } from './types';
 import { eq, and, desc, asc, inArray } from 'drizzle-orm';
@@ -1169,11 +1174,11 @@ const app = new Hono<HonoContext>()
       return c.json({ error: 'error tunneling to sentry' }, { status: 500 });
     }
   })
-  .post('/a8n/notify/:providerId', async (c) => {
+  .post('/api/mail/channels/gmail/push', async (c) => {
     const tracer = initTracing();
-    const span = tracer.startSpan('a8n_notify', {
+    const span = tracer.startSpan('mail.gmail.push', {
       attributes: {
-        'provider.id': c.req.param('providerId'),
+        'provider.id': 'gmail',
         'notification.type': 'email_notification',
         'http.method': c.req.method,
         'http.url': c.req.url,
@@ -1185,38 +1190,32 @@ const app = new Hono<HonoContext>()
         span.setAttributes({ 'auth.status': 'missing' });
         return c.json({ error: 'Unauthorized' }, { status: 401 });
       }
-      const providerId = c.req.param('providerId');
-      if (providerId === EProviders.google) {
-        const body = await c.req.json<{ emailAddress?: string; historyId?: string }>();
-        const subHeader = c.req.header('x-goog-pubsub-subscription-name');
+      const subHeader = c.req.header('x-goog-pubsub-subscription-name');
+      span.setAttributes({
+        'subscription.name': subHeader || 'missing',
+      });
 
-        span.setAttributes({
-          'history.id': body.historyId ?? 'missing',
-          'subscription.name': subHeader || 'missing',
-        });
-
-        if (!subHeader) {
-          console.log('[GOOGLE] no subscription header', body);
-          span.setAttributes({ 'error.type': 'missing_subscription_header' });
-          return c.json({}, { status: 200 });
-        }
-        const isValid = await verifyToken(c.req.header('Authorization')!.split(' ')[1]);
-        if (!isValid) {
-          console.log('[GOOGLE] invalid request', body);
-          span.setAttributes({ 'auth.status': 'invalid' });
-          return c.json({}, { status: 200 });
-        }
-
-        span.setAttributes({ 'auth.status': 'valid' });
-
-        const handled = await handleGmailPush(body, {
-          enqueue: (command) => env.MAIL_INGRESS_QUEUE.send(command),
-        });
-        span.setAttributes({
-          'queue.message_sent': handled.accepted,
-        });
-        return c.json({ message: 'OK' }, { status: 200 });
+      const config = readGmailInboundConfig(c.env);
+      const isValid = await authenticateGmailPush(
+        {
+          authorizationHeader: c.req.header('Authorization'),
+          subscriptionName: subHeader,
+        },
+        config,
+      );
+      if (!isValid) {
+        span.setAttributes({ 'auth.status': 'invalid' });
+        return c.json({ error: 'Unauthorized' }, { status: 401 });
       }
+
+      span.setAttributes({ 'auth.status': 'valid' });
+      const body = await c.req.json<unknown>();
+      const handled = await recordGmailPushSignal(c.env, body);
+      span.setAttributes({
+        'mail.sync.matched': handled.matched,
+        'queue.message_sent': handled.queued,
+      });
+      return c.json({ message: 'OK' }, { status: 200 });
     } catch (error) {
       span.recordException(error as Error);
       span.setStatus({ code: 2, message: (error as Error).message });

@@ -1,26 +1,24 @@
 import {
-  deleteRetainedMailboxData,
-  disconnectAuthorization,
-  type ConnectionLifecycleDependencies,
-} from '../../modules/mail-accounts/application/disconnect-mailbox';
-import {
   bindNangoMailbox,
   listSafeNangoConnections,
   NangoBindingError,
 } from '../../modules/mail-accounts/application/bind-nango-mailbox';
+import { createPostgresConnectionRepository } from '../../modules/mail-accounts/postgres/connection-repository';
+import { provisionGmailMailboxInDatabase } from '../../modules/mail-accounts/runtime/provision-gmail-mailbox';
+import { createMailboxLifecycleForDatabase } from '../../modules/mail-accounts/runtime/lifecycle-environment';
 import { resolveGmailConnectMode } from '../../modules/mail-accounts/application/gmail-connection-options';
 import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router } from '../trpc';
 import { withNangoRuntime, type NangoRuntime } from '../../modules/mail-accounts/runtime/nango';
 import { resolveFetchedNangoCredential } from '../../modules/mail-accounts/credentials/nango';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
-import { findMailChannel } from '../../lib/mail-channel/registry';
-import { deleteConnectionLocalData, getZeroDB } from '../../lib/server-utils';
 import { defaultMailChannelRegistry } from '../../mail-channel/registry';
 import { NangoIntegrationError } from '../../integrations/nango/errors';
-import { disableBrainFunction } from '../../lib/brain';
+import { findMailChannel } from '../../lib/mail-channel/registry';
+import { user as userTable } from '../../db/schema';
+import { getZeroDB } from '../../lib/server-utils';
 import { Ratelimit } from '@upstash/ratelimit';
-import type { EProviders } from '../../types';
 import { TRPCError } from '@trpc/server';
+import { and, eq } from 'drizzle-orm';
 import { createDb } from '../../db';
 import { env } from '../../env';
 import { z } from 'zod';
@@ -75,34 +73,6 @@ const mapNangoBindingError = (error: unknown): never => {
     });
   }
   throw error;
-};
-
-const createLifecycleDependencies = async (
-  userId: string,
-): Promise<ConnectionLifecycleDependencies> => {
-  const db = await getZeroDB(userId);
-  return {
-    repository: {
-      getConnection: (connectionId) => db.findUserConnection(connectionId),
-      removeAuthorizationBinding: (connectionId) => db.removeAuthorizationBinding(connectionId),
-      markDisconnected: (connectionId, disconnectedAt) =>
-        db.markConnectionDisconnected(connectionId, disconnectedAt),
-      markDeleting: (connectionId) => db.markConnectionDeleting(connectionId),
-      deleteMailbox: (connectionId) => db.deleteMailbox(connectionId),
-    },
-    stopMailboxTasks: async (connection) => {
-      const mailbox = await db.findUserConnection(connection.id);
-      if (!mailbox) return;
-      const providerId = findMailChannel(mailbox.channelId)?.legacyProviderId;
-      if (!providerId) return;
-      await disableBrainFunction({
-        id: connection.id,
-        providerId: providerId as EProviders,
-      });
-    },
-    cleanupLocalData: (connection) => deleteConnectionLocalData(connection.id),
-    now: () => new Date(),
-  };
 };
 
 export const connectionsRouter = router({
@@ -177,7 +147,7 @@ export const connectionsRouter = router({
   bindNango: privateProcedure
     .input(z.object({ connectionId: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
-      const db = await getZeroDB(ctx.sessionUser.id);
+      const database = createDb(env.HYPERDRIVE.connectionString);
       try {
         return await withConfiguredNango(async (runtime) => {
           const mapping = await runtime.integrationRepository.getMapping('gmail', 'nango');
@@ -185,6 +155,7 @@ export const connectionsRouter = router({
             throw new NangoBindingError('MAIL_CHANNEL_UNAVAILABLE');
           }
           const integrationId = mapping.externalIntegrationId;
+          const connectionRepository = createPostgresConnectionRepository(database.db);
           return await bindNangoMailbox(
             {
               userId: ctx.sessionUser.id,
@@ -198,23 +169,42 @@ export const connectionsRouter = router({
               isIntegrationAvailable: async (channelId, candidateIntegrationId) =>
                 channelId === 'gmail' && candidateIntegrationId === integrationId,
               repository: {
-                findMailboxByNormalizedEmail: (channelId, normalizedEmail) =>
-                  db.findConnectionByNormalizedEmail(channelId, normalizedEmail),
+                findMailboxByNormalizedEmail: (userId, channelId, normalizedEmail) =>
+                  connectionRepository.findMailboxByNormalizedEmail(
+                    userId,
+                    channelId,
+                    normalizedEmail,
+                  ),
                 findByNangoReference: (candidateIntegrationId, connectionId) =>
-                  db.findAuthorizationByNangoReference(candidateIntegrationId, connectionId),
+                  connectionRepository.findByNangoReference(candidateIntegrationId, connectionId),
                 save: async ({ mailbox, authorization }) => {
                   try {
-                    return await db.createMailboxWithAuthorization(mailbox, authorization);
+                    const result = await connectionRepository.saveBinding({
+                      userId: ctx.sessionUser.id,
+                      existingMailboxId: null,
+                      mailbox,
+                      authorization,
+                    });
+                    await provisionGmailMailboxInDatabase(database.db, env, {
+                      userId: ctx.sessionUser.id,
+                      connectionId: result.id,
+                      identity: {
+                        email: mailbox.email,
+                        name: mailbox.name,
+                      },
+                    });
+                    return result;
                   } catch (error) {
                     if (
-                      await db.findAuthorizationByNangoReference(
+                      await connectionRepository.findByNangoReference(
                         authorization.nangoProviderConfigKey,
                         authorization.nangoConnectionId,
                       )
                     ) {
                       throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
                     }
-                    const existing = await db.findConnectionByNormalizedEmail(
+                    const existing = await connectionRepository.findMailboxByNormalizedEmail(
+                      ctx.sessionUser.id,
                       mailbox.channelId,
                       mailbox.normalizedEmail,
                     );
@@ -235,6 +225,8 @@ export const connectionsRouter = router({
         });
       } catch (error) {
         mapNangoBindingError(error);
+      } finally {
+        await database.conn.end();
       }
     }),
   setDefault: privateProcedure
@@ -255,20 +247,38 @@ export const connectionsRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const dependencies = await createLifecycleDependencies(ctx.sessionUser.id);
-      const result = await disconnectAuthorization(input, dependencies);
-      const db = await getZeroDB(ctx.sessionUser.id);
-      const user = await db.findUser();
-      if (user?.defaultConnectionId === input.connectionId) {
-        await db.updateUser({ defaultConnectionId: null });
+      const database = createDb(env.HYPERDRIVE.connectionString);
+      try {
+        const result = await createMailboxLifecycleForDatabase(database.db, env).disconnect({
+          ...input,
+          userId: ctx.sessionUser.id,
+        });
+        await database.db
+          .update(userTable)
+          .set({ defaultConnectionId: null, updatedAt: new Date() })
+          .where(
+            and(
+              eq(userTable.id, ctx.sessionUser.id),
+              eq(userTable.defaultConnectionId, input.connectionId),
+            ),
+          );
+        return result;
+      } finally {
+        await database.conn.end();
       }
-      return result;
     }),
   deleteRetainedData: privateProcedure
     .input(z.object({ connectionId: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
-      const dependencies = await createLifecycleDependencies(ctx.sessionUser.id);
-      return await deleteRetainedMailboxData(input.connectionId, dependencies);
+      const database = createDb(env.HYPERDRIVE.connectionString);
+      try {
+        return await createMailboxLifecycleForDatabase(database.db, env).deleteRetainedData({
+          ...input,
+          userId: ctx.sessionUser.id,
+        });
+      } finally {
+        await database.conn.end();
+      }
     }),
   getDefault: publicProcedure.query(async ({ ctx }) => {
     if (!ctx.sessionUser) return null;

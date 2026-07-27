@@ -48,6 +48,7 @@ export type SaveNangoBindingInput = {
 
 export interface NangoBindingRepository {
   findMailboxByNormalizedEmail(
+    userId: string,
     channelId: MailChannelId,
     normalizedEmail: string,
   ): Promise<ExistingMailbox | null>;
@@ -132,6 +133,7 @@ export const bindNangoMailbox = async (
   }
 
   const existing = await dependencies.repository.findMailboxByNormalizedEmail(
+    input.userId,
     input.channelId,
     normalizedEmail,
   );

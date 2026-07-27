@@ -4,7 +4,7 @@ import { handleGmailPush } from './handle-push';
 
 describe('Gmail inbound push handler', () => {
   it('turns a valid Gmail notification into a generic signal command', async () => {
-    const commands: unknown[] = [];
+    const events: unknown[] = [];
 
     await expect(
       handleGmailPush(
@@ -13,21 +13,86 @@ describe('Gmail inbound push handler', () => {
           historyId: '123',
         },
         {
-          enqueue: async (command) => {
-            commands.push(command);
+          recordSignal: async (signal) => {
+            events.push({ type: 'record', signal });
+            return ['sync-1'];
+          },
+          enqueueDiscover: async (syncId) => {
+            events.push({ type: 'enqueue', syncId });
           },
         },
       ),
-    ).resolves.toEqual({ accepted: true });
+    ).resolves.toEqual({ accepted: true, matched: 1, queued: 1 });
 
-    expect(commands).toEqual([
+    expect(events).toEqual([
       {
-        type: 'signal',
-        provider: 'gmail',
-        externalAccount: 'user@example.com',
-        cursorHint: '123',
+        type: 'record',
+        signal: {
+          provider: 'gmail',
+          externalAccount: 'user@example.com',
+          cursorHint: '123',
+        },
       },
+      { type: 'enqueue', syncId: 'sync-1' },
     ]);
+  });
+
+  it('decodes the standard Pub/Sub message envelope', async () => {
+    let signal: unknown;
+    const data = Buffer.from(
+      JSON.stringify({
+        emailAddress: 'wrapped@example.com',
+        historyId: '456',
+      }),
+    ).toString('base64');
+
+    await expect(
+      handleGmailPush(
+        {
+          message: {
+            data,
+            messageId: 'pubsub-message-1',
+          },
+          subscription: 'projects/zero-mail/subscriptions/gmail-inbound-push',
+        },
+        {
+          recordSignal: async (input) => {
+            signal = input;
+            return [];
+          },
+          enqueueDiscover: async () => undefined,
+        },
+      ),
+    ).resolves.toEqual({ accepted: true, matched: 0, queued: 0 });
+    expect(signal).toEqual({
+      provider: 'gmail',
+      externalAccount: 'wrapped@example.com',
+      cursorHint: '456',
+    });
+  });
+
+  it('acknowledges a durably recorded signal even when Queue wakeup fails', async () => {
+    const events: string[] = [];
+
+    await expect(
+      handleGmailPush(
+        {
+          emailAddress: 'user@example.com',
+          historyId: '789',
+        },
+        {
+          recordSignal: async () => {
+            events.push('record');
+            return ['sync-1'];
+          },
+          enqueueDiscover: async () => {
+            events.push('enqueue');
+            throw new Error('queue unavailable');
+          },
+        },
+      ),
+    ).resolves.toEqual({ accepted: true, matched: 1, queued: 0 });
+    expect(events).toEqual(['record', 'enqueue']);
   });
 
   it.each([
@@ -39,10 +104,13 @@ describe('Gmail inbound push handler', () => {
   ])('rejects malformed notification payload %o', async (payload) => {
     await expect(
       handleGmailPush(payload, {
-        enqueue: async () => {
+        recordSignal: async () => {
+          throw new Error('must not persist');
+        },
+        enqueueDiscover: async () => {
           throw new Error('must not enqueue');
         },
       }),
-    ).resolves.toEqual({ accepted: false });
+    ).resolves.toEqual({ accepted: false, matched: 0, queued: 0 });
   });
 });

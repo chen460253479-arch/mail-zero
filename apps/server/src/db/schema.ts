@@ -6,6 +6,7 @@ import {
   jsonb,
   primaryKey,
   unique,
+  uniqueIndex,
   index,
   foreignKey,
   check,
@@ -146,6 +147,9 @@ export const connection = createIntegrationTable(
   (t) => [
     unique('connection_user_channel_email_uidx').on(t.userId, t.channelId, t.normalizedEmail),
     unique('connection_id_user_id_uidx').on(t.id, t.userId),
+    uniqueIndex('connection_channel_email_active_uidx')
+      .on(t.channelId, t.normalizedEmail)
+      .where(sql`${t.status} IN ('connected', 'reconnect_required')`),
     index('connection_provider_key_idx').on(t.providerKey),
     check(
       'connection_status_chk',

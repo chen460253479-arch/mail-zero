@@ -16,6 +16,7 @@ type ActivationRepository = {
     scopeKey: string;
     scope: IngressScope;
   }): Promise<ActivationSyncRecord>;
+  prepareActivation(input: { syncId: string }): Promise<ActivationSyncRecord>;
   storeActivationCheckpoint(input: {
     syncId: string;
     checkpoint: VersionedProviderState;
@@ -50,6 +51,9 @@ export const activateInboundSync = async (
   });
   if (sync.status === 'active') {
     return sync;
+  }
+  if (sync.status === 'paused' || sync.status === 'auth_error') {
+    sync = await dependencies.repository.prepareActivation({ syncId: sync.id });
   }
   if (sync.status !== 'activating') {
     throw new MailSyncError('MAIL_SYNC_ACTIVATION_NOT_ALLOWED', 'permanent');
