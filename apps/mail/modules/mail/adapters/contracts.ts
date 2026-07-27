@@ -2,6 +2,7 @@ import type {
   MailApiAccountDetailDto,
   MailApiAccountDto,
   MailApiEmailDto,
+  MailApiIdentityDto,
   MailApiMailboxDto,
   MailApiSubmissionDto,
   MailApiThreadSummaryDto,
@@ -10,5 +11,6 @@ import type {
 export type AccountDto = MailApiAccountDto | MailApiAccountDetailDto;
 export type MailboxDto = MailApiMailboxDto;
 export type EmailDto = MailApiEmailDto;
+export type IdentityDto = MailApiIdentityDto;
 export type ThreadSummaryDto = MailApiThreadSummaryDto;
 export type SubmissionDto = MailApiSubmissionDto;

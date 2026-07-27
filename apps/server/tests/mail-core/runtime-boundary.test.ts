@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -124,16 +124,14 @@ describe('mail runtime boundary', () => {
     }
   });
 
-  it('does not cut current mail, draft, or label routes over to the local runtime', () => {
+  it('does not retain the legacy mail, draft, or label routes', () => {
     const root = resolve(import.meta.dirname, '../../../..');
     for (const route of [
       'apps/server/src/trpc/routes/mail.ts',
       'apps/server/src/trpc/routes/drafts.ts',
       'apps/server/src/trpc/routes/label.ts',
     ]) {
-      expect(readFileSync(resolve(root, route), 'utf8'), route).not.toContain(
-        'createMailCoreRuntime',
-      );
+      expect(existsSync(resolve(root, route)), route).toBe(false);
     }
   });
 });

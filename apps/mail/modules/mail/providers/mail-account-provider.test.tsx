@@ -1,7 +1,6 @@
 import { MailAccountProvider, useMailAccountContext } from './mail-account-provider';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import React from 'react';
 
 const account = {
   id: 'account-a',

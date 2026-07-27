@@ -1,3 +1,9 @@
+import {
+  buildDraftCreateInput,
+  htmlToPlainText,
+  selectDeliveryIdentity,
+  toMailAddresses,
+} from '@/modules/mail';
 import { cleanEmailAddresses } from '../lib/email-utils';
 import { trpcClient } from '@/providers/query-provider';
 import type { Route } from './+types/mailto-handler';
@@ -103,142 +109,57 @@ async function createDraftFromMailto(mailtoData: {
   cc?: string;
   bcc?: string;
 }) {
-  const MAX_RETRIES = 3;
-  const RETRY_DELAY = 1000; // 1 second
-
-  // Helper function to handle Invalid To header errors by toggling format
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleInvalidToHeader = (draftData: any) => {
-    if (Array.isArray(draftData.to)) {
-      // Convert array to comma-separated string
-      draftData.to = draftData.to.join(',');
-    } else if (typeof draftData.to === 'string') {
-      // Convert string to array
-      draftData.to = draftData.to.split(',').map((e: string) => e.trim().replace(/^<|>$/g, ''));
-    }
-  };
-
   try {
-    // Ensure any non-standard line breaks are normalized to \n
     const normalizedBody = mailtoData.body.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-
-    // Create proper HTML-encoded content by wrapping all paragraphs in <p> tags
-    // This is the format that will work best with the editor
+    const escapeHtml = (value: string) =>
+      value
+        .replace(/&/gu, '&amp;')
+        .replace(/</gu, '&lt;')
+        .replace(/>/gu, '&gt;')
+        .replace(/"/gu, '&quot;')
+        .replace(/'/gu, '&#39;');
     const htmlContent = `<!DOCTYPE html><html><body>
       ${normalizedBody
         .split(/\n\s*\n/)
-        .map((paragraph) => {
-          return `<p>${paragraph.replace(/\n/g, '<br />').replace(/\s{2,}/g, (match) => '&nbsp;'.repeat(match.length))}</p>`;
-        })
+        .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/gu, '<br />')}</p>`)
         .join('\n')}
     </body></html>`;
-
-    // For the draft creation, we need to ensure we're providing the to/cc/bcc in the proper format
-    const toAddresses = cleanEmailAddresses(mailtoData.to);
+    const toAddresses = cleanEmailAddresses(mailtoData.to) ?? [];
     const ccAddresses = mailtoData.cc ? cleanEmailAddresses(mailtoData.cc) : [];
     const bccAddresses = mailtoData.bcc ? cleanEmailAddresses(mailtoData.bcc) : [];
-
-    // Let's try a simpler approach for multiple recipients
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const draftData: any = {
-      id: null,
-      subject: mailtoData.subject,
-      message: htmlContent,
-      attachments: [],
-    };
-
-    // Add recipients - ensuring they are in the correct format
-    // For multiple recipients, use array format; for single recipient, use string format
-    if (toAddresses && toAddresses.length > 0) {
-      if (toAddresses.length === 1) {
-        draftData.to = toAddresses[0];
-      } else {
-        draftData.to = toAddresses.join(',');
-      }
-    }
-
-    // Do the same for CC
-    if (ccAddresses && ccAddresses.length > 0) {
-      if (ccAddresses.length === 1) {
-        draftData.cc = ccAddresses[0];
-      } else {
-        draftData.cc = ccAddresses.join(',');
-      }
-    } else {
-      // Always include cc in the draft data, even if empty
-      draftData.cc = '';
-    }
-
-    // And for BCC
-    if (bccAddresses && bccAddresses.length > 0) {
-      if (bccAddresses.length === 1) {
-        draftData.bcc = bccAddresses[0];
-      } else {
-        draftData.bcc = bccAddresses.join(',');
-      }
-    } else {
-      // Always include bcc in the draft data, even if empty
-      draftData.bcc = '';
-    }
-
-    console.log('Creating draft with data:', {
-      to: draftData.to,
-      cc: draftData.cc,
-      bcc: draftData.bcc,
-      subject: draftData.subject,
-      messageSample: htmlContent.substring(0, 100) + (htmlContent.length > 100 ? '...' : ''),
-    });
-
-    // Try to create the draft with retries
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        console.log(`Attempt ${attempt} to create draft...`);
-
-        const result = await trpcClient.drafts.create.mutate(draftData);
-
-        if (result?.id) {
-          console.log('Draft created successfully with ID:', result.id);
-          return result.id;
-        } else {
-          console.error(
-            `Draft creation failed (attempt ${attempt}):`,
-            result?.error || 'Unknown error',
-          );
-
-          // If the error is related to "Invalid To header", try to fix the format for the next attempt
-          if (attempt < MAX_RETRIES) {
-            if (
-              typeof result === 'object' &&
-              result &&
-              'error' in result &&
-              String(result.error).includes('Invalid To header')
-            ) {
-              handleInvalidToHeader(draftData);
-            }
-
-            // Wait before retrying
-            await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY * attempt)); // Exponential backoff
-            continue;
-          }
-        }
-      } catch (error) {
-        console.error(`Error creating draft (attempt ${attempt}):`, error);
-        console.error('Error details:', error instanceof Error ? error.message : String(error));
-
-        // If the error is related to "Invalid To header", try to fix the format for the next attempt
-        if (attempt < MAX_RETRIES) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-
-          if (errorMessage.includes('Invalid To header')) {
-            handleInvalidToHeader(draftData);
-          }
-
-          // Wait before retrying
-          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY * attempt)); // Exponential backoff
-          continue;
-        }
-      }
-    }
+    const [connection, accountResult] = await Promise.all([
+      trpcClient.connections.getDefault.query(),
+      trpcClient.mail.account.list.query(),
+    ]);
+    const account = accountResult.accounts.find(
+      (candidate) => candidate.connectionId === connection?.id,
+    );
+    if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
+    const identityResult = await trpcClient.mail.identity.get.query({ accountId: account.id });
+    const identity = selectDeliveryIdentity(identityResult.list, connection?.email);
+    if (!identity) throw new Error('MAIL_IDENTITY_UNAVAILABLE');
+    const clientId = globalThis.crypto?.randomUUID?.() ?? `mailto-${Date.now()}`;
+    const result = await trpcClient.mail.email.set.mutate(
+      buildDraftCreateInput({
+        accountId: account.id,
+        clientId,
+        content: {
+          identityId: identity.id,
+          replyToEmailId: null,
+          to: toMailAddresses(toAddresses),
+          cc: toMailAddresses(ccAddresses ?? []),
+          bcc: toMailAddresses(bccAddresses ?? []),
+          subject: mailtoData.subject,
+          textBody: htmlToPlainText(htmlContent),
+          htmlBody: htmlContent,
+          attachmentBlobIds: [],
+        },
+      }),
+    );
+    const failure = result.notCreated[clientId];
+    const created = result.created[clientId];
+    if (failure || !created) throw new Error(failure?.code ?? 'DRAFT_CREATE_FAILED');
+    return created.id;
   } catch (error) {
     console.error('Error creating draft from mailto:', error);
   }

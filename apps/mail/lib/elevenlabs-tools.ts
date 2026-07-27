@@ -1,353 +1,380 @@
+import {
+  adaptMailbox,
+  buildDraftCreateInput,
+  buildKeywordThreadAction,
+  buildMoveThreadAction,
+  buildSubmissionCreateInput,
+  htmlToPlainText,
+  resolveMailboxRoute,
+  selectDeliveryIdentity,
+  toMailAddresses,
+} from '@/modules/mail';
 import { trpcClient } from '@/providers/query-provider';
-const getCurrentThreadId = () => {
-  if (typeof window !== 'undefined') {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('threadId');
+
+const getCurrentThreadId = () =>
+  typeof window === 'undefined'
+    ? null
+    : new URLSearchParams(window.location.search).get('threadId');
+
+const mutationId = () =>
+  globalThis.crypto?.randomUUID?.() ?? `voice_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+async function getMailContext() {
+  const [connection, accounts] = await Promise.all([
+    trpcClient.connections.getDefault.query(),
+    trpcClient.mail.account.list.query(),
+  ]);
+  const account = accounts.accounts.find((candidate) => candidate.connectionId === connection?.id);
+  if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
+  const [mailboxResult, identityResult] = await Promise.all([
+    trpcClient.mail.mailbox.get.query({ accountId: account.id }),
+    trpcClient.mail.identity.get.query({ accountId: account.id }),
+  ]);
+  return {
+    account,
+    connection,
+    mailboxes: mailboxResult.list.map(adaptMailbox),
+    mailboxState: mailboxResult.state,
+    identities: identityResult.list,
+  };
+}
+
+async function getThreadDetail(threadId: string) {
+  const { account } = await getMailContext();
+  const detail = await trpcClient.mail.view.threadDetail.query({
+    accountId: account.id,
+    threadId,
+    fetchTextBodyValues: true,
+    fetchHTMLBodyValues: true,
+    maxBodyValueBytes: 256_000,
+  });
+  const messages = detail.emails.map((email) => ({
+    id: email.id,
+    subject: email.subject,
+    sender: email.sender[0] ?? email.from[0] ?? { name: null, email: '' },
+    receivedOn: email.receivedAt,
+    body: [...email.htmlBody, ...email.textBody]
+      .map((part) => email.bodyValues[part.id]?.value ?? '')
+      .join(''),
+  }));
+  return {
+    id: detail.thread.id,
+    messages,
+    latest: messages.at(-1),
+    hasUnread: detail.emails.some((email) => email.keywords.$seen !== true),
+  };
+}
+
+const getRequestedThreadId = (params: Record<string, unknown>) => {
+  for (const key of ['threadId', 'thread_id', 'id']) {
+    const value = params[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
   }
-  return null;
+  return getCurrentThreadId();
 };
 
-const cleanNameDisplay = (name?: string) => {
-  if (!name) return '';
-  return name.replace(/["<>]/g, '');
-};
+async function listThreads(folder: string, query: string, limit: number) {
+  const { account, mailboxes } = await getMailContext();
+  const route = resolveMailboxRoute(folder.toLowerCase(), mailboxes);
+  if (route.kind === 'not-found') throw new Error('MAILBOX_ROUTE_NOT_FOUND');
+  return trpcClient.mail.view.threadPage.query({
+    accountId: account.id,
+    ...(route.kind === 'mailbox' ? { mailboxId: route.mailboxId } : { snoozed: true }),
+    ...(query.trim() ? { text: query.trim() } : {}),
+    limit: Math.min(Math.max(limit, 1), 200),
+  });
+}
+
+async function updateKeyword(threadIds: string[], keyword: string, enabled: boolean) {
+  const { account, mailboxState } = await getMailContext();
+  return trpcClient.mail.action.updateThreads.mutate(
+    buildKeywordThreadAction({
+      accountId: account.id,
+      threadIds,
+      keyword,
+      enabled,
+      ifInState: mailboxState,
+      clientMutationId: mutationId(),
+    }),
+  );
+}
+
+async function moveThreads(threadIds: string[], destination: 'archive' | 'bin') {
+  const { account, mailboxes, mailboxState } = await getMailContext();
+  return trpcClient.mail.action.updateThreads.mutate(
+    buildMoveThreadAction({
+      accountId: account.id,
+      threadIds,
+      destination,
+      mailboxes,
+      ifInState: mailboxState,
+      clientMutationId: mutationId(),
+    }),
+  );
+}
+
+const success = <Value extends object>(value: Value) => ({ success: true, ...value });
+const failure = (error: unknown) => ({
+  success: false,
+  error: error instanceof Error ? error.message : String(error),
+});
 
 export const toolExecutors = {
   listEmails: async (params: { folder: string; query: string; maxResults: number }) => {
     try {
-      const result = await trpcClient.mail.listThreads.query({
-        folder: params.folder || 'INBOX',
-        q: params.query,
-      });
-
-      const threads = result.threads.slice(0, params.maxResults || 10);
-
-      return {
-        success: true,
-        threads: threads.map((thread: any) => ({
+      const result = await listThreads(
+        params.folder || 'inbox',
+        params.query ?? '',
+        params.maxResults || 10,
+      );
+      return success({
+        threads: result.items.map((thread) => ({
           id: thread.id,
           subject: thread.subject,
-          from: thread.sender,
-          date: thread.receivedOn,
-          preview: thread.snippet,
-          hasUnread: thread.hasUnread,
+          from: thread.participants,
+          date: thread.latestReceivedAt,
+          preview: thread.preview,
+          hasUnread: thread.unreadCount > 0,
         })),
-      };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+      });
+    } catch (error) {
+      return failure(error);
     }
   },
-  getEmail: async (params: any) => {
+
+  getEmail: async (params: Record<string, unknown>) => {
+    const threadId = getRequestedThreadId(params);
+    if (!threadId) return failure('No email is currently open');
     try {
-      // Handle various ways the AI might pass the threadId
-      let threadId = null;
-
-      // Check for threadId in various formats
-      if (params.threadId && typeof params.threadId === 'string' && params.threadId.trim()) {
-        threadId = params.threadId.trim();
-      } else if (
-        params.thread_id &&
-        typeof params.thread_id === 'string' &&
-        params.thread_id.trim()
-      ) {
-        threadId = params.thread_id.trim();
-      } else if (params.id && typeof params.id === 'string' && params.id.trim()) {
-        threadId = params.id.trim();
-      } else {
-        // Fall back to current thread from URL
-        threadId = getCurrentThreadId();
-      }
-
-      if (!threadId) {
-        return {
-          success: false,
-          error: 'No email is currently open. Please open an email first or provide a thread ID.',
-          hint: 'You can refer to "this email" or "the current email" when an email is open.',
-        };
-      }
-
-      const result = await trpcClient.mail.get.query({ id: threadId });
-      return {
-        success: true,
-        thread: result,
-        currentThreadId: threadId,
-        message: `Retrieved email with thread ID: ${threadId}`,
-      };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+      return success({ thread: await getThreadDetail(threadId), currentThreadId: threadId });
+    } catch (error) {
+      return failure(error);
     }
   },
+
   sendEmail: async (params: {
     to: string[];
     subject: string;
     message: string;
-    threadId: string;
+    threadId?: string;
   }) => {
     try {
-      await trpcClient.mail.send.mutate({
-        to: params.to.map((email: string) => ({ email })),
-        subject: params.subject,
-        message: params.message,
-        threadId: params.threadId,
-      });
-      return { success: true, message: 'Email sent successfully' };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+      const { account, connection, identities } = await getMailContext();
+      const identity = selectDeliveryIdentity(identities, connection?.email);
+      if (!identity) throw new Error('MAIL_IDENTITY_UNAVAILABLE');
+      const draftClientId = mutationId();
+      const draftResult = await trpcClient.mail.email.set.mutate(
+        buildDraftCreateInput({
+          accountId: account.id,
+          clientId: draftClientId,
+          content: {
+            identityId: identity.id,
+            replyToEmailId: params.threadId
+              ? ((await getThreadDetail(params.threadId)).latest?.id ?? null)
+              : null,
+            to: toMailAddresses(params.to),
+            cc: [],
+            bcc: [],
+            subject: params.subject,
+            textBody: htmlToPlainText(params.message),
+            htmlBody: params.message,
+            attachmentBlobIds: [],
+          },
+        }),
+      );
+      const draft = draftResult.created[draftClientId];
+      if (!draft)
+        throw new Error(draftResult.notCreated[draftClientId]?.code ?? 'DRAFT_CREATE_FAILED');
+      const submissionClientId = mutationId();
+      const submissionResult = await trpcClient.mail.submission.set.mutate(
+        buildSubmissionCreateInput({
+          accountId: account.id,
+          clientId: submissionClientId,
+          emailId: draft.id,
+          identityId: identity.id,
+          idempotencyKey: mutationId(),
+          undoWindowMs: 0,
+        }),
+      );
+      if (!submissionResult.created[submissionClientId]) {
+        throw new Error(
+          submissionResult.notCreated[submissionClientId]?.code ?? 'SUBMISSION_CREATE_FAILED',
+        );
+      }
+      return success({ message: 'Email queued successfully' });
+    } catch (error) {
+      return failure(error);
     }
   },
-  markAsRead: async (params: any) => {
+
+  markAsRead: async (params: { threadIds: string[] }) => {
     try {
-      await trpcClient.mail.markAsRead.mutate({ ids: params.threadIds });
-      return { success: true, message: 'Emails marked as read' };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+      await updateKeyword(params.threadIds, '$seen', true);
+      return success({ message: 'Emails marked as read' });
+    } catch (error) {
+      return failure(error);
     }
   },
-  markAsUnread: async (params: any) => {
+
+  markAsUnread: async (params: { threadIds: string[] }) => {
     try {
-      await trpcClient.mail.markAsUnread.mutate({ ids: params.threadIds });
-      return { success: true, message: 'Emails marked as unread' };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+      await updateKeyword(params.threadIds, '$seen', false);
+      return success({ message: 'Emails marked as unread' });
+    } catch (error) {
+      return failure(error);
     }
   },
-  archiveEmails: async (params: any) => {
+
+  archiveEmails: async (params: { threadIds: string[] }) => {
     try {
-      await trpcClient.mail.bulkArchive.mutate({ ids: params.threadIds });
-      return { success: true, message: 'Emails archived' };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+      await moveThreads(params.threadIds, 'archive');
+      return success({ message: 'Emails archived' });
+    } catch (error) {
+      return failure(error);
     }
   },
-  deleteEmails: async (params: any) => {
+
+  deleteEmails: async (params: { threadIds: string[] }) => {
     try {
-      await trpcClient.mail.bulkDelete.mutate({ ids: params.threadIds });
-      return { success: true, message: 'Emails moved to trash' };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+      await moveThreads(params.threadIds, 'bin');
+      return success({ message: 'Emails moved to trash' });
+    } catch (error) {
+      return failure(error);
     }
   },
+
   deleteEmail: async () => {
     const threadId = getCurrentThreadId();
-    if (!threadId) {
-      return {
-        success: false,
-        error: 'No email is currently open. Please open an email first.',
-        hint: 'When an email is open, you can ask me to "delete this email" without specifying an ID.',
-      };
-    }
+    if (!threadId) return failure('No email is currently open');
     try {
-      await trpcClient.mail.bulkDelete.mutate({ ids: [threadId] });
-      return { success: true, message: 'Email deleted' };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+      await moveThreads([threadId], 'bin');
+      return success({ message: 'Email moved to trash' });
+    } catch (error) {
+      return failure(error);
     }
   },
-  createLabel: async (params: { name: string; backgroundColor: string; textColor: string }) => {
-    console.log('params:', params);
 
+  createLabel: async (params: { name: string; backgroundColor: string }) => {
     try {
-      await trpcClient.labels.create.mutate({
-        name: params.name,
-        color: {
-          backgroundColor: params.backgroundColor || '#1C2A41',
-          textColor: params.textColor || '#D8E6FD',
+      const { account, mailboxState } = await getMailContext();
+      const clientId = mutationId();
+      const created = await trpcClient.mail.mailbox.set.mutate({
+        accountId: account.id,
+        ifInState: mailboxState,
+        create: {
+          [clientId]: { name: params.name, kind: 'label', role: null, parentId: null },
+        },
+        update: {},
+        destroy: [],
+      });
+      const mailbox = created.created[clientId];
+      if (!mailbox) throw new Error(created.notCreated[clientId]?.code ?? 'MAILBOX_CREATE_FAILED');
+      if (params.backgroundColor) {
+        await trpcClient.mail.mailbox.set.mutate({
+          accountId: account.id,
+          ifInState: created.newState,
+          create: {},
+          update: { [mailbox.id]: { color: params.backgroundColor } },
+          destroy: [],
+        });
+      }
+      return success({ message: 'Label created' });
+    } catch (error) {
+      return failure(error);
+    }
+  },
+
+  applyLabel: async (params: { label: string; threadIds: string[] }) => {
+    try {
+      const { account, mailboxes, mailboxState } = await getMailContext();
+      const mailbox = mailboxes.find((candidate) => candidate.name === params.label);
+      if (!mailbox) throw new Error('Label not found');
+      await trpcClient.mail.action.updateThreads.mutate({
+        accountId: account.id,
+        threadIds: params.threadIds,
+        ifInState: mailboxState,
+        addMailboxIds: [mailbox.id],
+        removeMailboxIds: [],
+        addKeywords: [],
+        removeKeywords: [],
+        clientMutationId: mutationId(),
+      });
+      return success({ message: 'Label applied' });
+    } catch (error) {
+      return failure(error);
+    }
+  },
+
+  removeLabel: async (params: { label: string; threadIds?: string[] }) => {
+    const threadIds = params.threadIds?.length
+      ? params.threadIds
+      : ([getCurrentThreadId()].filter(Boolean) as string[]);
+    if (threadIds.length === 0) return failure('No email is currently open');
+    try {
+      const { account, mailboxes, mailboxState } = await getMailContext();
+      const mailbox = mailboxes.find((candidate) => candidate.name === params.label);
+      if (!mailbox) throw new Error('Label not found');
+      await trpcClient.mail.action.updateThreads.mutate({
+        accountId: account.id,
+        threadIds,
+        ifInState: mailboxState,
+        addMailboxIds: [],
+        removeMailboxIds: [mailbox.id],
+        addKeywords: [],
+        removeKeywords: [],
+        clientMutationId: mutationId(),
+      });
+      return success({ message: 'Label removed' });
+    } catch (error) {
+      return failure(error);
+    }
+  },
+
+  searchEmails: async (params: { question: string; maxResults: number }) => {
+    try {
+      const result = await listThreads('inbox', params.question, params.maxResults || 5);
+      return success({ results: result.items });
+    } catch (error) {
+      return failure(error);
+    }
+  },
+
+  webSearch: async (params: { query: string }) => {
+    const threadId = getCurrentThreadId();
+    if (!threadId) return failure('No email is currently open');
+    try {
+      const thread = await getThreadDetail(threadId);
+      const content = thread.messages.map((message) => message.body).join('\n\n');
+      const { text } = await trpcClient.ai.webSearch.mutate({
+        query: `Email subject: ${thread.latest?.subject ?? 'No subject'}\n\n${content}\n\nQuestion: ${params.query}`,
+      });
+      return success({ result: text });
+    } catch (error) {
+      return failure(error);
+    }
+  },
+
+  summarizeEmail: async () => {
+    const threadId = getCurrentThreadId();
+    if (!threadId) return failure('No email is currently open');
+    try {
+      const thread = await getThreadDetail(threadId);
+      const content = thread.messages.map((message) => message.body).join('\n\n');
+      const { text } = await trpcClient.ai.webSearch.mutate({
+        query: `Summarize this email thread in 2-3 sentences, including actions and urgency:\n\n${content}`,
+      });
+      return success({
+        result: {
+          threadId,
+          subject: thread.latest?.subject ?? 'No subject',
+          from: thread.latest?.sender.email ?? '',
+          messageCount: thread.messages.length,
+          hasUnread: thread.hasUnread,
+          summary: text,
         },
       });
-
-      return { success: true, message: 'Label created' };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  },
-  applyLabel: async (params: any) => {
-    try {
-      const labels = await trpcClient.labels.list.query();
-      const label = labels.find((label: any) => label.name === params.label);
-      if (!label) {
-        return { success: false, error: 'Label not found' };
-      }
-
-      await trpcClient.mail.modifyLabels.mutate({
-        threadId: params.threadIds,
-        addLabels: [label.id],
-        removeLabels: [],
-      });
-      return { success: true, message: 'Label applied' };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  },
-  removeLabel: async (params: any) => {
-    try {
-      const threadId = getCurrentThreadId();
-      if (!threadId) {
-        return {
-          success: false,
-          error: 'No email is currently open. Please open an email first.',
-          hint: 'When an email is open, you can ask me to "apply a label" without specifying an ID.',
-        };
-      }
-
-      const thread = await trpcClient.mail.get.query({ id: threadId });
-      const labels = thread.labels;
-      const label = labels.find((label: any) => label.name === params.label);
-      if (!label) {
-        return { success: false, error: 'Label not found' };
-      }
-
-      await trpcClient.mail.modifyLabels.mutate({
-        threadId: params.threadIds,
-        addLabels: [],
-        removeLabels: [label.id],
-      });
-      return { success: true, message: 'Label removed' };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  },
-  searchEmails: async (params: any) => {
-    try {
-      // just a simple search for now
-      const result = await trpcClient.mail.listThreads.query({
-        q: params.question,
-        folder: 'INBOX',
-      });
-
-      const threads = result.threads.slice(0, params.maxResults || 5);
-
-      return {
-        success: true,
-        results: threads.map((thread: any) => ({
-          id: thread.id,
-          subject: thread.subject,
-          from: thread.sender,
-          date: thread.receivedOn,
-          preview: thread.snippet,
-        })),
-      };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  },
-  webSearch: async (params: any) => {
-    console.log(params);
-    const threadId = getCurrentThreadId();
-    if (!threadId) {
-      return {
-        success: false,
-        error: 'No email is currently open. Please open an email first.',
-        hint: 'When an email is open, you can ask me to "summarize this email" without specifying an ID.',
-      };
-    }
-    try {
-      const thread = await trpcClient.mail.get.query({ id: threadId });
-
-      const emailContent = thread.messages?.map((m: any) => m.body).join('\n\n') || '';
-      const subject = thread.latest?.subject || 'No subject';
-      const from = thread.latest?.sender?.email || 'Unknown sender';
-      const senderName = cleanNameDisplay(thread.latest?.sender?.name);
-      const receivedDate = thread.latest?.receivedOn
-        ? new Date(thread.latest.receivedOn).toLocaleString()
-        : 'Unknown date';
-      const messageCount = thread.messages?.length || 0;
-
-      const emailContextPrompt = `You are analyzing an email thread to answer a specific question.
-
-      EMAIL THREAD CONTEXT:
-      - Subject: ${subject}
-      - From: ${senderName} (${from})
-      - Date: ${receivedDate}
-      - Number of messages: ${messageCount}
-      - Has unread messages: ${thread.hasUnread ? 'Yes' : 'No'}
-
-      EMAIL CONTENT:
-      ${emailContent}
-
-      USER'S QUESTION:
-      ${params.query}
-
-      Please provide a focused answer to the user's question based on the email content above. If the question asks for a summary, provide a concise summary. If it asks for specific information, extract and provide just that information. Always base your response on the actual email content provided you can also do web search if needed.`;
-
-      const { text } = await trpcClient.ai.webSearch.mutate({
-        query: emailContextPrompt,
-      });
-
-      return {
-        success: true,
-        result: text,
-      };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  },
-  summarizeEmail: async () => {
-    try {
-      const threadId = getCurrentThreadId();
-
-      if (!threadId) {
-        return {
-          success: false,
-          error: 'No email is currently open. Please open an email first.',
-          hint: 'When an email is open, you can ask me to "summarize this email" without specifying an ID.',
-        };
-      }
-
-      try {
-        const thread = await trpcClient.mail.get.query({ id: threadId });
-
-        const emailContent = thread.messages?.map((m: any) => m.body).join('\n\n') || '';
-        const subject = thread.latest?.subject || 'No subject';
-        const from = thread.latest?.sender?.email || 'Unknown sender';
-        const senderName = cleanNameDisplay(thread.latest?.sender?.name);
-        const receivedDate = thread.latest?.receivedOn
-          ? new Date(thread.latest.receivedOn).toLocaleString()
-          : 'Unknown date';
-        const messageCount = thread.messages?.length || 0;
-
-        const emailSummaryPrompt = `Please provide a concise summary of the following email thread:
-
-        THREAD INFORMATION:
-        - Subject: ${subject}
-        - From: ${senderName} (${from})
-        - Date: ${receivedDate}
-        - Number of messages: ${messageCount}
-        - Has unread messages: ${thread.hasUnread ? 'Yes' : 'No'}
-
-        EMAIL CONTENT:
-        ${emailContent}
-
-        Please provide a brief 2-3 sentence summary covering:
-        1. The main topic and purpose
-        2. Any key action items or decisions needed
-        3. The urgency level`;
-
-        const { text } = await trpcClient.ai.webSearch.mutate({
-          query: emailSummaryPrompt,
-        });
-
-        return {
-          success: true,
-          result: {
-            threadId: threadId,
-            subject: subject,
-            from: from,
-            senderName: senderName,
-            messageCount: messageCount,
-            hasUnread: thread.hasUnread,
-            summary: text,
-            message: `Successfully summarized email thread: ${threadId}`,
-          },
-        };
-      } catch (error) {
-        console.error(error);
-        return {
-          success: false,
-          error: 'Failed to fetch email for summarization',
-        };
-      }
-    } catch (error: any) {
-      return { success: false, error: error.message };
+    } catch (error) {
+      return failure(error);
     }
   },
 };

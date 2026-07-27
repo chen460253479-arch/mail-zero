@@ -25,15 +25,15 @@ import {
   Trash,
 } from 'lucide-react';
 import { useOptimisticThreadState } from '@/components/mail/optimistic-thread-state';
-import { LabelDialog } from '@/components/labels/label-dialog';
+import { useMemo, type ReactNode, useState, useCallback } from 'react';
 import { useOptimisticActions } from '@/hooks/use-optimistic-actions';
 import { ExclamationCircle, Mail, Clock } from '../icons/icons';
+import { LabelDialog } from '@/components/labels/label-dialog';
 import { SnoozeDialog } from '@/components/mail/snooze-dialog';
 import { type ThreadDestination } from '@/lib/thread-actions';
 import { useThread, useThreads } from '@/hooks/use-threads';
-import { useMemo, type ReactNode, useState, useCallback } from 'react';
-import { useTRPC } from '@/providers/query-provider';
-import { useMutation } from '@tanstack/react-query';
+import { useMailboxActions } from '@/modules/mail';
+import type { Label as LabelType } from '@/types';
 import { useLabels } from '@/hooks/use-labels';
 import { FOLDERS, LABELS } from '@/lib/utils';
 import { useMail } from '../mail/use-mail';
@@ -42,7 +42,6 @@ import { m } from '@/paraglide/messages';
 import { useParams } from 'react-router';
 import { useQueryState } from 'nuqs';
 import { toast } from 'sonner';
-import type { Label as LabelType } from '@/types';
 
 interface EmailAction {
   id: string;
@@ -64,7 +63,15 @@ interface EmailContextMenuProps {
   refreshCallback?: () => void;
 }
 
-const LabelsList = ({ threadId, bulkSelected, onCreateLabel }: { threadId: string; bulkSelected: string[]; onCreateLabel: () => void }) => {
+const LabelsList = ({
+  threadId,
+  bulkSelected,
+  onCreateLabel,
+}: {
+  threadId: string;
+  bulkSelected: string[];
+  onCreateLabel: () => void;
+}) => {
   const { userLabels: labels } = useLabels();
   const { optimisticToggleLabel } = useOptimisticActions();
   const targetThreadIds = bulkSelected.length > 0 ? bulkSelected : [threadId];
@@ -96,10 +103,7 @@ const LabelsList = ({ threadId, bulkSelected, onCreateLabel }: { threadId: strin
   // If no labels exist, show create label button
   if (!labels || labels.length === 0) {
     return (
-      <ContextMenuItem 
-        onClick={onCreateLabel}
-        className="font-normal"
-      >
+      <ContextMenuItem onClick={onCreateLabel} className="font-normal">
         <Plus className="mr-2 h-4 w-4 opacity-60" />
         {m['common.mail.createNewLabel']()}
       </ContextMenuItem>
@@ -163,7 +167,6 @@ export function ThreadContextMenu({
   const { data: threadData } = useThread(threadId);
   const [, setActiveReplyId] = useQueryState('activeReplyId');
   const optimisticState = useOptimisticThreadState(threadId);
-  const trpc = useTRPC();
   const { refetch: refetchLabels } = useLabels();
   const {
     optimisticMoveThreadsTo,
@@ -171,12 +174,11 @@ export function ThreadContextMenu({
     optimisticToggleImportant,
     optimisticMarkAsRead,
     optimisticMarkAsUnread,
-    // optimisticDeleteThreads,
+    permanentlyDeleteThreads,
     optimisticSnooze,
     optimisticUnsnooze,
   } = useOptimisticActions();
-  const { mutateAsync: deleteThread } = useMutation(trpc.mail.delete.mutationOptions());
-  const { mutateAsync: createLabel } = useMutation(trpc.labels.create.mutationOptions());
+  const { createLabel } = useMailboxActions();
 
   const { isUnread, isStarred, isImportant } = useMemo(() => {
     const unread = threadData?.hasUnread ?? false;
@@ -330,19 +332,11 @@ export function ThreadContextMenu({
 
   const handleDelete = () => () => {
     const targets = mail.bulkSelected.length ? mail.bulkSelected : [threadId];
-
-    toast.promise(
-      Promise.all(
-        targets.map(async (id) => {
-          return deleteThread({ id });
-        }),
-      ),
-      {
-        loading: 'Deleting...',
-        success: 'Deleted',
-        error: 'Failed to delete',
-      },
-    );
+    toast.promise(permanentlyDeleteThreads(targets), {
+      loading: m['common.actions.deletingMail'](),
+      success: m['common.actions.deletedMail'](),
+      error: m['common.actions.failedToDeleteMail'](),
+    });
   };
 
   const getActions = useMemo(() => {
@@ -489,22 +483,22 @@ export function ThreadContextMenu({
       name: data.name,
       color: {
         backgroundColor: data.color?.backgroundColor || '#202020',
-        textColor: data.color?.textColor || '#FFFFFF'
-      }
+        textColor: data.color?.textColor || '#FFFFFF',
+      },
     };
-    
+
     try {
       const promise = createLabel(labelData).then(async (result) => {
         await refetchLabels();
         return result;
       });
-      
+
       toast.promise(promise, {
         loading: m['common.labels.savingLabel'](),
         success: m['common.labels.saveLabelSuccess'](),
         error: m['common.labels.failedToSavingLabel'](),
       });
-      
+
       await promise;
     } catch (error) {
       console.error('Failed to create label:', error);
@@ -595,7 +589,11 @@ export function ThreadContextMenu({
               {m['common.mail.labels']()}
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="dark:bg-panelDark max-h-[520px] w-48 overflow-y-auto bg-white">
-              <LabelsList threadId={threadId} bulkSelected={mail.bulkSelected} onCreateLabel={handleOpenCreateLabel} />
+              <LabelsList
+                threadId={threadId}
+                bulkSelected={mail.bulkSelected}
+                onCreateLabel={handleOpenCreateLabel}
+              />
             </ContextMenuSubContent>
           </ContextMenuSub>
 

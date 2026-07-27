@@ -4,8 +4,8 @@ import { useActiveConnection } from '@/hooks/use-connections';
 import { ResizablePanel } from '@/components/ui/resizable';
 import { useSearchValue } from '@/hooks/use-search-value';
 import { useState, useEffect, useCallback } from 'react';
-import useSearchLabels from '@/hooks/use-labels-search';
 import { useQueryClient } from '@tanstack/react-query';
+import { useMailAccountContext } from '@/modules/mail';
 import { AIChat } from '@/components/create/ai-chat';
 import { useTRPC } from '@/providers/query-provider';
 import { Tools } from '../../../server/src/types';
@@ -304,31 +304,27 @@ function AISidebar({ className }: AISidebarProps) {
   const [searchValue] = useSearchValue();
   const { data: activeConnection } = useActiveConnection();
   const [, setDoState] = useDoState();
-  const { labels } = useSearchLabels();
+  const { account } = useMailAccountContext();
 
   const onMessage = useCallback(
-    (message: any) => {
+    (message: MessageEvent<string>) => {
       try {
         const parsedData = JSON.parse(message.data);
         const { type } = parsedData;
         if (type === IncomingMessageType.Mail_Get) {
-          const { threadId } = parsedData;
           queryClient.invalidateQueries({
-            queryKey: trpc.mail.get.queryKey({ id: threadId }),
+            queryKey: trpc.mail.view.threadDetail.queryKey(),
           });
         } else if (type === IncomingMessageType.Mail_List) {
-          const { folder } = parsedData;
           queryClient.invalidateQueries({
-            queryKey: trpc.mail.listThreads.infiniteQueryKey({
-              folder,
-              labelIds: labels,
-              q: searchValue.value,
-            }),
+            queryKey: trpc.mail.view.threadPage.infiniteQueryKey(),
           });
         } else if (type === IncomingMessageType.User_Topics) {
-          queryClient.invalidateQueries({
-            queryKey: trpc.labels.list.queryKey(),
-          });
+          if (account) {
+            queryClient.invalidateQueries({
+              queryKey: trpc.mail.mailbox.get.queryKey({ accountId: account.id }),
+            });
+          }
         } else if (type === IncomingMessageType.Do_State) {
           const { isSyncing, syncingFolders, storageSize, counts, shards } = parsedData;
           setDoState({ isSyncing, syncingFolders, storageSize, counts: counts ?? [], shards });
@@ -337,7 +333,14 @@ function AISidebar({ className }: AISidebarProps) {
         console.error('error parsing party message', error, { rawMessage: message.data });
       }
     },
-    [queryClient, trpc, labels, searchValue.value, setDoState],
+    [
+      account,
+      queryClient,
+      setDoState,
+      trpc.mail.mailbox.get,
+      trpc.mail.view.threadDetail,
+      trpc.mail.view.threadPage,
+    ],
   );
 
   const agent = useAgent({
@@ -398,7 +401,7 @@ function AISidebar({ className }: AISidebarProps) {
           break;
         case Tools.SendEmail:
           await queryClient.invalidateQueries({
-            queryKey: trpc.mail.listThreads.queryKey({ folder: 'sent' }),
+            queryKey: trpc.mail.view.threadPage.infiniteQueryKey(),
           });
           break;
         case Tools.MarkThreadsRead:
@@ -407,13 +410,12 @@ function AISidebar({ className }: AISidebarProps) {
         case Tools.BulkDelete:
           console.log('modifyLabels', toolCall.args);
           await refetchLabels();
-          await Promise.all(
-            (toolCall.args as { threadIds: string[] }).threadIds.map((id) =>
-              queryClient.invalidateQueries({
-                queryKey: trpc.mail.get.queryKey({ id }),
-              }),
-            ),
-          );
+          await queryClient.invalidateQueries({
+            queryKey: trpc.mail.view.threadDetail.queryKey(),
+          });
+          await queryClient.invalidateQueries({
+            queryKey: trpc.mail.view.threadPage.infiniteQueryKey(),
+          });
           break;
       }
     },

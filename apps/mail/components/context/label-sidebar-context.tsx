@@ -13,8 +13,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from '../ui/context-menu';
-import { useTRPC } from '@/providers/query-provider';
-import { useMutation } from '@tanstack/react-query';
+import { useMailboxActions } from '@/modules/mail';
 import { useState, type ReactNode } from 'react';
 import { useLabels } from '@/hooks/use-labels';
 import { m } from '@/paraglide/messages';
@@ -31,8 +30,7 @@ interface LabelSidebarContextMenuProps {
 export function LabelSidebarContextMenu({ children, labelId, hide }: LabelSidebarContextMenuProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const trpc = useTRPC();
-  const { mutateAsync: deleteLabel } = useMutation(trpc.labels.delete.mutationOptions());
+  const { deleteLabel } = useMailboxActions();
   const { refetch } = useLabels();
 
   const handleDelete = () => {

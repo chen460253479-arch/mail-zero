@@ -1,28 +1,20 @@
-import {
-  } from '@/components/ui/dialog';
-import {
-  } from '@/components/ui/form';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { SettingsCard } from '@/components/settings/settings-card';
 import { LabelDialog } from '@/components/labels/label-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 import { Separator } from '@/components/ui/separator';
-import { useTRPC } from '@/providers/query-provider';
-import { useMutation } from '@tanstack/react-query';
-import { Plus, Pencil } from 'lucide-react';
 import { type Label as LabelType } from '@/types';
 import { Button } from '@/components/ui/button';
+import { Plus, Pencil } from 'lucide-react';
 
 import { Bin } from '@/components/icons/icons';
 import { useLabels } from '@/hooks/use-labels';
 
-
-
 import { Badge } from '@/components/ui/badge';
 
+import { useMailboxActions } from '@/modules/mail';
 import { m } from '@/paraglide/messages';
-
 
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -32,10 +24,7 @@ export default function LabelsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingLabel, setEditingLabel] = useState<LabelType | null>(null);
 
-  const trpc = useTRPC();
-  const { mutateAsync: createLabel } = useMutation(trpc.labels.create.mutationOptions());
-  const { mutateAsync: updateLabel } = useMutation(trpc.labels.update.mutationOptions());
-  const { mutateAsync: deleteLabel } = useMutation(trpc.labels.delete.mutationOptions());
+  const { createLabel, updateLabel, deleteLabel } = useMailboxActions();
 
   const handleSubmit = async (data: LabelType) => {
     await toast.promise(
@@ -123,7 +112,7 @@ export default function LabelsPage() {
                             <span>{label.name}</span>
                           </Badge>
                         </div>
-                        <div className="dark:bg-panelDark absolute right-2 z-25 flex items-center gap-1 rounded-xl border bg-white p-1 opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+                        <div className="dark:bg-panelDark z-25 absolute right-2 flex items-center gap-1 rounded-xl border bg-white p-1 opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button

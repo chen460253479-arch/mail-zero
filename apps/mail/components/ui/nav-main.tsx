@@ -3,13 +3,14 @@ import { Collapsible, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useCommandPalette } from '../context/command-palette-context.jsx';
 import { LabelDialog } from '@/components/labels/label-dialog';
 import { useActiveConnection } from '@/hooks/use-connections';
-import { useMutation, useQuery } from '@tanstack/react-query';
 import Intercom, { show } from '@intercom/messenger-js-sdk';
 import { MessageSquare, OldPhone } from '../icons/icons';
 import { useSidebar } from '../context/sidebar-context';
 import { useTRPC } from '@/providers/query-provider';
 import { type NavItem } from '@/config/navigation';
+import { useMailboxActions } from '@/modules/mail';
 import type { Label as LabelType } from '@/types';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation } from 'react-router';
 import { m } from '../../paraglide/messages.js';
 import { Button } from '@/components/ui/button';
@@ -67,7 +68,7 @@ export function NavMain({ items }: NavMainProps) {
     }
   }, [intercomToken]);
 
-  const { mutateAsync: createLabel } = useMutation(trpc.labels.create.mutationOptions());
+  const { createLabel } = useMailboxActions();
   const { data: activeAccount } = useActiveConnection();
   const { userLabels, refetch } = useLabels({ enabled: Boolean(activeAccount) });
 
@@ -166,13 +167,13 @@ export function NavMain({ items }: NavMainProps) {
         await refetch();
         return result;
       });
-      
+
       toast.promise(promise, {
         loading: 'Creating label...',
         success: 'Label created successfully',
         error: 'Failed to create label',
       });
-      
+
       await promise;
     } catch (error) {
       console.error('Failed to create label:', error);

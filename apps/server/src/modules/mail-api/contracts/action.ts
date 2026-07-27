@@ -26,6 +26,13 @@ export const unsnoozeThreadsInputSchema = z.object({
   clientMutationId: z.string().min(1).max(255),
 });
 
+export const destroyThreadsInputSchema = z.object({
+  accountId: mailAccountIdSchema,
+  threadIds: z.array(mailIdSchema).min(1).max(200),
+  ifInState: stateSchema.optional(),
+  clientMutationId: z.string().min(1).max(255),
+});
+
 export const updateThreadsResultSchema = z.object({
   accountId: mailAccountIdSchema,
   clientMutationId: z.string(),
@@ -47,4 +54,13 @@ export const unsnoozeThreadsResultSchema = z.object({
   clientMutationId: z.string(),
   restored: z.array(mailIdSchema),
   notFound: z.array(mailIdSchema),
+});
+
+export const destroyThreadsResultSchema = z.object({
+  accountId: mailAccountIdSchema,
+  clientMutationId: z.string(),
+  oldState: stateSchema,
+  newState: stateSchema,
+  destroyedThreadIds: z.array(mailIdSchema),
+  failed: z.record(mailIdSchema, setErrorSchema),
 });

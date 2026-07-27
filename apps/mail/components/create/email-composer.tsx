@@ -17,10 +17,10 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { Check, Command, Loader, Paperclip, Plus, Type, X as XIcon } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { TextEffect } from '@/components/motion-primitives/text-effect';
-import { ScheduleSendPicker } from './schedule-send-picker';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { TextEffect } from '@/components/motion-primitives/text-effect';
 import { useEmailAliases } from '@/hooks/use-email-aliases';
+import { ScheduleSendPicker } from './schedule-send-picker';
 import useComposeEditor from '@/hooks/use-compose-editor';
 import { CurvedArrow, Sparkles, X } from '../icons/icons';
 import { gitHubEmojis } from '@tiptap/extension-emoji';
@@ -31,12 +31,11 @@ import { useTRPC } from '@/providers/query-provider';
 import { useMutation } from '@tanstack/react-query';
 import { useSettings } from '@/hooks/use-settings';
 
+import { useForm, type Resolver } from 'react-hook-form';
 import { cn, formatFileSize } from '@/lib/utils';
 import { useThread } from '@/hooks/use-threads';
-import { serializeFiles } from '@/lib/schemas';
 import { Input } from '@/components/ui/input';
 import { EditorContent } from '@tiptap/react';
-import { useForm } from 'react-hook-form';
 import { Button } from '../ui/button';
 import { useQueryState } from 'nuqs';
 import { Toolbar } from './toolbar';
@@ -46,8 +45,9 @@ import { z } from 'zod';
 
 import { RecipientAutosuggest } from '@/components/ui/recipient-autosuggest';
 import { ImageCompressionSettings } from './image-compression-settings';
-import { compressImages } from '@/lib/image-compression';
 import type { ImageQuality } from '@/lib/image-compression';
+import { compressImages } from '@/lib/image-compression';
+import { useMailDelivery } from '@/modules/mail';
 
 const shortcodeRegex = /:([a-zA-Z0-9_+-]+):/g;
 import { TemplateButton } from './template-button';
@@ -77,6 +77,7 @@ interface EmailComposerProps {
     attachments: File[];
     fromEmail?: string;
     scheduleAt?: string;
+    draftId?: string;
   }) => Promise<void>;
   onClose?: () => void;
   className?: string;
@@ -84,8 +85,6 @@ interface EmailComposerProps {
   settingsLoading?: boolean;
   editorClassName?: string;
 }
-
-
 
 const schema = z.object({
   to: z.array(z.string().email()).min(1),
@@ -98,6 +97,8 @@ const schema = z.object({
   threadId: z.string().optional(),
   fromEmail: z.string().optional(),
 });
+
+type EmailComposerForm = z.infer<typeof schema>;
 
 export function EmailComposer({
   initialTo = [],
@@ -217,13 +218,15 @@ export function EmailComposer({
 
   const trpc = useTRPC();
   const { mutateAsync: aiCompose } = useMutation(trpc.ai.compose.mutationOptions());
-  const { mutateAsync: createDraft } = useMutation(trpc.drafts.create.mutationOptions());
+  const { saveDraft: saveLocalDraft } = useMailDelivery();
   const { mutateAsync: generateEmailSubject } = useMutation(
     trpc.ai.generateEmailSubject.mutationOptions(),
   );
 
-  const form = useForm<z.infer<typeof schema>>({
-    resolver: zodResolver(schema),
+  const form = useForm<EmailComposerForm>({
+    // @hookform/resolvers and the workspace Zod version expose structurally
+    // incompatible type declarations even though the runtime contract matches.
+    resolver: zodResolver(schema as never) as Resolver<EmailComposerForm>,
     defaultValues: {
       to: initialTo,
       cc: initialCc,
@@ -352,7 +355,7 @@ export function EmailComposer({
       setIsLoading(true);
       setAiGeneratedMessage(null);
       // Save draft before sending, we want to send drafts instead of sending new emails
-      if (hasUnsavedChanges) await saveDraft();
+      const savedDraft = hasUnsavedChanges ? await saveDraft() : undefined;
 
       await onSendEmail({
         to: values.to,
@@ -363,6 +366,7 @@ export function EmailComposer({
         attachments: values.attachments || [],
         fromEmail: values.fromEmail,
         scheduleAt,
+        draftId: savedDraft?.id ?? draftId ?? undefined,
       });
       setHasUnsavedChanges(false);
       editor.commands.clearContent(true);
@@ -440,46 +444,64 @@ export function EmailComposer({
     }
   };
 
-  const saveDraft = async () => {
+  const saveDraft = useCallback(async () => {
     const values = getValues();
 
-    if (!hasUnsavedChanges) return;
+    if (!hasUnsavedChanges) return draftId ? { id: draftId } : undefined;
     const messageText = editor.getText();
 
-    if (messageText.trim() === initialMessage.trim()) return;
-    if (editor.getHTML() === initialMessage.trim()) return;
-    if (!values.to.length || !values.subject.length || !messageText.length) return;
-    if (aiGeneratedMessage || aiIsLoading || isGeneratingSubject) return;
+    if (messageText.trim() === initialMessage.trim()) return draftId ? { id: draftId } : undefined;
+    if (editor.getHTML() === initialMessage.trim()) return draftId ? { id: draftId } : undefined;
+    if (!values.to.length || !values.subject.length || !messageText.length) {
+      return draftId ? { id: draftId } : undefined;
+    }
+    if (aiGeneratedMessage || aiIsLoading || isGeneratingSubject) {
+      return draftId ? { id: draftId } : undefined;
+    }
 
     try {
       setIsSavingDraft(true);
       const draftData = {
-        to: values.to.join(', '),
-        cc: values.cc?.join(', '),
-        bcc: values.bcc?.join(', '),
+        to: values.to,
+        cc: values.cc,
+        bcc: values.bcc,
         subject: values.subject,
-        message: editor.getHTML(),
-        attachments: await serializeFiles(values.attachments ?? []),
-        id: draftId,
-        threadId: threadId ? threadId : null,
-        fromEmail: values.fromEmail ? values.fromEmail : null,
+        htmlBody: editor.getHTML(),
+        attachments: values.attachments ?? [],
+        draftId,
+        replyToEmailId: activeReplyId,
+        fromEmail: values.fromEmail,
       };
 
-      const response = await createDraft(draftData);
+      const response = await saveLocalDraft(draftData);
 
       if (response?.id && response.id !== draftId) {
         setDraftId(response.id);
       }
+      return response;
     } catch (error) {
       console.error('Error saving draft:', error);
       toast.error('Failed to save draft');
       setIsSavingDraft(false);
       setHasUnsavedChanges(false);
+      return undefined;
     } finally {
       setIsSavingDraft(false);
       setHasUnsavedChanges(false);
     }
-  };
+  }, [
+    activeReplyId,
+    aiGeneratedMessage,
+    aiIsLoading,
+    draftId,
+    editor,
+    getValues,
+    hasUnsavedChanges,
+    initialMessage,
+    isGeneratingSubject,
+    saveLocalDraft,
+    setDraftId,
+  ]);
 
   const handleGenerateSubject = async () => {
     try {
@@ -575,7 +597,6 @@ export function EmailComposer({
   //   await handleAiGenerate();
   // });
 
-
   // keep fromEmail in sync when settings or aliases load afterwards
   useEffect(() => {
     const preferred =
@@ -635,14 +656,14 @@ export function EmailComposer({
             <div className="flex gap-2">
               <button
                 tabIndex={-1}
-                className="flex h-full items-center gap-2 text-sm font-medium text-[#8C8C8C] hover:text-[#A8A8A8] hover:bg-gray-50 dark:hover:bg-[#404040] transition-colors cursor-pointer rounded-sm px-1 py-0.5"
+                className="flex h-full cursor-pointer items-center gap-2 rounded-sm px-1 py-0.5 text-sm font-medium text-[#8C8C8C] transition-colors hover:bg-gray-50 hover:text-[#A8A8A8] dark:hover:bg-[#404040]"
                 onClick={() => setShowCc(!showCc)}
               >
                 <span>Cc</span>
               </button>
               <button
                 tabIndex={-1}
-                className="flex h-full items-center gap-2 text-sm font-medium text-[#8C8C8C] hover:text-[#A8A8A8] hover:bg-gray-50 dark:hover:bg-[#404040] transition-colors cursor-pointer rounded-sm px-1 py-0.5"
+                className="flex h-full cursor-pointer items-center gap-2 rounded-sm px-1 py-0.5 text-sm font-medium text-[#8C8C8C] transition-colors hover:bg-gray-50 hover:text-[#A8A8A8] dark:hover:bg-[#404040]"
                 onClick={() => setShowBcc(!showBcc)}
               >
                 <span>Bcc</span>
@@ -650,7 +671,7 @@ export function EmailComposer({
               {onClose && (
                 <button
                   tabIndex={-1}
-                  className="flex h-full items-center gap-2 text-sm font-medium text-[#8C8C8C] hover:text-[#A8A8A8] hover:bg-gray-50 dark:hover:bg-[#404040] transition-colors cursor-pointer rounded-sm px-1 py-0.5"
+                  className="flex h-full cursor-pointer items-center gap-2 rounded-sm px-1 py-0.5 text-sm font-medium text-[#8C8C8C] transition-colors hover:bg-gray-50 hover:text-[#A8A8A8] dark:hover:bg-[#404040]"
                   onClick={handleClose}
                 >
                   <X className="h-3.5 w-3.5 fill-[#9A9A9A]" />
@@ -705,7 +726,7 @@ export function EmailComposer({
             <button
               onClick={handleGenerateSubject}
               disabled={isLoading || isGeneratingSubject || messageLength < 1}
-              className="hover:bg-gray-50 dark:hover:bg-[#404040] transition-colors cursor-pointer rounded p-1"
+              className="cursor-pointer rounded p-1 transition-colors hover:bg-gray-50 dark:hover:bg-[#404040]"
             >
               <div className="flex items-center justify-center gap-2.5 pl-0.5">
                 <div className="flex h-5 items-center justify-center gap-1 rounded-sm">
@@ -772,7 +793,11 @@ export function EmailComposer({
         <div className="flex flex-col items-start justify-start gap-2">
           {toggleToolbar && <Toolbar editor={editor} />}
           <div className="flex items-center justify-start gap-2">
-            <Button size={'xs'} onClick={handleSend} disabled={isLoading || settingsLoading || !isScheduleValid}>
+            <Button
+              size={'xs'}
+              onClick={handleSend}
+              disabled={isLoading || settingsLoading || !isScheduleValid}
+            >
               <div className="flex items-center justify-center">
                 <div className="text-center text-sm leading-none text-white dark:text-black">
                   <span>Send </span>
@@ -788,7 +813,12 @@ export function EmailComposer({
               onChange={handleScheduleChange}
               onValidityChange={handleScheduleValidityChange}
             />
-            <Button variant={'secondary'} size={'xs'} onClick={() => fileInputRef.current?.click()} className="bg-background border hover:bg-gray-50 dark:hover:bg-[#404040] transition-colors cursor-pointer">
+            <Button
+              variant={'secondary'}
+              size={'xs'}
+              onClick={() => fileInputRef.current?.click()}
+              className="bg-background cursor-pointer border transition-colors hover:bg-gray-50 dark:hover:bg-[#404040]"
+            >
               <Plus className="h-3 w-3 fill-[#9A9A9A]" />
               <span className="hidden px-0.5 text-sm md:block">Add</span>
             </Button>
@@ -820,7 +850,7 @@ export function EmailComposer({
               <Popover modal={true}>
                 <PopoverTrigger asChild>
                   <button
-                    className="focus-visible:ring-ring flex items-center gap-1.5 rounded-md border border-[#E7E7E7] bg-white/5 px-2 py-1 text-sm hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:border-[#2B2B2B] cursor-pointer"
+                    className="focus-visible:ring-ring flex cursor-pointer items-center gap-1.5 rounded-md border border-[#E7E7E7] bg-white/5 px-2 py-1 text-sm hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:border-[#2B2B2B]"
                     aria-label={`View ${attachments.length} attached ${pluralize('file', attachments.length)}`}
                   >
                     <Paperclip className="h-3.5 w-3.5 text-[#9A9A9A]" />
@@ -918,7 +948,7 @@ export function EmailComposer({
                                   toast.error('Failed to remove attachment');
                                 }
                               }}
-                              className="focus-visible:ring-ring ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-transparent hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 cursor-pointer"
+                              className="focus-visible:ring-ring ml-1 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full bg-transparent hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2"
                               aria-label={`Remove ${file.name}`}
                             >
                               <XIcon className="text-muted-foreground h-3.5 w-3.5 hover:text-black dark:text-[#9B9B9B] dark:hover:text-white" />
@@ -940,7 +970,7 @@ export function EmailComposer({
                     variant="ghost"
                     size="icon"
                     onClick={() => setToggleToolbar(!toggleToolbar)}
-                    className={`h-auto w-auto rounded p-1.5 ${toggleToolbar ? 'bg-muted' : 'bg-background'} border hover:bg-gray-50 dark:hover:bg-[#404040] transition-colors cursor-pointer`}
+                    className={`h-auto w-auto rounded p-1.5 ${toggleToolbar ? 'bg-muted' : 'bg-background'} cursor-pointer border transition-colors hover:bg-gray-50 dark:hover:bg-[#404040]`}
                   >
                     <Type className="h-4 w-4" />
                   </Button>
@@ -977,7 +1007,7 @@ export function EmailComposer({
             <Button
               size={'xs'}
               variant={'ghost'}
-              className="border border-[#8B5CF6] cursor-pointer"
+              className="cursor-pointer border border-[#8B5CF6]"
               onClick={async () => {
                 if (!subjectInput.trim()) {
                   await handleGenerateSubject();
@@ -1140,7 +1170,7 @@ const ContentPreview = ({
     </div>
     <div className="flex justify-end gap-2 p-2">
       <button
-        className="flex h-7 items-center gap-0.5 overflow-hidden rounded-md border bg-red-700 px-1.5 text-sm shadow-sm hover:bg-red-800 dark:border-none cursor-pointer transition-colors"
+        className="flex h-7 cursor-pointer items-center gap-0.5 overflow-hidden rounded-md border bg-red-700 px-1.5 text-sm shadow-sm transition-colors hover:bg-red-800 dark:border-none"
         onClick={async () => {
           if (onReject) {
             await onReject();
@@ -1153,7 +1183,7 @@ const ContentPreview = ({
         <span>Reject</span>
       </button>
       <button
-        className="flex h-7 items-center gap-0.5 overflow-hidden rounded-md border bg-green-700 px-1.5 text-sm shadow-sm hover:bg-green-800 dark:border-none cursor-pointer transition-colors"
+        className="flex h-7 cursor-pointer items-center gap-0.5 overflow-hidden rounded-md border bg-green-700 px-1.5 text-sm shadow-sm transition-colors hover:bg-green-800 dark:border-none"
         onClick={async () => {
           if (onAccept) {
             await onAccept(content);

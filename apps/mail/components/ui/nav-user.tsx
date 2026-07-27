@@ -1,4 +1,11 @@
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   HelpCircle,
   LogOut,
   MoonIcon,
@@ -8,13 +15,6 @@ import {
   RefreshCcw,
   Trash2,
 } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useActiveConnection, useConnections } from '@/hooks/use-connections';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -95,7 +95,6 @@ export function NavUser() {
   const { mutateAsync: setDefaultConnection } = useMutation(
     trpc.connections.setDefault.mutationOptions(),
   );
-  const { mutateAsync: handleForceSync } = useMutation(trpc.mail.forceSync.mutationOptions());
   const pathname = useLocation().pathname;
   const queryClient = useQueryClient();
   const { data: activeConnection, refetch: refetchActiveConnection } = useActiveConnection();
@@ -114,7 +113,7 @@ export function NavUser() {
     queryClient.clear();
     await idbClear();
     toast.success('Cache cleared successfully');
-  }, []);
+  }, [queryClient]);
 
   const handleCopyConnectionId = useCallback(async () => {
     await navigator.clipboard.writeText(activeConnection?.id || '');
@@ -133,7 +132,9 @@ export function NavUser() {
       setThreadId(null);
       await setDefaultConnection({ connectionId });
       queryClient.clear();
-      await queryClient.refetchQueries({ queryKey: trpc.mail.listThreads.infiniteQueryKey() });
+      await queryClient.refetchQueries({
+        queryKey: trpc.mail.view.threadPage.infiniteQueryKey(),
+      });
     } catch (error) {
       console.error('Error switching accounts:', error);
       toast.error(m['common.navUser.failedToSwitchAccount']());
@@ -143,6 +144,21 @@ export function NavUser() {
       setLoading(false);
     }
   };
+
+  const handleRefreshMailbox = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: trpc.mail.view.threadPage.infiniteQueryKey(),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: trpc.mail.view.threadDetail.queryKey(),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: trpc.mail.mailbox.get.queryKey(),
+      }),
+    ]);
+    toast.success('Local mailbox refreshed');
+  }, [queryClient, trpc.mail.mailbox.get, trpc.mail.view.threadDetail, trpc.mail.view.threadPage]);
 
   const handleLogout = async () => {
     toast.promise(signOut(), {
@@ -305,10 +321,10 @@ export function NavUser() {
                       <p className="text-[13px] opacity-60">Clear Local Cache</p>
                     </div>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleForceSync()}>
+                  <DropdownMenuItem onClick={() => void handleRefreshMailbox()}>
                     <div className="flex items-center gap-2">
                       <RefreshCcw size={16} className="opacity-60" />
-                      <p className="text-[13px] opacity-60">Force re-sync</p>
+                      <p className="text-[13px] opacity-60">Refresh local mailbox</p>
                     </div>
                   </DropdownMenuItem>
                   <SyncingStatusIndicator
@@ -324,7 +340,7 @@ export function NavUser() {
                   <DropdownMenuSeparator className="mt-1" />
                   <DropdownMenuItem onSelect={() => handleThemeToggle()} className="cursor-pointer">
                     <div className="flex w-full items-center gap-2">
-                    {resolvedTheme === 'dark' ? (
+                      {resolvedTheme === 'dark' ? (
                         <MoonIcon className="size-4 opacity-60" />
                       ) : (
                         <SunIcon className="size-4 opacity-60" />
@@ -535,10 +551,10 @@ export function NavUser() {
                       <p className="text-[13px] opacity-60">Clear Local Cache</p>
                     </div>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleForceSync()}>
+                  <DropdownMenuItem onClick={() => void handleRefreshMailbox()}>
                     <div className="flex items-center gap-2">
                       <RefreshCcw size={16} className="opacity-60" />
-                      <p className="text-[13px] opacity-60">Force re-sync</p>
+                      <p className="text-[13px] opacity-60">Refresh local mailbox</p>
                     </div>
                   </DropdownMenuItem>
                   <SyncingStatusIndicator

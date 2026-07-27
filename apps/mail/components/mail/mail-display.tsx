@@ -38,7 +38,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { EmailVerificationBadge } from './email-verification-badge';
 import type { Sender, ParsedMessage, Attachment } from '@/types';
 import { useActiveConnection } from '@/hooks/use-connections';
-import { useAttachments } from '@/hooks/use-attachments';
 import { useTRPC } from '@/providers/query-provider';
 import { useThreadLabels } from '@/hooks/use-labels';
 import { useMutation } from '@tanstack/react-query';
@@ -253,18 +252,22 @@ const cleanNameDisplay = (name?: string) => {
   return name.trim();
 };
 
+const attachmentBytes = async (attachment: { body: string }) => {
+  if (/^https?:\/\//u.test(attachment.body)) {
+    const response = await fetch(attachment.body, { credentials: 'include' });
+    if (!response.ok) throw new Error(`MAIL_BLOB_DOWNLOAD_FAILED:${response.status}`);
+    return new Uint8Array(await response.arrayBuffer());
+  }
+  const byteCharacters = atob(attachment.body);
+  return Uint8Array.from(byteCharacters, (character) => character.charCodeAt(0));
+};
+
 const ThreadAttachments = ({ attachments }: { attachments: Attachment[] }) => {
   if (!attachments || attachments.length === 0) return null;
 
   const handleDownload = async (attachment: Attachment) => {
     try {
-      // Convert base64 to blob
-      const byteCharacters = atob(attachment.body);
-      const byteNumbers: number[] = Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
+      const byteArray = await attachmentBytes(attachment);
       const blob = new Blob([byteArray], { type: attachment.mimeType });
 
       // Create download link
@@ -353,7 +356,7 @@ const ActionButton = ({ onClick, icon, text, shortcut }: ActionButtonProps) => {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-7 items-center justify-center gap-1 overflow-hidden rounded-md border bg-white px-1.5 dark:border-none dark:bg-[#313131] cursor-pointer hover:bg-gray-100 dark:hover:bg-[#3d3d3d] transition-colors"
+      className="inline-flex h-7 cursor-pointer items-center justify-center gap-1 overflow-hidden rounded-md border bg-white px-1.5 transition-colors hover:bg-gray-100 dark:border-none dark:bg-[#313131] dark:hover:bg-[#3d3d3d]"
     >
       {icon}
       <div className="flex items-center justify-center gap-2.5 pl-0.5 pr-1">
@@ -386,12 +389,7 @@ const downloadAttachment = async (attachment: {
       throw new Error('Attachment data not found');
     }
 
-    const byteCharacters = atob(attachmentData);
-    const byteNumbers: number[] = Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
+    const byteArray = await attachmentBytes(attachment);
     const blob = new Blob([byteArray], { type: attachment.mimeType });
 
     const url = window.URL.createObjectURL(blob);
@@ -417,24 +415,21 @@ const handleDownloadAllAttachments =
     const zip = new JSZip();
 
     console.log('attachments', attachments);
-    attachments.forEach((attachment) => {
-      try {
-        const byteCharacters = atob(attachment.body);
-        const byteNumbers: number[] = Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
+    await Promise.all(
+      attachments.map(async (attachment) => {
+        try {
+          const byteArray = await attachmentBytes(attachment);
 
-        zip.file(attachment.filename, byteArray, {
-          binary: true,
-          date: new Date(),
-          unixPermissions: 0o644,
-        });
-      } catch (error) {
-        console.error(`Error adding ${attachment.filename} to zip:`, error);
-      }
-    });
+          zip.file(attachment.filename, byteArray, {
+            binary: true,
+            date: new Date(),
+            unixPermissions: 0o644,
+          });
+        } catch (error) {
+          console.error(`Error adding ${attachment.filename} to zip:`, error);
+        }
+      }),
+    );
 
     // Generate and download the zip file
     zip
@@ -475,12 +470,7 @@ const openAttachment = async (attachment: {
       throw new Error('Attachment data not found');
     }
 
-    const byteCharacters = atob(attachmentData);
-    const byteNumbers: number[] = Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
+    const byteArray = await attachmentBytes(attachment);
     const blob = new Blob([byteArray], { type: attachment.mimeType });
     const url = window.URL.createObjectURL(blob);
 
@@ -657,7 +647,7 @@ const MoreAboutQuery = ({
 const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }: Props) => {
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   const { data: threadData } = useThread(emailData.threadId ?? null);
-  const { data: messageAttachments } = useAttachments(emailData.id);
+  const messageAttachments = emailData.attachments ?? [];
   //   const [unsubscribed, setUnsubscribed] = useState(false);
   //   const [isUnsubscribing, setIsUnsubscribing] = useState(false);
   const [preventCollapse, setPreventCollapse] = useState(false);
@@ -1350,7 +1340,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                           <Popover open={openDetailsPopover} onOpenChange={handlePopoverChange}>
                             <PopoverTrigger asChild>
                               <button
-                                className="hover:bg-iconLight/10 dark:hover:bg-iconDark/20 flex items-center gap-2 rounded-md p-2 cursor-pointer"
+                                className="hover:bg-iconLight/10 dark:hover:bg-iconDark/20 flex cursor-pointer items-center gap-2 rounded-md p-2"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   e.preventDefault();
@@ -1495,7 +1485,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                                   e.stopPropagation();
                                   e.preventDefault();
                                 }}
-                                className="inline-flex h-7 w-7 items-center justify-center gap-1 overflow-hidden rounded-md bg-white hover:bg-gray-100 focus:outline-none focus:ring-0 dark:bg-[#313131] dark:hover:bg-[#3d3d3d] cursor-pointer transition-colors"
+                                className="inline-flex h-7 w-7 cursor-pointer items-center justify-center gap-1 overflow-hidden rounded-md bg-white transition-colors hover:bg-gray-100 focus:outline-none focus:ring-0 dark:bg-[#313131] dark:hover:bg-[#3d3d3d]"
                               >
                                 <ThreeDots className="fill-iconLight dark:fill-iconDark" />
                               </button>

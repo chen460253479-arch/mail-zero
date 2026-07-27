@@ -4,6 +4,7 @@ import { defaultUserSettings } from '@zero/server/schemas';
 import { useTRPC } from '@/providers/query-provider';
 import { getBrowserTimezone } from '@/lib/timezones';
 import { useSettings } from '@/hooks/use-settings';
+import { cleanHtml } from '@/lib/email-utils';
 import { m } from '@/paraglide/messages';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
@@ -62,22 +63,31 @@ export function MailContent({ id, html, senderEmail }: MailContentProps) {
     },
   });
 
-  const { mutateAsync: processEmailContent } = useMutation(
-    trpc.mail.processEmailContent.mutationOptions(),
-  );
-
   const { data: processedData } = useQuery({
     queryKey: ['email-content', id, isTrustedSender || temporaryImagesEnabled, resolvedTheme],
     queryFn: async () => {
-      const result = await processEmailContent({
-        html,
-        shouldLoadImages: isTrustedSender || temporaryImagesEnabled,
-        theme: (resolvedTheme as 'light' | 'dark') || 'light',
-      });
-
+      const sanitized = cleanHtml(html);
+      const document = new DOMParser().parseFromString(sanitized, 'text/html');
+      const images = Array.from(document.querySelectorAll('img'));
+      const shouldLoadImages = isTrustedSender || temporaryImagesEnabled;
+      if (!shouldLoadImages) {
+        for (const image of images) {
+          const source = image.getAttribute('src');
+          if (source && !source.startsWith('data:') && !source.startsWith('blob:')) {
+            image.setAttribute('data-original-src', source);
+            image.removeAttribute('src');
+          }
+        }
+      }
+      const style = document.createElement('style');
+      style.textContent =
+        resolvedTheme === 'dark'
+          ? ':host { color-scheme: dark; } body { color: #fff; background: transparent; }'
+          : ':host { color-scheme: light; } body { color: #111; background: transparent; }';
+      document.head.appendChild(style);
       return {
-        html: result.processedHtml,
-        hasBlockedImages: result.hasBlockedImages,
+        html: `${document.head.innerHTML}${document.body.innerHTML}`,
+        hasBlockedImages: !shouldLoadImages && images.length > 0,
       };
     },
     staleTime: 30 * 60 * 1000,
@@ -181,7 +191,12 @@ export function MailContent({ id, html, senderEmail }: MailContentProps) {
           </button>
         </div>
       )}
-      <div ref={hostRef} className={cn('mail-content w-full flex-1 overflow-scroll no-scrollbar px-4 text-black dark:text-white')} />
+      <div
+        ref={hostRef}
+        className={cn(
+          'mail-content no-scrollbar w-full flex-1 overflow-scroll px-4 text-black dark:text-white',
+        )}
+      />
     </>
   );
 }

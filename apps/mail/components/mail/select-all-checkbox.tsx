@@ -1,4 +1,6 @@
-import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import { buildThreadPageInput, resolveMailboxRoute, useMailAccountContext } from '@/modules/mail';
+import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
 import { useSearchValue } from '@/hooks/use-search-value';
 import { trpcClient } from '@/providers/query-provider';
 import { useMail } from '@/components/mail/use-mail';
@@ -14,6 +16,8 @@ export default function SelectAllCheckbox({ className }: { className?: string })
   const [, loadedThreads] = useThreads();
   const [{ value: query }] = useSearchValue();
   const { folder = 'inbox' } = useParams<{ folder: string }>() ?? {};
+  const { account } = useMailAccountContext();
+  const { mailboxes } = useMailboxes();
 
   const [isFetchingIds, setIsFetchingIds] = useState(false);
   const allIdsCache = useRef<string[] | null>(null);
@@ -32,31 +36,36 @@ export default function SelectAllCheckbox({ className }: { className?: string })
   }, [mail.bulkSelected.length, isAllLoadedSelected]);
 
   const fetchAllMatchingThreadIds = useCallback(async (): Promise<string[]> => {
+    if (!account) return [];
+    const route = resolveMailboxRoute(folder, mailboxes);
+    if (route.kind === 'not-found') return [];
+
     const ids: string[] = [];
-    let cursor = '';
-    const MAX_PER_PAGE = 500;
+    let cursor: string | undefined;
+    const maxPerPage = 200;
 
     try {
       while (true) {
-        const page = await trpcClient.mail.listThreads.query({
-          folder,
-          q: query,
-          maxResults: MAX_PER_PAGE,
-          cursor,
-        });
-        if (page?.threads?.length) {
-          ids.push(...page.threads.map((t: { id: string }) => t.id));
-        }
-        if (!page?.nextPageToken) break;
-        cursor = page.nextPageToken;
+        const page = await trpcClient.mail.view.threadPage.query(
+          buildThreadPageInput({
+            accountId: account.id,
+            route,
+            text: query,
+            cursor,
+            limit: maxPerPage,
+          }),
+        );
+        ids.push(...page.items.map((thread) => thread.id));
+        if (!page.cursor) break;
+        cursor = page.cursor;
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to fetch all thread IDs', err);
-      toast.error(err?.message ?? 'Failed to select all emails');
+      toast.error(err instanceof Error ? err.message : 'Failed to select all emails');
     }
 
     return ids;
-  }, [folder, query]);
+  }, [account, folder, mailboxes, query]);
 
   const handleToggle = useCallback(() => {
     if (isFetchingIds) return;

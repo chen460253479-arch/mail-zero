@@ -1,6 +1,12 @@
-import { useDoState } from '@/components/mail/use-do-state';
+import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
 
 export const useStats = () => {
-  const [doState] = useDoState();
-  return { data: doState.counts };
+  const query = useMailboxes();
+  return {
+    ...query,
+    data: query.mailboxes.map((mailbox) => ({
+      label: mailbox.role ?? mailbox.name,
+      count: mailbox.unreadThreads,
+    })),
+  };
 };

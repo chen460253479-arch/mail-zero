@@ -1,9 +1,8 @@
-import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
-import { useTRPC } from '@/providers/query-provider';
-import { isSendResult } from '@/lib/email-utils';
 import type { UserSettings } from '@zero/server/schemas';
+import { isSendResult } from '@/lib/email-utils';
+import { useMailDelivery } from '@/modules/mail';
 
 export type EmailData = {
   to: string[];
@@ -16,57 +15,23 @@ export type EmailData = {
   scheduleAt?: string;
 };
 
-export type SerializedFile = {
-  name: string;
-  size: number;
-  type: string;
-  lastModified: number;
-  data: string; 
-};
-
-type SerializableEmailData = Omit<EmailData, 'attachments'> & {
-  attachments: SerializedFile[];
-};
-
-const serializeFiles = async (files: File[]): Promise<SerializedFile[]> => {
-  return Promise.all(
-    files.map(async (file) => ({
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      lastModified: file.lastModified,
-      data: await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve((reader.result as string).split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      }),
-    }))
-  );
-};
-
-export const deserializeFiles = (serializedFiles: SerializedFile[]): File[] => {
-  return serializedFiles.map(({ data, name, type, lastModified }) => {
-    const byteString = atob(data);
-    const byteArray = new Uint8Array(byteString.length);
-    for (let i = 0; i < byteString.length; i++) {
-      byteArray[i] = byteString.charCodeAt(i);
-    }
-    return new File([byteArray], name, { type, lastModified });
-  });
-};
-
 export const useUndoSend = () => {
-  const trpc = useTRPC();
-  const { mutateAsync: unsendEmail } = useMutation(trpc.mail.unsend.mutationOptions());
+  const { cancelSubmission } = useMailDelivery();
 
   const handleUndoSend = (
-    result: unknown, 
+    result: unknown,
     settings: { settings: UserSettings } | undefined,
-    emailData?: EmailData
+    emailData?: EmailData,
   ) => {
     if (isSendResult(result) && settings?.settings?.undoSendEnabled) {
       const { messageId, sendAt } = result;
+      const draftId =
+        typeof result === 'object' &&
+        result !== null &&
+        'draftId' in result &&
+        typeof result.draftId === 'string'
+          ? result.draftId
+          : null;
 
       const timeRemaining = sendAt ? Math.max(0, sendAt - Date.now()) : 15_000;
       const wasUserScheduled = Boolean(emailData?.scheduleAt);
@@ -78,7 +43,7 @@ export const useUndoSend = () => {
               label: 'Undo',
               onClick: async () => {
                 try {
-                  await unsendEmail({ messageId });
+                  await cancelSubmission(messageId);
                   toast.info('Schedule cancelled');
                 } catch {
                   toast.error('Failed to cancel');
@@ -93,29 +58,20 @@ export const useUndoSend = () => {
             action: {
               label: 'Undo',
               onClick: async () => {
-              try {
-                await unsendEmail({ messageId });
-                
-                if (emailData) {
-                  const serializedAttachments = await serializeFiles(emailData.attachments);
-                  const serializableData: SerializableEmailData = {
-                    ...emailData,
-                    attachments: serializedAttachments,
-                  };
-                  localStorage.setItem('undoEmailData', JSON.stringify(serializableData));
+                try {
+                  await cancelSubmission(messageId);
+
+                  const url = new URL(window.location.href);
+                  url.searchParams.delete('activeReplyId');
+                  url.searchParams.delete('mode');
+                  if (draftId) url.searchParams.set('draftId', draftId);
+                  url.searchParams.set('isComposeOpen', 'true');
+                  window.history.replaceState({}, '', url.toString());
+
+                  toast.info('Send cancelled');
+                } catch {
+                  toast.error('Failed to cancel');
                 }
-                
-                const url = new URL(window.location.href);
-                url.searchParams.delete('activeReplyId');
-                url.searchParams.delete('mode');
-                url.searchParams.delete('draftId');
-                url.searchParams.set('isComposeOpen', 'true');
-                window.history.replaceState({}, '', url.toString());
-                
-                toast.info('Send cancelled');
-              } catch {
-                toast.error('Failed to cancel');
-              }
               },
             },
             duration: 15_000,

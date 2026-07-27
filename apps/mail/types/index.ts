@@ -83,6 +83,7 @@ export interface ParsedMessage {
   messageId?: string;
   threadId?: string;
   isDraft?: boolean;
+  hasAttachment?: boolean;
   attachments?: Attachment[];
 }
 
@@ -121,7 +122,7 @@ export interface MailListProps {
 export type MailSelectMode = 'mass' | 'range' | 'single' | 'selectAllBelow';
 
 export type ThreadProps = {
-  message: { id: string; historyId?: string | null };
+  message: ParsedMessage;
   onClick?: (message: ParsedMessage) => () => void;
   isKeyboardFocused?: boolean;
 };

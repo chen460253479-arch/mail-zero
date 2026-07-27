@@ -18,22 +18,23 @@ import {
 import { useOptimisticThreadState } from '@/components/mail/optimistic-thread-state';
 import { focusedIndexAtom, useMailNavigation } from '@/hooks/use-mail-navigation';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useIsFetching, type UseQueryResult } from '@tanstack/react-query';
 import type { MailSelectMode, ParsedMessage, ThreadProps } from '@/types';
-import type { ParsedDraft } from '../../../server/src/lib/driver/types';
+import { useMailChanges } from '@/modules/mail/queries/use-mail-changes';
 import { ThreadContextMenu } from '@/components/context/thread-context';
 import { useOptimisticActions } from '@/hooks/use-optimistic-actions';
+import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
 import { useMail, type Config } from '@/components/mail/use-mail';
 import { type ThreadDestination } from '@/lib/thread-actions';
-import { useThread, useThreads } from '@/hooks/use-threads';
 import { useSearchValue } from '@/hooks/use-search-value';
 import { EmptyStateIcon } from '../icons/empty-state-svg';
 import { highlightText } from '@/lib/email-utils.client';
+import { useIsFetching } from '@tanstack/react-query';
 import { cn, FOLDERS, formatDate } from '@/lib/utils';
 import { useTRPC } from '@/providers/query-provider';
 import { useThreadLabels } from '@/hooks/use-labels';
 import { useSettings } from '@/hooks/use-settings';
 import { useKeyState } from '@/hooks/use-hot-key';
+import { useThreads } from '@/hooks/use-threads';
 import { VList, type VListHandle } from 'virtua';
 import { BimiAvatar } from '../ui/bimi-avatar';
 import { RenderLabels } from './render-labels';
@@ -59,7 +60,19 @@ const Thread = memo(
     const { folder } = useParams<{ folder: string }>();
     const [, threads] = useThreads();
     const [threadId] = useQueryState('threadId');
-    const { data: getThreadData, isGroupThread, latestDraft } = useThread(message.id);
+    const getThreadData = useMemo(
+      () => ({
+        latest: message,
+        messages: [message],
+        hasUnread: message.unread,
+        totalReplies: 1,
+        labels: message.tags.map((tag) => ({ id: tag.id, name: tag.name })),
+      }),
+      [message],
+    );
+    const isGroupThread =
+      message.to.length + (message.cc?.length ?? 0) + (message.bcc?.length ?? 0) > 1;
+    const latestDraft = message.isDraft ? message : undefined;
     const [id, setThreadId] = useQueryState('threadId');
     const [focusedIndex, setFocusedIndex] = useAtom(focusedIndexAtom);
 
@@ -564,7 +577,7 @@ const Thread = memo(
 );
 
 const Draft = memo(({ message, index }: { message: { id: string }; index: number }) => {
-  const draftQuery = useDraft(message.id) as UseQueryResult<ParsedDraft>;
+  const draftQuery = useDraft(message.id);
   const draft = draftQuery.data;
   const [, setComposeOpen] = useQueryState('isComposeOpen');
   const [, setDraftId] = useQueryState('draftId');
@@ -674,13 +687,13 @@ const Draft = memo(({ message, index }: { message: { id: string }; index: number
                     </span>
                   </span>
                 </div>
-                {draft.rawMessage?.internalDate && (
+                {draft.receivedOn && (
                   <p
                     className={cn(
                       'text-muted-foreground text-nowrap text-xs font-normal opacity-70 transition-opacity group-hover:opacity-100 dark:text-[#8C8C8C]',
                     )}
                   >
-                    {formatDate(Number(draft.rawMessage?.internalDate))}
+                    {formatDate(Date.parse(draft.receivedOn))}
                   </p>
                 )}
               </div>
@@ -726,10 +739,15 @@ export const MailList = memo(
       };
     }, [setAnchorIndex]);
 
-    const [{ refetch, isLoading, isFetching, isFetchingNextPage, hasNextPage }, items, , loadMore] =
-      useThreads();
+    const [threadsQuery, items, , loadMore] = useThreads();
+    const { refetch, isLoading, isFetching, isFetchingNextPage, hasNextPage } = threadsQuery;
+    const mailboxQuery = useMailboxes();
+    useMailChanges({
+      mailboxState: mailboxQuery.mailboxState,
+      threadState: threadsQuery.data?.pages[0]?.queryState,
+    });
     const trpc = useTRPC();
-    const isFetchingMail = useIsFetching({ queryKey: trpc.mail.get.queryKey() }) > 0;
+    const isFetchingMail = useIsFetching({ queryKey: trpc.mail.view.threadDetail.queryKey() }) > 0;
     const itemsRef = useRef(items);
     const parentRef = useRef<HTMLDivElement>(null);
     const vListRef = useRef<VListHandle>(null);
@@ -965,10 +983,14 @@ export const MailList = memo(
                 <div className="flex flex-col items-center justify-center gap-2 text-center">
                   <EmptyStateIcon width={200} height={200} />
                   <div className="mt-5">
-                    <p className="text-lg">It's empty here</p>
+                    <p className="text-lg">It&apos;s empty here</p>
                     <p className="text-md text-muted-foreground dark:text-white/50">
                       Search for another email or{' '}
-                      <button type="button" className="underline cursor-pointer" onClick={clearFilters}>
+                      <button
+                        type="button"
+                        className="cursor-pointer underline"
+                        onClick={clearFilters}
+                      >
                         clear filters
                       </button>
                     </p>

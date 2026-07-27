@@ -1,5 +1,4 @@
 import { createContext, useContext, useMemo, type PropsWithChildren } from 'react';
-import React from 'react';
 
 import { selectMailAccount } from './mail-account-selection';
 import type { MailAccount } from '../model/account';

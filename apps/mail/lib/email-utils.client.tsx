@@ -1,10 +1,15 @@
 import { Html, Head, Body, Container, Section, Column, Row } from '@react-email/components';
 import { getListUnsubscribeAction } from '@/lib/email-utils';
-import { trpcClient } from '@/providers/query-provider';
 import { renderToString } from 'react-dom/server';
 import type { ParsedMessage } from '@/types';
 
-export const handleUnsubscribe = async ({ emailData }: { emailData: ParsedMessage }) => {
+export const handleUnsubscribe = async ({
+  emailData,
+  sendEmail,
+}: {
+  emailData: ParsedMessage;
+  sendEmail: (input: { to: string; subject: string; htmlBody: string }) => Promise<unknown>;
+}) => {
   try {
     if (emailData.listUnsubscribe) {
       const listUnsubscribeAction = getListUnsubscribeAction({
@@ -36,17 +41,12 @@ export const handleUnsubscribe = async ({ emailData }: { emailData: ParsedMessag
             clearTimeout(timeoutId);
             return true;
           case 'email':
-            await trpcClient.mail.send.mutate({
-              to: [
-                {
-                  email: listUnsubscribeAction.emailAddress,
-                  name: listUnsubscribeAction.emailAddress,
-                },
-              ],
+            await sendEmail({
+              to: listUnsubscribeAction.emailAddress,
               subject: listUnsubscribeAction.subject.trim().length
                 ? listUnsubscribeAction.subject
                 : 'Unsubscribe Request',
-              message: 'Zero sent this email to unsubscribe from this mailing list.',
+              htmlBody: '<p>Zero sent this email to unsubscribe from this mailing list.</p>',
             });
             return true;
         }

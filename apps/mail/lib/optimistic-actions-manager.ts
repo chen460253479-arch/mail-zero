@@ -2,7 +2,7 @@ import type { ThreadDestination } from '@/lib/thread-actions';
 
 type BasePendingAction = {
   id: string;
-  type: 'MOVE' | 'STAR' | 'READ' | 'LABEL' | 'IMPORTANT' | 'SNOOZE' | 'UNSNOOZE';
+  type: 'MOVE' | 'STAR' | 'READ' | 'LABEL' | 'IMPORTANT' | 'SNOOZE' | 'UNSNOOZE' | 'DELETE_DRAFT';
   threadIds: string[];
   optimisticId: string;
   execute: () => Promise<void>;
@@ -17,6 +17,9 @@ export type PendingAction = BasePendingAction &
     | { type: 'READ'; params: { read: boolean } }
     | { type: 'LABEL'; params: { labelId: string; add: boolean } }
     | { type: 'IMPORTANT'; params: { important: boolean } }
+    | { type: 'SNOOZE'; params: { currentFolder: string; wakeAt: string } }
+    | { type: 'UNSNOOZE'; params: { currentFolder: string } }
+    | { type: 'DELETE_DRAFT'; params: Record<string, never> }
   );
 
 class OptimisticActionsManager {

@@ -2,11 +2,15 @@ import { addOptimisticActionAtom, removeOptimisticActionAtom } from '@/store/opt
 import { optimisticActionsManager, type PendingAction } from '@/lib/optimistic-actions-manager';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { backgroundQueueAtom } from '@/store/backgroundQueue';
+import {
+  buildKeywordThreadAction,
+  buildMoveThreadAction,
+} from '@/modules/mail/mutations/thread-action-input';
+import { useMailAccountContext } from '@/modules/mail/providers/mail-account-provider';
+import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
 import type { ThreadDestination } from '@/lib/thread-actions';
 import { useTRPC } from '@/providers/query-provider';
 import { useMail } from '@/components/mail/use-mail';
-import { moveThreadsTo } from '@/lib/thread-actions';
 import { m } from '@/paraglide/messages';
 import { useQueryState } from 'nuqs';
 import { useCallback } from 'react';
@@ -52,31 +56,63 @@ const actionEventNames: Record<ActionType, (params: ActionParams) => string> = {
 export function useOptimisticActions() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const [, setBackgroundQueue] = useAtom(backgroundQueueAtom);
   const [, addOptimisticAction] = useAtom(addOptimisticActionAtom);
   const [, removeOptimisticAction] = useAtom(removeOptimisticActionAtom);
   const [threadId, setThreadId] = useQueryState('threadId');
   const [, setActiveReplyId] = useQueryState('activeReplyId');
   const [mail, setMail] = useMail();
-  const { mutateAsync: markAsRead } = useMutation(trpc.mail.markAsRead.mutationOptions());
-  const { mutateAsync: markAsUnread } = useMutation(trpc.mail.markAsUnread.mutationOptions());
+  const { account } = useMailAccountContext();
+  const { mailboxes, mailboxState } = useMailboxes();
+  const { mutateAsync: updateThreads } = useMutation(
+    trpc.mail.action.updateThreads.mutationOptions(),
+  );
+  const { mutateAsync: snoozeThreads } = useMutation(
+    trpc.mail.action.snoozeThreads.mutationOptions(),
+  );
+  const { mutateAsync: unsnoozeThreads } = useMutation(
+    trpc.mail.action.unsnoozeThreads.mutationOptions(),
+  );
+  const { mutateAsync: setEmails } = useMutation(trpc.mail.email.set.mutationOptions());
+  const { mutateAsync: destroyThreads } = useMutation(
+    trpc.mail.action.destroyThreads.mutationOptions(),
+  );
 
-  const { mutateAsync: toggleStar } = useMutation(trpc.mail.toggleStar.mutationOptions());
-  const { mutateAsync: toggleImportant } = useMutation(trpc.mail.toggleImportant.mutationOptions());
+  const mutationId = () =>
+    globalThis.crypto?.randomUUID?.() ??
+    `mutation_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
-  const { mutateAsync: bulkDeleteThread } = useMutation(trpc.mail.bulkDelete.mutationOptions());
-  const { mutateAsync: snoozeThreads } = useMutation(trpc.mail.snoozeThreads.mutationOptions());
-  const { mutateAsync: unsnoozeThreads } = useMutation(trpc.mail.unsnoozeThreads.mutationOptions());
-  const { mutateAsync: modifyLabels } = useMutation(trpc.mail.modifyLabels.mutationOptions());
-
-  const { mutateAsync: deleteDraft } = useMutation(trpc.drafts.delete.mutationOptions());
+  const updateKeyword = async (threadIds: string[], keyword: string, enabled: boolean) => {
+    if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
+    const result = await updateThreads(
+      buildKeywordThreadAction({
+        accountId: account.id,
+        threadIds,
+        keyword,
+        enabled,
+        ifInState: mailboxState,
+        clientMutationId: mutationId(),
+      }),
+    );
+    if (Object.keys(result.failed).length > 0) {
+      throw new Error('THREAD_ACTION_PARTIAL_FAILURE');
+    }
+  };
 
   const generatePendingActionId = () =>
     `pending_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
   const refreshData = useCallback(async () => {
-    return await queryClient.refetchQueries({ queryKey: trpc.labels.list.queryKey() });
-  }, [queryClient]);
+    await Promise.all([
+      queryClient.refetchQueries({
+        queryKey: trpc.mail.view.threadPage.infiniteQueryKey(),
+      }),
+      account
+        ? queryClient.refetchQueries({
+            queryKey: trpc.mail.mailbox.get.queryKey({ accountId: account.id }),
+          })
+        : Promise.resolve(),
+    ]);
+  }, [account, queryClient, trpc.mail.mailbox.get, trpc.mail.view.threadPage]);
 
   function createPendingAction({
     type,
@@ -154,6 +190,7 @@ export function useOptimisticActions() {
         removeOptimisticAction(optimisticId);
         optimisticActionsManager.pendingActions.delete(pendingActionId);
         optimisticActionsManager.pendingActionsByType.get(type)?.delete(pendingActionId);
+        await refreshData();
         toast.error('Action failed');
       }
     }
@@ -199,7 +236,7 @@ export function useOptimisticActions() {
         params: { read: true },
         optimisticId,
         execute: async () => {
-          await markAsRead({ ids: threadIds });
+          await updateKeyword(threadIds, '$seen', true);
 
           if (mail.bulkSelected.length > 0) {
             setMail((prev) => ({ ...prev, bulkSelected: [] }));
@@ -211,7 +248,7 @@ export function useOptimisticActions() {
         toastMessage: silent ? '' : 'Marked as read',
       });
     },
-    [queryClient, addOptimisticAction, removeOptimisticAction, markAsRead, setMail],
+    [addOptimisticAction, removeOptimisticAction, setMail, updateKeyword],
   );
 
   function optimisticMarkAsUnread(threadIds: string[]) {
@@ -229,7 +266,7 @@ export function useOptimisticActions() {
       params: { read: false },
       optimisticId,
       execute: async () => {
-        await markAsUnread({ ids: threadIds });
+        await updateKeyword(threadIds, '$seen', false);
 
         if (mail.bulkSelected.length > 0) {
           setMail({ ...mail, bulkSelected: [] });
@@ -258,7 +295,7 @@ export function useOptimisticActions() {
         params: { starred },
         optimisticId,
         execute: async () => {
-          await toggleStar({ ids: threadIds });
+          await updateKeyword(threadIds, '$flagged', starred);
         },
         undo: () => {
           removeOptimisticAction(optimisticId);
@@ -268,7 +305,7 @@ export function useOptimisticActions() {
           : m['common.actions.removedFromFavorites'](),
       });
     },
-    [queryClient, addOptimisticAction, removeOptimisticAction, toggleStar, setMail],
+    [addOptimisticAction, removeOptimisticAction, setMail, updateKeyword],
   );
 
   function optimisticMoveThreadsTo(
@@ -284,10 +321,6 @@ export function useOptimisticActions() {
       type: 'MOVE',
       threadIds,
       destination,
-    });
-
-    threadIds.forEach((id) => {
-      setBackgroundQueue({ type: 'add', threadId: `thread:${id}` });
     });
 
     if (threadId && threadIds.includes(threadId)) {
@@ -309,25 +342,29 @@ export function useOptimisticActions() {
       params: { currentFolder, destination },
       optimisticId,
       execute: async () => {
-        await moveThreadsTo({
-          threadIds,
-          currentFolder,
-          destination,
-        });
+        if (!account || !destination || destination === 'snoozed') {
+          throw new Error('MAIL_MOVE_DESTINATION_UNAVAILABLE');
+        }
+        const result = await updateThreads(
+          buildMoveThreadAction({
+            accountId: account.id,
+            threadIds,
+            destination,
+            mailboxes,
+            ifInState: mailboxState,
+            clientMutationId: mutationId(),
+          }),
+        );
+        if (Object.keys(result.failed).length > 0) {
+          throw new Error('THREAD_MOVE_PARTIAL_FAILURE');
+        }
 
         if (mail.bulkSelected.length > 0) {
           setMail({ ...mail, bulkSelected: [] });
         }
-
-        threadIds.forEach((id) => {
-          setBackgroundQueue({ type: 'delete', threadId: `thread:${id}` });
-        });
       },
       undo: () => {
         removeOptimisticAction(optimisticId);
-        threadIds.forEach((id) => {
-          setBackgroundQueue({ type: 'delete', threadId: `thread:${id}` });
-        });
       },
       toastMessage: successMessage,
       folders: [currentFolder, destination],
@@ -345,10 +382,6 @@ export function useOptimisticActions() {
       destination: 'bin',
     });
 
-    threadIds.forEach((id) => {
-      setBackgroundQueue({ type: 'add', threadId: `thread:${id}` });
-    });
-
     if (threadId && threadIds.includes(threadId)) {
       setThreadId(null);
       setActiveReplyId(null);
@@ -359,25 +392,49 @@ export function useOptimisticActions() {
       params: { currentFolder, destination: 'bin' },
       optimisticId,
       execute: async () => {
-        await bulkDeleteThread({ ids: threadIds });
+        if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
+        const result = await updateThreads(
+          buildMoveThreadAction({
+            accountId: account.id,
+            threadIds,
+            destination: 'bin',
+            mailboxes,
+            ifInState: mailboxState,
+            clientMutationId: mutationId(),
+          }),
+        );
+        if (Object.keys(result.failed).length > 0) {
+          throw new Error('THREAD_MOVE_PARTIAL_FAILURE');
+        }
 
         if (mail.bulkSelected.length > 0) {
           setMail({ ...mail, bulkSelected: [] });
         }
-
-        threadIds.forEach((id) => {
-          setBackgroundQueue({ type: 'delete', threadId: `thread:${id}` });
-        });
       },
       undo: () => {
         removeOptimisticAction(optimisticId);
-
-        threadIds.forEach((id) => {
-          setBackgroundQueue({ type: 'delete', threadId: `thread:${id}` });
-        });
       },
       toastMessage: m['common.actions.movedToBin'](),
     });
+  }
+
+  async function permanentlyDeleteThreads(threadIds: string[]) {
+    if (!account || threadIds.length === 0) return;
+    const result = await destroyThreads({
+      accountId: account.id,
+      threadIds,
+      clientMutationId: mutationId(),
+    });
+    if (Object.keys(result.failed).length > 0) {
+      throw new Error('THREAD_DESTROY_PARTIAL_FAILURE');
+    }
+    if (threadId && threadIds.includes(threadId)) {
+      setThreadId(null);
+      setActiveReplyId(null);
+    }
+    setMail((current) => ({ ...current, bulkSelected: [] }));
+    await refreshData();
+    return result.destroyedThreadIds;
   }
 
   const optimisticToggleImportant = useCallback(
@@ -396,7 +453,7 @@ export function useOptimisticActions() {
         params: { important: isImportant },
         optimisticId,
         execute: async () => {
-          await toggleImportant({ ids: threadIds });
+          await updateKeyword(threadIds, '$important', isImportant);
 
           if (mail.bulkSelected.length > 0) {
             setMail((prev) => ({ ...prev, bulkSelected: [] }));
@@ -408,7 +465,7 @@ export function useOptimisticActions() {
         toastMessage: isImportant ? 'Marked as important' : 'Unmarked as important',
       });
     },
-    [queryClient, addOptimisticAction, removeOptimisticAction, toggleImportant, setMail],
+    [addOptimisticAction, removeOptimisticAction, setMail, updateKeyword],
   );
 
   function optimisticToggleLabel(threadIds: string[], labelId: string, add: boolean) {
@@ -427,11 +484,20 @@ export function useOptimisticActions() {
       params: { labelId, add },
       optimisticId,
       execute: async () => {
-        await modifyLabels({
-          threadId: threadIds,
-          addLabels: add ? [labelId] : [],
-          removeLabels: add ? [] : [labelId],
+        if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
+        const result = await updateThreads({
+          accountId: account.id,
+          threadIds,
+          ...(mailboxState ? { ifInState: mailboxState } : {}),
+          addMailboxIds: add ? [labelId] : [],
+          removeMailboxIds: add ? [] : [labelId],
+          addKeywords: [],
+          removeKeywords: [],
+          clientMutationId: mutationId(),
         });
+        if (Object.keys(result.failed).length > 0) {
+          throw new Error('THREAD_LABEL_PARTIAL_FAILURE');
+        }
 
         if (mail.bulkSelected.length > 0) {
           setMail({ ...mail, bulkSelected: [] });
@@ -461,7 +527,13 @@ export function useOptimisticActions() {
       params: { currentFolder, wakeAt: wakeAt.toISOString() },
       optimisticId,
       execute: async () => {
-        await snoozeThreads({ ids: threadIds, wakeAt: wakeAt.toISOString() });
+        if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
+        await snoozeThreads({
+          accountId: account.id,
+          threadIds,
+          wakeAt: wakeAt.toISOString(),
+          clientMutationId: mutationId(),
+        });
 
         if (mail.bulkSelected.length > 0) {
           setMail({ ...mail, bulkSelected: [] });
@@ -486,10 +558,15 @@ export function useOptimisticActions() {
     createPendingAction({
       type: 'UNSNOOZE',
       threadIds,
-      params: { currentFolder } as any,
+      params: { currentFolder },
       optimisticId,
       execute: async () => {
-        await unsnoozeThreads({ ids: threadIds });
+        if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
+        await unsnoozeThreads({
+          accountId: account.id,
+          threadIds,
+          clientMutationId: mutationId(),
+        });
       },
       undo: () => {
         removeOptimisticAction(optimisticId);
@@ -510,11 +587,19 @@ export function useOptimisticActions() {
     createPendingAction({
       type: 'DELETE_DRAFT',
       threadIds: [draftId],
-      params: {} as any,
+      params: {},
       optimisticId,
       execute: async () => {
-        await deleteDraft({ id: draftId });
-        await queryClient.invalidateQueries({ queryKey: trpc.drafts.list.queryKey() });
+        if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
+        await setEmails({
+          accountId: account.id,
+          create: {},
+          update: {},
+          destroy: [draftId],
+        });
+        await queryClient.invalidateQueries({
+          queryKey: trpc.mail.view.threadPage.infiniteQueryKey(),
+        });
       },
       undo: () => {
         removeOptimisticAction(optimisticId);
@@ -551,6 +636,7 @@ export function useOptimisticActions() {
     optimisticToggleStar,
     optimisticMoveThreadsTo,
     optimisticDeleteThreads,
+    permanentlyDeleteThreads,
     optimisticToggleImportant,
     optimisticToggleLabel,
     optimisticSnooze,

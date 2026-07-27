@@ -1,15 +1,13 @@
-import { useUndoSend } from '@/hooks/use-undo-send';
 import { constructReplyBody, constructForwardBody } from '@/lib/utils';
 import { useActiveConnection } from '@/hooks/use-connections';
 import { useEmailAliases } from '@/hooks/use-email-aliases';
 import { EmailComposer } from '../create/email-composer';
 import { useHotkeysContext } from 'react-hotkeys-hook';
-import { useTRPC } from '@/providers/query-provider';
-import { useMutation } from '@tanstack/react-query';
+import { useUndoSend } from '@/hooks/use-undo-send';
 import { useSettings } from '@/hooks/use-settings';
+import { useMailDelivery } from '@/modules/mail';
 import { useThread } from '@/hooks/use-threads';
 import { useSession } from '@/lib/auth-client';
-import { serializeFiles } from '@/lib/schemas';
 import { useDraft } from '@/hooks/use-drafts';
 import { m } from '@/paraglide/messages';
 import type { Sender } from '@/types';
@@ -32,8 +30,7 @@ export default function ReplyCompose({ messageId }: ReplyComposeProps) {
   const [, setActiveReplyId] = useQueryState('activeReplyId');
   const { data: emailData, refetch, latestDraft } = useThread(threadId);
   const { data: draft } = useDraft(draftId ?? null);
-  const trpc = useTRPC();
-  const { mutateAsync: sendEmail } = useMutation(trpc.mail.send.mutationOptions());
+  const { sendMessage } = useMailDelivery();
   const { data: activeConnection } = useActiveConnection();
   const { data: settings, isLoading: settingsLoading } = useSettings();
   const { data: session } = useSession();
@@ -105,7 +102,9 @@ export default function ReplyCompose({ messageId }: ReplyComposeProps) {
     subject: string;
     message: string;
     attachments: File[];
+    fromEmail?: string;
     scheduleAt?: string;
+    draftId?: string;
   }) => {
     if (!replyToMessage || !activeConnection?.email) return;
 
@@ -180,29 +179,18 @@ export default function ReplyCompose({ messageId }: ReplyComposeProps) {
               //   replyToMessage.decodedBody,
             );
 
-      const result = await sendEmail({
-        to: toRecipients,
-        cc: ccRecipients,
-        bcc: bccRecipients,
+      const result = await sendMessage({
+        to: toRecipients.map((recipient) => recipient.email),
+        cc: ccRecipients?.map((recipient) => recipient.email),
+        bcc: bccRecipients?.map((recipient) => recipient.email),
         subject: data.subject,
-        message: emailBody,
-        attachments: await serializeFiles(data.attachments),
+        htmlBody: emailBody,
+        attachments: data.attachments,
         fromEmail: fromEmail,
-        draftId: draftId ?? undefined,
-        headers: {
-          'In-Reply-To': replyToMessage?.messageId ?? '',
-          References: [
-            ...(replyToMessage?.references ? replyToMessage.references.split(' ') : []),
-            replyToMessage?.messageId,
-          ]
-            .filter(Boolean)
-            .join(' '),
-          'Thread-Id': replyToMessage?.threadId ?? '',
-        },
-        threadId: replyToMessage?.threadId,
-        isForward: mode === 'forward',
-        originalMessage: replyToMessage.decodedBody,
+        draftId: data.draftId ?? draftId ?? undefined,
+        replyToEmailId: mode === 'forward' ? null : replyToMessage.id,
         scheduleAt: data.scheduleAt,
+        undoWindowMs: settings?.settings.undoSendEnabled ? 30_000 : 0,
       });
 
       posthog.capture('Reply Email Sent');
@@ -210,7 +198,7 @@ export default function ReplyCompose({ messageId }: ReplyComposeProps) {
       // Reset states
       setMode(null);
       await refetch();
-      
+
       handleUndoSend(result, settings, {
         to: data.to,
         cc: data.cc,
@@ -255,10 +243,10 @@ export default function ReplyCompose({ messageId }: ReplyComposeProps) {
   if (!mode || !emailData) return null;
 
   return (
-    <div className="w-full rounded-2xl overflow-visible border">
+    <div className="w-full overflow-visible rounded-2xl border">
       <EmailComposer
         editorClassName="min-h-[50px]"
-        className="w-full max-w-none! pb-1 overflow-visible"
+        className="max-w-none! w-full overflow-visible pb-1"
         onSendEmail={handleSendEmail}
         onClose={async () => {
           setMode(null);

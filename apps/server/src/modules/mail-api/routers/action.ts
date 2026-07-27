@@ -1,5 +1,7 @@
 import {
   snoozeThreadsInputSchema,
+  destroyThreadsInputSchema,
+  destroyThreadsResultSchema,
   snoozeThreadsResultSchema,
   unsnoozeThreadsResultSchema,
   unsnoozeThreadsInputSchema,
@@ -8,12 +10,19 @@ import {
 } from '../contracts/action';
 import {
   createSnoozeActionService,
+  createDestroyThreadsService,
   createThreadActionService,
 } from '../application/thread-action-service';
 import { mailAccountProcedure } from '../procedures/mail-account-procedure';
 import { router } from '../../../trpc/trpc';
 
 export const actionRouter = router({
+  destroyThreads: mailAccountProcedure
+    .input(destroyThreadsInputSchema)
+    .output(destroyThreadsResultSchema)
+    .mutation(({ ctx, input }) =>
+      createDestroyThreadsService(ctx.mailApi.core).destroyThreads(input),
+    ),
   updateThreads: mailAccountProcedure
     .input(updateThreadsInputSchema)
     .output(updateThreadsResultSchema)

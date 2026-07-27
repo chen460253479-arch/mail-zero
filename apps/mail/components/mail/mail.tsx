@@ -477,7 +477,7 @@ export function MailLayout() {
                         </div>
                       </Button>
 
-                      {activeConnection?.channelId === 'gmail' && folder === 'inbox' && (
+                      {folder === 'inbox' && (
                         <CategoryDropdown isMultiSelectMode={mail.bulkSelected.length > 0} />
                       )}
                     </>
@@ -510,7 +510,7 @@ export function MailLayout() {
                     disabled={!activeConnection}
                     variant="ghost"
                     size="icon"
-                    className="border-none bg-transparent hover:bg-accent/50 h-10 w-10 rounded-lg backdrop-blur-sm"
+                    className="hover:bg-accent/50 h-10 w-10 rounded-lg border-none bg-transparent backdrop-blur-sm"
                   >
                     <RefreshCcw className="text-muted-foreground h-4 w-4" />
                   </Button>
@@ -531,18 +531,18 @@ export function MailLayout() {
                 {activeConnection ? (
                   <MailList />
                 ) : isConnectionPending ? (
-                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
                     Loading…
                   </div>
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                    <div className="bg-primary/10 mb-4 flex h-12 w-12 items-center justify-center rounded-full">
                       <Mail className="h-5 w-5" />
                     </div>
                     <h2 className="text-base font-semibold">Zero is ready</h2>
-                    <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-                      You are signed in as the instance administrator. Connect a mail provider
-                      when you are ready to sync, organize, and send email.
+                    <p className="text-muted-foreground mt-2 max-w-sm text-sm leading-6">
+                      You are signed in as the instance administrator. Connect a mail provider when
+                      you are ready to sync, organize, and send email.
                     </p>
                     <Button
                       className="mt-5"

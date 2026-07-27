@@ -62,7 +62,7 @@ export const makeQueryClient = () =>
     },
   });
 
-let browserQueryClient = {
+const browserQueryClient = {
   queryClient: null,
   activeUserId: null,
 } as {
@@ -134,10 +134,10 @@ export function QueryProvider({ children, userId }: PropsWithChildren<{ userId: 
         maxAge: 1000 * 60 * 60 * 24, // 24 hours
       }}
       onSuccess={() => {
-        const threadQueryKey = [['mail', 'listThreads'], { type: 'infinite' }];
+        const threadQueryKey = [['mail', 'view', 'threadPage'], { type: 'infinite' }];
         queryClient.setQueriesData(
           { queryKey: threadQueryKey },
-          (data: InfiniteData<TrpcHook['mail']['listThreads']['~types']['output']>) => {
+          (data: InfiniteData<TrpcHook['mail']['view']['threadPage']['~types']['output']>) => {
             if (!data) return data;
             // We only keep few pages of threads in the cache before we invalidate them
             // invalidating will attempt to refetch every page that was in cache, if someone have too many pages in cache, it will refetch every page every time

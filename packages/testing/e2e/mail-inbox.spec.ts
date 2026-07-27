@@ -1,13 +1,15 @@
+import { observeMailApi } from './helpers/mail-api-observer';
 import { test, expect } from '@playwright/test';
 
 const email = process.env.EMAIL;
 
 if (!email) {
-    throw new Error('EMAIL environment variable must be set.');
-  }
+  throw new Error('EMAIL environment variable must be set.');
+}
 
 test.describe('Signing In, Sending mail, Replying to a mail', () => {
   test('should send and reply to an email in the same session', async ({ page }) => {
+    const mailApi = observeMailApi(page);
     await page.goto('/mail/inbox');
     await page.waitForLoadState('domcontentloaded');
     console.log('Successfully accessed mail inbox');
@@ -24,18 +26,25 @@ test.describe('Signing In, Sending mail, Replying to a mail', () => {
     } catch {
       console.log('No onboarding modal found, proceeding...');
     }
-    
+
     await expect(page.getByText('Inbox')).toBeVisible();
+    await mailApi.expectProcedure('mail.view.threadPage');
     console.log('Mail inbox is now visible');
 
     console.log('Starting email sending process...');
     await page.getByText('New email').click();
     await page.waitForTimeout(2000);
-    
-    await page.locator('input').first().fill(email);
+
+    await page.getByPlaceholder('Enter email address').fill(email);
+    await page.getByPlaceholder('Enter email address').press('Enter');
     console.log('Filled To: field');
-    
+
+    await page.getByPlaceholder('Re: Design review feedback').fill('Zero local mail E2E');
+    await page.locator('[contenteditable="true"]').last().fill('Local EmailSubmission test');
+
     await page.getByRole('button', { name: 'Send' }).click();
+    await mailApi.expectProcedure('mail.email.set');
+    await mailApi.expectProcedure('mail.submission.set');
     console.log('Clicked Send button');
     await page.waitForTimeout(3000);
     console.log('Email sent successfully!');
@@ -49,15 +58,15 @@ test.describe('Signing In, Sending mail, Replying to a mail', () => {
 
     console.log('Looking for Reply button to confirm email is open...');
     await page.waitForTimeout(2000);
-    
+
     const replySelectors = [
       'button:has-text("Reply")',
       '[data-testid*="reply"]',
       'button[title*="Reply"]',
       'button:text-is("Reply")',
-      'button:text("Reply")'
+      'button:text("Reply")',
     ];
-    
+
     let replyClicked = false;
     for (const selector of replySelectors) {
       try {
@@ -69,11 +78,11 @@ test.describe('Signing In, Sending mail, Replying to a mail', () => {
         console.log(`Failed to click with ${selector}`);
       }
     }
-    
+
     if (!replyClicked) {
       console.log('Could not find Reply button');
     }
-    
+
     await page.waitForTimeout(2000);
 
     console.log('Sending reply...');
@@ -82,5 +91,6 @@ test.describe('Signing In, Sending mail, Replying to a mail', () => {
     console.log('Reply sent successfully!');
 
     console.log('Entire email flow completed successfully!');
+    mailApi.expectNoLegacyRequests();
   });
 });
