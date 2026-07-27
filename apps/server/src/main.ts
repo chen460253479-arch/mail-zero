@@ -1,7 +1,5 @@
 import {
   account,
-  authorizationBinding,
-  connection,
   note,
   session,
   user,
@@ -10,33 +8,21 @@ import {
   emailTemplate,
 } from './db/schema';
 import {
-  assertMailChannelBinding,
-  channelIdToProviderId,
-  getMailChannel,
-  providerIdToChannelId,
-} from './lib/mail-channel/registry';
-import {
   enqueueDueMailIngressWork,
   recordGmailPushSignal,
   runMailIngressCommand,
 } from './runtime/mail/gmail-inbound';
-import { assertAuthorizationCanBeAttached } from './modules/mail-accounts/application/disconnect-mailbox';
-import { normalizeMailboxEmail } from './modules/mail-accounts/application/mailbox-identity';
 import { enqueueDueMailOutboundWork, runMailOutboundCommand } from './runtime/mail/outbound';
-import { createZeroOAuthSnapshot } from './modules/mail-accounts/credentials/zero-oauth';
 import { MailOutboundError, parseMailOutboundCommand } from './modules/mail-outbound';
-import { encryptCredential } from './infrastructure/security/credential-encryption';
 import { parseMailIngressCommand } from './modules/mail-sync/application/commands';
 import { WorkerEntrypoint, DurableObject, RpcTarget } from 'cloudflare:workers';
 import { wakeDueMailSnoozes } from './modules/mail-snooze/runtime/environment';
 import { authenticateGmailPush } from './mail-channel/gmail/inbound/push-auth';
 import { readGmailInboundConfig } from './runtime/mail/gmail-inbound-config';
-import type { MailChannelId } from './lib/mail-channel/types';
 import { oAuthDiscoveryMetadata } from 'better-auth/plugins';
 // import { instrument, type ResolveConfigFn } from '@microlabs/otel-cf-workers';
 import { getZeroDB } from './lib/server-utils';
 import { registerMailBlobRoutes } from './modules/mail-api';
-import { EProviders, type IEmailSendBatch } from './types';
 import { eq, and, desc, asc, inArray } from 'drizzle-orm';
 import { MailSyncError } from './modules/mail-sync';
 
@@ -59,30 +45,6 @@ import { Hono } from 'hono';
 const SENTRY_HOST = 'o4509328786915328.ingest.us.sentry.io';
 const SENTRY_PROJECT_IDS = new Set(['4509328795303936']);
 
-type ConnectionWithAuthorization = {
-  connection: typeof connection.$inferSelect;
-  authorization: typeof authorizationBinding.$inferSelect | null;
-};
-
-type CreateMailboxInput = Omit<
-  typeof connection.$inferInsert,
-  'id' | 'userId' | 'normalizedEmail' | 'createdAt' | 'updatedAt'
->;
-
-type CreateAuthorizationInput = Omit<
-  typeof authorizationBinding.$inferInsert,
-  'id' | 'connectionId' | 'createdAt' | 'updatedAt'
->;
-
-type LegacyConnectionDetails = {
-  expiresAt: Date;
-  scope: string;
-  accessToken?: string | null;
-  refreshToken?: string | null;
-  name?: string | null;
-  picture?: string | null;
-};
-
 export class DbRpcDO extends RpcTarget {
   constructor(
     private mainDo: ZeroDB,
@@ -95,64 +57,8 @@ export class DbRpcDO extends RpcTarget {
     return await this.mainDo.findUser(this.userId);
   }
 
-  async findUserConnection(
-    connectionId: string,
-  ): Promise<typeof connection.$inferSelect | undefined> {
-    return await this.mainDo.findUserConnection(this.userId, connectionId);
-  }
-
-  async findConnectionWithAuthorization(
-    connectionId: string,
-  ): Promise<ConnectionWithAuthorization | undefined> {
-    return await this.mainDo.findConnectionWithAuthorization(this.userId, connectionId);
-  }
-
   async updateUser(data: Partial<typeof user.$inferInsert>) {
     return await this.mainDo.updateUser(this.userId, data);
-  }
-
-  async deleteConnection(connectionId: string) {
-    return await this.mainDo.deleteConnection(connectionId, this.userId);
-  }
-
-  async removeAuthorizationBinding(connectionId: string) {
-    return await this.mainDo.removeAuthorizationBinding(this.userId, connectionId);
-  }
-
-  async markConnectionDisconnected(connectionId: string, disconnectedAt: Date) {
-    return await this.mainDo.markConnectionDisconnected(this.userId, connectionId, disconnectedAt);
-  }
-
-  async markConnectionDeleting(connectionId: string) {
-    return await this.mainDo.markConnectionDeleting(this.userId, connectionId);
-  }
-
-  async deleteMailbox(connectionId: string) {
-    return await this.mainDo.deleteMailbox(this.userId, connectionId);
-  }
-
-  async findFirstConnection(): Promise<typeof connection.$inferSelect | undefined> {
-    return await this.mainDo.findFirstConnection(this.userId);
-  }
-
-  async findManyConnections(): Promise<(typeof connection.$inferSelect)[]> {
-    return await this.mainDo.findManyConnections(this.userId);
-  }
-
-  async findManyConnectionsWithAuthorization(): Promise<ConnectionWithAuthorization[]> {
-    return await this.mainDo.findManyConnectionsWithAuthorization(this.userId);
-  }
-
-  async findConnectionByNormalizedEmail(channelId: MailChannelId, normalizedEmail: string) {
-    return await this.mainDo.findConnectionByNormalizedEmail(
-      this.userId,
-      channelId,
-      normalizedEmail,
-    );
-  }
-
-  async findAuthorizationByNangoReference(integrationId: string, connectionId: string) {
-    return await this.mainDo.findAuthorizationByNangoReference(integrationId, connectionId);
   }
 
   async findManyNotesByThreadId(
@@ -234,38 +140,6 @@ export class DbRpcDO extends RpcTarget {
     return await this.mainDo.updateUserSettings(this.userId, settings);
   }
 
-  async createConnection(
-    providerId: EProviders,
-    email: string,
-    updatingInfo: LegacyConnectionDetails,
-  ): Promise<{ id: string }[]> {
-    return await this.mainDo.createConnection(providerId, email, this.userId, updatingInfo);
-  }
-
-  async createMailboxWithAuthorization(
-    mailbox: CreateMailboxInput,
-    authorization: CreateAuthorizationInput,
-  ): Promise<{ id: string }> {
-    return await this.mainDo.createMailboxWithAuthorization(this.userId, mailbox, authorization);
-  }
-
-  async findConnectionById(
-    connectionId: string,
-  ): Promise<typeof connection.$inferSelect | undefined> {
-    return await this.mainDo.findConnectionById(connectionId);
-  }
-
-  async deleteActiveConnection(connectionId: string) {
-    return await this.mainDo.deleteActiveConnection(this.userId, connectionId);
-  }
-
-  async updateConnection(
-    connectionId: string,
-    updatingInfo: Partial<typeof connection.$inferInsert>,
-  ) {
-    return await this.mainDo.updateConnection(this.userId, connectionId, updatingInfo);
-  }
-
   async listEmailTemplates(): Promise<(typeof emailTemplate.$inferSelect)[]> {
     return await this.mainDo.findManyEmailTemplates(this.userId);
   }
@@ -296,135 +170,8 @@ class ZeroDB extends DurableObject<ZeroEnv> {
     });
   }
 
-  async findUserConnection(
-    userId: string,
-    connectionId: string,
-  ): Promise<typeof connection.$inferSelect | undefined> {
-    return await this.db.query.connection.findFirst({
-      where: and(eq(connection.userId, userId), eq(connection.id, connectionId)),
-    });
-  }
-
-  async findConnectionWithAuthorization(
-    userId: string,
-    connectionId: string,
-  ): Promise<ConnectionWithAuthorization | undefined> {
-    const [result] = await this.db
-      .select({
-        connection,
-        authorization: authorizationBinding,
-      })
-      .from(connection)
-      .leftJoin(authorizationBinding, eq(authorizationBinding.connectionId, connection.id))
-      .where(and(eq(connection.userId, userId), eq(connection.id, connectionId)))
-      .limit(1);
-    return result;
-  }
-
   async updateUser(userId: string, data: Partial<typeof user.$inferInsert>) {
     return await this.db.update(user).set(data).where(eq(user.id, userId));
-  }
-
-  async deleteConnection(connectionId: string, userId: string) {
-    const connections = await this.findManyConnections(userId);
-    if (connections.length <= 1) {
-      throw new Error('Cannot delete the last connection. At least one connection is required.');
-    }
-    return await this.db
-      .delete(connection)
-      .where(and(eq(connection.id, connectionId), eq(connection.userId, userId)));
-  }
-
-  private async requireUserConnection(userId: string, connectionId: string) {
-    const foundConnection = await this.findUserConnection(userId, connectionId);
-    if (!foundConnection) throw new Error('Mailbox not found');
-    return foundConnection;
-  }
-
-  async removeAuthorizationBinding(userId: string, connectionId: string) {
-    await this.requireUserConnection(userId, connectionId);
-    await this.db
-      .delete(authorizationBinding)
-      .where(eq(authorizationBinding.connectionId, connectionId));
-  }
-
-  async markConnectionDisconnected(userId: string, connectionId: string, disconnectedAt: Date) {
-    await this.requireUserConnection(userId, connectionId);
-    await this.db
-      .update(connection)
-      .set({ status: 'disconnected', disconnectedAt, updatedAt: disconnectedAt })
-      .where(and(eq(connection.id, connectionId), eq(connection.userId, userId)));
-  }
-
-  async markConnectionDeleting(userId: string, connectionId: string) {
-    await this.requireUserConnection(userId, connectionId);
-    await this.db
-      .update(connection)
-      .set({ status: 'deleting', updatedAt: new Date() })
-      .where(and(eq(connection.id, connectionId), eq(connection.userId, userId)));
-  }
-
-  async deleteMailbox(userId: string, connectionId: string) {
-    await this.requireUserConnection(userId, connectionId);
-    await this.db
-      .delete(connection)
-      .where(and(eq(connection.id, connectionId), eq(connection.userId, userId)));
-  }
-
-  async findFirstConnection(userId: string): Promise<typeof connection.$inferSelect | undefined> {
-    return await this.db.query.connection.findFirst({
-      where: eq(connection.userId, userId),
-    });
-  }
-
-  async findManyConnections(userId: string): Promise<(typeof connection.$inferSelect)[]> {
-    return await this.db.query.connection.findMany({
-      where: eq(connection.userId, userId),
-    });
-  }
-
-  async findManyConnectionsWithAuthorization(
-    userId: string,
-  ): Promise<ConnectionWithAuthorization[]> {
-    return await this.db
-      .select({
-        connection,
-        authorization: authorizationBinding,
-      })
-      .from(connection)
-      .leftJoin(authorizationBinding, eq(authorizationBinding.connectionId, connection.id))
-      .where(eq(connection.userId, userId));
-  }
-
-  async findConnectionByNormalizedEmail(
-    userId: string,
-    channelId: MailChannelId,
-    normalizedEmail: string,
-  ) {
-    const mailbox = await this.db.query.connection.findFirst({
-      where: and(
-        eq(connection.userId, userId),
-        eq(connection.channelId, channelId),
-        eq(connection.normalizedEmail, normalizedEmail),
-      ),
-      columns: {
-        id: true,
-        channelId: true,
-        status: true,
-      },
-    });
-    return mailbox ?? null;
-  }
-
-  async findAuthorizationByNangoReference(integrationId: string, connectionId: string) {
-    const binding = await this.db.query.authorizationBinding.findFirst({
-      where: and(
-        eq(authorizationBinding.nangoProviderConfigKey, integrationId),
-        eq(authorizationBinding.nangoConnectionId, connectionId),
-      ),
-      columns: { connectionId: true },
-    });
-    return binding ?? null;
   }
 
   async findManyNotesByThreadId(
@@ -543,7 +290,6 @@ class ZeroDB extends DurableObject<ZeroEnv> {
 
   async deleteUser(userId: string) {
     return await this.db.transaction(async (tx) => {
-      await tx.delete(connection).where(eq(connection.userId, userId));
       await tx.delete(account).where(eq(account.userId, userId));
       await tx.delete(session).where(eq(session.userId, userId));
       await tx.delete(userSettings).where(eq(userSettings.userId, userId));
@@ -609,134 +355,6 @@ class ZeroDB extends DurableObject<ZeroEnv> {
           updatedAt: new Date(),
         },
       });
-  }
-
-  async createConnection(
-    providerId: EProviders,
-    email: string,
-    userId: string,
-    updatingInfo: LegacyConnectionDetails,
-  ): Promise<{ id: string }[]> {
-    if (!updatingInfo.accessToken || !updatingInfo.refreshToken) {
-      throw new Error('Mailbox OAuth credential is missing');
-    }
-    const channelId = providerIdToChannelId(providerId);
-    const channel = getMailChannel(channelId);
-    const created = await this.createMailboxWithAuthorization(
-      userId,
-      {
-        name: updatingInfo.name,
-        picture: updatingInfo.picture,
-        providerKey: channel.providerKey,
-        channelId,
-        email,
-      },
-      {
-        authSource: 'zero_oauth',
-        credentialType: 'oauth2',
-        encryptedCredentialSnapshot: await encryptCredential(
-          createZeroOAuthSnapshot({
-            accessToken: updatingInfo.accessToken,
-            refreshToken: updatingInfo.refreshToken,
-            scope: updatingInfo.scope,
-          }),
-          this.env.CREDENTIAL_ENCRYPTION_KEY,
-        ),
-        accessTokenExpiresAt: updatingInfo.expiresAt,
-        credentialFetchedAt: new Date(),
-      },
-    );
-    return [created];
-  }
-
-  async createMailboxWithAuthorization(
-    userId: string,
-    mailbox: CreateMailboxInput,
-    authorization: CreateAuthorizationInput,
-  ): Promise<{ id: string }> {
-    const now = new Date();
-    const normalizedEmail = normalizeMailboxEmail(mailbox.email);
-    assertMailChannelBinding({
-      channelId: mailbox.channelId,
-      providerKey: mailbox.providerKey,
-      credentialType: authorization.credentialType,
-    });
-
-    return await this.db.transaction(async (tx) => {
-      const existing = await tx.query.connection.findFirst({
-        where: and(
-          eq(connection.userId, userId),
-          eq(connection.channelId, mailbox.channelId),
-          eq(connection.normalizedEmail, normalizedEmail),
-        ),
-      });
-      const connectionId = existing?.id ?? crypto.randomUUID();
-
-      if (existing) {
-        const existingAuthorization = await tx.query.authorizationBinding.findFirst({
-          where: eq(authorizationBinding.connectionId, existing.id),
-        });
-        assertAuthorizationCanBeAttached(existing.status, Boolean(existingAuthorization));
-        await tx
-          .update(connection)
-          .set({
-            ...mailbox,
-            normalizedEmail,
-            status: 'connected',
-            disconnectedAt: null,
-            updatedAt: now,
-          })
-          .where(eq(connection.id, existing.id));
-      } else {
-        await tx.insert(connection).values({
-          ...mailbox,
-          id: connectionId,
-          userId,
-          normalizedEmail,
-          createdAt: now,
-          updatedAt: now,
-        });
-      }
-
-      await tx.insert(authorizationBinding).values({
-        ...authorization,
-        id: crypto.randomUUID(),
-        connectionId,
-        createdAt: now,
-        updatedAt: now,
-      });
-
-      return { id: connectionId };
-    });
-  }
-
-  /**
-   * @param connectionId Dangerous, use findUserConnection instead
-   * @returns
-   */
-  async findConnectionById(
-    connectionId: string,
-  ): Promise<typeof connection.$inferSelect | undefined> {
-    return await this.db.query.connection.findFirst({
-      where: eq(connection.id, connectionId),
-    });
-  }
-
-  async deleteActiveConnection(userId: string, connectionId: string) {
-    return await this.db
-      .delete(connection)
-      .where(and(eq(connection.userId, userId), eq(connection.id, connectionId)));
-  }
-
-  async updateConnection(
-    userId: string,
-    connectionId: string,
-    updatingInfo: Partial<typeof connection.$inferInsert>,
-  ) {
-    return await this.db
-      .update(connection)
-      .set(updatingInfo)
-      .where(and(eq(connection.id, connectionId), eq(connection.userId, userId)));
   }
 
   async findManyEmailTemplates(userId: string): Promise<(typeof emailTemplate.$inferSelect)[]> {
@@ -929,7 +547,6 @@ const api = new Hono<HonoContext>()
     } finally {
       finalizeRequestTrace(c, requestSpan.id, c.res.status, requestError);
       c.set('sessionUser', undefined);
-      c.set('auth', undefined as any);
     }
   })
   .route('/public', publicRouter)
@@ -1159,142 +776,6 @@ export default class Entry extends WorkerEntrypoint<ZeroEnv> {
     await enqueueDueMailOutboundWork(this.env);
 
     await wakeDueMailSnoozes(this.env);
-
-  }
-
-  private async processScheduledEmails() {
-    console.log('Checking for scheduled emails ready to be queued...');
-    const { scheduled_emails: scheduledKV, send_email_queue } = this.env as {
-      scheduled_emails: KVNamespace;
-      send_email_queue: Queue<IEmailSendBatch>;
-    };
-
-    try {
-      const now = Date.now();
-      const twelveHoursFromNow = now + 12 * 60 * 60 * 1000;
-
-      let cursor: string | undefined = undefined;
-      const batchSize = 1000;
-
-      do {
-        const listResp: {
-          keys: { name: string }[];
-          cursor?: string;
-        } = await scheduledKV.list({ cursor, limit: batchSize });
-        cursor = listResp.cursor;
-
-        for (const key of listResp.keys) {
-          try {
-            const scheduledData = await scheduledKV.get(key.name);
-            if (!scheduledData) continue;
-
-            const { messageId, connectionId, sendAt } = JSON.parse(scheduledData);
-
-            if (sendAt <= twelveHoursFromNow) {
-              const delaySeconds = Math.max(0, Math.floor((sendAt - now) / 1000));
-
-              console.log(`Queueing scheduled email ${messageId} with ${delaySeconds}s delay`);
-
-              const queueBody: IEmailSendBatch = {
-                messageId,
-                connectionId,
-                sendAt,
-              };
-
-              await send_email_queue.send(queueBody, { delaySeconds });
-              await scheduledKV.delete(key.name);
-
-              console.log(`Successfully queued scheduled email ${messageId}`);
-            }
-          } catch (error) {
-            console.error('Failed to process scheduled email key', key.name, error);
-          }
-        }
-      } while (cursor);
-    } catch (error) {
-      console.error('Error processing scheduled emails:', error);
-    }
-  }
-
-  private async processExpiredSubscriptions() {
-    console.log('[SCHEDULED] Checking for expired subscriptions...');
-    const { db, conn } = createDb(this.env.HYPERDRIVE.connectionString);
-    const allAccounts = await db.query.connection.findMany({
-      where: (fields, { eq, and }) =>
-        and(eq(fields.status, 'connected'), eq(fields.channelId, 'gmail')),
-    });
-    await conn.end();
-    console.log('[SCHEDULED] allAccounts', allAccounts.length);
-    const now = new Date();
-    const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
-
-    const expiredSubscriptions: Array<{ connectionId: string; providerId: EProviders }> = [];
-
-    const nowTs = Date.now();
-
-    const unsnoozeMap: Record<string, { threadIds: string[]; keyNames: string[] }> = {};
-
-    let cursor: string | undefined = undefined;
-    do {
-      const listResp: {
-        keys: { name: string; metadata?: { wakeAt?: string } }[];
-        cursor?: string;
-      } = await this.env.snoozed_emails.list({ cursor, limit: 1000 });
-      cursor = listResp.cursor;
-
-      for (const key of listResp.keys) {
-        try {
-          const wakeAtIso = key.metadata?.wakeAt as string | undefined;
-          if (!wakeAtIso) continue;
-          const wakeAt = new Date(wakeAtIso).getTime();
-          if (wakeAt > nowTs) continue;
-
-          const [threadId, connectionId] = key.name.split('__');
-          if (!threadId || !connectionId) continue;
-
-          if (!unsnoozeMap[connectionId]) {
-            unsnoozeMap[connectionId] = { threadIds: [], keyNames: [] };
-          }
-          unsnoozeMap[connectionId].threadIds.push(threadId);
-          unsnoozeMap[connectionId].keyNames.push(key.name);
-        } catch (error) {
-          console.error('Failed to prepare unsnooze for key', key.name, error);
-        }
-      }
-    } while (cursor);
-
-    await Promise.all(
-      allAccounts.map(async ({ id, channelId }) => {
-        const providerId = channelIdToProviderId(channelId);
-        const lastSubscribed = await this.env.gmail_sub_age.get(`${id}__${providerId}`);
-
-        if (lastSubscribed) {
-          const subscriptionDate = new Date(lastSubscribed);
-          if (subscriptionDate < fiveDaysAgo) {
-            console.log(`[SCHEDULED] Found expired Google subscription for connection: ${id}`);
-            expiredSubscriptions.push({ connectionId: id, providerId: providerId as EProviders });
-          }
-        } else {
-          expiredSubscriptions.push({ connectionId: id, providerId: providerId as EProviders });
-        }
-      }),
-    );
-
-    // Send expired subscriptions to queue for renewal
-    if (expiredSubscriptions.length > 0) {
-      console.log(
-        `[SCHEDULED] Sending ${expiredSubscriptions.length} expired subscriptions to renewal queue`,
-      );
-      await Promise.all(
-        expiredSubscriptions.map(async ({ connectionId, providerId }) => {
-          await this.env.subscribe_queue.send({ connectionId, providerId });
-        }),
-      );
-    }
-
-    console.log(
-      `[SCHEDULED] Processed ${allAccounts.keys.length} accounts, found ${expiredSubscriptions.length} expired subscriptions`,
-    );
   }
 }
 

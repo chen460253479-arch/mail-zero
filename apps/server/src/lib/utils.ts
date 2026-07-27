@@ -1,4 +1,4 @@
-import type { AppContext, EProviders, Sender } from '../types';
+import type { AppContext, Sender } from '../types';
 import { env } from '../env';
 
 export const parseHeaders = (token: string) => {
@@ -12,35 +12,15 @@ export const parseHeaders = (token: string) => {
  */
 export const c = {
   env,
-  json: (data: any, status: number) => ({
+  json: (data: unknown, status: number) => ({
     data,
     status,
   }),
-  text: (data: any, status: number) => ({
+  text: (data: unknown, status: number) => ({
     data,
     status,
   }),
 } as unknown as AppContext;
-
-export const getNotificationsUrl = (provider: EProviders) => {
-  return env.DEV_PROXY
-    ? `${env.DEV_PROXY}/a8n/notify/${provider}`
-    : env.VITE_PUBLIC_BACKEND_URL + '/a8n/notify/' + provider;
-};
-
-export async function setSubscribedState(
-  connectionId: string,
-  providerId: EProviders,
-): Promise<void> {
-  return await env.subscribed_accounts.put(
-    `${connectionId}__${providerId}`,
-    new Date().toISOString(),
-  );
-}
-
-export async function cleanupOnFailure(connectionId: string): Promise<void> {
-  return await env.subscribed_accounts.delete(connectionId);
-}
 
 export const FOLDERS = {
   SPAM: 'spam',

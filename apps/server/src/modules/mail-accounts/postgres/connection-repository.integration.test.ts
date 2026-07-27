@@ -66,6 +66,15 @@ describe('PostgreSQL mail connection repository', () => {
             authSource: 'zero_oauth',
           },
         });
+      await expect(repository.findFirstOwnedConnection('user-1')).resolves.toMatchObject({
+        id: 'generated-1',
+      });
+      await expect(repository.listConnectionsWithAuthorization('user-1')).resolves.toMatchObject([
+        {
+          connection: { id: 'generated-1' },
+          authorization: { id: 'generated-2' },
+        },
+      ]);
     });
   });
 

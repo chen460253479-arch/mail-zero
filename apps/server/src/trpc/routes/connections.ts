@@ -13,9 +13,7 @@ import { resolveFetchedNangoCredential } from '../../modules/mail-accounts/crede
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import { defaultMailChannelRegistry } from '../../mail-channel/registry';
 import { NangoIntegrationError } from '../../integrations/nango/errors';
-import { findMailChannel } from '../../lib/mail-channel/registry';
 import { user as userTable } from '../../db/schema';
-import { getZeroDB } from '../../lib/server-utils';
 import { Ratelimit } from '@upstash/ratelimit';
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
@@ -85,16 +83,18 @@ export const connectionsRouter = router({
     )
     .query(async ({ ctx }) => {
       const { sessionUser } = ctx;
-      const db = await getZeroDB(sessionUser.id);
-      const records = await db.findManyConnectionsWithAuthorization();
+      const database = createDb(env.HYPERDRIVE.connectionString);
+      try {
+        const records = await createPostgresConnectionRepository(
+          database.db,
+        ).listConnectionsWithAuthorization(sessionUser.id);
 
-      const disconnectedIds = records
-        .filter(({ connection }) => connection.status === 'disconnected')
-        .map(({ connection }) => connection.id);
+        const disconnectedIds = records
+          .filter(({ connection }) => connection.status === 'disconnected')
+          .map(({ connection }) => connection.id);
 
-      return {
-        connections: records.map(({ connection, authorization }) => {
-          return {
+        return {
+          connections: records.map(({ connection, authorization }) => ({
             id: connection.id,
             email: connection.email,
             name: connection.name,
@@ -103,11 +103,15 @@ export const connectionsRouter = router({
             channelId: connection.channelId,
             status: connection.status,
             authSource: authorization?.authSource ?? null,
-            capabilities: Array.from(findMailChannel(connection.channelId)?.capabilities ?? []),
-          };
-        }),
-        disconnectedIds,
-      };
+            capabilities: Array.from(
+              defaultMailChannelRegistry.find(connection.channelId)?.capabilities ?? [],
+            ),
+          })),
+          disconnectedIds,
+        };
+      } finally {
+        await database.conn.end();
+      }
     }),
   getGmailAuthorizationOptions: privateProcedure.query(getGmailAuthorizationOptions),
   listNangoGmailConnections: privateProcedure.query(async () => {
@@ -234,10 +238,19 @@ export const connectionsRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { connectionId } = input;
       const user = ctx.sessionUser;
-      const db = await getZeroDB(user.id);
-      const foundConnection = await db.findUserConnection(connectionId);
-      if (!foundConnection) throw new TRPCError({ code: 'NOT_FOUND' });
-      await db.updateUser({ defaultConnectionId: connectionId });
+      const database = createDb(env.HYPERDRIVE.connectionString);
+      try {
+        const foundConnection = await createPostgresConnectionRepository(
+          database.db,
+        ).findOwnedConnection(user.id, connectionId);
+        if (!foundConnection) throw new TRPCError({ code: 'NOT_FOUND' });
+        await database.db
+          .update(userTable)
+          .set({ defaultConnectionId: connectionId, updatedAt: new Date() })
+          .where(eq(userTable.id, user.id));
+      } finally {
+        await database.conn.end();
+      }
     }),
   disconnect: privateProcedure
     .input(
@@ -282,25 +295,40 @@ export const connectionsRouter = router({
     }),
   getDefault: publicProcedure.query(async ({ ctx }) => {
     if (!ctx.sessionUser) return null;
-    const db = await getZeroDB(ctx.sessionUser.id);
-    const user = await db.findUser();
-    const selectedConnection = user?.defaultConnectionId
-      ? (await db.findUserConnection(user.defaultConnectionId)) || (await db.findFirstConnection())
-      : await db.findFirstConnection();
-    if (!selectedConnection) return null;
-    const record = await db.findConnectionWithAuthorization(selectedConnection.id);
-    if (!record) return null;
-    const { connection, authorization } = record;
-    return {
-      id: connection.id,
-      email: connection.email,
-      name: connection.name,
-      picture: connection.picture,
-      createdAt: connection.createdAt,
-      channelId: connection.channelId,
-      status: connection.status,
-      authSource: authorization?.authSource ?? null,
-      capabilities: Array.from(findMailChannel(connection.channelId)?.capabilities ?? []),
-    };
+    const database = createDb(env.HYPERDRIVE.connectionString);
+    try {
+      const repository = createPostgresConnectionRepository(database.db);
+      const foundUser = await database.db.query.user.findFirst({
+        where: eq(userTable.id, ctx.sessionUser.id),
+      });
+      const selectedConnection = foundUser?.defaultConnectionId
+        ? ((await repository.findOwnedConnection(
+            ctx.sessionUser.id,
+            foundUser.defaultConnectionId,
+          )) ?? (await repository.findFirstOwnedConnection(ctx.sessionUser.id)))
+        : await repository.findFirstOwnedConnection(ctx.sessionUser.id);
+      if (!selectedConnection) return null;
+      const record = await repository.findConnectionWithAuthorization(
+        ctx.sessionUser.id,
+        selectedConnection.id,
+      );
+      if (!record) return null;
+      const { connection, authorization } = record;
+      return {
+        id: connection.id,
+        email: connection.email,
+        name: connection.name,
+        picture: connection.picture,
+        createdAt: connection.createdAt,
+        channelId: connection.channelId,
+        status: connection.status,
+        authSource: authorization?.authSource ?? null,
+        capabilities: Array.from(
+          defaultMailChannelRegistry.find(connection.channelId)?.capabilities ?? [],
+        ),
+      };
+    } finally {
+      await database.conn.end();
+    }
   }),
 });

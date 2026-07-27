@@ -73,6 +73,18 @@ export const createPostgresConnectionRepository = (
   return {
     findOwnedConnection,
 
+    findFirstOwnedConnection: async (userId: string) =>
+      (await db.query.connection.findFirst({
+        where: eq(connection.userId, userId),
+      })) ?? null,
+
+    listConnectionsWithAuthorization: async (userId: string) =>
+      await db
+        .select({ connection, authorization: authorizationBinding })
+        .from(connection)
+        .leftJoin(authorizationBinding, eq(authorizationBinding.connectionId, connection.id))
+        .where(eq(connection.userId, userId)),
+
     findMailboxByNormalizedEmail: async (
       userId: string,
       channelId: MailChannelId,

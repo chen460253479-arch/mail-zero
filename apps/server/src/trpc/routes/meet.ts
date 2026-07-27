@@ -1,4 +1,4 @@
-import { activeDriverProcedure, createRateLimiterMiddleware, router } from '../trpc';
+import { createRateLimiterMiddleware, privateProcedure, router } from '../trpc';
 import { Ratelimit } from '@upstash/ratelimit';
 import { TRPCError } from '@trpc/server';
 import { env } from '../../env';
@@ -19,7 +19,7 @@ type MeetResponse = {
 };
 
 export const meetRouter = router({
-  create: activeDriverProcedure
+  create: privateProcedure
     .use(
       createRateLimiterMiddleware({
         limiter: Ratelimit.slidingWindow(10, '1m'),

@@ -30,10 +30,6 @@
       "queues": {
         "producers": [
           {
-            "queue": "subscribe-queue",
-            "binding": "subscribe_queue",
-          },
-          {
             "queue": "mail-ingress-queue",
             "binding": "MAIL_INGRESS_QUEUE",
           },
@@ -41,15 +37,8 @@
             "queue": "mail-outbound-queue",
             "binding": "MAIL_OUTBOUND_QUEUE",
           },
-          {
-            "queue": "send-email-queue",
-            "binding": "send_email_queue",
-          },
         ],
         "consumers": [
-          {
-            "queue": "subscribe-queue",
-          },
           {
             "queue": "mail-ingress-queue",
             "max_batch_size": 10,
@@ -59,9 +48,6 @@
             "queue": "mail-outbound-queue",
             "max_batch_size": 10,
             "max_retries": 5,
-          },
-          {
-            "queue": "send-email-queue",
           },
         ],
       },
@@ -139,44 +125,6 @@
         "OTEL_EXPORTER_OTLP_ENDPOINT": "https://api.axiom.co/v1/traces",
         "OTEL_SERVICE_NAME": "zero-email-server-local",
       },
-      "kv_namespaces": [
-        {
-          "binding": "gmail_history_id",
-          "id": "4e814c70e35d413d99c923029928efae",
-        },
-        {
-          "binding": "gmail_processing_threads",
-          "id": "b7db3a98a80f4e16a8b6edc5fa8c7b76",
-        },
-        {
-          "binding": "subscribed_accounts",
-          "id": "7e6eadacf19c4c56a9ec3c357adb584a",
-        },
-        {
-          "binding": "connection_labels",
-          "id": "4d3a28d3265a4388aae2e9e9b534d019",
-        },
-        {
-          "binding": "gmail_sub_age",
-          "id": "c55e692bb71d4e5bae23dded092b09d5",
-        },
-        {
-          "binding": "pending_emails_status",
-          "id": "7f277903ebab4b4d89f5d59b1f531073",
-        },
-        {
-          "binding": "pending_emails_payload",
-          "id": "d5da698931524da9992fe398e095fc32",
-        },
-        {
-          "binding": "scheduled_emails",
-          "id": "444cad0e54114635b5199ffae9542bd5",
-        },
-        {
-          "binding": "snoozed_emails",
-          "id": "f3a30ed7198542d890db172536bade33",
-        },
-      ],
     },
     "staging": {
       "rules": [
@@ -209,10 +157,6 @@
       "queues": {
         "producers": [
           {
-            "queue": "subscribe-queue-staging",
-            "binding": "subscribe_queue",
-          },
-          {
             "queue": "mail-ingress-queue-staging",
             "binding": "MAIL_INGRESS_QUEUE",
           },
@@ -220,15 +164,8 @@
             "queue": "mail-outbound-queue-staging",
             "binding": "MAIL_OUTBOUND_QUEUE",
           },
-          {
-            "queue": "send-email-queue-staging",
-            "binding": "send_email_queue",
-          },
         ],
         "consumers": [
-          {
-            "queue": "subscribe-queue-staging",
-          },
           {
             "queue": "mail-ingress-queue-staging",
             "max_batch_size": 10,
@@ -238,9 +175,6 @@
             "queue": "mail-outbound-queue-staging",
             "max_batch_size": 10,
             "max_retries": 5,
-          },
-          {
-            "queue": "send-email-queue-staging",
           },
         ],
       },
@@ -316,44 +250,6 @@
         "OTEL_EXPORTER_OTLP_ENDPOINT": "https://api.axiom.co/v1/traces",
         "OTEL_SERVICE_NAME": "zero-email-server-staging",
       },
-      "kv_namespaces": [
-        {
-          "binding": "gmail_history_id",
-          "id": "4e814c70e35d413d99c923029928efae",
-        },
-        {
-          "binding": "gmail_processing_threads",
-          "id": "b7db3a98a80f4e16a8b6edc5fa8c7b76",
-        },
-        {
-          "binding": "subscribed_accounts",
-          "id": "7e6eadacf19c4c56a9ec3c357adb584a",
-        },
-        {
-          "binding": "connection_labels",
-          "id": "4d3a28d3265a4388aae2e9e9b534d019",
-        },
-        {
-          "binding": "gmail_sub_age",
-          "id": "c55e692bb71d4e5bae23dded092b09d5",
-        },
-        {
-          "binding": "pending_emails_status",
-          "id": "7f277903ebab4b4d89f5d59b1f531073",
-        },
-        {
-          "binding": "pending_emails_payload",
-          "id": "d5da698931524da9992fe398e095fc32",
-        },
-        {
-          "binding": "scheduled_emails",
-          "id": "444cad0e54114635b5199ffae9542bd5",
-        },
-        {
-          "binding": "snoozed_emails",
-          "id": "f3a30ed7198542d890db172536bade33",
-        },
-      ],
     },
     "production": {
       "rules": [
@@ -393,10 +289,6 @@
       "queues": {
         "producers": [
           {
-            "queue": "subscribe-queue-prod",
-            "binding": "subscribe_queue",
-          },
-          {
             "queue": "mail-ingress-queue-prod",
             "binding": "MAIL_INGRESS_QUEUE",
           },
@@ -404,15 +296,8 @@
             "queue": "mail-outbound-queue-prod",
             "binding": "MAIL_OUTBOUND_QUEUE",
           },
-          {
-            "queue": "send-email-queue-prod",
-            "binding": "send_email_queue",
-          },
         ],
         "consumers": [
-          {
-            "queue": "subscribe-queue-prod",
-          },
           {
             "queue": "mail-ingress-queue-prod",
             "max_batch_size": 10,
@@ -422,9 +307,6 @@
             "queue": "mail-outbound-queue-prod",
             "max_batch_size": 10,
             "max_retries": 5,
-          },
-          {
-            "queue": "send-email-queue-prod",
           },
         ],
       },
@@ -490,44 +372,6 @@
         "OTEL_EXPORTER_OTLP_ENDPOINT": "https://api.axiom.co/v1/traces",
         "OTEL_SERVICE_NAME": "zero-email-server-production",
       },
-      "kv_namespaces": [
-        {
-          "binding": "gmail_history_id",
-          "id": "10005d74e84f4f18a17c9618d9e9cecf",
-        },
-        {
-          "binding": "gmail_processing_threads",
-          "id": "3348ff0976284269a8d8a5e6e4c04c56",
-        },
-        {
-          "binding": "subscribed_accounts",
-          "id": "5902b3b948ff4c4ba1aedbbbbe25503d",
-        },
-        {
-          "binding": "connection_labels",
-          "id": "9a13290a55ad4f62824c67005dd66f6f",
-        },
-        {
-          "binding": "gmail_sub_age",
-          "id": "0591e91fffcc4675aaf00f909bee77d2",
-        },
-        {
-          "binding": "pending_emails_status",
-          "id": "e65f8f72441d4eadb9d5ae36269316c9",
-        },
-        {
-          "binding": "pending_emails_payload",
-          "id": "e65f8f72441d4eadb9d5ae36269316c9_payload",
-        },
-        {
-          "binding": "scheduled_emails",
-          "id": "e65f8f72441d4eadb9d5ae36269316c9_scheduled",
-        },
-        {
-          "binding": "snoozed_emails",
-          "id": "f0952e9c3b024cb499c4b9dfe8bb603e",
-        },
-      ],
     },
   },
 }

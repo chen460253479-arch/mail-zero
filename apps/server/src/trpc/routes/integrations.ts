@@ -8,9 +8,11 @@ import { NangoChannelMappingService } from '../../modules/mail-accounts/applicat
 import { type GmailOAuthService } from '../../modules/mail-accounts/application/connect-gmail-oauth';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import { createGmailOAuthApplication } from '../../runtime/mail/gmail-oauth';
-import { getMailChannel } from '../../lib/mail-channel/registry';
+import { createPostgresConnectionRepository } from '../../modules/mail-accounts/postgres/connection-repository';
+import { provisionGmailMailboxInDatabase } from '../../modules/mail-accounts/runtime/provision-gmail-mailbox';
+import { normalizeMailboxEmail } from '../../modules/mail-accounts/application/mailbox-identity';
+import { defaultMailChannelRegistry } from '../../mail-channel/registry';
 import { mapIntegrationError } from './integration-errors';
-import { getZeroDB } from '../../lib/server-utils';
 import { adminProcedure, router } from '../trpc';
 import type { ZeroEnv } from '../../env';
 import { createDb } from '../../db';
@@ -41,12 +43,30 @@ const withIntegrationServices = async <T>(
       nangoChannels: new NangoChannelMappingService({
         repository,
         listIntegrations: () => nango.listIntegrations(),
-        getChannel: (channelId) => getMailChannel(channelId),
+        getChannel: (channelId) => defaultMailChannelRegistry.get(channelId),
       }),
       gmail: createGmailOAuthApplication({
         repository,
-        saveMailbox: async (userId, mailbox, authorization) =>
-          await (await getZeroDB(userId)).createMailboxWithAuthorization(mailbox, authorization),
+        saveMailbox: async (userId, mailbox, authorization) => {
+          const result = await createPostgresConnectionRepository(db).saveBinding({
+            userId,
+            existingMailboxId: null,
+            mailbox: {
+              ...mailbox,
+              normalizedEmail: normalizeMailboxEmail(mailbox.email),
+            },
+            authorization,
+          });
+          await provisionGmailMailboxInDatabase(db, env, {
+            userId,
+            connectionId: result.id,
+            identity: {
+              email: mailbox.email,
+              name: mailbox.name,
+            },
+          });
+          return result;
+        },
         encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
         backendUrl: env.VITE_PUBLIC_BACKEND_URL,
       }),

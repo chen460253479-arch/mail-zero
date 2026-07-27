@@ -14,7 +14,6 @@ describe('mail provider configuration boundaries', () => {
       '.env.example',
       'apps/server/src/env.ts',
       'apps/server/src/lib/auth.ts',
-      'apps/server/src/lib/factories/google-subscription.factory.ts',
       'packages/cli/src/commands/fix-env.ts',
     ];
 

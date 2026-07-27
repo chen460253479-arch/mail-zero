@@ -53,6 +53,49 @@ const importsBelow = (
   );
 
 describe('mail server architecture', () => {
+  it('contains no retired remote-mail source trees', () => {
+    const retiredPaths = [
+      'lib/driver',
+      'lib/mail-channel',
+      'lib/factories',
+      'lib/bulk-delete.ts',
+    ];
+
+    expect(retiredPaths.filter((path) => existsSync(resolve(srcRoot, path)))).toEqual([]);
+  });
+
+  it('contains no retired mail Queue or KV bindings in runtime configuration', () => {
+    const retiredBindings = [
+      'subscribe_queue',
+      'send_email_queue',
+      'thread_queue',
+      'gmail_history_id',
+      'gmail_processing_threads',
+      'gmail_sub_age',
+      'subscribed_accounts',
+      'connection_labels',
+      'pending_emails_status',
+      'pending_emails_payload',
+      'scheduled_emails',
+      'snoozed_emails',
+      'prompts_storage',
+    ];
+    const configurationFiles = [
+      resolve(srcRoot, 'env.ts'),
+      resolve(srcRoot, '../wrangler.jsonc'),
+      resolve(srcRoot, '../worker-configuration.d.ts'),
+      resolve(srcRoot, '../../../compose.yaml'),
+    ].filter(existsSync);
+    const violations = configurationFiles.flatMap((file) => {
+      const source = readFileSync(file, 'utf8');
+      return retiredBindings
+        .filter((binding) => source.includes(binding))
+        .map((binding) => `${normalizePath(relative(srcRoot, file))}:${binding}`);
+    });
+
+    expect(violations).toEqual([]);
+  });
+
   it('keeps every canonical mail module in its declared root', () => {
     const missing = canonicalRoots.filter((root) => !existsSync(resolve(srcRoot, root)));
     expect(missing).toEqual([]);
