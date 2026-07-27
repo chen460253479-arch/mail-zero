@@ -12,6 +12,7 @@ import {
 import { Analytics as DubAnalytics } from '@dub/analytics/react';
 import { ServerProviders } from '@/providers/server-providers';
 import { ClientProviders } from '@/providers/client-providers';
+import { getServerBackendUrl } from '@/lib/server-backend-url';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import { useEffect, type PropsWithChildren } from 'react';
 import type { AppRouter } from '@zero/server/trpc';
@@ -28,7 +29,7 @@ import * as Sentry from '@sentry/react';
 import superjson from 'superjson';
 import './globals.css';
 
-const getUrl = () => import.meta.env.VITE_PUBLIC_BACKEND_URL + '/api/trpc';
+const getUrl = () => getServerBackendUrl() + '/api/trpc';
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await authProxy.api.getSession({ headers: request.headers });

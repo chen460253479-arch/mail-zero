@@ -7,6 +7,7 @@ x-zero-development: &zero-development
   environment:
     ZERO_WRANGLER_ENV: ${ZERO_WRANGLER_ENV:-local}
     ZERO_DOCKER_DEV: 'true'
+    VITE_INTERNAL_BACKEND_URL: ${VITE_INTERNAL_BACKEND_URL:-http://server:8787}
     CHOKIDAR_USEPOLLING: 'true'
     CHOKIDAR_INTERVAL: '1000'
     DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-zerodotemail}
@@ -19,6 +20,11 @@ x-zero-development: &zero-development
     - zero-node-modules:/app/node_modules
     - zero-mail-node-modules:/app/apps/mail/node_modules
     - zero-server-node-modules:/app/apps/server/node_modules
+    - zero-cli-node-modules:/app/packages/cli/node_modules
+    - zero-eslint-config-node-modules:/app/packages/eslint-config/node_modules
+    - zero-mail-core-node-modules:/app/packages/mail-core/node_modules
+    - zero-testing-node-modules:/app/packages/testing/node_modules
+    - zero-tsconfig-node-modules:/app/packages/tsconfig/node_modules
     - zero-wrangler-state:/app/apps/server/.wrangler
 
 services:
@@ -134,4 +140,9 @@ volumes:
   zero-node-modules:
   zero-mail-node-modules:
   zero-server-node-modules:
+  zero-cli-node-modules:
+  zero-eslint-config-node-modules:
+  zero-mail-core-node-modules:
+  zero-testing-node-modules:
+  zero-tsconfig-node-modules:
   zero-wrangler-state:

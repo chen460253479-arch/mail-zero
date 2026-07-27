@@ -1,8 +1,9 @@
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
+import { getServerBackendUrl } from './server-backend-url';
 import type { AppRouter } from '@zero/server/trpc';
 import superjson from 'superjson';
 
-const getUrl = () => import.meta.env.VITE_PUBLIC_BACKEND_URL + '/api/trpc';
+const getUrl = () => getServerBackendUrl() + '/api/trpc';
 
 export const getServerTrpc = (req: Request) =>
   createTRPCClient<AppRouter>({

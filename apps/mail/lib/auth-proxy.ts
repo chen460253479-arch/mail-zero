@@ -1,7 +1,8 @@
+import { getServerBackendUrl } from './server-backend-url';
 import { createAuthClient } from 'better-auth/client';
 
 const authClient = createAuthClient({
-  baseURL: import.meta.env.VITE_PUBLIC_BACKEND_URL,
+  baseURL: getServerBackendUrl(),
   fetchOptions: {
     credentials: 'include',
   },

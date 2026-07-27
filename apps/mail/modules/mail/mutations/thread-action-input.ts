@@ -34,7 +34,7 @@ const destinationRoles = {
   bin: 'trash',
 } as const satisfies Record<string, MailboxRole>;
 
-const exclusiveSystemRoles: MailboxRole[] = ['inbox', 'archive', 'junk', 'trash'];
+const exclusiveSystemRoles = new Set<MailboxRole>(['inbox', 'archive', 'junk', 'trash']);
 
 export function buildMoveThreadAction({
   destination,
@@ -54,7 +54,7 @@ export function buildMoveThreadAction({
     .filter(
       (mailbox) =>
         mailbox.role !== null &&
-        exclusiveSystemRoles.includes(mailbox.role) &&
+        exclusiveSystemRoles.has(mailbox.role) &&
         mailbox.id !== destinationMailbox.id,
     )
     .map((mailbox) => mailbox.id);

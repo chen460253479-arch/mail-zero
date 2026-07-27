@@ -6,14 +6,14 @@ import { Outlet } from 'react-router';
 
 export default function Layout() {
   return (
-    <CommandPaletteProvider>
-      <MailAccountBootstrapProvider>
+    <MailAccountBootstrapProvider>
+      <CommandPaletteProvider>
         <HotkeyProviderWrapper>
           <div className="relative flex max-h-screen w-full overflow-hidden">
             <Outlet />
           </div>
         </HotkeyProviderWrapper>
-      </MailAccountBootstrapProvider>
-    </CommandPaletteProvider>
+      </CommandPaletteProvider>
+    </MailAccountBootstrapProvider>
   );
 }
