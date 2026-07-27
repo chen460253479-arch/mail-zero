@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false,
+    "types": ["node", "vite/client"]
+  },
+  "include": ["modules/mail/**/*.ts", "modules/mail/**/*.tsx"],
+  "exclude": ["build", "node_modules", "modules/mail/**/*.test.ts", "modules/mail/**/*.test.tsx"]
+}

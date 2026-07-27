@@ -9,6 +9,7 @@
     "start": "wrangler dev --port 3000 --show-interactive-dev-session=false",
     "types": "wrangler types",
     "deploy": "wrangler deploy",
+    "test": "vitest run",
     "lint": "eslint .",
     "machine-translate": "inlang machine translate --project project.inlang"
   },
@@ -140,6 +141,7 @@
     "typescript": "catalog:",
     "vite": "^6.3.5",
     "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "3.2.4",
     "wrangler": "catalog:"
   }
 }

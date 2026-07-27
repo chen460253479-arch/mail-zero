@@ -5,6 +5,7 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useLoaderData,
   useNavigate,
   type MetaFunction,
 } from 'react-router';
@@ -17,6 +18,7 @@ import type { AppRouter } from '@zero/server/trpc';
 import { Button } from '@/components/ui/button';
 import { getLocale } from '@/paraglide/runtime';
 import { siteConfig } from '@/lib/site-config';
+import { authProxy } from '@/lib/auth-proxy';
 import { signOut } from '@/lib/auth-client';
 import type { Route } from './+types/root';
 import { AlertCircle } from 'lucide-react';
@@ -27,6 +29,11 @@ import superjson from 'superjson';
 import './globals.css';
 
 const getUrl = () => import.meta.env.VITE_PUBLIC_BACKEND_URL + '/api/trpc';
+
+export async function loader({ request }: Route.LoaderArgs) {
+  const session = await authProxy.api.getSession({ headers: request.headers });
+  return { userId: session?.user.id ?? null };
+}
 
 export const getServerTrpc = (req: Request) =>
   createTRPCClient<AppRouter>({
@@ -54,6 +61,8 @@ export const meta: MetaFunction = () => {
 };
 
 export function Layout({ children }: PropsWithChildren) {
+  const { userId } = useLoaderData<typeof loader>();
+
   return (
     <html lang={getLocale()} suppressHydrationWarning>
       <head>
@@ -69,7 +78,7 @@ export function Layout({ children }: PropsWithChildren) {
         <Links />
       </head>
       <body className="antialiased">
-        <ServerProviders connectionId={null}>
+        <ServerProviders userId={userId}>
           <ClientProviders>{children}</ClientProviders>
           <DubAnalytics
             domainsConfig={{

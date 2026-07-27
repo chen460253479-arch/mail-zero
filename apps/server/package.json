@@ -19,6 +19,8 @@
   },
   "exports": {
     "./trpc": "./src/trpc/index.ts",
+    "./mail-api": "./src/modules/mail-api/index.ts",
+    "./mail-api-contracts": "./src/modules/mail-api/public-contracts.ts",
     "./auth": "./src/lib/auth.ts",
     "./schemas": "./src/lib/schemas.ts"
   },

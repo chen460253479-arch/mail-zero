@@ -3,7 +3,7 @@ import type { PropsWithChildren } from 'react';
 
 export function ServerProviders({
   children,
-  connectionId,
-}: PropsWithChildren<{ connectionId: string | null }>) {
-  return <QueryProvider connectionId={connectionId}>{children}</QueryProvider>;
+  userId,
+}: PropsWithChildren<{ userId: string | null }>) {
+  return <QueryProvider userId={userId}>{children}</QueryProvider>;
 }

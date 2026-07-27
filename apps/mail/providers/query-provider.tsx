@@ -4,6 +4,7 @@ import {
   type Persister,
 } from '@tanstack/react-query-persist-client';
 import { QueryCache, QueryClient, hashKey, type InfiniteData } from '@tanstack/react-query';
+import { getQueryCacheStorageKey } from '@/modules/mail/api/query-cache-scope';
 import { createTRPCContext } from '@trpc/tanstack-react-query';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import { useMemo, type PropsWithChildren } from 'react';
@@ -27,7 +28,7 @@ function createIDBPersister(idbValidKey: IDBValidKey = 'zero-query-cache') {
   } satisfies Persister;
 }
 
-export const makeQueryClient = (connectionId: string | null) =>
+export const makeQueryClient = () =>
   new QueryClient({
     queryCache: new QueryCache({
       onError: (err, { meta }) => {
@@ -52,7 +53,7 @@ export const makeQueryClient = (connectionId: string | null) =>
       queries: {
         retry: false,
         refetchOnWindowFocus: false,
-        queryKeyHashFn: (queryKey) => hashKey([{ connectionId }, ...queryKey]),
+        queryKeyHashFn: hashKey,
         gcTime: 1000 * 60 * 60 * 24, // 24 hours,
       },
       mutations: {
@@ -63,19 +64,20 @@ export const makeQueryClient = (connectionId: string | null) =>
 
 let browserQueryClient = {
   queryClient: null,
-  activeConnectionId: null,
+  activeUserId: null,
 } as {
   queryClient: QueryClient | null;
-  activeConnectionId: string | null;
+  activeUserId: string | null;
 };
 
-const getQueryClient = (connectionId: string | null) => {
+const getQueryClient = (userId: string | null) => {
   if (typeof window === 'undefined') {
-    return makeQueryClient(connectionId);
+    return makeQueryClient();
   } else {
-    if (!browserQueryClient.queryClient || browserQueryClient.activeConnectionId !== connectionId) {
-      browserQueryClient.queryClient = makeQueryClient(connectionId);
-      browserQueryClient.activeConnectionId = connectionId;
+    if (!browserQueryClient.queryClient || browserQueryClient.activeUserId !== userId) {
+      browserQueryClient.queryClient?.clear();
+      browserQueryClient.queryClient = makeQueryClient();
+      browserQueryClient.activeUserId = userId;
     }
     return browserQueryClient.queryClient;
   }
@@ -108,15 +110,20 @@ export const trpcClient = createTRPCClient<AppRouter>({
 });
 
 type TrpcHook = ReturnType<typeof useTRPC>;
-export function QueryProvider({
-  children,
-  connectionId,
-}: PropsWithChildren<{ connectionId: string | null }>) {
-  const persister = useMemo(
-    () => createIDBPersister(`zero-query-cache-${connectionId ?? 'default'}`),
-    [connectionId],
-  );
-  const queryClient = useMemo(() => getQueryClient(connectionId), [connectionId]);
+export function QueryProvider({ children, userId }: PropsWithChildren<{ userId: string | null }>) {
+  const storageKey = getQueryCacheStorageKey(userId);
+  const persister = useMemo(() => {
+    if (storageKey) {
+      return createIDBPersister(storageKey);
+    }
+
+    return {
+      persistClient: async () => undefined,
+      restoreClient: async () => undefined,
+      removeClient: async () => undefined,
+    } satisfies Persister;
+  }, [storageKey]);
+  const queryClient = useMemo(() => getQueryClient(userId), [userId]);
 
   return (
     <PersistQueryClientProvider
