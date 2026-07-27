@@ -1,11 +1,13 @@
 import { createMailCore } from '@zero/mail-core';
 import { describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 
 import { createPostgresMailSyncRepository } from '../../src/modules/mail-sync/postgres/sync-repository';
 import { importPendingMessages } from '../../src/modules/mail-sync/application/import-pending';
 import type { InboundMailAdapter, IngressScope } from '../../src/modules/mail-sync';
 import { createPostgresMailTestHarness } from '../mail-core/helpers/harness';
 import { withMailSyncTestDatabase } from './helpers/database';
+import { inboundSync } from '../../src/db/schema';
 
 const scope: IngressScope = {
   version: 1,
@@ -141,6 +143,152 @@ describe('pending import integration', () => {
       });
       expect(projection!.change_count).toBeGreaterThan(0);
       expect(projection!.local_email_id).toBeTruthy();
+
+      await repository.acquireSyncLease({
+        syncId: sync.id,
+        owner: 'second-discovery-worker',
+        leaseForMs: 60_000,
+      });
+      await repository.persistDiscoveryPage({
+        syncId: sync.id,
+        owner: 'second-discovery-worker',
+        events: [
+          {
+            type: 'message_added',
+            remoteMessageId: 'gmail-message-2',
+            remoteThreadId: null,
+          },
+        ],
+      });
+      await repository.releaseSyncLease({
+        syncId: sync.id,
+        owner: 'second-discovery-worker',
+      });
+
+      const authenticationResult = await importPendingMessages(
+        {
+          syncId: sync.id,
+          owner: 'authentication-worker',
+          limit: 10,
+          leaseForMs: 60_000,
+          maxAttempts: 5,
+          baseRetryDelayMs: 1_000,
+        },
+        {
+          clock: harness.dependencies.clock,
+          resolveContext: async () => ({
+            accountId: harness.accountId,
+            connectionId: 'postgres-connection-mail-sync-import',
+            provider: 'gmail',
+            scope,
+            inboxMailboxId: harness.inbox.id,
+          }),
+          getAdapterFactory: () => ({
+            create: async () => ({
+              ...adapter,
+              fetchRawMessage: async () => {
+                throw new Error('unauthorized');
+              },
+              classifyError: () => 'authentication',
+            }),
+          }),
+          repository,
+          mailCore: createMailCore(harness.dependencies),
+          onAuthenticationError: async ({ syncId, errorCode, errorMessage }) => {
+            await db
+              .update(inboundSync)
+              .set({
+                status: 'auth_error',
+                lastErrorCode: errorCode,
+                lastErrorMessage: errorMessage,
+              })
+              .where(eq(inboundSync.id, syncId));
+          },
+        },
+      );
+      expect(authenticationResult).toEqual({
+        claimed: 1,
+        imported: 0,
+        retried: 1,
+        failed: 0,
+      });
+
+      await repository.prepareActivation({ syncId: sync.id });
+      await repository.storeActivationCheckpoint({
+        syncId: sync.id,
+        checkpoint: { version: 1, historyId: '200' },
+      });
+      await repository.activate({
+        syncId: sync.id,
+        subscriptionExpiresAt: null,
+      });
+
+      const recoveredResult = await importPendingMessages(
+        {
+          syncId: sync.id,
+          owner: 'recovered-worker',
+          limit: 10,
+          leaseForMs: 60_000,
+          maxAttempts: 5,
+          baseRetryDelayMs: 1_000,
+        },
+        {
+          clock: harness.dependencies.clock,
+          resolveContext: async () => ({
+            accountId: harness.accountId,
+            connectionId: 'postgres-connection-mail-sync-import',
+            provider: 'gmail',
+            scope,
+            inboxMailboxId: harness.inbox.id,
+          }),
+          getAdapterFactory: () => ({
+            create: async () => ({
+              ...adapter,
+              fetchRawMessage: async ({ remoteMessageId }) => ({
+                remoteMessageId,
+                raw: new TextEncoder().encode(
+                  new TextDecoder().decode(raw).replaceAll('gmail-message-1', remoteMessageId),
+                ),
+                receivedAt: new Date('2026-01-01T10:05:00.000Z'),
+              }),
+            }),
+          }),
+          repository,
+          mailCore: createMailCore(harness.dependencies),
+          onAuthenticationError: async () => {
+            throw new Error('must not fail authentication after reauthorization');
+          },
+        },
+      );
+      expect(recoveredResult).toEqual({
+        claimed: 1,
+        imported: 1,
+        retried: 0,
+        failed: 0,
+      });
+
+      const [recoveredItem] = await sql<
+        {
+          status: string;
+          attempt_count: number;
+          attempt_rows: number;
+        }[]
+      >`
+        SELECT
+          item.status,
+          item.attempt_count,
+          count(attempt.id)::integer AS attempt_rows
+        FROM integration.inbound_sync_item item
+        LEFT JOIN integration.inbound_sync_attempt attempt ON attempt.item_id = item.id
+        WHERE item.sync_id = ${sync.id}
+          AND item.remote_message_id = 'gmail-message-2'
+        GROUP BY item.id
+      `;
+      expect(recoveredItem).toEqual({
+        status: 'imported',
+        attempt_count: 2,
+        attempt_rows: 2,
+      });
     });
   });
 });

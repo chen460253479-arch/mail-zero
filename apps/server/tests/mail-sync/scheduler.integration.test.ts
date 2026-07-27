@@ -113,6 +113,32 @@ describe('mail sync scheduler claims', () => {
         completed_generation: 0,
         dispatch_lease_owner: loser,
       });
+
+      await sql`
+        UPDATE integration.connection
+        SET status = 'disconnecting'
+        WHERE id = 'connection-1'
+      `;
+      await sql`
+        UPDATE integration.inbound_sync
+        SET dispatch_lease_expires_at = now() - interval '1 second'
+        WHERE id = ${sync.id}
+      `;
+      await expect(claim('scheduler-after-disconnect')).resolves.toEqual([]);
+      await expect(
+        repository.acquireSyncLease({
+          syncId: sync.id,
+          owner: 'worker-after-disconnect',
+          leaseForMs: 60_000,
+        }),
+      ).resolves.toBeNull();
+      await expect(
+        repository.recordSignal({
+          provider: 'gmail',
+          externalAccount: 'user@example.com',
+          cursorHint: '200',
+        }),
+      ).resolves.toEqual([]);
     });
   });
 });

@@ -87,7 +87,7 @@ CREATE TABLE "integration"."connection" (
 	"updated_at" timestamp with time zone NOT NULL,
 	CONSTRAINT "connection_user_channel_email_uidx" UNIQUE("user_id","channel_id","normalized_email"),
 	CONSTRAINT "connection_id_user_id_uidx" UNIQUE("id","user_id"),
-	CONSTRAINT "connection_status_chk" CHECK ("integration"."connection"."status" IN ('connected', 'disconnected', 'reconnect_required', 'deleting')),
+	CONSTRAINT "connection_status_chk" CHECK ("integration"."connection"."status" IN ('connected', 'disconnecting', 'disconnected', 'reconnect_required', 'deleting')),
 	CONSTRAINT "connection_provider_key_chk" CHECK ("integration"."connection"."provider_key" ~ '^[a-z][a-z0-9]*([._-][a-z0-9]+)*$')
 );
 --> statement-breakpoint
@@ -787,7 +787,7 @@ ALTER TABLE "mail"."thread_snooze" ADD CONSTRAINT "thread_snooze_thread_account_
 CREATE INDEX "account_user_id_idx" ON "auth"."account" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "account_provider_user_id_idx" ON "auth"."account" USING btree ("provider_id","user_id");--> statement-breakpoint
 CREATE INDEX "account_expires_at_idx" ON "auth"."account" USING btree ("access_token_expires_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "connection_channel_email_active_uidx" ON "integration"."connection" USING btree ("channel_id","normalized_email") WHERE "integration"."connection"."status" IN ('connected', 'reconnect_required');--> statement-breakpoint
+CREATE UNIQUE INDEX "connection_channel_email_active_uidx" ON "integration"."connection" USING btree ("channel_id","normalized_email") WHERE "integration"."connection"."status" IN ('connected', 'disconnecting', 'reconnect_required', 'deleting');--> statement-breakpoint
 CREATE INDEX "connection_provider_key_idx" ON "integration"."connection" USING btree ("provider_key");--> statement-breakpoint
 CREATE INDEX "early_access_is_early_access_idx" ON "app"."early_access" USING btree ("is_early_access");--> statement-breakpoint
 CREATE INDEX "email_template_user_id_idx" ON "app"."email_template" USING btree ("user_id");--> statement-breakpoint

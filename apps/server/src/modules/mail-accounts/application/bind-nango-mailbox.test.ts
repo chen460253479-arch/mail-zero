@@ -106,6 +106,7 @@ describe('Nango mailbox binding', () => {
     const { repository, dependencies } = createDependencies();
     vi.mocked(repository.findMailboxByNormalizedEmail).mockResolvedValue({
       id: 'existing',
+      userId: 'user-1',
       channelId: 'gmail',
       status: 'connected',
     });
@@ -120,6 +121,7 @@ describe('Nango mailbox binding', () => {
     const { repository, dependencies } = createDependencies();
     vi.mocked(repository.findMailboxByNormalizedEmail).mockResolvedValue({
       id: 'existing',
+      userId: 'user-1',
       channelId: 'gmail',
       status: 'disconnected',
     });
@@ -132,12 +134,48 @@ describe('Nango mailbox binding', () => {
 
     vi.mocked(repository.findMailboxByNormalizedEmail).mockResolvedValue({
       id: 'other-channel',
+      userId: 'user-1',
       channelId: 'outlook',
       status: 'disconnected',
     });
     await expect(bindNangoMailbox(input, dependencies)).rejects.toMatchObject({
       code: 'MAILBOX_IDENTITY_MISMATCH',
     } satisfies Partial<NangoBindingError>);
+  });
+
+  it('replaces the authorization for an owned reconnect_required mailbox', async () => {
+    const { repository, dependencies } = createDependencies();
+    vi.mocked(repository.findMailboxByNormalizedEmail).mockResolvedValue({
+      id: 'existing',
+      userId: 'user-1',
+      channelId: 'gmail',
+      status: 'reconnect_required',
+    });
+    vi.mocked(repository.findByNangoReference).mockResolvedValue({
+      connectionId: 'existing',
+    });
+
+    await bindNangoMailbox(input, dependencies);
+
+    expect(repository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ existingMailboxId: 'existing' }),
+    );
+  });
+
+  it('allows a new Nango reference to recover an owned reconnect_required mailbox', async () => {
+    const { repository, dependencies } = createDependencies();
+    vi.mocked(repository.findMailboxByNormalizedEmail).mockResolvedValue({
+      id: 'existing',
+      userId: 'user-1',
+      channelId: 'gmail',
+      status: 'reconnect_required',
+    });
+
+    await bindNangoMailbox(input, dependencies);
+
+    expect(repository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ existingMailboxId: 'existing' }),
+    );
   });
 
   it('rejects a Nango connection already bound elsewhere', async () => {

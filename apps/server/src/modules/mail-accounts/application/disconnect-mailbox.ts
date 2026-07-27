@@ -3,12 +3,13 @@ import type { MailChannelId } from '../../../mail-channel/contracts';
 export type LifecycleConnection = {
   id: string;
   channelId: MailChannelId;
-  status: 'connected' | 'disconnected' | 'reconnect_required' | 'deleting';
+  status: 'connected' | 'disconnecting' | 'disconnected' | 'reconnect_required' | 'deleting';
 };
 
 export interface ConnectionLifecycleRepository {
   getConnection(userId: string, connectionId: string): Promise<LifecycleConnection | undefined>;
   removeAuthorizationBinding(userId: string, connectionId: string): Promise<void>;
+  markDisconnecting(userId: string, connectionId: string): Promise<void>;
   markDisconnected(userId: string, connectionId: string, disconnectedAt: Date): Promise<void>;
   markDeleting(userId: string, connectionId: string): Promise<void>;
   deleteMailbox(userId: string, connectionId: string): Promise<void>;
@@ -51,15 +52,19 @@ export const disconnectAuthorization = async (
   const connection = await getConnection(input.userId, input.connectionId, dependencies.repository);
 
   if (input.deleteLocalData) {
+    await dependencies.repository.markDeleting(input.userId, connection.id);
     await dependencies.stopMailboxTasks(connection);
     await dependencies.revokeAuthorization(connection);
-    await dependencies.repository.markDeleting(input.userId, connection.id);
     await dependencies.repository.removeAuthorizationBinding(input.userId, connection.id);
     await dependencies.cleanupLocalData(connection);
     await dependencies.repository.deleteMailbox(input.userId, connection.id);
     return { status: 'deleted' };
   }
 
+  if (connection.status === 'disconnected') {
+    return { status: 'disconnected' };
+  }
+  await dependencies.repository.markDisconnecting(input.userId, connection.id);
   await dependencies.stopMailboxTasks(connection);
   await dependencies.revokeAuthorization(connection);
   await dependencies.repository.removeAuthorizationBinding(input.userId, connection.id);

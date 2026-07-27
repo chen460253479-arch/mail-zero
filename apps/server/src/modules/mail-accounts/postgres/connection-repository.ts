@@ -1,12 +1,17 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
-import type { MailChannelId } from '../../../mail-channel/contracts';
 import { authorizationBinding, connection } from '../../../db/schema';
-import type { DB } from '../../../db';
+import type { MailChannelId } from '../../../mail-channel/contracts';
 import { mailAccount } from '../../mail/postgres/schema/accounts';
 import { blob } from '../../mail/postgres/schema/blobs';
+import type { DB } from '../../../db';
 
-type ConnectionStatus = 'connected' | 'disconnected' | 'reconnect_required' | 'deleting';
+type ConnectionStatus =
+  | 'connected'
+  | 'disconnecting'
+  | 'disconnected'
+  | 'reconnect_required'
+  | 'deleting';
 
 type MailboxBindingInput = {
   userId: string;
@@ -48,7 +53,12 @@ export class MailConnectionRepositoryError extends Error {
   }
 }
 
-const activeStatuses: ConnectionStatus[] = ['connected', 'reconnect_required'];
+const reservedStatuses: ConnectionStatus[] = [
+  'connected',
+  'disconnecting',
+  'reconnect_required',
+  'deleting',
+];
 
 const constraintName = (error: unknown): string | null => {
   if (typeof error !== 'object' || error === null || !('constraint_name' in error)) {
@@ -58,10 +68,7 @@ const constraintName = (error: unknown): string | null => {
   return typeof value === 'string' ? value : null;
 };
 
-export const createPostgresConnectionRepository = (
-  db: DB,
-  options: RepositoryOptions = {},
-) => {
+export const createPostgresConnectionRepository = (db: DB, options: RepositoryOptions = {}) => {
   const newId = options.newId ?? (() => crypto.randomUUID());
   const now = options.now ?? (() => new Date());
 
@@ -103,7 +110,7 @@ export const createPostgresConnectionRepository = (
           and(
             eq(connection.channelId, channelId),
             eq(connection.normalizedEmail, normalizedEmail),
-            inArray(connection.status, activeStatuses),
+            inArray(connection.status, reservedStatuses),
           ),
         )
         .limit(1);
@@ -163,7 +170,7 @@ export const createPostgresConnectionRepository = (
               and(
                 eq(connection.channelId, input.mailbox.channelId),
                 eq(connection.normalizedEmail, input.mailbox.normalizedEmail),
-                inArray(connection.status, activeStatuses),
+                inArray(connection.status, reservedStatuses),
               ),
             )
             .for('update')
@@ -220,9 +227,7 @@ export const createPostgresConnectionRepository = (
             replaceAuthorization =
               existing.status === 'reconnect_required' && authorization !== undefined;
             if (existing.status === 'disconnected' && authorization !== undefined) {
-              throw new MailConnectionRepositoryError(
-                'MAILBOX_AUTHORIZATION_ALREADY_EXISTS',
-              );
+              throw new MailConnectionRepositoryError('MAILBOX_AUTHORIZATION_ALREADY_EXISTS');
             }
             await transaction
               .update(connection)
@@ -284,6 +289,26 @@ export const createPostgresConnectionRepository = (
         .where(eq(authorizationBinding.connectionId, connectionId));
     },
 
+    markDisconnecting: async (userId: string, connectionId: string): Promise<void> => {
+      const rows = await db
+        .update(connection)
+        .set({
+          status: 'disconnecting',
+          updatedAt: now(),
+        })
+        .where(
+          and(
+            eq(connection.id, connectionId),
+            eq(connection.userId, userId),
+            inArray(connection.status, ['connected', 'reconnect_required', 'disconnecting']),
+          ),
+        )
+        .returning({ id: connection.id });
+      if (rows.length === 0) {
+        throw new MailConnectionRepositoryError('MAILBOX_NOT_FOUND');
+      }
+    },
+
     markDisconnected: async (
       userId: string,
       connectionId: string,
@@ -325,10 +350,7 @@ export const createPostgresConnectionRepository = (
           .innerJoin(mailAccount, eq(mailAccount.id, blob.mailAccountId))
           .innerJoin(
             connection,
-            and(
-              eq(connection.id, mailAccount.connectionId),
-              eq(connection.userId, userId),
-            ),
+            and(eq(connection.id, mailAccount.connectionId), eq(connection.userId, userId)),
           )
           .where(eq(connection.id, connectionId))
       ).map(({ objectKey }) => objectKey),
@@ -346,12 +368,7 @@ export const createPostgresConnectionRepository = (
         await transaction
           .update(mailAccount)
           .set({ status: 'deleting', updatedAt: now() })
-          .where(
-            and(
-              eq(mailAccount.connectionId, connectionId),
-              eq(mailAccount.userId, userId),
-            ),
-          );
+          .where(and(eq(mailAccount.connectionId, connectionId), eq(mailAccount.userId, userId)));
       });
     },
 
@@ -367,6 +384,4 @@ export const createPostgresConnectionRepository = (
   };
 };
 
-export type PostgresConnectionRepository = ReturnType<
-  typeof createPostgresConnectionRepository
->;
+export type PostgresConnectionRepository = ReturnType<typeof createPostgresConnectionRepository>;

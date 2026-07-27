@@ -132,7 +132,7 @@ export const connection = createIntegrationTable(
     picture: text('picture'),
     channelId: text('channel_id').$type<MailChannelId>().notNull(),
     status: text('status')
-      .$type<'connected' | 'disconnected' | 'reconnect_required' | 'deleting'>()
+      .$type<'connected' | 'disconnecting' | 'disconnected' | 'reconnect_required' | 'deleting'>()
       .notNull()
       .default('connected'),
     disconnectedAt: timestamp('disconnected_at', { withTimezone: true }),
@@ -145,11 +145,11 @@ export const connection = createIntegrationTable(
     unique('connection_id_user_id_uidx').on(t.id, t.userId),
     uniqueIndex('connection_channel_email_active_uidx')
       .on(t.channelId, t.normalizedEmail)
-      .where(sql`${t.status} IN ('connected', 'reconnect_required')`),
+      .where(sql`${t.status} IN ('connected', 'disconnecting', 'reconnect_required', 'deleting')`),
     index('connection_provider_key_idx').on(t.providerKey),
     check(
       'connection_status_chk',
-      sql`${t.status} IN ('connected', 'disconnected', 'reconnect_required', 'deleting')`,
+      sql`${t.status} IN ('connected', 'disconnecting', 'disconnected', 'reconnect_required', 'deleting')`,
     ),
     check(
       'connection_provider_key_chk',

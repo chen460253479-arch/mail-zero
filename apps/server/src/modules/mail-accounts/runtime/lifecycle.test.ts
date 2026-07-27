@@ -18,6 +18,9 @@ const createHarness = (authSource: 'zero_oauth' | 'nango' = 'zero_oauth') => {
     removeAuthorizationBinding: vi.fn(async () => {
       calls.push('removeAuthorizationBinding');
     }),
+    markDisconnecting: vi.fn(async () => {
+      calls.push('markDisconnecting');
+    }),
     markDisconnected: vi.fn(async () => {
       calls.push('markDisconnected');
     }),
@@ -68,6 +71,7 @@ describe('mailbox lifecycle runtime', () => {
     ).resolves.toEqual({ status: 'disconnected' });
 
     expect(calls).toEqual([
+      'markDisconnecting',
       'pauseConnectionSyncs',
       'stopGmailWatch',
       'revokeZeroOAuth',
@@ -109,7 +113,7 @@ describe('mailbox lifecycle runtime', () => {
     expect(repository.removeAuthorizationBinding).toHaveBeenCalled();
   });
 
-  it('does not remove credentials when pausing local synchronization fails', async () => {
+  it('blocks new work but does not remove credentials when pausing local synchronization fails', async () => {
     const { runtime, dependencies, repository } = createHarness();
     dependencies.pauseConnectionSyncs.mockRejectedValueOnce(new Error('database unavailable'));
 
@@ -120,6 +124,7 @@ describe('mailbox lifecycle runtime', () => {
         deleteLocalData: false,
       }),
     ).rejects.toThrow('database unavailable');
+    expect(repository.markDisconnecting).toHaveBeenCalledWith('user-1', 'connection-1');
     expect(dependencies.stopGmailWatch).not.toHaveBeenCalled();
     expect(repository.removeAuthorizationBinding).not.toHaveBeenCalled();
   });

@@ -4,7 +4,9 @@
     "lib": ["dom", "dom.iterable", "esnext"],
     "types": ["node", "vite/client"],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "zod": ["./node_modules/zod"],
+      "zod/*": ["./node_modules/zod/*"]
     },
     "rootDirs": [".", "./.react-router/types"]
   },

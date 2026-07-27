@@ -27,15 +27,11 @@ export type ZeroEnv = {
   ZERO_ADMIN_BOOTSTRAP_SECRET?: string;
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
-  HISTORY_OFFSET: string;
-  ZERO_CLIENT_ID: string;
-  ZERO_CLIENT_SECRET: string;
   VITE_PUBLIC_BACKEND_URL: string;
   REDIS_URL: string;
   REDIS_TOKEN: string;
   EARLY_ACCESS_ENABLED: string;
   REACT_SCAN: string;
-  GOOGLE_S_ACCOUNT: string;
   GMAIL_PUBSUB_TOPIC_NAME: string;
   GMAIL_PUBSUB_SUBSCRIPTION_NAME: string;
   GMAIL_PUBSUB_PUSH_AUDIENCE: string;

@@ -24,6 +24,7 @@ const itemErrorCodes = new Set<MailCoreErrorCode>([
   'INVALID_EMAIL',
   'IDEMPOTENCY_CONFLICT',
   'INVALID_SUBMISSION_TRANSITION',
+  'ACCOUNT_NOT_ACTIVE',
 ]);
 
 const asCreateItemError = (error: unknown): MailCoreSetError | null => {

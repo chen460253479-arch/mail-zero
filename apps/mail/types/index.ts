@@ -144,6 +144,7 @@ export interface IOutgoingMessage {
 export interface Note {
   id: string;
   userId: string;
+  connectionId: string;
   threadId: string;
   content: string;
   color: string;

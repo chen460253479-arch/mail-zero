@@ -210,6 +210,36 @@ describe('PostgreSQL mail connection repository', () => {
     });
   });
 
+  it('marks disconnecting before cleanup and keeps the global mailbox identity reserved', async () => {
+    await withMailTestDatabase(async ({ db, sql }) => {
+      await insertUser(sql, 'user-1', 'user-1@example.com');
+      await insertUser(sql, 'user-2', 'user-2@example.com');
+      const repository = createPostgresConnectionRepository(db);
+      const created = await repository.saveBinding({
+        userId: 'user-1',
+        existingMailboxId: null,
+        mailbox: gmailMailbox,
+        authorization: zeroOAuthAuthorization,
+      });
+
+      await expect(
+        repository.markDisconnecting('user-2', created.id),
+      ).rejects.toMatchObject({ code: 'MAILBOX_NOT_FOUND' });
+      await repository.markDisconnecting('user-1', created.id);
+      await expect(repository.findOwnedConnection('user-1', created.id)).resolves.toMatchObject({
+        status: 'disconnecting',
+      });
+      await expect(
+        repository.saveBinding({
+          userId: 'user-2',
+          existingMailboxId: null,
+          mailbox: gmailMailbox,
+          authorization: zeroOAuthAuthorization,
+        }),
+      ).rejects.toMatchObject({ code: 'MAILBOX_ALREADY_CONNECTED' });
+    });
+  });
+
   it('finds an existing Nango authorization by its external reference', async () => {
     await withMailTestDatabase(async ({ db, sql }) => {
       await insertUser(sql, 'user-1', 'user-1@example.com');

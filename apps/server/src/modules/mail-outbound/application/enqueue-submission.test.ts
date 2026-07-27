@@ -1,5 +1,6 @@
 import { createDraft, createIdentity } from '@zero/mail-core';
 import { describe, expect, it, vi } from 'vitest';
+import { eq } from 'drizzle-orm';
 
 import { createPostgresMailTestHarness } from '../../../../tests/mail-core/helpers/harness';
 import { withMailTestDatabase } from '../../../../tests/mail-core/helpers/database';
@@ -7,6 +8,7 @@ import { PostgresMailOutboundUnitOfWork } from '../postgres/unit-of-work';
 import type { MailOutboundTransaction } from '../postgres/unit-of-work';
 import { setOutboundSubmissions } from './set-submissions';
 import { enqueueSubmission } from './enqueue-submission';
+import { connection } from '../../../db/schema';
 
 describe('enqueueSubmission', () => {
   it('atomically creates one idempotent Submission and Delivery', () =>
@@ -60,6 +62,41 @@ describe('enqueueSubmission', () => {
       expect(wakeup.enqueue).toHaveBeenCalledWith({
         type: 'deliver',
         deliveryId: first.delivery.id,
+      });
+
+      const account = await unitOfWork.mailUnitOfWork.run((tx) =>
+        tx.accounts.findById(harness.accountId),
+      );
+      await db
+        .update(connection)
+        .set({ status: 'disconnecting' })
+        .where(eq(connection.id, account!.connectionId));
+
+      await expect(
+        enqueueSubmission(
+          {
+            ...input,
+            idempotencyKey: 'enqueue-while-disconnecting',
+          },
+          dependencies,
+        ),
+      ).rejects.toMatchObject({ code: 'ACCOUNT_NOT_ACTIVE' });
+      await unitOfWork.run(async (tx) => {
+        expect(
+          await tx.mail.submissions.findByIdempotencyKey(
+            harness.accountId,
+            'enqueue-while-disconnecting',
+          ),
+        ).toBeNull();
+        expect(
+          await tx.outbound.claimById({
+            deliveryId: first.delivery.id,
+            owner: 'blocked-worker',
+            leaseForMs: 60_000,
+            attemptKind: 'send',
+            now: harness.dependencies.clock.now(),
+          }),
+        ).toBeNull();
       });
     }));
 

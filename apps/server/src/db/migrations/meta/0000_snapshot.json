@@ -448,7 +448,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"integration\".\"connection\".\"status\" IN ('connected', 'reconnect_required')",
+          "where": "\"integration\".\"connection\".\"status\" IN ('connected', 'disconnecting', 'reconnect_required', 'deleting')",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -509,7 +509,7 @@
       "checkConstraints": {
         "connection_status_chk": {
           "name": "connection_status_chk",
-          "value": "\"integration\".\"connection\".\"status\" IN ('connected', 'disconnected', 'reconnect_required', 'deleting')"
+          "value": "\"integration\".\"connection\".\"status\" IN ('connected', 'disconnecting', 'disconnected', 'reconnect_required', 'deleting')"
         },
         "connection_provider_key_chk": {
           "name": "connection_provider_key_chk",

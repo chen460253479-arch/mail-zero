@@ -51,6 +51,11 @@ export const enqueueSubmissionInTransaction = async (
       entityId: input.accountId,
     });
   }
+  if (!(await tx.outbound.isConnectionReady(input.accountId, account.connectionId))) {
+    throw new MailCoreError('ACCOUNT_NOT_ACTIVE', {
+      entityId: input.accountId,
+    });
+  }
   const delivery = await tx.outbound.insert({
     id: dependencies.nextId(),
     mailAccountId: input.accountId,

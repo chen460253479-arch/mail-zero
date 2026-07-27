@@ -6,6 +6,21 @@ import { type Shortcut } from '@/config/shortcuts';
 import { m } from '@/paraglide/messages';
 import { type ReactNode } from 'react';
 
+type ShortcutActionMessageKey = Extract<
+  keyof typeof m,
+  `pages.settings.shortcuts.actions.${string}`
+>;
+
+function getShortcutActionLabel(shortcut: Shortcut): string {
+  const key = `pages.settings.shortcuts.actions.${shortcut.action}`;
+
+  if (!(key in m)) {
+    return shortcut.description;
+  }
+
+  return m[key as ShortcutActionMessageKey]();
+}
+
 export default function ShortcutsPage() {
   const {
     shortcuts,
@@ -69,9 +84,9 @@ export default function ShortcutsPage() {
                     const cat = categorySettings[idx];
                     label = cat
                       ? `Show ${cat.name}`
-                      : m[`pages.settings.shortcuts.actions.${shortcut.action}`]();
+                      : getShortcutActionLabel(shortcut);
                   } else {
-                    label = m[`pages.settings.shortcuts.actions.${shortcut.action}`]();
+                    label = getShortcutActionLabel(shortcut);
                   }
 
                   return (

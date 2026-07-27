@@ -53,10 +53,7 @@ const normalizeDecimalCursor = (value: string): string => {
   return normalized.length === 0 ? '0' : normalized;
 };
 
-const mergeCursorHint = (
-  current: string | null,
-  incoming: string | undefined,
-): string | null => {
+const mergeCursorHint = (current: string | null, incoming: string | undefined): string | null => {
   if (incoming === undefined) return current;
   if (current === null) return incoming;
   if (!decimalCursorPattern.test(current) || !decimalCursorPattern.test(incoming)) {
@@ -78,6 +75,12 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
     const rows = await db.select().from(inboundSync).where(eq(inboundSync.id, syncId)).limit(1);
     return rows[0] ?? null;
   };
+
+  const connectedAccount = db
+    .select({ id: mailAccount.id })
+    .from(mailAccount)
+    .innerJoin(connection, eq(connection.id, mailAccount.connectionId))
+    .where(and(eq(mailAccount.id, inboundSync.accountId), eq(connection.status, 'connected')));
 
   return {
     createActivatingSync: async (input: CreateActivatingSyncInput): Promise<InboundSyncRecord> => {
@@ -118,11 +121,17 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
         .update(inboundSync)
         .set({
           status: 'activating',
+          checkpoint: null,
           subscriptionExpiresAt: null,
+          completedGeneration: inboundSync.requestedGeneration,
+          pendingCursorHint: null,
+          nextReconcileAt: sql`now()`,
           lastErrorCode: null,
           lastErrorMessage: null,
           leaseOwner: null,
           leaseExpiresAt: null,
+          dispatchLeaseOwner: null,
+          dispatchLeaseExpiresAt: null,
           updatedAt: sql`now()`,
         })
         .where(
@@ -209,6 +218,7 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
           and(
             eq(inboundSync.id, input.syncId),
             eq(inboundSync.status, 'active'),
+            exists(connectedAccount),
             or(
               isNull(inboundSync.leaseExpiresAt),
               lte(inboundSync.leaseExpiresAt, sql`now()`),
@@ -393,7 +403,15 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
         const activeStream = transaction
           .select({ id: inboundSync.id })
           .from(inboundSync)
-          .where(and(eq(inboundSync.id, input.syncId), eq(inboundSync.status, 'active')));
+          .innerJoin(mailAccount, eq(mailAccount.id, inboundSync.accountId))
+          .innerJoin(connection, eq(connection.id, mailAccount.connectionId))
+          .where(
+            and(
+              eq(inboundSync.id, input.syncId),
+              eq(inboundSync.status, 'active'),
+              eq(connection.status, 'connected'),
+            ),
+          );
         const candidates = await transaction
           .select({ id: inboundSyncItem.id })
           .from(inboundSyncItem)
@@ -660,6 +678,7 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
               eq(inboundSync.status, 'active'),
               eq(inboundSync.provider, input.provider),
               eq(connection.normalizedEmail, input.externalAccount),
+              eq(connection.status, 'connected'),
             ),
           )
           .for('update', { of: inboundSync });
@@ -730,9 +749,12 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
             importPending: sql<boolean>`EXISTS (${dueItems})`,
           })
           .from(inboundSync)
+          .innerJoin(mailAccount, eq(mailAccount.id, inboundSync.accountId))
+          .innerJoin(connection, eq(connection.id, mailAccount.connectionId))
           .where(
             and(
               eq(inboundSync.status, 'active'),
+              eq(connection.status, 'connected'),
               or(
                 isNull(inboundSync.dispatchLeaseExpiresAt),
                 lte(inboundSync.dispatchLeaseExpiresAt, sql`now()`),
@@ -746,7 +768,7 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
             ),
           )
           .orderBy(asc(inboundSync.nextReconcileAt), asc(inboundSync.id))
-          .for('update', { skipLocked: true })
+          .for('update', { of: inboundSync, skipLocked: true })
           .limit(input.limit);
 
         const claimed: ClaimedMailSyncDispatch[] = [];
@@ -823,10 +845,7 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
           updatedAt: sql`now()`,
         })
         .where(
-          and(
-            eq(inboundSync.id, input.syncId),
-            eq(inboundSync.dispatchLeaseOwner, input.owner),
-          ),
+          and(eq(inboundSync.id, input.syncId), eq(inboundSync.dispatchLeaseOwner, input.owner)),
         );
     },
 

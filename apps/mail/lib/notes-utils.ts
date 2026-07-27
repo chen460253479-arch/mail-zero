@@ -155,6 +155,7 @@ export function updateNotesWithNewOrders(
     return {
       id: note.id,
       userId: note.userId,
+      connectionId: note.connectionId,
       threadId: note.threadId,
       content: note.content,
       color: note.color,

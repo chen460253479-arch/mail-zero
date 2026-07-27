@@ -16,6 +16,7 @@ import type {
 import { emailSubmission, submissionBlob } from '../../mail/postgres/schema/submissions';
 import { email, emailAddress, remoteEmail } from '../../mail/postgres/schema/emails';
 import type { MailDatabase } from '../../mail/postgres/repositories/database';
+import { mailAccount } from '../../mail/postgres/schema/accounts';
 import { outboundDelivery, sendAttempt } from './schema';
 import { MailOutboundError } from '../domain/errors';
 import { connection } from '../../../db/schema';
@@ -111,6 +112,7 @@ export type CompleteDeliveryInput = LeaseIdentity & {
 };
 
 export interface MailOutboundRepository {
+  isConnectionReady(mailAccountId: string, connectionId: string): Promise<boolean>;
   insert(input: InsertOutboundDelivery): Promise<OutboundDeliveryRecord>;
   findById(deliveryId: string): Promise<OutboundDeliveryRecord | null>;
   findBySubmission(accountId: string, submissionId: string): Promise<OutboundDeliveryRecord | null>;
@@ -231,6 +233,20 @@ export const createMailOutboundRepository = (
   db: MailDatabase,
   factories: MailOutboundRepositoryFactories,
 ): MailOutboundRepository => ({
+  isConnectionReady: (mailAccountId, connectionId) =>
+    runOutboundAdapter(async () => {
+      const rows = await db
+        .select({ id: connection.id })
+        .from(connection)
+        .innerJoin(
+          mailAccount,
+          and(eq(mailAccount.id, mailAccountId), eq(mailAccount.connectionId, connection.id)),
+        )
+        .where(and(eq(connection.id, connectionId), eq(connection.status, 'connected')))
+        .limit(1)
+        .for('update', { of: connection });
+      return rows.length === 1;
+    }),
   insert: (input) =>
     runOutboundAdapter(async () => {
       const rows = await db
@@ -294,8 +310,10 @@ export const createMailOutboundRepository = (
         await db
           .select({ id: outboundDelivery.id })
           .from(outboundDelivery)
+          .innerJoin(connection, eq(connection.id, outboundDelivery.connectionId))
           .where(
             and(
+              eq(connection.status, 'connected'),
               inArray(outboundDelivery.status, dueStatuses),
               lte(outboundDelivery.availableAt, now),
             ),
@@ -311,8 +329,13 @@ export const createMailOutboundRepository = (
         await db
           .select({ id: outboundDelivery.id })
           .from(outboundDelivery)
+          .innerJoin(connection, eq(connection.id, outboundDelivery.connectionId))
           .where(
-            and(eq(outboundDelivery.status, 'uncertain'), lte(outboundDelivery.availableAt, now)),
+            and(
+              eq(connection.status, 'connected'),
+              eq(outboundDelivery.status, 'uncertain'),
+              lte(outboundDelivery.availableAt, now),
+            ),
           )
           .orderBy(asc(outboundDelivery.availableAt), asc(outboundDelivery.id))
           .limit(limit)
@@ -339,6 +362,16 @@ export const createMailOutboundRepository = (
   claimById: (input) =>
     runOutboundAdapter(async () => {
       requireLeaseDuration(input.leaseForMs);
+      const connectionRows = await db
+        .select({ status: connection.status })
+        .from(outboundDelivery)
+        .innerJoin(connection, eq(connection.id, outboundDelivery.connectionId))
+        .where(eq(outboundDelivery.id, input.deliveryId))
+        .limit(1)
+        .for('update', { of: connection });
+      if (connectionRows[0]?.status !== 'connected') {
+        return null;
+      }
       const leaseToken = factories.nextLeaseToken();
       const allowed =
         input.attemptKind === 'send'

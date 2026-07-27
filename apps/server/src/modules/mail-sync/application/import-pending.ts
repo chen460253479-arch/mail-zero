@@ -164,19 +164,24 @@ export const importPendingMessages = async (
           : classification === 'retryable'
             ? 'MAIL_SYNC_IMPORT_ATTEMPTS_EXHAUSTED'
             : 'MAIL_SYNC_IMPORT_PERMANENT';
-      await dependencies.repository.markFailed({
-        ...finish,
-        errorCode,
-      });
       if (classification === 'authentication') {
+        await dependencies.repository.scheduleRetry({
+          ...finish,
+          nextAttemptAt: dependencies.clock.now(),
+          errorCode,
+        });
         await dependencies.onAuthenticationError({
           syncId: input.syncId,
           errorCode,
           errorMessage,
         });
-        result.failed += 1;
+        result.retried += 1;
         break;
       }
+      await dependencies.repository.markFailed({
+        ...finish,
+        errorCode,
+      });
       result.failed += 1;
       continue;
     }

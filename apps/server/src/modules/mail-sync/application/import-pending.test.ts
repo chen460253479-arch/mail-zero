@@ -232,8 +232,9 @@ describe('pending inbound message import', () => {
     ]);
   });
 
-  it('stops the claimed batch after the first authentication failure', async () => {
+  it('keeps the first authentication failure retryable and stops the claimed batch', async () => {
     const fetched: string[] = [];
+    const retries: string[] = [];
     const failed: string[] = [];
     const adapter: InboundMailAdapter = {
       provider: 'gmail',
@@ -281,7 +282,9 @@ describe('pending inbound message import', () => {
             },
           ],
           markImported: async () => undefined,
-          scheduleRetry: async () => undefined,
+          scheduleRetry: async ({ itemId }) => {
+            retries.push(itemId);
+          },
           markFailed: async ({ itemId }) => {
             failed.push(itemId);
           },
@@ -298,10 +301,11 @@ describe('pending inbound message import', () => {
     expect(result).toEqual({
       claimed: 2,
       imported: 0,
-      retried: 0,
-      failed: 1,
+      retried: 1,
+      failed: 0,
     });
     expect(fetched).toEqual(['message-1']);
-    expect(failed).toEqual(['item-1']);
+    expect(retries).toEqual(['item-1']);
+    expect(failed).toEqual([]);
   });
 });

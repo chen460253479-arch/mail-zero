@@ -5,6 +5,7 @@ import {
   type MailCoreDependencies,
 } from '@zero/mail-core';
 import { describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 
 import { createPostgresMailSyncRepository } from '../../src/modules/mail-sync/postgres/sync-repository';
 import { bootstrapLocalMailAccount } from '../../src/modules/mail-sync/application/bootstrap-account';
@@ -12,9 +13,9 @@ import { PostgresMailUnitOfWork } from '../../src/modules/mail/postgres/postgres
 import { PostgresSearchStore } from '../../src/modules/mail/search/postgres-search-store';
 import { activateInboundSync } from '../../src/modules/mail-sync/application/activate';
 import type { InboundMailAdapter } from '../../src/modules/mail-sync';
+import { connection, inboundSync, user } from '../../src/db/schema';
 import { withMailSyncTestDatabase } from './helpers/database';
 import { MemoryBlobStore } from '../../src/modules/mail';
-import { connection, user } from '../../src/db/schema';
 
 describe('mail sync activation integration', () => {
   it('creates one local account with Inbox and persists the baseline before Watch', async () => {
@@ -126,6 +127,56 @@ describe('mail sync activation integration', () => {
       ).resolves.toEqual(
         expect.arrayContaining([expect.objectContaining({ role: 'inbox', name: 'Inbox' })]),
       );
+
+      await db
+        .update(inboundSync)
+        .set({
+          status: 'paused',
+          checkpoint: { version: 1, historyId: '100' },
+          requestedGeneration: 2,
+          completedGeneration: 1,
+          pendingCursorHint: '150',
+          lastErrorCode: 'GMAIL_HISTORY_GAP',
+        })
+        .where(eq(inboundSync.id, activated.id));
+
+      const reactivated = await activateInboundSync(
+        {
+          accountId: account.id as MailAccountId,
+          connectionId: 'connection-1',
+          provider: 'gmail',
+          scopeKey: 'inbox',
+          scope: {
+            version: 1,
+            mailboxRoles: ['inbox'],
+            initialSync: 'none',
+          },
+          subscriptionTarget: {
+            version: 1,
+            topicName: 'projects/zero/topics/connection-1',
+          },
+        },
+        {
+          adapterFactory: {
+            create: async () => ({
+              ...adapter,
+              establishCheckpoint: async () => ({ version: 1, historyId: '200' }),
+              subscribe: async ({ checkpoint }) => {
+                expect(checkpoint).toEqual({ version: 1, historyId: '200' });
+                return { expiresAt: new Date('2026-08-02T00:00:00.000Z') };
+              },
+            }),
+          },
+          repository,
+        },
+      );
+      expect(reactivated).toMatchObject({
+        status: 'active',
+        checkpoint: { version: 1, historyId: '200' },
+        requestedGeneration: 2,
+        completedGeneration: 2,
+        pendingCursorHint: null,
+      });
     });
   });
 });

@@ -551,7 +551,7 @@ exports[`database structural parity > preserves every field, constraint, index, 
   },
   "connection": {
     "checks": [
-      ""<table>"."status" IN ('connected', 'disconnected', 'reconnect_required', 'deleting')",
+      ""<table>"."status" IN ('connected', 'disconnecting', 'disconnected', 'reconnect_required', 'deleting')",
       ""<table>"."provider_key" ~ '^[a-z][a-z0-9]*([._-][a-z0-9]+)*$'",
     ],
     "columns": [
@@ -685,7 +685,7 @@ exports[`database structural parity > preserves every field, constraint, index, 
         ],
         "method": "btree",
         "unique": true,
-        "where": ""<table>"."status" IN ('connected', 'reconnect_required')",
+        "where": ""<table>"."status" IN ('connected', 'disconnecting', 'reconnect_required', 'deleting')",
       },
       {
         "columns": [

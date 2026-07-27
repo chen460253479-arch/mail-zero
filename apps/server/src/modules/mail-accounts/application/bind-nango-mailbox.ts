@@ -21,8 +21,9 @@ export class NangoBindingError extends Error {
 
 type ExistingMailbox = {
   id: string;
+  userId: string;
   channelId: MailChannelId;
-  status: 'connected' | 'disconnected' | 'reconnect_required' | 'deleting';
+  status: 'connected' | 'disconnecting' | 'disconnected' | 'reconnect_required' | 'deleting';
 };
 
 export type SaveNangoBindingInput = {
@@ -94,9 +95,10 @@ export const bindNangoMailbox = async (
   if (!(await dependencies.isIntegrationAvailable(input.channelId, input.integrationId))) {
     throw new NangoBindingError('MAIL_CHANNEL_UNAVAILABLE');
   }
-  if (await dependencies.repository.findByNangoReference(input.integrationId, input.connectionId)) {
-    throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
-  }
+  const boundReference = await dependencies.repository.findByNangoReference(
+    input.integrationId,
+    input.connectionId,
+  );
 
   const connection = await dependencies.client
     .getConnection(input.connectionId, input.integrationId)
@@ -137,11 +139,18 @@ export const bindNangoMailbox = async (
     input.channelId,
     normalizedEmail,
   );
-  if (existing && existing.status !== 'disconnected') {
-    throw new NangoBindingError('MAILBOX_ALREADY_CONNECTED');
-  }
   if (existing && existing.channelId !== input.channelId) {
     throw new NangoBindingError('MAILBOX_IDENTITY_MISMATCH');
+  }
+  if (boundReference !== null && boundReference.connectionId !== existing?.id) {
+    throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
+  }
+  if (
+    existing &&
+    existing.status !== 'disconnected' &&
+    !(existing.status === 'reconnect_required' && existing.userId === input.userId)
+  ) {
+    throw new NangoBindingError('MAILBOX_ALREADY_CONNECTED');
   }
 
   const now = dependencies.now();

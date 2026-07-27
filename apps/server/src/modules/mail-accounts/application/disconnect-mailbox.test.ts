@@ -13,12 +13,17 @@ const connection = {
   status: 'connected' as const,
 };
 
-const createDependencies = (status: 'connected' | 'disconnected' | 'deleting' = 'connected') => {
+const createDependencies = (
+  status: 'connected' | 'disconnecting' | 'disconnected' | 'deleting' = 'connected',
+) => {
   const calls: string[] = [];
   const repository = {
     getConnection: vi.fn().mockResolvedValue({ ...connection, status }),
     removeAuthorizationBinding: vi.fn(async () => {
       calls.push('removeAuthorizationBinding');
+    }),
+    markDisconnecting: vi.fn(async () => {
+      calls.push('markDisconnecting');
     }),
     markDisconnected: vi.fn(async () => {
       calls.push('markDisconnected');
@@ -69,6 +74,7 @@ describe('connection lifecycle', () => {
       ),
     ).resolves.toEqual({ status: 'disconnected' });
     expect(calls).toEqual([
+      'markDisconnecting',
       'stopMailboxTasks',
       'revokeAuthorization',
       'removeAuthorizationBinding',
@@ -83,7 +89,7 @@ describe('connection lifecycle', () => {
     );
   });
 
-  it('stops external work before marking the mailbox deleting', async () => {
+  it('marks the mailbox deleting before stopping external work', async () => {
     const { calls, dependencies, repository } = createDependencies();
 
     await expect(
@@ -93,9 +99,9 @@ describe('connection lifecycle', () => {
       ),
     ).resolves.toEqual({ status: 'deleted' });
     expect(calls).toEqual([
+      'markDeleting',
       'stopMailboxTasks',
       'revokeAuthorization',
-      'markDeleting',
       'removeAuthorizationBinding',
       'cleanupLocalData',
       'deleteMailbox',
@@ -104,7 +110,7 @@ describe('connection lifecycle', () => {
     expect(repository.deleteMailbox).toHaveBeenCalledWith('user-1', connection.id);
   });
 
-  it('does not persist deleting when external task cleanup fails', async () => {
+  it('keeps deleting recoverable when external task cleanup fails', async () => {
     const { dependencies, repository } = createDependencies();
     vi.mocked(dependencies.stopMailboxTasks).mockRejectedValueOnce(
       new Error('provider task cleanup failed'),
@@ -116,7 +122,8 @@ describe('connection lifecycle', () => {
         dependencies,
       ),
     ).rejects.toThrow('provider task cleanup failed');
-    expect(repository.markDeleting).not.toHaveBeenCalled();
+    expect(repository.markDeleting).toHaveBeenCalledWith('user-1', connection.id);
+    expect(repository.deleteMailbox).not.toHaveBeenCalled();
   });
 
   it('does not delete a Nango connection when removing a local binding', async () => {
@@ -157,6 +164,25 @@ describe('connection lifecycle', () => {
         deleting.dependencies,
       ),
     ).resolves.toEqual({ status: 'deleted' });
+  });
+
+  it('can retry a disconnect after an earlier failure left it disconnecting', async () => {
+    const disconnecting = createDependencies('disconnecting');
+
+    await expect(
+      disconnectAuthorization(
+        { userId: 'user-1', connectionId: connection.id, deleteLocalData: false },
+        disconnecting.dependencies,
+      ),
+    ).resolves.toEqual({ status: 'disconnected' });
+
+    expect(disconnecting.calls).toEqual([
+      'markDisconnecting',
+      'stopMailboxTasks',
+      'revokeAuthorization',
+      'removeAuthorizationBinding',
+      'markDisconnected',
+    ]);
   });
 
   it('keeps the deleting database record when object cleanup fails', async () => {

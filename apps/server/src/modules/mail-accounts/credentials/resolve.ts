@@ -20,7 +20,7 @@ type AuthorizationCredentialRecord = {
 
 export type ConnectionCredentialRecord = {
   connection: {
-    status: 'connected' | 'disconnected' | 'reconnect_required' | 'deleting';
+    status: 'connected' | 'disconnecting' | 'disconnected' | 'reconnect_required' | 'deleting';
   };
   authorization: AuthorizationCredentialRecord | null;
 };
@@ -77,7 +77,9 @@ export const resolveConnectionCredential = async (
   encryptionKey: string,
   dependencies: CredentialResolutionDependencies = {},
 ): Promise<ResolvedCredential> => {
-  if (record.connection.status !== 'connected') throw new Error('Mailbox is disconnected');
+  if (!['connected', 'disconnecting', 'deleting'].includes(record.connection.status)) {
+    throw new Error('Mailbox is disconnected');
+  }
   if (!record.authorization) throw new Error('Mailbox authorization is missing');
 
   const resolver = resolvers[record.authorization.authSource as keyof typeof resolvers];

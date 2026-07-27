@@ -21,6 +21,7 @@ type LifecycleRepository = {
     connectionId: string,
   ): Promise<ConnectionWithAuthorization | null>;
   removeAuthorizationBinding(userId: string, connectionId: string): Promise<void>;
+  markDisconnecting(userId: string, connectionId: string): Promise<void>;
   markDisconnected(userId: string, connectionId: string, disconnectedAt: Date): Promise<void>;
   markDeleting(userId: string, connectionId: string): Promise<void>;
   listBlobObjectKeys(userId: string, connectionId: string): Promise<string[]>;
@@ -51,6 +52,8 @@ export const createMailboxLifecycleRuntime = (runtime: MailboxLifecycleRuntimeDe
         }),
       removeAuthorizationBinding: (ownerId, connectionId) =>
         runtime.repository.removeAuthorizationBinding(ownerId, connectionId),
+      markDisconnecting: (ownerId, connectionId) =>
+        runtime.repository.markDisconnecting(ownerId, connectionId),
       markDisconnected: (ownerId, connectionId, disconnectedAt) =>
         runtime.repository.markDisconnected(ownerId, connectionId, disconnectedAt),
       markDeleting: (ownerId, connectionId) =>
@@ -69,12 +72,7 @@ export const createMailboxLifecycleRuntime = (runtime: MailboxLifecycleRuntimeDe
         userId,
         connection.id,
       );
-      if (
-        connection.channelId !== 'gmail' ||
-        connection.status !== 'connected' ||
-        record?.authorization === null ||
-        record === null
-      ) {
+      if (connection.channelId !== 'gmail' || record?.authorization === null || record === null) {
         return;
       }
       try {
@@ -84,9 +82,6 @@ export const createMailboxLifecycleRuntime = (runtime: MailboxLifecycleRuntimeDe
       }
     },
     revokeAuthorization: async (connection) => {
-      if (connection.status !== 'connected') {
-        return;
-      }
       const record = await runtime.repository.findConnectionWithAuthorization(
         userId,
         connection.id,
