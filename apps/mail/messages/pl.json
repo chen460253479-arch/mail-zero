@@ -126,12 +126,7 @@
       "starred": "Oznaczone gwiazdką",
       "applyFilters": "Zastosuj filtry",
       "reset": "Resetuj",
-      "searching": "Wyszukiwanie...",
-      "aiSuggestions": "Sugestie AI",
-      "aiSearching": "AI wyszukuje...",
-      "aiSearchError": "Wyszukiwanie AI nie powiodło się. Spróbuj ponownie.",
-      "aiNoResults": "Nie znaleziono sugestii AI",
-      "aiEnhancedQuery": "Ulepszone zapytanie wyszukiwania"
+      "searching": "Wyszukiwanie..."
     },
     "navUser": {
       "customerSupport": "Społeczność",
@@ -425,7 +420,6 @@
       "livesupport": "Wsparcie na żywo",
       "feedback": "Opinie",
       "settings": "Ustawienia",
-      "voice": "Asystent głosowy",
       "snoozed": "Odłożone"
     },
     "settings": {
@@ -462,9 +456,6 @@
         "dynamicContent": "Dynamiczna zawartość",
         "dynamicContentDescription": "Zezwalaj na wyświetlanie dynamicznej zawartości w e-mailach.",
         "languageChangedTo": "Język zmieniony na {locale}",
-        "customPrompt": "Niestandardowe polecenie dla AI",
-        "customPromptPlaceholder": "Wprowadź własne polecenie dla AI...",
-        "customPromptDescription": "Dostosuj sposób, w jaki AI pisze odpowiedzi na Twoje e-maile. Zostanie to dodane do podstawowego polecenia.",
         "noResultsFound": "Nie znaleziono wyników",
         "zeroSignature": "Podpis Zero",
         "zeroSignatureDescription": "Dodaj podpis Zero do swoich e-maili.",
@@ -577,7 +568,6 @@
           "showPromotions": "Pokaż promocje",
           "showUnread": "Pokaż nieprzeczytane",
           "selectUnderCursor": "Zaznacz pod kursorem",
-          "openVoice": "Otwórz Asystenta Głosowego",
           "clearAllFilters": "Wyczyść wszystkie filtry",
           "markAsImportant": "Oznacz jako ważne",
           "markAsUnimportant": "Oznacz jako nieważne",

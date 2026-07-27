@@ -126,12 +126,7 @@
       "starred": "スター付き",
       "applyFilters": "フィルタを適用",
       "reset": "リセット",
-      "searching": "検索中...",
-      "aiSuggestions": "AIの提案",
-      "aiSearching": "AIが検索中...",
-      "aiSearchError": "AI検索に失敗しました。もう一度お試しください。",
-      "aiNoResults": "AIの提案が見つかりませんでした",
-      "aiEnhancedQuery": "拡張検索クエリ"
+      "searching": "検索中..."
     },
     "navUser": {
       "customerSupport": "コミュニティ",
@@ -425,7 +420,6 @@
       "livesupport": "ライブサポート",
       "feedback": "フィードバック",
       "settings": "設定",
-      "voice": "音声アシスタント",
       "snoozed": "スヌーズ済み"
     },
     "settings": {
@@ -462,9 +456,6 @@
         "dynamicContent": "動的コンテンツ",
         "dynamicContentDescription": "電子メールの動的なコンテンツの表示を許可します。",
         "languageChangedTo": "言語を {locale}に変更しました",
-        "customPrompt": "カスタムAIプロンプト",
-        "customPromptPlaceholder": "AIのカスタムプロンプトを入力...",
-        "customPromptDescription": "AIがメールの返信を書く方法をカスタマイズします。これはベースプロンプトに追加されます。",
         "noResultsFound": "結果が見つかりませんでした",
         "zeroSignature": "Zero署名",
         "zeroSignatureDescription": "メールにZero署名を追加します。",
@@ -577,7 +568,6 @@
           "showPromotions": "プロモーションを表示",
           "showUnread": "未読を表示",
           "selectUnderCursor": "カーソル下を選択",
-          "openVoice": "音声アシスタントを開く",
           "clearAllFilters": "すべてのフィルターをクリア",
           "markAsImportant": "重要としてマーク",
           "markAsUnimportant": "重要でないとしてマーク",

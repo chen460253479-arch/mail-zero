@@ -149,26 +149,6 @@ export default function Footer() {
               </div>
               <div className="flex flex-col items-start justify-start gap-4 self-stretch">
                 <a
-                  href="https://x.com/nizzyabi/status/1918064165530550286"
-                  className="w-full"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <div className="justify-start self-stretch text-sm md:text-base leading-none text-white opacity-80 transition-opacity hover:opacity-100">
-                    Chat with Zero
-                  </div>
-                </a>
-                <a
-                  href="https://x.com/nizzyabi/status/1918051282881069229"
-                  className="w-full"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <div className="justify-start self-stretch text-sm md:text-base leading-none text-white opacity-80 transition-opacity hover:opacity-100">
-                    Zero AI
-                  </div>
-                </a>
-                <a
                   href="https://x.com/nizzyabi/status/1919292505260249486"
                   className="w-full"
                   target="_blank"

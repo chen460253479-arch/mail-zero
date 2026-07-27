@@ -1,6 +1,6 @@
 # Agent Configuration for Zero Email
 
-Zero is an open-source AI email solution built with a modern TypeScript/Next.js stack in a monorepo setup.
+Zero is an open-source email solution built with a modern TypeScript/React stack in a monorepo setup.
 
 ## Project Structure
 
@@ -40,11 +40,9 @@ This is a pnpm workspace monorepo with the following structure:
 - `pnpm db:migrate` - Apply database migrations
 - `pnpm db:studio` - Open Drizzle Studio
 
-### Testing & Evaluation
-- `pnpm test:ai` - Run AI tests
-- `pnpm eval` - Run evaluation suite
-- `pnpm eval:dev` - Run evaluation in dev mode
-- `pnpm eval:ci` - Run evaluation in CI mode
+### Testing
+- `pnpm test` - Run the application test suite
+- `pnpm test:mail-core` - Run local mailbox kernel tests
 
 ### Utilities
 - `pnpm nizzy env` - Setup environment variables
@@ -78,7 +76,6 @@ This is a pnpm workspace monorepo with the following structure:
 ### Important Environment Variables
 - `BETTER_AUTH_SECRET` - Auth secret key
 - `CREDENTIAL_ENCRYPTION_KEY` - Encrypts database-stored integration and mailbox credentials
-- `TWILIO_*` - SMS integration
 - `DATABASE_URL` - PostgreSQL connection string
 
 ## Development Setup

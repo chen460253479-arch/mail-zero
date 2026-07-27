@@ -126,12 +126,7 @@
       "starred": "Oblíbené",
       "applyFilters": "Použít filtry",
       "reset": "Obnovit",
-      "searching": "Vyhledávání...",
-      "aiSuggestions": "AI návrhy",
-      "aiSearching": "AI vyhledává...",
-      "aiSearchError": "AI vyhledávání selhalo. Zkuste to prosím znovu.",
-      "aiNoResults": "Žádné AI návrhy nenalezeny",
-      "aiEnhancedQuery": "Vylepšený vyhledávací dotaz"
+      "searching": "Vyhledávání..."
     },
     "navUser": {
       "customerSupport": "Komunita",
@@ -425,7 +420,6 @@
       "livesupport": "Živá podpora",
       "feedback": "Zpětná vazba",
       "settings": "Nastavení",
-      "voice": "Hlasový asistent",
       "snoozed": "Odložené"
     },
     "settings": {
@@ -462,9 +456,6 @@
         "dynamicContent": "Dynamický obsah",
         "dynamicContentDescription": "Povolit emailům zobrazení dynamického obsahu.",
         "languageChangedTo": "Jazyk změněn na {locale}",
-        "customPrompt": "Vlastní AI pokyn",
-        "customPromptPlaceholder": "Zadejte vlastní pokyn pro AI...",
-        "customPromptDescription": "Přizpůsobte, jak AI píše vaše e-mailové odpovědi. Toto bude přidáno k základnímu pokynu.",
         "noResultsFound": "Nebyly nalezeny žádné výsledky",
         "zeroSignature": "Zero podpis",
         "zeroSignatureDescription": "Přidat Zero podpis k vašim emailům.",
@@ -577,7 +568,6 @@
           "showPromotions": "Zobrazit propagace",
           "showUnread": "Zobrazit nepřečtené",
           "selectUnderCursor": "Vybrat pod kurzorem",
-          "openVoice": "Otevřít hlasového asistenta",
           "clearAllFilters": "Vymazat všechny filtry",
           "markAsImportant": "Označit jako důležité",
           "markAsUnimportant": "Označit jako nedůležité",

@@ -216,38 +216,7 @@ export interface DeleteAllSpamResponse {
   error?: string;
 }
 
-export enum Tools {
-  GetThreadSummary = 'getThreadSummary',
-  GetThread = 'getThread',
-  ComposeEmail = 'composeEmail',
-  DeleteEmail = 'deleteEmail',
-  MarkThreadsRead = 'markThreadsRead',
-  MarkThreadsUnread = 'markThreadsUnread',
-  ModifyLabels = 'modifyLabels',
-  GetUserLabels = 'getUserLabels',
-  SendEmail = 'sendEmail',
-  CreateLabel = 'createLabel',
-  BulkDelete = 'bulkDelete',
-  BulkArchive = 'bulkArchive',
-  DeleteLabel = 'deleteLabel',
-  AskZeroMailbox = 'askZeroMailbox',
-  AskZeroThread = 'askZeroThread',
-  WebSearch = 'webSearch',
-  InboxRag = 'inboxRag',
-  BuildGmailSearchQuery = 'buildGmailSearchQuery',
-  GetCurrentDate = 'getCurrentDate',
-}
-
 export type AppContext = Context<{ Bindings: Env }>;
-
-export enum EPrompts {
-  SummarizeMessage = 'SummarizeMessage',
-  ReSummarizeThread = 'ReSummarizeThread',
-  SummarizeThread = 'SummarizeThread',
-  Chat = 'Chat',
-  Compose = 'Compose',
-  //   ThreadLabels = 'ThreadLabels'
-}
 
 export interface IEmailSendBatch {
   messageId: string;

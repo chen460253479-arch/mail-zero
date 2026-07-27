@@ -132,7 +132,6 @@ export default function GeneralPage() {
       language: locale,
       timezone: getBrowserTimezone(),
       dynamicContent: false,
-      customPrompt: '',
       zeroSignature: true,
       defaultEmailAlias: '',
       animations: false,

@@ -126,12 +126,7 @@
       "starred": "Отмеченные",
       "applyFilters": "Применить фильтры",
       "reset": "Сбросить",
-      "searching": "Поиск...",
-      "aiSuggestions": "Предложения ИИ",
-      "aiSearching": "ИИ ищет...",
-      "aiSearchError": "Поиск ИИ не удался. Пожалуйста, попробуйте снова.",
-      "aiNoResults": "ИИ предложения не найдены",
-      "aiEnhancedQuery": "Расширенный поиск"
+      "searching": "Поиск..."
     },
     "navUser": {
       "customerSupport": "Сообщество",
@@ -425,7 +420,6 @@
       "livesupport": "Поддержка в реальном времени",
       "feedback": "Отзывы",
       "settings": "Настройки",
-      "voice": "Голосовой помощник",
       "snoozed": "Отложенные"
     },
     "settings": {
@@ -462,9 +456,6 @@
         "dynamicContent": "Динамический контент",
         "dynamicContentDescription": "Позволяет электронной почте отображать динамический контент.",
         "languageChangedTo": "Язык изменен на {locale}",
-        "customPrompt": "Пользовательский ИИ Запрос",
-        "customPromptPlaceholder": "Введите ваш запрос для ИИ...",
-        "customPromptDescription": "Настройте, как ИИ будет писать ваши ответы на письма. Этот текст будет добавлен к основному запросу.",
         "noResultsFound": "Результаты не найдены",
         "zeroSignature": "Подпись Zero",
         "zeroSignatureDescription": "Добавьте подпись Zero к вашим письмам.",
@@ -577,7 +568,6 @@
           "showPromotions": "Показать промоакции",
           "showUnread": "Показать непрочитанное",
           "selectUnderCursor": "Выбрать под курсором",
-          "openVoice": "Открыть голосовой помощник",
           "clearAllFilters": "Очистить все фильтры",
           "markAsImportant": "Отметить как важное",
           "markAsUnimportant": "Отметить как неважное",

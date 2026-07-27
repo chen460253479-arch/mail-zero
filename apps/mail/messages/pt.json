@@ -126,12 +126,7 @@
       "starred": "Favoritos",
       "applyFilters": "Aplicar filtros",
       "reset": "Limpar",
-      "searching": "Pesquisando...",
-      "aiSuggestions": "Sugestões de IA",
-      "aiSearching": "IA está pesquisando...",
-      "aiSearchError": "Pesquisa de IA falhou. Por favor, tente novamente.",
-      "aiNoResults": "Nenhuma sugestão de IA encontrada",
-      "aiEnhancedQuery": "Consulta de pesquisa aprimorada"
+      "searching": "Pesquisando..."
     },
     "navUser": {
       "customerSupport": "Comunidade",
@@ -425,7 +420,6 @@
       "livesupport": "Suporte ao vivo",
       "feedback": "Feedback",
       "settings": "Configurações",
-      "voice": "Assistente de voz",
       "snoozed": "Adiados"
     },
     "settings": {
@@ -462,9 +456,6 @@
         "dynamicContent": "Conteúdo Dinâmico",
         "dynamicContentDescription": "Permitir que e-mails exibam conteúdo dinâmico.",
         "languageChangedTo": "Idioma alterado para {locale}",
-        "customPrompt": "Prompt personalizado de IA",
-        "customPromptPlaceholder": "Digite seu prompt personalizado para a IA...",
-        "customPromptDescription": "Personalize como a IA escreve suas respostas de email. Isto será adicionado ao prompt base.",
         "noResultsFound": "Nenhum resultado encontrado",
         "zeroSignature": "Assinatura Zero",
         "zeroSignatureDescription": "Adicionar uma assinatura Zero aos seus e-mails.",
@@ -577,7 +568,6 @@
           "showPromotions": "Mostrar promoções",
           "showUnread": "Mostrar não lidos",
           "selectUnderCursor": "Selecionar sob o cursor",
-          "openVoice": "Abrir assistente de voz",
           "clearAllFilters": "Limpar todos os filtros",
           "markAsImportant": "Marcar como importante",
           "markAsUnimportant": "Marcar como não importante",

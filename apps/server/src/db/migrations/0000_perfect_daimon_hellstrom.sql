@@ -203,18 +203,6 @@ CREATE TABLE "auth"."session" (
 	CONSTRAINT "session_token_unique" UNIQUE("token")
 );
 --> statement-breakpoint
-CREATE TABLE "app"."summary" (
-	"message_id" text NOT NULL,
-	"content" text NOT NULL,
-	"created_at" timestamp NOT NULL,
-	"updated_at" timestamp NOT NULL,
-	"connection_id" text NOT NULL,
-	"saved" boolean DEFAULT false NOT NULL,
-	"tags" text,
-	"suggested_reply" text,
-	CONSTRAINT "summary_pk" PRIMARY KEY("connection_id","message_id")
-);
---> statement-breakpoint
 CREATE TABLE "integration"."system_config" (
 	"id" text PRIMARY KEY NOT NULL,
 	"integration_key" text NOT NULL,
@@ -240,11 +228,7 @@ CREATE TABLE "auth"."user_account" (
 	"created_at" timestamp NOT NULL,
 	"updated_at" timestamp NOT NULL,
 	"default_connection_id" text,
-	"custom_prompt" text,
-	"phone_number" text,
-	"phone_number_verified" boolean,
-	CONSTRAINT "user_account_email_unique" UNIQUE("email"),
-	CONSTRAINT "user_account_phone_number_unique" UNIQUE("phone_number")
+	CONSTRAINT "user_account_email_unique" UNIQUE("email")
 );
 --> statement-breakpoint
 CREATE TABLE "app"."user_hotkeys" (
@@ -257,7 +241,7 @@ CREATE TABLE "app"."user_hotkeys" (
 CREATE TABLE "app"."user_settings" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
-	"settings" jsonb DEFAULT '{"language":"en","timezone":"UTC","dynamicContent":false,"externalImages":true,"customPrompt":"","trustedSenders":[],"isOnboarded":false,"colorTheme":"system","zeroSignature":true,"autoRead":true,"defaultEmailAlias":"","categories":[{"id":"Important","name":"Important","searchValue":"IMPORTANT","order":0,"icon":"Lightning","isDefault":false},{"id":"All Mail","name":"All Mail","searchValue":"","order":1,"icon":"Mail","isDefault":true},{"id":"Unread","name":"Unread","searchValue":"UNREAD","order":5,"icon":"ScanEye","isDefault":false}],"undoSendEnabled":false,"imageCompression":"medium","animations":false}'::jsonb NOT NULL,
+	"settings" jsonb DEFAULT '{"language":"en","timezone":"UTC","dynamicContent":false,"externalImages":true,"trustedSenders":[],"isOnboarded":false,"colorTheme":"system","zeroSignature":true,"autoRead":true,"defaultEmailAlias":"","categories":[{"id":"Important","name":"Important","searchValue":"IMPORTANT","order":0,"icon":"Lightning","isDefault":false},{"id":"All Mail","name":"All Mail","searchValue":"","order":1,"icon":"Mail","isDefault":true},{"id":"Unread","name":"Unread","searchValue":"UNREAD","order":5,"icon":"ScanEye","isDefault":false}],"undoSendEnabled":false,"imageCompression":"medium","animations":false}'::jsonb NOT NULL,
 	"created_at" timestamp NOT NULL,
 	"updated_at" timestamp NOT NULL,
 	CONSTRAINT "user_settings_user_id_unique" UNIQUE("user_id")
@@ -270,14 +254,6 @@ CREATE TABLE "auth"."verification" (
 	"expires_at" timestamp NOT NULL,
 	"created_at" timestamp,
 	"updated_at" timestamp
-);
---> statement-breakpoint
-CREATE TABLE "app"."writing_style_matrix" (
-	"connectionId" text NOT NULL,
-	"numMessages" integer NOT NULL,
-	"style" jsonb NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "writing_style_matrix_pk" PRIMARY KEY("connectionId")
 );
 --> statement-breakpoint
 CREATE TABLE "mail"."account" (
@@ -716,6 +692,22 @@ CREATE TABLE "integration"."send_attempt" (
         OR ("integration"."send_attempt"."finished_at" IS NOT NULL AND "integration"."send_attempt"."outcome" IS NOT NULL))
 );
 --> statement-breakpoint
+CREATE TABLE "mail"."thread_snooze" (
+	"mail_account_id" text NOT NULL,
+	"thread_id" text NOT NULL,
+	"wake_at" timestamp with time zone NOT NULL,
+	"restore_plan" jsonb NOT NULL,
+	"status" text NOT NULL,
+	"lease_owner" text,
+	"lease_expires_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "thread_snooze_pk" PRIMARY KEY("mail_account_id","thread_id"),
+	CONSTRAINT "thread_snooze_status_chk" CHECK ("mail"."thread_snooze"."status" IN ('scheduled', 'waking', 'completed', 'canceled')),
+	CONSTRAINT "thread_snooze_lease_chk" CHECK (("mail"."thread_snooze"."status" = 'waking' AND "mail"."thread_snooze"."lease_owner" IS NOT NULL AND "mail"."thread_snooze"."lease_expires_at" IS NOT NULL)
+        OR ("mail"."thread_snooze"."status" <> 'waking' AND "mail"."thread_snooze"."lease_owner" IS NULL AND "mail"."thread_snooze"."lease_expires_at" IS NULL))
+);
+--> statement-breakpoint
 ALTER TABLE "auth"."account" ADD CONSTRAINT "account_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."authorization_binding" ADD CONSTRAINT "authorization_binding_connection_id_connection_id_fk" FOREIGN KEY ("connection_id") REFERENCES "integration"."connection"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."connection" ADD CONSTRAINT "connection_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -724,11 +716,9 @@ ALTER TABLE "integration"."oauth_session" ADD CONSTRAINT "oauth_session_created_
 ALTER TABLE "app"."note" ADD CONSTRAINT "note_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "app"."note" ADD CONSTRAINT "note_connection_fk" FOREIGN KEY ("connection_id") REFERENCES "integration"."connection"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auth"."session" ADD CONSTRAINT "session_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "app"."summary" ADD CONSTRAINT "summary_connection_id_connection_id_fk" FOREIGN KEY ("connection_id") REFERENCES "integration"."connection"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."system_config" ADD CONSTRAINT "system_config_updated_by_user_account_id_fk" FOREIGN KEY ("updated_by") REFERENCES "auth"."user_account"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "app"."user_hotkeys" ADD CONSTRAINT "user_hotkeys_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "app"."user_settings" ADD CONSTRAINT "user_settings_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "app"."writing_style_matrix" ADD CONSTRAINT "writing_style_matrix_connectionId_connection_id_fk" FOREIGN KEY ("connectionId") REFERENCES "integration"."connection"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."account" ADD CONSTRAINT "account_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."account" ADD CONSTRAINT "mail_account_connection_user_fk" FOREIGN KEY ("connection_id","user_id") REFERENCES "integration"."connection"("id","user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."identity" ADD CONSTRAINT "identity_mail_account_id_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -783,9 +773,12 @@ ALTER TABLE "integration"."outbound_delivery" ADD CONSTRAINT "outbound_delivery_
 ALTER TABLE "integration"."outbound_delivery" ADD CONSTRAINT "outbound_delivery_submission_account_fk" FOREIGN KEY ("submission_id","mail_account_id") REFERENCES "mail"."submission"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."send_attempt" ADD CONSTRAINT "send_attempt_delivery_account_submission_fk" FOREIGN KEY ("delivery_id","mail_account_id","submission_id") REFERENCES "integration"."outbound_delivery"("id","mail_account_id","submission_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."send_attempt" ADD CONSTRAINT "send_attempt_submission_account_fk" FOREIGN KEY ("submission_id","mail_account_id") REFERENCES "mail"."submission"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mail"."thread_snooze" ADD CONSTRAINT "thread_snooze_account_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mail"."thread_snooze" ADD CONSTRAINT "thread_snooze_thread_account_fk" FOREIGN KEY ("thread_id","mail_account_id") REFERENCES "mail"."thread"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "account_user_id_idx" ON "auth"."account" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "account_provider_user_id_idx" ON "auth"."account" USING btree ("provider_id","user_id");--> statement-breakpoint
 CREATE INDEX "account_expires_at_idx" ON "auth"."account" USING btree ("access_token_expires_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "connection_channel_email_active_uidx" ON "integration"."connection" USING btree ("channel_id","normalized_email") WHERE "integration"."connection"."status" IN ('connected', 'reconnect_required');--> statement-breakpoint
 CREATE INDEX "connection_provider_key_idx" ON "integration"."connection" USING btree ("provider_key");--> statement-breakpoint
 CREATE INDEX "early_access_is_early_access_idx" ON "app"."early_access" USING btree ("is_early_access");--> statement-breakpoint
 CREATE INDEX "email_template_user_id_idx" ON "app"."email_template" USING btree ("user_id");--> statement-breakpoint
@@ -804,12 +797,10 @@ CREATE INDEX "oauth_consent_client_id_idx" ON "auth"."oauth_consent" USING btree
 CREATE INDEX "oauth_consent_given_idx" ON "auth"."oauth_consent" USING btree ("consent_given");--> statement-breakpoint
 CREATE INDEX "session_user_id_idx" ON "auth"."session" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "session_expires_at_idx" ON "auth"."session" USING btree ("expires_at");--> statement-breakpoint
-CREATE INDEX "summary_connection_id_saved_idx" ON "app"."summary" USING btree ("connection_id","saved");--> statement-breakpoint
 CREATE INDEX "user_hotkeys_shortcuts_idx" ON "app"."user_hotkeys" USING btree ("shortcuts");--> statement-breakpoint
 CREATE INDEX "user_settings_settings_idx" ON "app"."user_settings" USING btree ("settings");--> statement-breakpoint
 CREATE INDEX "verification_identifier_idx" ON "auth"."verification" USING btree ("identifier");--> statement-breakpoint
 CREATE INDEX "verification_expires_at_idx" ON "auth"."verification" USING btree ("expires_at");--> statement-breakpoint
-CREATE INDEX "writing_style_matrix_style_idx" ON "app"."writing_style_matrix" USING btree ("style");--> statement-breakpoint
 CREATE UNIQUE INDEX "mail_account_connection_id_uidx" ON "mail"."account" USING btree ("connection_id");--> statement-breakpoint
 CREATE INDEX "mail_account_user_id_idx" ON "mail"."account" USING btree ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "mail_identity_account_default_active_uidx" ON "mail"."identity" USING btree ("mail_account_id") WHERE "mail"."identity"."is_default" = true AND "mail"."identity"."deleted_at" IS NULL;--> statement-breakpoint
@@ -864,22 +855,5 @@ CREATE INDEX "inbound_sync_item_lease_idx" ON "integration"."inbound_sync_item" 
 CREATE INDEX "outbound_delivery_due_idx" ON "integration"."outbound_delivery" USING btree ("status","available_at","id") WHERE "integration"."outbound_delivery"."status" IN ('scheduled', 'ready', 'retry_wait', 'uncertain');--> statement-breakpoint
 CREATE INDEX "outbound_delivery_expired_lease_idx" ON "integration"."outbound_delivery" USING btree ("lease_expires_at","id") WHERE "integration"."outbound_delivery"."status" = 'leased';--> statement-breakpoint
 CREATE UNIQUE INDEX "send_attempt_open_delivery_uidx" ON "integration"."send_attempt" USING btree ("mail_account_id","delivery_id") WHERE "integration"."send_attempt"."finished_at" IS NULL AND "integration"."send_attempt"."kind" = 'send';--> statement-breakpoint
-CREATE TABLE "mail"."thread_snooze" (
-	"mail_account_id" text NOT NULL,
-	"thread_id" text NOT NULL,
-	"wake_at" timestamp with time zone NOT NULL,
-	"restore_plan" jsonb NOT NULL,
-	"status" text NOT NULL,
-	"lease_owner" text,
-	"lease_expires_at" timestamp with time zone,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "thread_snooze_pk" PRIMARY KEY("mail_account_id","thread_id"),
-	CONSTRAINT "thread_snooze_status_chk" CHECK ("mail"."thread_snooze"."status" IN ('scheduled', 'waking', 'completed', 'canceled')),
-	CONSTRAINT "thread_snooze_lease_chk" CHECK (("mail"."thread_snooze"."status" = 'waking' AND "mail"."thread_snooze"."lease_owner" IS NOT NULL AND "mail"."thread_snooze"."lease_expires_at" IS NOT NULL)
-        OR ("mail"."thread_snooze"."status" <> 'waking' AND "mail"."thread_snooze"."lease_owner" IS NULL AND "mail"."thread_snooze"."lease_expires_at" IS NULL))
-);--> statement-breakpoint
-ALTER TABLE "mail"."thread_snooze" ADD CONSTRAINT "thread_snooze_account_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "mail"."thread_snooze" ADD CONSTRAINT "thread_snooze_thread_account_fk" FOREIGN KEY ("thread_id","mail_account_id") REFERENCES "mail"."thread"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "thread_snooze_due_idx" ON "mail"."thread_snooze" USING btree ("status","wake_at","thread_id") WHERE "mail"."thread_snooze"."status" = 'scheduled';--> statement-breakpoint
 CREATE INDEX "thread_snooze_expired_lease_idx" ON "mail"."thread_snooze" USING btree ("lease_expires_at","thread_id") WHERE "mail"."thread_snooze"."status" = 'waking';

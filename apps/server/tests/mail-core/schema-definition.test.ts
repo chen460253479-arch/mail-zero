@@ -42,9 +42,6 @@ describe('local mail schema', () => {
         constraint.getName(),
       ),
     ).toContain('channel_mapping_channel_auth_uidx');
-    expect(getTableConfig(schema.writingStyleMatrix).primaryKeys.map(({ name }) => name)).toContain(
-      'writing_style_matrix_pk',
-    );
   });
 
   it.each([
@@ -182,12 +179,6 @@ describe('local mail schema', () => {
     expect(
       getTableConfig(schema.authorizationBinding).indexes.map(({ config }) => config.name),
     ).not.toContain('authorization_connection_id_idx');
-    expect(getTableConfig(schema.summary).indexes.map(({ config }) => config.name)).not.toContain(
-      'summary_connection_id_idx',
-    );
-    expect(getTableConfig(schema.summary).indexes.map(({ config }) => config.name)).not.toContain(
-      'summary_saved_idx',
-    );
     expect(getTableConfig(schema.note).indexes.map(({ config }) => config.name)).not.toContain(
       'note_user_id_idx',
     );
@@ -196,15 +187,7 @@ describe('local mail schema', () => {
     );
   });
 
-  it('scopes legacy mail projections by Connection', () => {
-    const summaryConfig = getTableConfig(schema.summary);
-    expect(summaryConfig.columns.find(({ name }) => name === 'message_id')?.primary).toBe(false);
-    expect(
-      summaryConfig.primaryKeys
-        .find(({ name }) => name === 'summary_pk')
-        ?.columns.map(({ name }) => name),
-    ).toEqual(['connection_id', 'message_id']);
-
+  it('scopes application notes by Connection', () => {
     const noteConfig = getTableConfig(schema.note);
     expect(noteConfig.columns.map(({ name }) => name)).toContain('connection_id');
     expect(

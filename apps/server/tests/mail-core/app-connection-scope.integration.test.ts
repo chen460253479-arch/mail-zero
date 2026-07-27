@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { connection, note, summary, user } from '../../src/db/schema';
+import { connection, note, user } from '../../src/db/schema';
 import { withMailTestDatabase } from './helpers/database';
 
-describe('application mail projection Connection scope', () => {
-  it('allows equal provider object IDs in different Connections without cross-account collision', () =>
+describe('application note Connection scope', () => {
+  it('allows equal thread IDs in different Connections without cross-account collision', () =>
     withMailTestDatabase(async ({ db }) => {
       const now = new Date('2026-07-26T00:00:00.000Z');
       await db.insert(user).values({
@@ -37,22 +37,6 @@ describe('application mail projection Connection scope', () => {
           updatedAt: now,
         },
       ]);
-      await db.insert(summary).values([
-        {
-          connectionId: 'scope-connection-a',
-          messageId: 'provider-message-1',
-          content: 'A',
-          createdAt: now,
-          updatedAt: now,
-        },
-        {
-          connectionId: 'scope-connection-b',
-          messageId: 'provider-message-1',
-          content: 'B',
-          createdAt: now,
-          updatedAt: now,
-        },
-      ]);
       await db.insert(note).values([
         {
           id: 'scope-note-a',
@@ -69,16 +53,6 @@ describe('application mail projection Connection scope', () => {
           content: 'B',
         },
       ]);
-
-      await expect(
-        db.insert(summary).values({
-          connectionId: 'scope-connection-a',
-          messageId: 'provider-message-1',
-          content: 'duplicate',
-          createdAt: now,
-          updatedAt: now,
-        }),
-      ).rejects.toMatchObject({ code: '23505' });
       await expect(
         db.query.note.findMany({
           where: (fields, { and, eq }) =>

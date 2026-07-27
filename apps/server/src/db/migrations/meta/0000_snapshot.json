@@ -1,5 +1,5 @@
 {
-  "id": "0c30dc88-871e-4a78-8991-4ddd368947e5",
+  "id": "456b7abc-a0d7-4749-a7cf-28f6fb2d16d7",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -431,6 +431,28 @@
         }
       },
       "indexes": {
+        "connection_channel_email_active_uidx": {
+          "name": "connection_channel_email_active_uidx",
+          "columns": [
+            {
+              "expression": "channel_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "normalized_email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"integration\".\"connection\".\"status\" IN ('connected', 'reconnect_required')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "connection_provider_key_idx": {
           "name": "connection_provider_key_idx",
           "columns": [
@@ -1493,113 +1515,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "app.summary": {
-      "name": "summary",
-      "schema": "app",
-      "columns": {
-        "message_id": {
-          "name": "message_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "content": {
-          "name": "content",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "connection_id": {
-          "name": "connection_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "saved": {
-          "name": "saved",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "tags": {
-          "name": "tags",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "suggested_reply": {
-          "name": "suggested_reply",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "summary_connection_id_saved_idx": {
-          "name": "summary_connection_id_saved_idx",
-          "columns": [
-            {
-              "expression": "connection_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "saved",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "summary_connection_id_connection_id_fk": {
-          "name": "summary_connection_id_connection_id_fk",
-          "tableFrom": "summary",
-          "tableTo": "connection",
-          "schemaTo": "integration",
-          "columnsFrom": [
-            "connection_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "summary_pk": {
-          "name": "summary_pk",
-          "columns": [
-            "connection_id",
-            "message_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "integration.system_config": {
       "name": "system_config",
       "schema": "integration",
@@ -1757,24 +1672,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "custom_prompt": {
-          "name": "custom_prompt",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "phone_number": {
-          "name": "phone_number",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "phone_number_verified": {
-          "name": "phone_number_verified",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},
@@ -1786,13 +1683,6 @@
           "nullsNotDistinct": false,
           "columns": [
             "email"
-          ]
-        },
-        "user_account_phone_number_unique": {
-          "name": "user_account_phone_number_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "phone_number"
           ]
         }
       },
@@ -1889,7 +1779,7 @@
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
-          "default": "'{\"language\":\"en\",\"timezone\":\"UTC\",\"dynamicContent\":false,\"externalImages\":true,\"customPrompt\":\"\",\"trustedSenders\":[],\"isOnboarded\":false,\"colorTheme\":\"system\",\"zeroSignature\":true,\"autoRead\":true,\"defaultEmailAlias\":\"\",\"categories\":[{\"id\":\"Important\",\"name\":\"Important\",\"searchValue\":\"IMPORTANT\",\"order\":0,\"icon\":\"Lightning\",\"isDefault\":false},{\"id\":\"All Mail\",\"name\":\"All Mail\",\"searchValue\":\"\",\"order\":1,\"icon\":\"Mail\",\"isDefault\":true},{\"id\":\"Unread\",\"name\":\"Unread\",\"searchValue\":\"UNREAD\",\"order\":5,\"icon\":\"ScanEye\",\"isDefault\":false}],\"undoSendEnabled\":false,\"imageCompression\":\"medium\",\"animations\":false}'::jsonb"
+          "default": "'{\"language\":\"en\",\"timezone\":\"UTC\",\"dynamicContent\":false,\"externalImages\":true,\"trustedSenders\":[],\"isOnboarded\":false,\"colorTheme\":\"system\",\"zeroSignature\":true,\"autoRead\":true,\"defaultEmailAlias\":\"\",\"categories\":[{\"id\":\"Important\",\"name\":\"Important\",\"searchValue\":\"IMPORTANT\",\"order\":0,\"icon\":\"Lightning\",\"isDefault\":false},{\"id\":\"All Mail\",\"name\":\"All Mail\",\"searchValue\":\"\",\"order\":1,\"icon\":\"Mail\",\"isDefault\":true},{\"id\":\"Unread\",\"name\":\"Unread\",\"searchValue\":\"UNREAD\",\"order\":5,\"icon\":\"ScanEye\",\"isDefault\":false}],\"undoSendEnabled\":false,\"imageCompression\":\"medium\",\"animations\":false}'::jsonb"
         },
         "created_at": {
           "name": "created_at",
@@ -2026,82 +1916,6 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "app.writing_style_matrix": {
-      "name": "writing_style_matrix",
-      "schema": "app",
-      "columns": {
-        "connectionId": {
-          "name": "connectionId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "numMessages": {
-          "name": "numMessages",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "style": {
-          "name": "style",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "writing_style_matrix_style_idx": {
-          "name": "writing_style_matrix_style_idx",
-          "columns": [
-            {
-              "expression": "style",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "writing_style_matrix_connectionId_connection_id_fk": {
-          "name": "writing_style_matrix_connectionId_connection_id_fk",
-          "tableFrom": "writing_style_matrix",
-          "tableTo": "connection",
-          "schemaTo": "integration",
-          "columnsFrom": [
-            "connectionId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "writing_style_matrix_pk": {
-          "name": "writing_style_matrix_pk",
-          "columns": [
-            "connectionId"
-          ]
-        }
-      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},

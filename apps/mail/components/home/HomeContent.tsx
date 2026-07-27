@@ -1,7 +1,5 @@
 import {
   ChevronDown,
-  CurvedArrow,
-  GitHub,
   Plus,
   Cube,
   MediumStack,
@@ -23,7 +21,6 @@ import {
   Figma,
   Docx,
   ImageFile,
-  Expand,
 } from '../icons/icons';
 import { PixelatedBackground, PixelatedLeft, PixelatedRight } from '@/components/home/pixelated-bg';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
@@ -36,23 +33,11 @@ import { useTheme } from 'next-themes';
 import { motion } from 'motion/react';
 import { useEffect } from 'react';
 import Footer from './footer';
-import React from 'react';
-
-const firstRowQueries: string[] = [
-  'Show recent design feedback',
-  'Reply to Nick',
-  'Find invoice from Stripe',
-];
-
-const secondRowQueries: string[] = [
-  'Schedule meeting with Sarah',
-  'What did alex say about the design',
-];
 
 const tabs = [
-  { label: 'Chat With Your Inbox', value: 'smart-categorization' },
-  { label: 'Smart Labels', value: 'ai-features' },
-  { label: 'Write Better Emails', value: 'feature-3' },
+  { label: 'Local Inbox', value: 'local-inbox' },
+  { label: 'Folders and Labels', value: 'organization' },
+  { label: 'Compose and Reply', value: 'delivery' },
 ];
 
 export default function HomeContent() {
@@ -84,7 +69,7 @@ export default function HomeContent() {
           className="text-center text-4xl font-medium md:text-6xl"
         >
           <Balancer className="mb-3 max-w-[1130px]">
-            AI Powered Email, Built to Save You Time
+            Your Email, Stored and Organized Locally
           </Balancer>
         </motion.h1>
         <motion.p
@@ -93,7 +78,7 @@ export default function HomeContent() {
           transition={{ duration: 0.5, delay: 0.4 }}
           className="mx-auto mb-4 max-w-2xl text-center text-base font-medium text-[#B7B7B7] md:text-lg"
         >
-          Zero is an AI-native email client that manages your inbox, so you don't have to.
+          Zero synchronizes provider mail into a local mailbox you control.
         </motion.p>
         <p className="mb-4 ml-0.5 text-xs text-[#B7B7B7]/60">No credit card required.</p>
         <motion.div
@@ -141,7 +126,7 @@ export default function HomeContent() {
       <section className="relative mt-10 hidden flex-col justify-center md:flex">
         <div className="bg-border absolute left-1/2 top-0 h-px w-full -translate-x-1/2 md:container xl:max-w-7xl" />
         <Tabs
-          defaultValue="smart-categorization"
+          defaultValue="local-inbox"
           className="flex w-full flex-col items-center gap-0"
         >
           <div
@@ -624,7 +609,7 @@ export default function HomeContent() {
                     <div className="bg-tokens-surface-on-secondary/5 outline-base-secondary-500 flex flex-col items-start justify-start gap-3.5 self-stretch rounded-lg p-3 outline outline-[0.35px] outline-offset-[-0.35px]">
                       <div className="inline-flex items-center justify-start gap-1">
                         <div className="justify-start text-[9.92px] leading-[9.92px] text-[#948CA4]">
-                          AI Summary
+                          Thread note
                         </div>
                       </div>
                       <div className="text-base-gray-950 justify-start self-stretch text-[9.92px] font-normal leading-none">
@@ -718,10 +703,10 @@ export default function HomeContent() {
                 <div className="absolute left-0 top-[121px] inline-flex w-[650px] flex-col items-start justify-start gap-4 overflow-hidden rounded-3xl border border-[#8B5CF6] bg-[#2A1D48] p-6 outline outline-[#3F325F]">
                   <div className="inline-flex items-center justify-start gap-1.5">
                     <div className="relative h-3.5 w-3.5">
-                      <img src="/star.svg" alt="AI Summary" width={16} height={16} />
+                      <img src="/star.svg" alt="Thread note" width={16} height={16} />
                     </div>
                     <div className="flex items-center justify-start gap-1 text-xs leading-3 text-[#948CA4]">
-                      AI Summary
+                      Thread note
                       <ChevronDown className="relative h-2 w-2 overflow-hidden fill-[#8C8C8C]" />
                     </div>
                   </div>
@@ -738,11 +723,11 @@ export default function HomeContent() {
             </div>
             <div>
               <h1 className="mb-2 mt-4 text-lg font-medium leading-loose text-white">
-                AI-Powered Summaries
+                Notes and Thread Context
               </h1>
               <p className="max-w-sm text-sm font-light text-[#979797]">
-                Your personal email copilot. Let our AI draft responses, summarize long threads, and
-                extract action items automatically.
+                Keep local notes beside conversations and review participants, labels, and
+                attachments in one thread view.
               </p>
             </div>
           </motion.div>
@@ -1020,254 +1005,13 @@ export default function HomeContent() {
               </div>
             </div>
             <div className="mt-4">
-              <h1 className="mb-2 text-lg font-medium leading-loose text-white">Smart Search</h1>
+              <h1 className="mb-2 text-lg font-medium leading-loose text-white">Local Search</h1>
               <p className="max-w-sm text-sm font-light text-[#979797]">
-                Your inbox, your rules. Create personalized email processing flows that match
-                exactly how you organize,write, reply, and work.
+                Search synchronized messages and combine sender, subject, date, label, and
+                attachment filters.
               </p>
             </div>
           </motion.div>
-        </div>
-      </div>
-
-      <div className="relative mt-52">
-        <div className="z-1 relative w-full">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="flex items-center justify-center"
-          >
-            <h1 className="text-lg font-light text-white/40 md:text-xl">
-              AI email chat with natural language
-            </h1>
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="mt-2 flex flex-col items-center justify-center md:mt-8"
-          >
-            <h1 className="text-4xl font-medium text-white md:text-6xl">Ask away</h1>
-            <h1 className="mb-4 text-4xl font-medium text-white/40 md:text-6xl">
-              Get your answers
-            </h1>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.5 }}
-            className="relative flex w-full items-center justify-center"
-          >
-            <div className="relative mx-auto flex h-[587px] w-full max-w-[894px] items-center justify-center rounded-xl">
-              <div className="absolute left-0 top-[319px] mx-auto inline-flex w-full max-w-[894px] flex-col items-start justify-start overflow-hidden rounded-xl bg-zinc-900 opacity-30">
-                <div className="inline-flex items-center justify-start gap-1.5 self-stretch px-5 pb-4 pt-7">
-                  <div className="flex flex-1 items-center justify-start gap-1.5">
-                    <div className="justify-start text-sm leading-none text-[#8C8C8C]">Pinned</div>
-                    <div className="justify-start text-sm leading-none text-[#8C8C8C]">[3]</div>
-                  </div>
-                </div>
-                <div className="flex flex-col items-start justify-start gap-2 self-stretch px-2 pb-2">
-                  <div className="inline-flex items-center justify-start gap-3 self-stretch rounded-lg p-3">
-                    <img
-                      src="/adam.jpg"
-                      alt="avatar"
-                      width={32}
-                      height={32}
-                      className="rounded-full"
-                    />
-                    <div className="inline-flex h-9 flex-1 flex-col items-start justify-start gap-2.5">
-                      <div className="inline-flex items-start justify-start gap-2.5 self-stretch">
-                        <div className="flex flex-1 items-center justify-start gap-3">
-                          <div className="flex items-center justify-start gap-1">
-                            <div className="text-base-gray-950 justify-start text-sm leading-none">
-                              Adam from Zero
-                            </div>
-                            <div className="justify-start text-center text-sm leading-none text-[#8C8C8C]">
-                              [9]
-                            </div>
-                          </div>
-                        </div>
-                        <div className="justify-start text-sm font-normal leading-none text-[#8C8C8C]">
-                          Mar 29
-                        </div>
-                      </div>
-                      <div className="inline-flex items-center justify-start gap-2.5 self-stretch">
-                        <div className="flex-1 justify-start text-sm font-normal leading-none text-[#8C8C8C]">
-                          New design review
-                        </div>
-                        <div className="flex items-start justify-start gap-1">
-                          <div className="relative h-3.5 w-3.5 overflow-hidden" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="inline-flex items-center justify-start gap-3 self-stretch rounded-[10px] p-3">
-                    <div className="inline-flex h-8 w-8 flex-col items-center justify-center gap-2.5 overflow-hidden rounded-full bg-[#313131] px-1.5 py-2.5 shadow-[0px_0px_0px_0.5px_rgba(255,255,255,0.00)] shadow-[0px_1px_2px_0px_rgba(255,255,255,0.00)]">
-                      <GroupPeople className="h-5 w-5 overflow-hidden fill-[#989898]" />
-                    </div>
-                    <div className="inline-flex flex-1 flex-col items-start justify-start gap-2.5">
-                      <div className="inline-flex items-start justify-start gap-2.5 self-stretch">
-                        <div className="flex flex-1 items-center justify-start gap-3">
-                          <div className="flex items-center justify-start gap-1.5">
-                            <div className="text-base-gray-950 justify-start text-sm leading-none">
-                              Alex, Ali, Sarah
-                            </div>
-                            <div className="justify-start text-center text-sm leading-none text-[#8C8C8C]">
-                              [6]
-                            </div>
-                          </div>
-                        </div>
-                        <div className="justify-start text-sm font-normal leading-none text-[#8C8C8C]">
-                          Mar 28
-                        </div>
-                      </div>
-                      <div className="inline-flex items-center justify-start gap-2.5 self-stretch">
-                        <div className="flex-1 justify-start text-sm font-normal leading-none text-[#8C8C8C]">
-                          Re: Design review feedback
-                        </div>
-                        <div className="flex items-start justify-start gap-1">
-                          <div className="relative h-3.5 w-3.5 overflow-hidden" />
-                          <div className="relative h-3.5 w-3.5 overflow-hidden" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="inline-flex items-center justify-start gap-3 self-stretch rounded-lg p-3">
-                    <div className="bg-tokens-surface-primary inline-flex h-8 w-8 flex-col items-center justify-center gap-2.5 overflow-hidden rounded-full px-1.5 py-2.5">
-                      <div className="relative h-fit">
-                        <GitHub className="h-[25px] w-[25px] fill-white" />
-                      </div>
-                    </div>
-                    <div className="inline-flex flex-1 flex-col items-start justify-start gap-2.5">
-                      <div className="inline-flex items-start justify-start gap-2.5 self-stretch">
-                        <div className="flex flex-1 items-center justify-start gap-3">
-                          <div className="flex items-center justify-start gap-1">
-                            <div className="text-base-gray-950 justify-start text-sm leading-none">
-                              GitHub
-                            </div>
-                            <div className="justify-start text-center text-sm leading-none text-[#8C8C8C]">
-                              [8]
-                            </div>
-                          </div>
-                        </div>
-                        <div className="justify-start text-sm font-normal leading-none text-[#8C8C8C]">
-                          Mar 28
-                        </div>
-                      </div>
-                      <div className="inline-flex items-center justify-start gap-2.5 self-stretch">
-                        <div className="flex-1 justify-start text-sm font-normal leading-none text-[#8C8C8C]">
-                          Security alert: Critical vulnerability
-                        </div>
-                        <div className="flex items-start justify-start gap-1">
-                          <div className="relative h-3.5 w-3.5 overflow-hidden" />
-                          <div className="relative h-3.5 w-3.5 overflow-hidden" />
-                          <div className="relative h-3.5 w-3.5 overflow-hidden" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="aspect-96/125 absolute top-0 inline-flex w-full flex-col items-center justify-center overflow-hidden rounded-xl bg-[#252525] md:h-[500px] md:w-96">
-                <div className="border-tokens-stroke-light/5 inline-flex items-center justify-start gap-2 self-stretch overflow-hidden border-b-[0.50px] py-3.5 pl-5 pr-3.5">
-                  <div className="flex flex-1 items-center justify-start gap-3">
-                    <div className="text-base-gray-950 flex flex-1 items-center justify-start text-sm leading-none">
-                      <X className="mr-2 h-4 w-4 fill-[#8C8C8C]" />
-                      New chat
-                    </div>
-                  </div>
-                  <div className="flex h-6 items-center justify-center gap-0.5 overflow-hidden rounded-md px-1">
-                    <Plus className="h-3 w-3 overflow-hidden fill-[#8C8C8C]" />
-                  </div>
-                  <div className="flex h-6 items-center justify-center gap-0.5 overflow-hidden rounded-md px-1">
-                    <PanelLeftOpen className="h-3 w-3 overflow-hidden fill-[#8C8C8C]" />
-                  </div>
-                  <div className="flex h-6 items-center justify-center gap-0.5 overflow-hidden rounded-md px-1">
-                    <Expand className="h-2.5 w-2.5 overflow-hidden fill-[#8C8C8C]" />
-                  </div>
-                </div>
-                <div className="relative flex h-full flex-1 flex-col items-center justify-between gap-8 self-stretch overflow-hidden px-5 py-4">
-                  <img
-                    src="/white-icon.svg"
-                    alt="chat"
-                    width={28}
-                    height={28}
-                    className="h-7 w-7"
-                  />
-                  <div className="flex flex-col items-center justify-start gap-3">
-                    <div className="text-base-gray-950 justify-start text-sm leading-none">
-                      Ask anything about your emails
-                    </div>
-                    <div className="justify-start text-sm font-normal leading-none text-[#929292]">
-                      Ask to do or show anything using natural language
-                    </div>
-                  </div>
-                  <div className="relative inline-flex w-96 flex-col items-start justify-center gap-2">
-                    {/* First row */}
-                    <div className="no-scrollbar relative flex w-full justify-center">
-                      <div className="flex items-center justify-start gap-2 whitespace-nowrap">
-                        {firstRowQueries.map((query) => (
-                          <div
-                            key={query}
-                            className="flex h-7 shrink-0 items-center justify-start gap-1.5 overflow-hidden rounded-md bg-[#303030] px-2 py-1.5"
-                          >
-                            <div className="flex items-center justify-start gap-1 px-0.5">
-                              <div className="justify-start text-sm leading-none text-[#8B8B8B]">
-                                {query}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="bg-linear-to-l absolute left-0 top-0 h-7 w-12 from-neutral-800/0 to-neutral-800" />
-                      <div className="bg-linear-to-l absolute right-0 top-0 h-7 w-12 from-neutral-800 to-neutral-800/0" />
-                    </div>
-
-                    {/* Second row */}
-                    <div className="no-scrollbar relative flex w-full justify-center">
-                      <div className="flex items-center justify-start gap-2 whitespace-nowrap">
-                        {secondRowQueries.map((query) => (
-                          <div
-                            key={query}
-                            className="flex h-7 shrink-0 items-center justify-start gap-1.5 overflow-hidden rounded-md bg-[#303030] px-2 py-1.5"
-                          >
-                            <div className="flex items-center justify-start gap-1 px-0.5">
-                              <div className="justify-start text-sm leading-none text-[#8B8B8B]">
-                                {query}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="bg-linear-to-l absolute left-0 top-0 h-7 w-12 from-neutral-800/0 to-neutral-800" />
-                      <div className="bg-linear-to-l absolute right-0 top-0 h-7 w-12 from-neutral-800 to-neutral-800/0" />
-                    </div>
-                  </div>
-                  <div className="inline-flex w-full items-center justify-start gap-4 overflow-hidden p-0 md:w-96 md:p-4 md:pb-0">
-                    <div className="flex h-8 flex-1 items-center justify-start gap-1.5 overflow-hidden rounded-md bg-[#141414] pl-2.5 pr-1">
-                      <div className="relative h-3 w-px rounded-full bg-white" />
-                      <div className="flex-1 justify-start text-sm leading-none text-[#727272]">
-                        Ask Zero to do anything...
-                      </div>
-                      <div className="flex h-6 items-center justify-center gap-2.5 rounded bg-[#262626] px-1">
-                        <CurvedArrow className="relative left-px mt-1 h-4 w-4 fill-black dark:fill-[#929292]" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-          <img
-            src="/pixel.svg"
-            alt="hero"
-            width={1920}
-            height={1080}
-            className="z-2 relative bottom-24 rotate-180 bg-transparent opacity-0"
-            style={{ clipPath: 'inset(45% 0 0 0)' }}
-          />
         </div>
       </div>
 

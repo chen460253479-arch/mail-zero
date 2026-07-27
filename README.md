@@ -11,7 +11,8 @@ An Open-Source Gmail Alternative for the Future of Email
 
 ## What is Zero?
 
-Zero is an open-source AI email solution that gives users the power to **self-host** their own email app while also integrating external services like Gmail and other email providers. Our goal is to modernize and improve emails through AI agents to truly modernize emails.
+Zero is an open-source email service that lets users **self-host** a local mailbox while integrating
+external providers such as Gmail through channel plugins.
 
 ## Why Zero?
 
@@ -19,7 +20,6 @@ Most email services today are either **closed-source**, **data-hungry**, or **to
 0.email is different:
 
 - ✅ **Open-Source** – No hidden agendas, fully transparent.
-- 🦾 **AI Driven** - Enhance your emails with Agents & LLMs.
 - 🔒 **Data Privacy First** – Your emails, your data. Zero does not track, collect, or sell your data in any way. Please note: while we integrate with external services, the data passed through them is not under our control and falls under their respective privacy policies and terms of service.
 - ⚙️ **Self-Hosting Freedom** – Run your own email app with ease.
 - 📬 **Unified Inbox** – Connect multiple email providers like Gmail, Outlook, and more.
@@ -213,22 +213,6 @@ You can set up Zero in two ways:
 > The authorized redirect URIs in Google Cloud Console must exactly match the URLs shown in
 > **Settings → Integrations → Gmail**, including protocol, domain, and path.
 
-3. **Twilio Setup** (Required for SMS Integration)
-   - Go to the [Twilio](https://www.twilio.com/)
-   - Create a Twilio account if you don’t already have one
-   - From the dashboard, locate your:
-     - Account SID
-     - Auth Token
-     - Phone Number
-
-   - Add to your `.env` file:
-
-   ```env
-   TWILIO_ACCOUNT_SID=your_account_sid
-   TWILIO_AUTH_TOKEN=your_auth_token
-   TWILIO_PHONE_NUMBER=your_twilio_phone_number
-   ```
-
 ### Environment Variables
 
 For Docker development, copy `.env.example` to `.env` and edit the values before starting the
@@ -302,12 +286,9 @@ Zero uses PostgreSQL for storing data. Here's how to set it up:
 
 ### Sync
 
-Background: https://x.com/cmdhaus/status/1940886269950902362
-We're now storing the user's emails in their Durable Object & an R2 bucket. This allow us to speed things up, a lot.
-This also introduces 3 environment variables, `DROP_AGENT_TABLES`,`THREAD_SYNC_MAX_COUNT`, `THREAD_SYNC_LOOP`.
-`DROP_AGENT_TABLES`: should the durable object drop the threads table before starting a sync
-`THREAD_SYNC_MAX_COUNT`: how many threads should we sync? max `500` because it's using the same number for the maxResults number from the driver. i.e 500 results per page.
-`THREAD_SYNC_LOOP`: should make sure to sync all of the items inside a folder? i.e if THREAD_SYNC_MAX_COUNT=500 it will sync 500 threads per request until the folder is fully synced. (should be true in production)
+Provider plugins receive remote changes and persist normalized messages in the PostgreSQL-backed
+local mailbox. Gmail push notifications and scheduled reconciliation share the same idempotent
+ingress command path.
 
 ## Contribute
 

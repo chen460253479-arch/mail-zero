@@ -7,15 +7,8 @@ import {
   user,
   userHotkeys,
   userSettings,
-  writingStyleMatrix,
   emailTemplate,
 } from './db/schema';
-import {
-  createUpdatedMatrixFromNewEmail,
-  initializeStyleMatrixFromEmail,
-  type EmailMatrix,
-  type WritingStyleMatrix,
-} from './services/writing-style-service';
 import {
   assertMailChannelBinding,
   channelIdToProviderId,
@@ -27,13 +20,7 @@ import {
   recordGmailPushSignal,
   runMailIngressCommand,
 } from './runtime/mail/gmail-inbound';
-import {
-  toAttachmentFiles,
-  type SerializedAttachment,
-  type AttachmentFile,
-} from './lib/attachments';
 import { assertAuthorizationCanBeAttached } from './modules/mail-accounts/application/disconnect-mailbox';
-import { SyncThreadsCoordinatorWorkflow } from './workflows/sync-threads-coordinator-workflow';
 import { normalizeMailboxEmail } from './modules/mail-accounts/application/mailbox-identity';
 import { enqueueDueMailOutboundWork, runMailOutboundCommand } from './runtime/mail/outbound';
 import { createZeroOAuthSnapshot } from './modules/mail-accounts/credentials/zero-oauth';
@@ -44,17 +31,13 @@ import { WorkerEntrypoint, DurableObject, RpcTarget } from 'cloudflare:workers';
 import { wakeDueMailSnoozes } from './modules/mail-snooze/runtime/environment';
 import { authenticateGmailPush } from './mail-channel/gmail/inbound/push-auth';
 import { readGmailInboundConfig } from './runtime/mail/gmail-inbound-config';
-import { SyncThreadsWorkflow } from './workflows/sync-threads-workflow';
-import { ShardRegistry, ZeroAgent, ZeroDriver } from './routes/agent';
-import { ThreadSyncWorker } from './routes/agent/sync-worker';
 import type { MailChannelId } from './lib/mail-channel/types';
 import { oAuthDiscoveryMetadata } from 'better-auth/plugins';
 // import { instrument, type ResolveConfigFn } from '@microlabs/otel-cf-workers';
-import { getZeroAgent, getZeroDB } from './lib/server-utils';
+import { getZeroDB } from './lib/server-utils';
 import { registerMailBlobRoutes } from './modules/mail-api';
 import { EProviders, type IEmailSendBatch } from './types';
 import { eq, and, desc, asc, inArray } from 'drizzle-orm';
-import { ThinkingMCP } from './lib/sequential-thinking';
 import { MailSyncError } from './modules/mail-sync';
 
 import { ensureConfiguredAdmin } from './lib/admin-provisioning';
@@ -62,18 +45,13 @@ import { integrationOAuthRouter } from './routes/integrations';
 import { contextStorage } from 'hono/context-storage';
 import { defaultUserSettings } from './lib/schemas';
 import { createLocalJWKSet, jwtVerify } from 'jose';
-import { enableBrainFunction } from './lib/brain';
 import { trpcServer } from '@hono/trpc-server';
-import { agentsMiddleware } from 'hono-agents';
-import { ZeroMCP } from './routes/agent/mcp';
 import { publicRouter } from './routes/auth';
-import { WorkflowRunner } from './pipelines';
 import { initTracing } from './lib/tracing';
 import { env, type ZeroEnv } from './env';
 import type { HonoContext } from './ctx';
 import { createDb, type DB } from './db';
 import { createAuth } from './lib/auth';
-import { aiRouter } from './routes/ai';
 import { appRouter } from './trpc';
 import { cors } from 'hono/cors';
 import { Hono } from 'hono';
@@ -275,16 +253,6 @@ export class DbRpcDO extends RpcTarget {
     connectionId: string,
   ): Promise<typeof connection.$inferSelect | undefined> {
     return await this.mainDo.findConnectionById(connectionId);
-  }
-
-  async syncUserMatrix(connectionId: string, emailStyleMatrix: EmailMatrix) {
-    return await this.mainDo.syncUserMatrix(connectionId, emailStyleMatrix);
-  }
-
-  async findWritingStyleMatrix(
-    connectionId: string,
-  ): Promise<typeof writingStyleMatrix.$inferSelect | undefined> {
-    return await this.mainDo.findWritingStyleMatrix(connectionId);
   }
 
   async deleteActiveConnection(connectionId: string) {
@@ -754,59 +722,6 @@ class ZeroDB extends DurableObject<ZeroEnv> {
     });
   }
 
-  async syncUserMatrix(connectionId: string, emailStyleMatrix: EmailMatrix) {
-    await this.db.transaction(async (tx) => {
-      const [existingMatrix] = await tx
-        .select({
-          numMessages: writingStyleMatrix.numMessages,
-          style: writingStyleMatrix.style,
-        })
-        .from(writingStyleMatrix)
-        .where(eq(writingStyleMatrix.connectionId, connectionId));
-
-      if (existingMatrix) {
-        const newStyle = createUpdatedMatrixFromNewEmail(
-          existingMatrix.numMessages,
-          existingMatrix.style as WritingStyleMatrix,
-          emailStyleMatrix,
-        );
-
-        await tx
-          .update(writingStyleMatrix)
-          .set({
-            numMessages: existingMatrix.numMessages + 1,
-            style: newStyle,
-          })
-          .where(eq(writingStyleMatrix.connectionId, connectionId));
-      } else {
-        const newStyle = initializeStyleMatrixFromEmail(emailStyleMatrix);
-
-        await tx
-          .insert(writingStyleMatrix)
-          .values({
-            connectionId,
-            numMessages: 1,
-            style: newStyle,
-          })
-          .onConflictDoNothing();
-      }
-    });
-  }
-
-  async findWritingStyleMatrix(
-    connectionId: string,
-  ): Promise<typeof writingStyleMatrix.$inferSelect | undefined> {
-    return await this.db.query.writingStyleMatrix.findFirst({
-      where: eq(writingStyleMatrix.connectionId, connectionId),
-      columns: {
-        numMessages: true,
-        style: true,
-        updatedAt: true,
-        connectionId: true,
-      },
-    });
-  }
-
   async deleteActiveConnection(userId: string, connectionId: string) {
     return await this.db
       .delete(connection)
@@ -1017,7 +932,6 @@ const api = new Hono<HonoContext>()
       c.set('auth', undefined as any);
     }
   })
-  .route('/ai', aiRouter)
   .route('/public', publicRouter)
   .route('/api/integrations', integrationOAuthRouter)
   .on(['GET', 'POST', 'OPTIONS'], '/auth/*', (c) => {
@@ -1078,71 +992,7 @@ const app = new Hono<HonoContext>()
     const auth = createAuth();
     return oAuthDiscoveryMetadata(auth)(c.req.raw);
   })
-  .mount(
-    '/sse',
-    async (request, env, ctx) => {
-      const authBearer = request.headers.get('Authorization');
-      if (!authBearer) {
-        console.log('No auth provided');
-        return new Response('Unauthorized', { status: 401 });
-      }
-      const auth = createAuth();
-      const session = await auth.api.getMcpSession({ headers: request.headers });
-      if (!session) {
-        console.log('Invalid auth provided', Array.from(request.headers.entries()));
-        return new Response('Unauthorized', { status: 401 });
-      }
-      ctx.props = {
-        userId: session?.userId,
-      };
-      return ZeroMCP.serveSSE('/sse', { binding: 'ZERO_MCP' }).fetch(request, env, ctx);
-    },
-    { replaceRequest: false },
-  )
-  .mount(
-    '/mcp/thinking/sse',
-    async (request, env, ctx) => {
-      return ThinkingMCP.serveSSE('/mcp/thinking/sse', { binding: 'THINKING_MCP' }).fetch(
-        request,
-        env,
-        ctx,
-      );
-    },
-    { replaceRequest: false },
-  )
-  .mount(
-    '/mcp',
-    async (request, env, ctx) => {
-      const authBearer = request.headers.get('Authorization');
-      if (!authBearer) {
-        return new Response('Unauthorized', { status: 401 });
-      }
-      const auth = createAuth();
-      const session = await auth.api.getMcpSession({ headers: request.headers });
-      if (!session) {
-        console.log('Invalid auth provided', Array.from(request.headers.entries()));
-        return new Response('Unauthorized', { status: 401 });
-      }
-      ctx.props = {
-        userId: session?.userId,
-      };
-      return ZeroMCP.serve('/mcp', { binding: 'ZERO_MCP' }).fetch(request, env, ctx);
-    },
-    { replaceRequest: false },
-  )
   .route('/api', api)
-  .use(
-    '*',
-    agentsMiddleware({
-      options: {
-        onBeforeConnect: (c) => {
-          if (!c.headers.get('Cookie')) {
-            return new Response('Unauthorized', { status: 401 });
-          }
-        },
-      },
-    }),
-  )
   .get('/health', (c) => c.json({ message: 'Zero Server is Up!' }))
   .get('/', (c) => c.redirect(`${env.VITE_PUBLIC_APP_URL}`))
   .post('/monitoring/sentry', async (c) => {
@@ -1254,9 +1104,7 @@ export default class Entry extends WorkerEntrypoint<ZeroEnv> {
   async fetch(request: Request): Promise<Response> {
     return handler.fetch(request, this.env, this.ctx);
   }
-  async queue(
-    batch: MessageBatch<unknown> | { queue: string; messages: Array<{ body: IEmailSendBatch }> },
-  ) {
+  async queue(batch: MessageBatch<unknown>) {
     switch (true) {
       case batch.queue.startsWith('mail-ingress-queue'): {
         const messages = batch.messages as Message<unknown>[];
@@ -1301,146 +1149,10 @@ export default class Entry extends WorkerEntrypoint<ZeroEnv> {
         );
         return;
       }
-      case batch.queue.startsWith('subscribe-queue'): {
-        console.log('batch', batch);
-        const messages = batch.messages as Message<{
-          connectionId: string;
-          providerId: EProviders;
-        }>[];
-        await Promise.all(
-          messages.map(async (msg) => {
-            const connectionId = msg.body.connectionId;
-            const providerId = msg.body.providerId;
-            try {
-              await enableBrainFunction({ id: connectionId, providerId });
-            } catch (error) {
-              console.error(
-                `Failed to enable brain function for connection ${connectionId}:`,
-                error,
-              );
-              msg.retry?.({ delaySeconds: 60 });
-            }
-          }),
-        );
-        console.log('[SUBSCRIBE_QUEUE] batch done');
-        return;
-      }
-      case batch.queue.startsWith('send-email-queue'): {
-        await Promise.all(
-          batch.messages.map(async (msg: any) => {
-            const { messageId, connectionId, mail } = msg.body;
-
-            const { pending_emails_status: statusKV, pending_emails_payload: payloadKV } = this
-              .env as { pending_emails_status: KVNamespace; pending_emails_payload: KVNamespace };
-
-            const status = await statusKV.get(messageId);
-            if (status === 'cancelled') {
-              console.log(`Email ${messageId} cancelled – skipping send.`);
-              return;
-            }
-
-            let payload = mail;
-            if (!payload) {
-              const stored = await payloadKV.get(messageId);
-              if (!stored) {
-                console.error(`No payload found for scheduled email ${messageId}`);
-                return;
-              }
-              payload = JSON.parse(stored);
-            }
-
-            const agent = await getZeroAgent(connectionId, this.ctx);
-            try {
-              if (Array.isArray((payload as any).attachments)) {
-                const attachments = (payload as any).attachments;
-
-                const processedAttachments = await Promise.all(
-                  attachments.map(
-                    async (att: SerializedAttachment | AttachmentFile, index: number) => {
-                      if ('arrayBuffer' in att && typeof att.arrayBuffer === 'function') {
-                        return { attachment: att as AttachmentFile, index };
-                      } else {
-                        const processed = toAttachmentFiles([att as SerializedAttachment]);
-                        return { attachment: processed[0], index };
-                      }
-                    },
-                  ),
-                );
-
-                const orderedAttachments = Array.from({ length: attachments.length });
-                processedAttachments.forEach(({ attachment, index }) => {
-                  orderedAttachments[index] = attachment;
-                });
-
-                (payload as any).attachments = orderedAttachments;
-              }
-
-              if ('draftId' in (payload as any) && (payload as any).draftId) {
-                const { draftId, ...rest } = payload as any;
-                await agent.stub.sendDraft(draftId, rest as any);
-              } else {
-                await agent.stub.create(payload as any);
-              }
-
-              await statusKV.delete(messageId);
-              await payloadKV.delete(messageId);
-              console.log(`Email ${messageId} sent successfully`);
-            } catch (error) {
-              console.error(`Failed to send scheduled email ${messageId}:`, error);
-              await statusKV.delete(messageId);
-              await payloadKV.delete(messageId);
-            }
-          }),
-        );
-        return;
-      }
-      case batch.queue.startsWith('thread-queue'): {
-        const tracer = initTracing();
-
-        await Promise.all(
-          batch.messages.map(async (msg: any) => {
-            const span = tracer.startSpan('thread_queue_processing', {
-              attributes: {
-                'provider.id': msg.body.providerId,
-                'history.id': msg.body.historyId,
-                'subscription.name': msg.body.subscriptionName,
-                'queue.name': batch.queue,
-              },
-            });
-
-            try {
-              const providerId = msg.body.providerId;
-              const historyId = msg.body.historyId;
-              const subscriptionName = msg.body.subscriptionName;
-
-              const workflowRunner = env.WORKFLOW_RUNNER.get(env.WORKFLOW_RUNNER.newUniqueId());
-              const result = await workflowRunner.runMainWorkflow({
-                providerId,
-                historyId,
-                subscriptionName,
-              });
-              console.log('[THREAD_QUEUE] result', result);
-              span.setAttributes({
-                'workflow.result': typeof result === 'string' ? result : JSON.stringify(result),
-                'workflow.success': true,
-              });
-            } catch (error) {
-              console.error('Error running workflow', error);
-              span.recordException(error as Error);
-              span.setStatus({ code: 2, message: (error as Error).message });
-            } finally {
-              span.end();
-            }
-          }),
-        );
-        break;
-      }
     }
   }
   async scheduled() {
     console.log('Running scheduled tasks...');
-
-    await this.processScheduledEmails();
 
     await enqueueDueMailIngressWork(this.env);
 
@@ -1448,7 +1160,6 @@ export default class Entry extends WorkerEntrypoint<ZeroEnv> {
 
     await wakeDueMailSnoozes(this.env);
 
-    await this.processExpiredSubscriptions();
   }
 
   private async processScheduledEmails() {
@@ -1552,17 +1263,6 @@ export default class Entry extends WorkerEntrypoint<ZeroEnv> {
       }
     } while (cursor);
 
-    // await Promise.all(
-    //   Object.entries(unsnoozeMap).map(async ([connectionId, { threadIds, keyNames }]) => {
-    //     try {
-    //       const { stub: agent } = await getZeroAgent(connectionId, this.ctx);
-    //       await agent.queue('unsnoozeThreadsHandler', { connectionId, threadIds, keyNames });
-    //     } catch (error) {
-    //       console.error('Failed to enqueue unsnooze tasks', { connectionId, threadIds, error });
-    //     }
-    //   }),
-    // );
-
     await Promise.all(
       allAccounts.map(async ({ id, channelId }) => {
         const providerId = channelIdToProviderId(channelId);
@@ -1598,15 +1298,4 @@ export default class Entry extends WorkerEntrypoint<ZeroEnv> {
   }
 }
 
-export {
-  ZeroAgent,
-  ZeroMCP,
-  ZeroDB,
-  ZeroDriver,
-  ThinkingMCP,
-  WorkflowRunner,
-  ThreadSyncWorker,
-  SyncThreadsWorkflow,
-  SyncThreadsCoordinatorWorkflow,
-  ShardRegistry,
-};
+export { ZeroDB };

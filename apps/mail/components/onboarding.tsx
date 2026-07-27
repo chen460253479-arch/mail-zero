@@ -6,17 +6,17 @@ import confetti from 'canvas-confetti';
 const steps = [
   {
     title: 'Welcome to Zero Email!',
-    description: 'Your new intelligent email experience starts here.',
+    description: 'Your local mailbox experience starts here.',
     video: 'https://assets.0.email/get-started.png',
   },
   {
-    title: 'Chat with your inbox',
-    description: 'Zero allows you to chat with your inbox, and take actions on your behalf.',
+    title: 'Connect your mailbox',
+    description: 'Connect a provider account and let Zero synchronize messages into your mailbox.',
     video: 'https://assets.0.email/step2.gif',
   },
   {
-    title: 'AI Compose & Reply',
-    description: 'Our AI assistant allows you to write emails that sound like you.',
+    title: 'Compose and reply',
+    description: 'Create drafts, reply to conversations, and send through your connected provider.',
     video: 'https://assets.0.email/step1.gif',
   },
   {
@@ -25,19 +25,13 @@ const steps = [
     video: 'https://assets.0.email/step3.gif',
   },
   {
-    title: 'Coming Soon',
-    description: (
-      <>
-        <span className="text-muted-foreground mb-4">
-          We're excited to bring these powerful features to all users very soon!
-        </span>
-      </>
-    ),
+    title: 'Organize locally',
+    description: 'Use local folders, labels, search, notes, and templates to organize your mail.',
     video: 'https://assets.0.email/coming-soon.png',
   },
   {
     title: 'Ready to start?',
-    description: 'Click below to begin your intelligent email experience!',
+    description: 'Click below to open your mailbox.',
     video: 'https://assets.0.email/ready.png',
   },
 ];

@@ -1,6 +1,5 @@
 import {
   ArrowLeft,
-  ArrowRight,
   Calendar as CalendarIcon,
   Clock,
   FileText,
@@ -37,16 +36,14 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { getMainSearchTerm, parseNaturalLanguageSearch } from '@/lib/utils';
+import { getMainSearchTerm } from '@/lib/utils';
 import { DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useSearchValue } from '@/hooks/use-search-value';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLocation, useNavigate } from 'react-router';
 import { navigationConfig } from '@/config/navigation';
 import { Separator } from '@/components/ui/separator';
-import { useTRPC } from '@/providers/query-provider';
 import { Calendar } from '@/components/ui/calendar';
-import { useMutation } from '@tanstack/react-query';
 import { useThreads } from '@/hooks/use-threads';
 import { useLabels } from '@/hooks/use-labels';
 import { useActiveConnection } from '@/hooks/use-connections';
@@ -198,10 +195,6 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
 
   const { userLabels = [] } = useLabels({ enabled: Boolean(activeConnection) });
-  const trpc = useTRPC();
-  const { mutateAsync: generateSearchQuery } = useMutation(
-    trpc.ai.generateSearchQuery.mutationOptions(),
-  );
 
   useEffect(() => {
     setRecentSearches(getRecentSearches());
@@ -419,7 +412,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
   }, [searchValue.folder, setSearchValue]);
 
   const executeSearch = useCallback(
-    (query: string, isNaturalLanguage = false) => {
+    (query: string) => {
       setOpen(null);
 
       if (query && query.trim()) {
@@ -428,11 +421,6 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
       }
 
       let finalQuery = query;
-
-      if (isNaturalLanguage) {
-        const semanticQuery = parseNaturalLanguageSearch(query);
-        finalQuery = semanticQuery || query;
-      }
 
       const isFilterSyntax = /^(from:|to:|subject:|has:|is:|after:|before:|label:)/.test(
         query.trim(),
@@ -456,7 +444,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
         value: finalQuery,
         highlight: getMainSearchTerm(finalQuery),
         folder: searchValue.folder,
-        isAISearching: isNaturalLanguage,
+        isAISearching: false,
       });
 
       console.warn('Search applied', {
@@ -530,35 +518,12 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
   );
 
   const handleSearch = useCallback(
-    async (query: string, useNaturalLanguage = true) => {
+    async (query: string) => {
       if (isProcessing) return;
       setIsProcessing(true);
 
       try {
         let finalQuery = query;
-
-        if (useNaturalLanguage) {
-          const result = await generateSearchQuery({ query });
-          finalQuery = result.query;
-
-          const searchFilter: ActiveFilter = {
-            id: `ai-search-${Date.now()}`,
-            type: 'search',
-            value: finalQuery,
-            display: `AI Search: "${query}"`,
-          };
-          addFilter(searchFilter);
-
-          setOpen(null);
-
-          return setSearchValue({
-            value: finalQuery,
-            highlight: getMainSearchTerm(query),
-            folder: searchValue.folder,
-            isAISearching: useNaturalLanguage,
-            isLoading: true,
-          });
-        }
 
         const isFilterSyntax = /^(from:|to:|subject:|has:|is:|after:|before:|label:)/.test(
           query.trim(),
@@ -587,7 +552,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
           value: finalQuery,
           highlight: getMainSearchTerm(query),
           folder: searchValue.folder,
-          isAISearching: useNaturalLanguage,
+          isAISearching: false,
           isLoading: true,
         });
 
@@ -828,7 +793,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
         onKeyDown={(e) => {
           if (e.key === 'Enter' && commandInputValue.trim() && !hasMatchingCommands) {
             e.preventDefault();
-            handleSearch(commandInputValue, true);
+            handleSearch(commandInputValue);
           }
         }}
       />
@@ -938,7 +903,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
             onKeyDown={(e) => {
               if (e.key === 'Enter' && searchQuery.trim()) {
                 e.preventDefault();
-                handleSearch(searchQuery, true);
+                handleSearch(searchQuery);
               }
             }}
           />
@@ -956,7 +921,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
               {recentSearches.map((search, index) => (
                 <CommandItem
                   key={`recent-${index}`}
-                  onSelect={() => handleSearch(search, true)}
+                  onSelect={() => handleSearch(search)}
                   disabled={isProcessing}
                 >
                   <Clock className="h-4 w-4 opacity-60" />
@@ -1000,25 +965,19 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
 
           {searchQuery && (
             <CommandGroup heading="Search Suggestions">
-              <CommandItem onSelect={() => handleSearch(searchQuery, true)} disabled={isProcessing}>
+              <CommandItem onSelect={() => handleSearch(searchQuery)} disabled={isProcessing}>
                 <Search className="h-4 w-4 opacity-60" />
                 <span className="ml-2">Search for "{searchQuery}"</span>
-                <Badge variant="secondary" className="ml-auto text-xs">
-                  Smart Search
-                </Badge>
               </CommandItem>
 
-              <CommandItem
-                onSelect={() => handleSearch(searchQuery, false)}
-                disabled={isProcessing}
-              >
+              <CommandItem onSelect={() => handleSearch(`"${searchQuery}"`)} disabled={isProcessing}>
                 <Search className="relative top-2 h-4 w-4 opacity-60" />
                 <span className="ml-2">Exact match: "{searchQuery}"</span>
               </CommandItem>
 
               {searchQuery.includes('@') && (
                 <CommandItem
-                  onSelect={() => handleSearch(`from:${searchQuery}`, false)}
+                  onSelect={() => handleSearch(`from:${searchQuery}`)}
                   disabled={isProcessing}
                 >
                   <Mail className="h-4 w-4 opacity-60" />
@@ -1027,7 +986,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
               )}
 
               <CommandItem
-                onSelect={() => handleSearch(`subject:"${searchQuery}"`, false)}
+                onSelect={() => handleSearch(`subject:"${searchQuery}"`)}
                 disabled={isProcessing}
               >
                 <FileText className="h-4 w-4 opacity-60" />
@@ -1035,36 +994,12 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
               </CommandItem>
 
               <CommandItem
-                onSelect={() => handleSearch(`"${searchQuery}"`, false)}
+                onSelect={() => handleSearch(`"${searchQuery}"`)}
                 disabled={isProcessing}
               >
                 <Hash className="h-4 w-4 opacity-60" />
                 <span className="ml-2">Body contains: "{searchQuery}"</span>
               </CommandItem>
-            </CommandGroup>
-          )}
-
-          {!searchQuery && (
-            <CommandGroup heading="Try Natural Language">
-              {[
-                'emails from john',
-                'emails from last week',
-                'unread emails with attachments',
-                'emails about meeting',
-                'emails from december 2023',
-              ].map((example) => (
-                <CommandItem
-                  key={example}
-                  onSelect={() => {
-                    setSearchQuery(example);
-                    handleSearch(example, true);
-                  }}
-                  disabled={isProcessing}
-                >
-                  <ArrowRight className="h-4 w-4 opacity-60" />
-                  <span className="text-muted-foreground ml-2 italic">{example}</span>
-                </CommandItem>
-              ))}
             </CommandGroup>
           )}
 
@@ -1798,22 +1733,6 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
               <code className="bg-muted block rounded px-2 py-1">
                 from:boss@company.com is:unread has:attachment
               </code>
-            </div>
-          </div>
-
-          <Separator />
-
-          <div>
-            <h4 className="mb-2 font-medium">Natural Language</h4>
-            <div className="space-y-2 text-sm">
-              <p className="text-muted-foreground">
-                You can also use natural language queries which will be converted to filters:
-              </p>
-              <div className="space-y-1">
-                <p className="italic">"emails from john about the project"</p>
-                <p className="italic">"unread messages with attachments from last week"</p>
-                <p className="italic">"starred emails from my boss"</p>
-              </div>
             </div>
           </div>
 

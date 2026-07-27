@@ -126,12 +126,7 @@
       "starred": "Favoriten",
       "applyFilters": "Filter anwenden",
       "reset": "Zurücksetzen",
-      "searching": "Suchen...",
-      "aiSuggestions": "KI-Vorschläge",
-      "aiSearching": "KI sucht...",
-      "aiSearchError": "KI Suche fehlgeschlagen. Bitte versuche es erneut.",
-      "aiNoResults": "Keine KI-Vorschläge gefunden",
-      "aiEnhancedQuery": "Erweiterte Suchanfrage"
+      "searching": "Suchen..."
     },
     "navUser": {
       "customerSupport": "Community",
@@ -425,7 +420,6 @@
       "livesupport": "Live-Support",
       "feedback": "Rückmeldung",
       "settings": "Einstellungen",
-      "voice": "Sprachassistent",
       "snoozed": "Zurückgestellt"
     },
     "settings": {
@@ -462,9 +456,6 @@
         "dynamicContent": "Dynamischer Inhalt",
         "dynamicContentDescription": "Dynamischen Inhalt erlauben",
         "languageChangedTo": "Sprache zu {locale} geändert",
-        "customPrompt": "Benutzerdefinierte KI-Aufforderung",
-        "customPromptPlaceholder": "Geben Sie Ihre benutzerdefinierte Eingabeaufforderung für die KI ein...",
-        "customPromptDescription": "Passen Sie an, wie die KI Ihre E-Mail beantwortet. Dies wird zur Base-Prompt hinzugefügt.",
         "noResultsFound": "Keine Ergebnisse gefunden",
         "zeroSignature": "Zero-Signatur",
         "zeroSignatureDescription": "Füge deinen E-Mails eine Zero-Signatur hinzu.",
@@ -577,7 +568,6 @@
           "showPromotions": "Werbeaktionen anzeigen",
           "showUnread": "Ungelesene anzeigen",
           "selectUnderCursor": "Unter Cursor auswählen",
-          "openVoice": "Sprachassistent öffnen",
           "clearAllFilters": "Alle Filter löschen",
           "markAsImportant": "Als wichtig markieren",
           "markAsUnimportant": "Als unwichtig markieren",

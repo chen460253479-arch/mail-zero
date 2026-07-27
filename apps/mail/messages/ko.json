@@ -126,12 +126,7 @@
       "starred": "별표 처리됨",
       "applyFilters": "필터 적용",
       "reset": "초기화",
-      "searching": "검색 중...",
-      "aiSuggestions": "AI 추천",
-      "aiSearching": "AI가 검색 중...",
-      "aiSearchError": "AI 검색에 실패했습니다. 다시 시도해 주세요.",
-      "aiNoResults": "AI 추천 결과가 없습니다",
-      "aiEnhancedQuery": "향상된 검색 쿼리"
+      "searching": "검색 중..."
     },
     "navUser": {
       "customerSupport": "커뮤니티",
@@ -425,7 +420,6 @@
       "livesupport": "실시간 지원",
       "feedback": "피드백",
       "settings": "설정",
-      "voice": "음성 비서",
       "snoozed": "스누즈됨"
     },
     "settings": {
@@ -462,9 +456,6 @@
         "dynamicContent": "동적 콘텐츠",
         "dynamicContentDescription": "이메일에 동적 콘텐츠를 표시하도록 허용합니다.",
         "languageChangedTo": "언어가 {locale}(으)로 변경되었습니다",
-        "customPrompt": "맞춤 AI 프롬프트",
-        "customPromptPlaceholder": "AI를 위한 맞춤 프롬프트를 입력하세요...",
-        "customPromptDescription": "AI가 이메일 답장을 작성하는 방식을 맞춤설정하세요. 이것은 기본 프롬프트에 추가됩니다.",
         "noResultsFound": "검색 결과 없음",
         "zeroSignature": "Zero 서명",
         "zeroSignatureDescription": "이메일에 Zero 서명을 추가합니다.",
@@ -577,7 +568,6 @@
           "showPromotions": "프로모션 표시",
           "showUnread": "읽지 않은 메일 표시",
           "selectUnderCursor": "커서 아래 항목 선택",
-          "openVoice": "음성 비서 열기",
           "clearAllFilters": "모든 필터 지우기",
           "markAsImportant": "중요로 표시",
           "markAsUnimportant": "중요하지 않음으로 표시",

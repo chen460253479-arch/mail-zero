@@ -126,12 +126,7 @@
       "starred": "Étoilé",
       "applyFilters": "Appliquer les filtres",
       "reset": "Réinitialiser",
-      "searching": "Recherche en cours...",
-      "aiSuggestions": "Suggestions de l'IA",
-      "aiSearching": "L'IA est en cours de recherche...",
-      "aiSearchError": "La recherche de l'IA a échouée. Veuillez réessayer.",
-      "aiNoResults": "Aucune suggestion de l'IA trouvée",
-      "aiEnhancedQuery": "Requête de recherche avancée"
+      "searching": "Recherche en cours..."
     },
     "navUser": {
       "customerSupport": "Communauté",
@@ -425,7 +420,6 @@
       "livesupport": "Support en direct",
       "feedback": "Vos commentaires",
       "settings": "Paramètres",
-      "voice": "Assistant vocal",
       "snoozed": "En sommeil"
     },
     "settings": {
@@ -462,9 +456,6 @@
         "dynamicContent": "Contenu dynamique",
         "dynamicContentDescription": "Autoriser les courriels à afficher du contenu dynamique.",
         "languageChangedTo": "Langue changée en {locale}",
-        "customPrompt": "Requêtes IA personnalisées",
-        "customPromptPlaceholder": "Entrez votre requête personnalisée pour l'IA...",
-        "customPromptDescription": "Personnalisez la façon dont l'IA écrit vos réponses. Cela sera ajouté à la requête par défaut.",
         "noResultsFound": "Aucun résultat trouvé",
         "zeroSignature": "Signature Zero",
         "zeroSignatureDescription": "Ajouter une signature Zero à vos courriels.",
@@ -577,7 +568,6 @@
           "showPromotions": "Afficher les promotions",
           "showUnread": "Afficher les non lus",
           "selectUnderCursor": "Sélectionner sous le curseur",
-          "openVoice": "Ouvrir l'assistant vocal",
           "clearAllFilters": "Effacer tous les filtres",
           "markAsImportant": "Marquer comme important",
           "markAsUnimportant": "Marquer comme non important",

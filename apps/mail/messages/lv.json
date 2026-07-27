@@ -126,12 +126,7 @@
       "starred": "Ar zvaigznīti",
       "applyFilters": "Lietot filtrus",
       "reset": "Atstatīt",
-      "searching": "Meklē...",
-      "aiSuggestions": "AI ieteikumi",
-      "aiSearching": "AI meklē...",
-      "aiSearchError": "AI meklēšana neizdevās. Lūdzu, mēģiniet vēlreiz.",
-      "aiNoResults": "Nav atrasti AI ieteikumi",
-      "aiEnhancedQuery": "Uzlabota meklēšanas frāze"
+      "searching": "Meklē..."
     },
     "navUser": {
       "customerSupport": "Kopiena",
@@ -425,7 +420,6 @@
       "livesupport": "Tiešsaistes atbalsts",
       "feedback": "Atsauksmes",
       "settings": "Iestatījumi",
-      "voice": "Balss asistents",
       "snoozed": "Atlikti"
     },
     "settings": {
@@ -462,9 +456,6 @@
         "dynamicContent": "Dinamisks Saturs",
         "dynamicContentDescription": "Atļaut e-pastiem rādīt dinamisku saturu.",
         "languageChangedTo": "Valoda nomainīta uz {locale}",
-        "customPrompt": "Pielāgota AI instrukcija",
-        "customPromptPlaceholder": "Ievadi savu pielāgoto norādījumu AI...",
-        "customPromptDescription": "Pielāgot, kā AI raksta jūsu e-pasta atbildes. Jūsu norādījumi tiks pievienoti AI noklusējuma instrukcijām.",
         "noResultsFound": "Netika atrasts neviens rezultāts",
         "zeroSignature": "Zero paraksts",
         "zeroSignatureDescription": "Pievienot Zero parakstu saviem e-pastiem.",
@@ -577,7 +568,6 @@
           "showPromotions": "Rādīt akcijas",
           "showUnread": "Rādīt nelasītos",
           "selectUnderCursor": "Atlasīt zem kursora",
-          "openVoice": "Atvērt balss asistentu",
           "clearAllFilters": "Notīrīt visus filtrus",
           "markAsImportant": "Atzīmēt kā svarīgu",
           "markAsUnimportant": "Atzīmēt kā nesvarīgu",

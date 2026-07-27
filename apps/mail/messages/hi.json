@@ -126,12 +126,7 @@
       "starred": "स्टार के निशान वाले",
       "applyFilters": "फिल्टर लगाएं",
       "reset": "रीसेट करें",
-      "searching": "खोज रहे हैं...",
-      "aiSuggestions": "AI सुझाव",
-      "aiSearching": "AI खोज रहा है...",
-      "aiSearchError": "AI खोज विफल हुई। कृपया पुनः प्रयास करें।",
-      "aiNoResults": "कोई AI सुझाव नहीं मिला",
-      "aiEnhancedQuery": "बेहतर खोज क्वेरी"
+      "searching": "खोज रहे हैं..."
     },
     "navUser": {
       "customerSupport": "समुदाय",
@@ -425,7 +420,6 @@
       "livesupport": "लाइव सपोर्ट",
       "feedback": "प्रतिक्रिया",
       "settings": "सेटिंग्स",
-      "voice": "वॉइस असिस्टेंट",
       "snoozed": "स्नूज़ किए गए"
     },
     "settings": {
@@ -462,9 +456,6 @@
         "dynamicContent": "डायनामिक कंटेंट",
         "dynamicContentDescription": "ईमेल्स को डायनामिक कंटेंट दिखाने की अनुमति दें।",
         "languageChangedTo": "भाषा {locale} में बदल दी गई",
-        "customPrompt": "कस्टम AI प्रॉम्प्ट",
-        "customPromptPlaceholder": "AI के लिए अपना कस्टम प्रॉम्प्ट दर्ज करें...",
-        "customPromptDescription": "AI आपके ईमेल जवाब कैसे लिखता है, इसे अनुकूलित करें। यह आधार प्रॉम्प्ट में जोड़ा जाएगा।",
         "noResultsFound": "कोई परिणाम नहीं मिला",
         "zeroSignature": "ज़ीरो सिग्नेचर",
         "zeroSignatureDescription": "अपने ईमेल में ज़ीरो सिग्नेचर जोड़ें।",
@@ -577,7 +568,6 @@
           "showPromotions": "प्रमोशन दिखाएँ",
           "showUnread": "अपठित दिखाएँ",
           "selectUnderCursor": "कर्सर के नीचे चुनें",
-          "openVoice": "वॉइस असिस्टेंट खोलें",
           "clearAllFilters": "सभी फ़िल्टर हटाएं",
           "markAsImportant": "महत्वपूर्ण के रूप में चिह्नित करें",
           "markAsUnimportant": "अमहत्वपूर्ण के रूप में चिह्नित करें",

@@ -98,12 +98,6 @@ importers:
 
   apps/mail:
     dependencies:
-      '@ai-sdk/perplexity':
-        specifier: 1.1.9
-        version: 1.1.9(zod@3.25.67)
-      '@ai-sdk/react':
-        specifier: 1.2.12
-        version: 1.2.12(react@19.1.0)(zod@3.25.67)
       '@dnd-kit/core':
         specifier: 6.3.1
         version: 6.3.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -119,9 +113,6 @@ importers:
       '@dub/analytics':
         specifier: 0.0.29
         version: 0.0.29
-      '@elevenlabs/react':
-        specifier: 0.5.1
-        version: 0.5.1(@types/dom-mediacapture-record@1.0.22)(react@19.1.0)
       '@fontsource-variable/geist':
         specifier: 5.2.6
         version: 5.2.6
@@ -221,12 +212,6 @@ importers:
       accept-language-parser:
         specifier: ^1.5.0
         version: 1.5.0
-      agents:
-        specifier: 0.0.93
-        version: 0.0.93(@cloudflare/workers-types@4.20250628.0)(react@19.1.0)
-      ai:
-        specifier: ^4.3.9
-        version: 4.3.16(react@19.1.0)(zod@3.25.67)
       babel-plugin-react-compiler:
         specifier: 19.1.0-rc.2
         version: 19.1.0-rc.2
@@ -308,9 +293,6 @@ importers:
       oxlint:
         specifier: 1.6.0
         version: 1.6.0
-      partysocket:
-        specifier: ^1.1.4
-        version: 1.1.4
       pluralize:
         specifier: ^8.0.0
         version: 8.0.0
@@ -483,27 +465,6 @@ importers:
 
   apps/server:
     dependencies:
-      '@ai-sdk/anthropic':
-        specifier: 1.2.12
-        version: 1.2.12(zod@3.25.67)
-      '@ai-sdk/google':
-        specifier: ^1.2.18
-        version: 1.2.19(zod@3.25.67)
-      '@ai-sdk/groq':
-        specifier: 1.2.9
-        version: 1.2.9(zod@3.25.67)
-      '@ai-sdk/openai':
-        specifier: ^1.3.21
-        version: 1.3.22(zod@3.25.67)
-      '@ai-sdk/perplexity':
-        specifier: 1.1.9
-        version: 1.1.9(zod@3.25.67)
-      '@ai-sdk/ui-utils':
-        specifier: 1.2.11
-        version: 1.2.11(zod@3.25.67)
-      '@arcadeai/arcadejs':
-        specifier: 1.8.1
-        version: 1.8.1
       '@barkleapp/css-sanitizer':
         specifier: 1.0.0
         version: 1.0.0
@@ -513,9 +474,6 @@ importers:
       '@dub/better-auth':
         specifier: 0.0.3
         version: 0.0.3
-      '@elevenlabs/elevenlabs-js':
-        specifier: 2.12.2
-        version: 2.12.2
       '@googleapis/gmail':
         specifier: 12.0.0
         version: 12.0.0
@@ -534,9 +492,6 @@ importers:
       '@microsoft/microsoft-graph-types':
         specifier: ^2.40.0
         version: 2.40.0
-      '@modelcontextprotocol/sdk':
-        specifier: 1.15.1
-        version: 1.15.1
       '@opentelemetry/api':
         specifier: 1.9.0
         version: 1.9.0
@@ -567,12 +522,6 @@ importers:
       '@zero/mail-core':
         specifier: workspace:*
         version: link:../../packages/mail-core
-      agents:
-        specifier: 0.0.106
-        version: 0.0.106(@cloudflare/workers-types@4.20250628.0)(react@19.1.0)
-      ai:
-        specifier: ^4.3.13
-        version: 4.3.16(react@19.1.0)(zod@3.25.67)
       base64-js:
         specifier: 1.5.1
         version: 1.5.1
@@ -591,9 +540,6 @@ importers:
       dedent:
         specifier: ^1.6.0
         version: 1.6.0
-      dormroom:
-        specifier: 1.0.1
-        version: 1.0.1
       drizzle-orm:
         specifier: 'catalog:'
         version: 0.43.1(@cloudflare/workers-types@4.20250628.0)(@opentelemetry/api@1.9.0)(@types/pg@8.6.1)(better-sqlite3@11.10.0)(kysely@0.28.5)(postgres@3.4.5)
@@ -615,12 +561,6 @@ importers:
       hono:
         specifier: ^4.7.8
         version: 4.8.3
-      hono-agents:
-        specifier: 0.0.83
-        version: 0.0.83(agents@0.0.106(@cloudflare/workers-types@4.20250628.0)(react@19.1.0))(hono@4.8.3)
-      hono-party:
-        specifier: ^0.0.12
-        version: 0.0.12(@cloudflare/workers-types@4.20250628.0)(hono@4.8.3)(partyserver@0.0.71(@cloudflare/workers-types@4.20250628.0))
       jose:
         specifier: 6.0.11
         version: 6.0.11
@@ -636,9 +576,6 @@ importers:
       p-retry:
         specifier: 6.2.1
         version: 6.2.1
-      partyserver:
-        specifier: ^0.0.71
-        version: 0.0.71(@cloudflare/workers-types@4.20250628.0)
       postgres:
         specifier: 3.4.5
         version: 3.4.5
@@ -660,9 +597,6 @@ importers:
       superjson:
         specifier: 'catalog:'
         version: 2.2.2
-      twilio:
-        specifier: 5.7.0
-        version: 5.7.0
       ulid:
         specifier: 3.0.1
         version: 3.0.1
@@ -700,18 +634,12 @@ importers:
       '@zero/tsconfig':
         specifier: workspace:*
         version: link:../../packages/tsconfig
-      autoevals:
-        specifier: 0.0.130
-        version: 0.0.130(ws@8.18.0)
       drizzle-kit:
         specifier: 'catalog:'
         version: 0.31.4
       eslint:
         specifier: ^9.27.0
         version: 9.27.0(jiti@2.4.2)
-      evalite:
-        specifier: 0.11.4
-        version: 0.11.4
       jiti:
         specifier: 2.4.2
         version: 2.4.2

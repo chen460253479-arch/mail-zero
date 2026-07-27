@@ -126,12 +126,7 @@
       "starred": "Destacat",
       "applyFilters": "Aplicar filtres",
       "reset": "Restablir",
-      "searching": "Cercant...",
-      "aiSuggestions": "Suggeriments d'IA",
-      "aiSearching": "La IA està cercant...",
-      "aiSearchError": "La cerca d'IA ha fallat. Torneu-ho a provar.",
-      "aiNoResults": "No s'han trobat suggeriments d'IA",
-      "aiEnhancedQuery": "Consulta de cerca millorada"
+      "searching": "Cercant..."
     },
     "navUser": {
       "customerSupport": "Comunitat",
@@ -425,7 +420,6 @@
       "livesupport": "Suport en directe",
       "feedback": "Feedback",
       "settings": "Configuració",
-      "voice": "Assistent de veu",
       "snoozed": "Posposat"
     },
     "settings": {
@@ -462,9 +456,6 @@
         "dynamicContent": "Contingut dinàmic",
         "dynamicContentDescription": "Permet que els correus mostrin contingut dinàmic.",
         "languageChangedTo": "Idioma canviat a {locale}",
-        "customPrompt": "Instrucció personalitzada per a la IA",
-        "customPromptPlaceholder": "Introdueix la teva instrucció personalitzada per a la IA...",
-        "customPromptDescription": "Personalitza com la IA escriu les teves respostes de correu. Això s'afegirà a la instrucció base.",
         "noResultsFound": "No s'han trobat resultats",
         "zeroSignature": "Signatura Zero",
         "zeroSignatureDescription": "Afegeix una signatura Zero als teus correus.",
@@ -577,7 +568,6 @@
           "showPromotions": "Mostrar promocions",
           "showUnread": "Mostrar no llegits",
           "selectUnderCursor": "Seleccionar sota el cursor",
-          "openVoice": "Obrir l'assistent de veu",
           "clearAllFilters": "Esborrar tots els filtres",
           "markAsImportant": "Marcar com a important",
           "markAsUnimportant": "Marcar com a no important",

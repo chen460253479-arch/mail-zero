@@ -191,8 +191,8 @@ export const getMainSearchTerm = (searchQuery: string): string => {
     }
   }
 
-  // Handle other natural language queries
-  const naturalLanguageMatches = {
+  // Extract useful highlight terms from common search phrases.
+  const phraseMatches = {
     'emails from': /emails?\s+from\s+(\w+)/i,
     'mail from': /mail\s+from\s+(\w+)/i,
     from: /\bfrom\s+(\w+)/i,
@@ -201,15 +201,14 @@ export const getMainSearchTerm = (searchQuery: string): string => {
     regarding: /\bregarding\s+(\w+)/i,
   };
 
-  // Try to match natural language patterns
-  for (const [, pattern] of Object.entries(naturalLanguageMatches)) {
+  for (const [, pattern] of Object.entries(phraseMatches)) {
     const match = searchQuery.match(pattern);
     if (match && match[1]) {
       return match[1];
     }
   }
 
-  // If no natural language match, remove search operators and date-related terms
+  // If no phrase matches, remove search operators and date-related terms.
   const cleanedQuery = searchQuery
     .replace(/\b(from|to|subject|has|in|after|before):\s*/gi, '')
     .replace(/\b(is|has):\s*/gi, '')
@@ -225,126 +224,6 @@ export const getMainSearchTerm = (searchQuery: string): string => {
   const terms = cleanedQuery.split(/\s+/);
   return terms[0] || '';
 };
-
-export function parseNaturalLanguageSearch(query: string): string {
-  // Common search patterns
-  const patterns = [
-    // From pattern
-    {
-      regex: /^from\s+([^:\s]+)/i,
-      transform: (match: string[]) => `from:${match[1]}`,
-    },
-    // To pattern
-    {
-      regex: /^to\s+([^:\s]+)/i,
-      transform: (match: string[]) => `to:${match[1]}`,
-    },
-    // Subject pattern
-    {
-      regex: /^subject\s+([^:\s]+)/i,
-      transform: (match: string[]) => `subject:${match[1]}`,
-    },
-    // Has attachment pattern
-    {
-      regex: /^has\s+(attachment|file)/i,
-      transform: () => 'has:attachment',
-    },
-    // Is pattern (unread, read, starred)
-    {
-      regex: /^is\s+(unread|read|starred)/i,
-      transform: (match: string[]) => `is:${match[1]}`,
-    },
-  ];
-
-  // Check if query matches any pattern
-  for (const pattern of patterns) {
-    const match = query.match(pattern.regex);
-    if (match) {
-      return pattern.transform(match);
-    }
-  }
-
-  return query;
-}
-
-export function parseNaturalLanguageDate(query: string): { from?: Date; to?: Date } | null {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-
-  // Common date patterns
-  const patterns = [
-    // "emails from [month] [year]"
-    {
-      regex: /(?:emails?|mail)\s+from\s+(\w+)\s+(\d{4})/i,
-      transform: (match: string[]) => {
-        const monthNames = [
-          'january',
-          'february',
-          'march',
-          'april',
-          'may',
-          'june',
-          'july',
-          'august',
-          'september',
-          'october',
-          'november',
-          'december',
-        ];
-        const monthIndex = monthNames.findIndex((m) =>
-          m.toLowerCase().startsWith(match[1]?.toLowerCase() ?? ''),
-        );
-        if (monthIndex === -1) return null;
-
-        const year = parseInt(match[2] ?? currentYear.toString());
-        const from = new Date(year, monthIndex, 1);
-        const to = new Date(year, monthIndex + 1, 0); // Last day of the month
-        return { from, to };
-      },
-    },
-    // "emails from [month]" (assumes current year)
-    {
-      regex: /(?:emails?|mail)\s+from\s+(\w+)/i,
-      transform: (match: string[]) => {
-        const monthNames = [
-          'january',
-          'february',
-          'march',
-          'april',
-          'may',
-          'june',
-          'july',
-          'august',
-          'september',
-          'october',
-          'november',
-          'december',
-        ];
-        const monthIndex = monthNames.findIndex((m) =>
-          m.toLowerCase().startsWith(match[1]?.toLowerCase() ?? ''),
-        );
-        if (monthIndex === -1) return null;
-
-        const from = new Date(currentYear, monthIndex, 1);
-        const to = new Date(currentYear, monthIndex + 1, 0); // Last day of the month
-        return { from, to };
-      },
-    },
-  ];
-
-  // Check if query matches any pattern
-  for (const pattern of patterns) {
-    const match = query.match(pattern.regex);
-    if (match) {
-      const result = pattern.transform(match);
-      if (result) {
-        return result;
-      }
-    }
-  }
-
-  return null;
-}
 
 // Duplicated on server & client
 export const categorySearchValues = [

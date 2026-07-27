@@ -126,12 +126,7 @@
       "starred": "مميزة بنجمة",
       "applyFilters": "تطبيق التصفية",
       "reset": "إعادة ضبط",
-      "searching": "جارٍ البحث...",
-      "aiSuggestions": "اقتراحات الذكاء الاصطناعي",
-      "aiSearching": "الذكاء الاصطناعي يبحث...",
-      "aiSearchError": "فشل بحث الذكاء الاصطناعي. يرجى المحاولة مرة أخرى.",
-      "aiNoResults": "لم يتم العثور على اقتراحات من الذكاء الاصطناعي",
-      "aiEnhancedQuery": "استعلام بحث محسّن"
+      "searching": "جارٍ البحث..."
     },
     "navUser": {
       "customerSupport": "المجتمع",
@@ -425,7 +420,6 @@
       "livesupport": "الدعم المباشر",
       "feedback": "الملاحظات",
       "settings": "الإعدادات",
-      "voice": "المساعد الصوتي",
       "snoozed": "مؤجل"
     },
     "settings": {
@@ -462,9 +456,6 @@
         "dynamicContent": "المحتوى الديناميكي",
         "dynamicContentDescription": "السماح للرسائل بعرض محتوى ديناميكي.",
         "languageChangedTo": "تم تغيير اللغة إلى {locale}",
-        "customPrompt": "توجيه الذكاء الاصطناعي المخصص",
-        "customPromptPlaceholder": "أدخل توجيهك المخصص للذكاء الاصطناعي...",
-        "customPromptDescription": "خصص كيفية كتابة الذكاء الاصطناعي لردود بريدك الإلكتروني. سيتم إضافة هذا إلى التوجيه الأساسي.",
         "noResultsFound": "لم يتم العثور على نتائج",
         "zeroSignature": "توقيع Zero",
         "zeroSignatureDescription": "إضافة توقيع Zero إلى رسائل البريد الإلكتروني الخاصة بك.",
@@ -577,7 +568,6 @@
           "showPromotions": "عرض العروض",
           "showUnread": "عرض غير المقروء",
           "selectUnderCursor": "تحديد ما تحت المؤشر",
-          "openVoice": "فتح المساعد الصوتي",
           "clearAllFilters": "مسح جميع عوامل التصفية",
           "markAsImportant": "تمييز كمهم",
           "markAsUnimportant": "إلغاء تمييز الأهمية",

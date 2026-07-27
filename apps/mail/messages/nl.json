@@ -126,12 +126,7 @@
       "starred": "Met ster",
       "applyFilters": "Filters toepassen",
       "reset": "Resetten",
-      "searching": "Zoeken...",
-      "aiSuggestions": "AI-suggesties",
-      "aiSearching": "AI is aan het zoeken...",
-      "aiSearchError": "AI-zoekopdracht mislukt. Probeer het opnieuw.",
-      "aiNoResults": "Geen AI-suggesties gevonden",
-      "aiEnhancedQuery": "Verbeterde zoekopdracht"
+      "searching": "Zoeken..."
     },
     "navUser": {
       "customerSupport": "Community",
@@ -425,7 +420,6 @@
       "livesupport": "Live ondersteuning",
       "feedback": "Feedback",
       "settings": "Instellingen",
-      "voice": "Spraakassistent",
       "snoozed": "Uitgesteld"
     },
     "settings": {
@@ -462,9 +456,6 @@
         "dynamicContent": "Dynamische inhoud",
         "dynamicContentDescription": "Sta toe dat e-mails dynamische inhoud weergeven.",
         "languageChangedTo": "Taal gewijzigd naar {locale}",
-        "customPrompt": "Aangepaste AI-prompt",
-        "customPromptPlaceholder": "Voer je aangepaste prompt in voor de AI...",
-        "customPromptDescription": "Pas aan hoe de AI je e-mailantwoorden schrijft. Dit wordt toegevoegd aan de basisprompt.",
         "noResultsFound": "Geen resultaten gevonden",
         "zeroSignature": "Zero-handtekening",
         "zeroSignatureDescription": "Voeg een Zero-handtekening toe aan je e-mails.",
@@ -577,7 +568,6 @@
           "showPromotions": "Toon promoties",
           "showUnread": "Toon ongelezen",
           "selectUnderCursor": "Selecteer onder cursor",
-          "openVoice": "Spraakassistent openen",
           "clearAllFilters": "Alle filters wissen",
           "markAsImportant": "Markeren als belangrijk",
           "markAsUnimportant": "Markeren als onbelangrijk",

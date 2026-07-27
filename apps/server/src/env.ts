@@ -1,21 +1,9 @@
-import type { ThinkingMCP, ThreadSyncWorker, WorkflowRunner, ZeroDB, ZeroMCP } from './main';
-import type { ShardRegistry, ZeroAgent, ZeroDriver } from './routes/agent';
+import type { ZeroDB } from './main';
 
 import { env as _env } from 'cloudflare:workers';
-import type { QueryableHandler } from 'dormroom';
 
 export type ZeroEnv = {
-  ZERO_DRIVER: DurableObjectNamespace<ZeroDriver & QueryableHandler>;
-  SHARD_REGISTRY: DurableObjectNamespace<ShardRegistry & QueryableHandler>;
   ZERO_DB: DurableObjectNamespace<ZeroDB>;
-  ZERO_AGENT: DurableObjectNamespace<ZeroAgent>;
-  ZERO_MCP: DurableObjectNamespace<ZeroMCP & QueryableHandler>;
-  THINKING_MCP: DurableObjectNamespace<ThinkingMCP & QueryableHandler>;
-  WORKFLOW_RUNNER: DurableObjectNamespace<WorkflowRunner & QueryableHandler>;
-
-  THREAD_SYNC_WORKER: DurableObjectNamespace<ThreadSyncWorker>;
-  SYNC_THREADS_WORKFLOW: Workflow;
-  SYNC_THREADS_COORDINATOR_WORKFLOW: Workflow;
   HYPERDRIVE: { connectionString: string };
   pending_emails_status: KVNamespace;
   pending_emails_payload: KVNamespace;
@@ -26,24 +14,12 @@ export type ZeroEnv = {
   subscribe_queue: Queue;
   MAIL_INGRESS_QUEUE: Queue;
   MAIL_OUTBOUND_QUEUE: Queue;
-  AI: Ai;
   gmail_history_id: KVNamespace;
   gmail_processing_threads: KVNamespace;
   subscribed_accounts: KVNamespace;
   connection_labels: KVNamespace;
-  prompts_storage: KVNamespace;
   NODE_ENV: 'local' | 'development' | 'production';
   JWT_SECRET: 'secret';
-  ELEVENLABS_API_KEY: '1234567890';
-  DISABLE_CALLS: 'true' | '';
-  DROP_AGENT_TABLES: 'false';
-  THREAD_SYNC_MAX_COUNT: '5' | '20' | '10';
-  THREAD_SYNC_LOOP: 'false' | 'true';
-  DISABLE_WORKFLOWS: 'true';
-  AUTORAG_ID: '';
-  USE_OPENAI: 'true';
-  CLOUDFLARE_ACCOUNT_ID: '';
-  CLOUDFLARE_API_TOKEN: '';
   BASE_URL: string;
   VITE_PUBLIC_APP_URL: string;
   DATABASE_URL: string;
@@ -68,24 +44,8 @@ export type ZeroEnv = {
   VITE_PUBLIC_BACKEND_URL: string;
   REDIS_URL: string;
   REDIS_TOKEN: string;
-  OPENAI_API_KEY: string;
-  BRAIN_URL: string;
-  COMPOSIO_API_KEY: string;
-  GROQ_API_KEY: string;
   EARLY_ACCESS_ENABLED: string;
-  GOOGLE_GENERATIVE_AI_API_KEY: string;
-  AI_SYSTEM_PROMPT: string;
-  PERPLEXITY_API_KEY: string;
-  TWILIO_ACCOUNT_SID: string;
-  TWILIO_AUTH_TOKEN: string;
-  TWILIO_PHONE_NUMBER: string;
-  VITE_PUBLIC_ELEVENLABS_AGENT_ID: string;
   REACT_SCAN: string;
-  VOICE_SECRET: string;
-  ARCADE_API_KEY: string;
-  OPENAI_MODEL: string;
-  OPENAI_MINI_MODEL: string;
-  ANTHROPIC_API_KEY: string;
   GOOGLE_S_ACCOUNT: string;
   GMAIL_PUBSUB_TOPIC_NAME: string;
   GMAIL_PUBSUB_SUBSCRIPTION_NAME: string;
@@ -94,9 +54,6 @@ export type ZeroEnv = {
   AXIOM_API_TOKEN: string;
   AXIOM_DATASET: string;
   THREADS_BUCKET: R2Bucket;
-  thread_queue: Queue;
-  VECTORIZE: VectorizeIndex;
-  VECTORIZE_MESSAGE: VectorizeIndex;
   DEV_PROXY: string;
   MEET_AUTH_HEADER: string;
   MEET_API_URL: string;
@@ -106,5 +63,5 @@ export type ZeroEnv = {
   OTEL_SERVICE_NAME?: string;
 };
 
-const env = _env as ZeroEnv;
+const env = _env as unknown as ZeroEnv;
 export { env };

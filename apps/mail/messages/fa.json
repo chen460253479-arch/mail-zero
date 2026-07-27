@@ -126,12 +126,7 @@
       "starred": "ستاره‌دار",
       "applyFilters": "اعمال فیلترها",
       "reset": "بازنشانی",
-      "searching": "در حال جستجو...",
-      "aiSuggestions": "پیشنهادهای هوش مصنوعی",
-      "aiSearching": "هوش مصنوعی در حال جستجو است...",
-      "aiSearchError": "جستجوی هوش مصنوعی ناموفق بود. لطفاً دوباره تلاش کنید.",
-      "aiNoResults": "هیچ پیشنهادی از هوش مصنوعی یافت نشد",
-      "aiEnhancedQuery": "پرس‌وجوی پیشرفته جستجو"
+      "searching": "در حال جستجو..."
     },
     "navUser": {
       "customerSupport": "انجمن",
@@ -425,7 +420,6 @@
       "livesupport": "پشتیبانی زنده",
       "feedback": "بازخورد",
       "settings": "تنظیمات",
-      "voice": "دستیار صوتی",
       "snoozed": "به تعویق افتاده"
     },
     "settings": {
@@ -462,9 +456,6 @@
         "dynamicContent": "محتوای پویا",
         "dynamicContentDescription": "به ایمیل‌ها اجازه دهید محتوای پویا را نمایش دهند.",
         "languageChangedTo": "زبان به {locale} تغییر کرد",
-        "customPrompt": "پرامپت سفارشی هوش مصنوعی",
-        "customPromptPlaceholder": "پرامپت سفارشی خود را برای هوش مصنوعی وارد کنید...",
-        "customPromptDescription": "نحوه نگارش پاسخ‌های ایمیل توسط هوش مصنوعی را سفارشی کنید. این به پرامپت پایه اضافه خواهد شد.",
         "noResultsFound": "نتیجه‌ای یافت نشد",
         "zeroSignature": "امضای Zero",
         "zeroSignatureDescription": "افزودن امضای Zero به ایمیل‌های شما.",
@@ -577,7 +568,6 @@
           "showPromotions": "نمایش تبلیغات",
           "showUnread": "نمایش خوانده‌نشده‌ها",
           "selectUnderCursor": "انتخاب زیر نشانگر",
-          "openVoice": "باز کردن دستیار صوتی",
           "clearAllFilters": "پاک کردن همه فیلترها",
           "markAsImportant": "علامت‌گذاری به عنوان مهم",
           "markAsUnimportant": "علامت‌گذاری به عنوان غیرمهم",

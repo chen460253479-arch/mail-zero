@@ -4,7 +4,6 @@ import {
   boolean,
   integer,
   jsonb,
-  primaryKey,
   unique,
   uniqueIndex,
   index,
@@ -30,9 +29,6 @@ export const user = createAuthTable('user_account', {
   createdAt: timestamp('created_at').notNull(),
   updatedAt: timestamp('updated_at').notNull(),
   defaultConnectionId: text('default_connection_id'),
-  customPrompt: text('custom_prompt'),
-  phoneNumber: text('phone_number').unique(),
-  phoneNumberVerified: boolean('phone_number_verified'),
 });
 
 export const session = createAuthTable(
@@ -286,27 +282,6 @@ export const integrationOAuthSession = createIntegrationTable(
   ],
 );
 
-export const summary = createAppTable(
-  'summary',
-  {
-    messageId: text('message_id').notNull(),
-    content: text('content').notNull(),
-    createdAt: timestamp('created_at').notNull(),
-    updatedAt: timestamp('updated_at').notNull(),
-    connectionId: text('connection_id')
-      .notNull()
-      .references(() => connection.id, { onDelete: 'cascade' }),
-    saved: boolean('saved').notNull().default(false),
-    tags: text('tags'),
-    suggestedReply: text('suggested_reply'),
-  },
-  (t) => [
-    primaryKey({ name: 'summary_pk', columns: [t.connectionId, t.messageId] }),
-    index('summary_connection_id_saved_idx').on(t.connectionId, t.saved),
-  ],
-);
-
-// Testing
 export const note = createAppTable(
   'note',
   {
@@ -350,32 +325,6 @@ export const userSettings = createAppTable(
     updatedAt: timestamp('updated_at').notNull(),
   },
   (t) => [index('user_settings_settings_idx').on(t.settings)],
-);
-
-export const writingStyleMatrix = createAppTable(
-  'writing_style_matrix',
-  {
-    connectionId: text()
-      .notNull()
-      .references(() => connection.id, { onDelete: 'cascade' }),
-    numMessages: integer().notNull(),
-    // TODO: way too much pain to get this type to work,
-    // revisit later
-    style: jsonb().$type<unknown>().notNull(),
-    updatedAt: timestamp()
-      .defaultNow()
-      .notNull()
-      .$onUpdate(() => new Date()),
-  },
-  (table) => {
-    return [
-      primaryKey({
-        name: 'writing_style_matrix_pk',
-        columns: [table.connectionId],
-      }),
-      index('writing_style_matrix_style_idx').on(table.style),
-    ];
-  },
 );
 
 export const jwks = createAuthTable(

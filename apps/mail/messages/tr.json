@@ -126,12 +126,7 @@
       "starred": "Yıldızlı",
       "applyFilters": "Filtreleri Uygula",
       "reset": "Sıfırla",
-      "searching": "Aranıyor...",
-      "aiSuggestions": "Yapay Zeka Önerileri",
-      "aiSearching": "Yapay Zeka arama yapıyor...",
-      "aiSearchError": "Yapay Zeka araması başarısız oldu. Lütfen tekrar deneyin.",
-      "aiNoResults": "Yapay Zeka önerisi bulunamadı",
-      "aiEnhancedQuery": "Geliştirilmiş arama sorgusu"
+      "searching": "Aranıyor..."
     },
     "navUser": {
       "customerSupport": "Topluluk",
@@ -425,7 +420,6 @@
       "livesupport": "Canlı Destek",
       "feedback": "Geribildirim",
       "settings": "Ayarlar",
-      "voice": "Sesli Asistan",
       "snoozed": "Ertelendi"
     },
     "settings": {
@@ -462,9 +456,6 @@
         "dynamicContent": "Dinamik İçerik",
         "dynamicContentDescription": "E-postaların dinamik içerik göstermesine izin verin.",
         "languageChangedTo": "Dil {locale} olarak değiştirildi",
-        "customPrompt": "Özel Yapay Zeka Yönergesi",
-        "customPromptPlaceholder": "Yapay zeka için özel yönergenizi girin...",
-        "customPromptDescription": "Yapay zekanın e-posta yanıtlarınızı nasıl yazacağını özelleştirin. Bu, temel yönergeye eklenecektir.",
         "noResultsFound": "Sonuç bulunamadı",
         "zeroSignature": "Zero İmzası",
         "zeroSignatureDescription": "E-postalarınıza Zero imzası ekleyin.",
@@ -577,7 +568,6 @@
           "showPromotions": "Promosyonları göster",
           "showUnread": "Okunmamışları göster",
           "selectUnderCursor": "İmleç altındakini seç",
-          "openVoice": "Sesli Asistanı Aç",
           "clearAllFilters": "Tüm filtreleri temizle",
           "markAsImportant": "Önemli olarak işaretle",
           "markAsUnimportant": "Önemsiz olarak işaretle",

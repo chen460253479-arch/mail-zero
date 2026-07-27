@@ -3,7 +3,6 @@ import { Github, Mail, ArrowLeft } from 'lucide-react';
 import { Navigation } from '@/components/navigation';
 import { Button } from '@/components/ui/button';
 import Footer from '@/components/home/footer';
-import React from 'react';
 
 export default function AboutPage() {
   return (
@@ -59,10 +58,9 @@ const sections = [
     title: 'Our Mission',
     content: (
       <p>
-        Zero is an AI-powered email client that manages your inbox, so you don't have to. We help
-        busy professionals unclutter their inboxes, prioritize important messages, summarize
-        conversations, complete tasks, and even chat with their inbox — letting them spend less time
-        managing email and more time getting things done.
+        Zero is a locally organized email service that keeps provider synchronization separate from
+        your mailbox data. We help busy professionals manage inboxes, folders, labels, threads, and
+        drafts from one consistent local model.
       </p>
     ),
   },
@@ -70,11 +68,9 @@ const sections = [
     title: 'Why We Started',
     content: (
       <p>
-        We started Zero because we were frustrated that email — the most-used communication tool in
-        the world — hasn't meaningfully evolved in decades. Despite countless new apps, none
-        actually solve the real problem: helping you finish what you intend to do. We realized the
-        real solution isn't just a new interface — it's AI acting like a true assistant inside your
-        inbox.
+        We started Zero because provider-specific mailbox behavior makes it difficult to build a
+        consistent email workflow. Zero keeps synchronization and delivery behind provider plugins
+        while standard mailbox operations run against a local source of truth.
       </p>
     ),
   },
@@ -104,10 +100,9 @@ const sections = [
     content: (
       <div className="space-y-4">
         <p>
-          We launched our early access program and have already seen strong demand, with over 15,000
-          signups in just under 3 months. What we found is that users want an assistant that
-          streamlines their inbox, providing features to summarize emails, compose responses, and
-          take necessary actions.
+          We launched our early access program and found that users want one dependable mailbox
+          across providers, with local folders, labels, threads, drafts, and search behaving
+          consistently.
         </p>
         <p>
           The opportunity is massive: over 4 billion people use email daily, and most still manage

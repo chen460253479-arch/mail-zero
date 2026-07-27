@@ -60,24 +60,6 @@ describe('self-hosted commercial billing removal', () => {
     }
   });
 
-  it('keeps AI chat independent of billing and entitlements', () => {
-    expectNoTokens('apps/mail/components/create/ai-chat.tsx', [
-      'useBilling',
-      "useQueryState('pricingDialog')",
-      'chatMessages.enabled',
-      'Upgrade to Zero Pro',
-      'Start 7 day free trial',
-    ]);
-    expectNoTokens('apps/mail/components/ui/ai-sidebar.tsx', [
-      'useBilling',
-      'isPro',
-      'setPricingDialog',
-      "featureId: 'chat-messages'",
-      'refetchBilling',
-      'Upgrade for unlimited messages',
-    ]);
-  });
-
   it('keeps connections and the application shell independent of billing', () => {
     const paths = [
       'apps/mail/app/(routes)/settings/connections/page.tsx',
@@ -134,6 +116,7 @@ describe('self-hosted commercial billing removal', () => {
       'apps/mail/components/pricing/pricing-card.tsx',
       'apps/mail/components/ui/pricing-dialog.tsx',
       'apps/mail/components/ui/pricing-switch.tsx',
+      'apps/server/src/lib/react-emails/email-sequences.tsx',
     ];
 
     for (const path of removedFiles) {
@@ -148,12 +131,6 @@ describe('self-hosted commercial billing removal', () => {
       '7-day free trial',
     ]);
     expectNoTokens('apps/server/src/lib/auth.ts', ['Mail0ProEmail']);
-    expectNoTokens('apps/server/src/lib/react-emails/email-sequences.tsx', [
-      'Mail0ProEmail',
-      'Mail0ProWelcomeEmail',
-      'Mail0CancellationEmail',
-      '/pricing',
-    ]);
     expectNoTokens('README.md', ['Autumn Setup', 'AUTUMN_SECRET_KEY']);
     expectNoTokens('AGENT.md', ['AUTUMN_SECRET_KEY']);
   });

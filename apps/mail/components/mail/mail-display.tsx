@@ -11,7 +11,6 @@ import {
   ThreeDots,
   Tag,
   User,
-  ChevronDown,
   Printer,
 } from '../icons/icons';
 import {
@@ -21,7 +20,6 @@ import {
   Users,
   Lock,
   HardDriveDownload,
-  Loader2,
   CopyIcon,
 } from 'lucide-react';
 import {
@@ -31,19 +29,13 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { cn, formatDate, formatTime, shouldShowSeparateTime } from '@/lib/utils';
-import { Dialog, DialogTitle, DialogHeader, DialogContent } from '../ui/dialog';
 import { memo, useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { EmailVerificationBadge } from './email-verification-badge';
 import type { Sender, ParsedMessage, Attachment } from '@/types';
 import { useActiveConnection } from '@/hooks/use-connections';
-import { useTRPC } from '@/providers/query-provider';
 import { useThreadLabels } from '@/hooks/use-labels';
-import { useMutation } from '@tanstack/react-query';
-import { Markdown } from '@react-email/components';
-import { useSummary } from '@/hooks/use-summary';
-import { TextShimmer } from '../ui/text-shimmer';
 import { useThread } from '@/hooks/use-threads';
 import { BimiAvatar } from '../ui/bimi-avatar';
 import { RenderLabels } from './render-labels';
@@ -87,60 +79,6 @@ const getFileIcon = (filename: string) => {
     default:
       return <FileText className="h-4 w-4 text-[#8B5CF6]" />;
   }
-};
-
-const StreamingText = ({ text }: { text: string }) => {
-  const [displayText, setDisplayText] = useState('');
-  const [isComplete, setIsComplete] = useState(false);
-  const [isThinking, setIsThinking] = useState(false);
-
-  useEffect(() => {
-    let currentIndex = 0;
-    setIsComplete(false);
-    setIsThinking(true);
-
-    const thinkingTimeout = setTimeout(() => {
-      setIsThinking(false);
-      setDisplayText('');
-
-      const interval = setInterval(() => {
-        if (currentIndex < text.length) {
-          const nextChar = text[currentIndex];
-          setDisplayText((prev) => prev + nextChar);
-          currentIndex++;
-        } else {
-          setIsComplete(true);
-          clearInterval(interval);
-        }
-      }, 20);
-
-      return () => clearInterval(interval);
-    }, 1000);
-
-    return () => {
-      clearTimeout(thinkingTimeout);
-    };
-  }, [text]);
-
-  return (
-    <div className="flex items-center gap-2">
-      <div
-        className={cn(
-          'bg-linear-to-r bg-size-[200%_100%] from-neutral-500 via-neutral-300 to-neutral-500 bg-clip-text text-sm leading-relaxed text-transparent',
-          isComplete ? 'animate-shine-slow' : '',
-        )}
-      >
-        {isThinking ? (
-          <TextShimmer duration={1}>Thinking...</TextShimmer>
-        ) : (
-          <span>{displayText}</span>
-        )}
-        {!isComplete && !isThinking && (
-          <span className="animate-blink bg-primary ml-0.5 inline-block h-4 w-0.5"></span>
-        )}
-      </div>
-    </div>
-  );
 };
 
 type Props = {
@@ -310,40 +248,6 @@ const ThreadAttachments = ({ attachments }: { attachments: Attachment[] }) => {
   );
 };
 
-const AiSummary = () => {
-  const [threadId] = useQueryState('threadId');
-  const { data: summary, isLoading } = useSummary(threadId ?? null);
-  const [showSummary, setShowSummary] = useState(false);
-
-  const handleToggle = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowSummary(!showSummary);
-  };
-
-  if (isLoading) return null;
-  if (!summary?.data.short?.length) return null;
-
-  return (
-    <div
-      className="mt-2 max-w-3xl rounded-xl border border-[#8B5CF6] bg-white px-4 py-2 dark:bg-[#252525]"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="flex cursor-pointer items-center" onClick={handleToggle}>
-        <TextShimmer className="text-xs font-medium text-[#929292]">Summary</TextShimmer>
-
-        {!isLoading && (
-          <ChevronDown
-            className={`ml-1 h-2.5 w-2.5 fill-[#929292] transition-transform ${showSummary ? 'rotate-180' : ''}`}
-          />
-        )}
-      </div>
-      {showSummary && (
-        <Markdown markdownContainerStyles={{ fontSize: 15 }}>{summary?.data.short || ''}</Markdown>
-      )}
-    </div>
-  );
-};
-
 type ActionButtonProps = {
   onClick: (e: React.MouseEvent) => void;
   icon: React.ReactNode;
@@ -496,154 +400,6 @@ const openAttachment = async (attachment: {
   }
 };
 
-const MoreAboutPerson = ({
-  person,
-  open,
-  onOpenChange,
-}: {
-  person: Sender;
-  extra?: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) => {
-  const trpc = useTRPC();
-  const {
-    mutate: doSearch,
-    isPending,
-    data,
-    error,
-  } = useMutation(trpc.ai.webSearch.mutationOptions());
-  const handleSearch = useCallback(() => {
-    doSearch({
-      query: `In 50 words or less: What is the background of ${person.name} & ${person.email}, of ${person.email.split('@')[1]}.
-      This could be a phishing email address, indicate if the domain is suspicious, example: x.io is not a valid domain for x.com | example: x.com is a valid domain for x.com | example: paypalcom.com is not a valid domain for paypal.com`,
-    });
-  }, [person.name]);
-
-  useEffect(() => {
-    if (open) {
-      handleSearch();
-    }
-  }, [open]);
-
-  const findSource = useCallback(
-    (id: string) => {
-      const sources = data?.sources;
-      if (!sources) return;
-      return sources.find((source) => source.id === id);
-    },
-    [data],
-  );
-
-  const replaceSourcesInText = useCallback(
-    (text: string) => {
-      const sources = data?.sources;
-      if (!sources) return text;
-      const sourcesRegex = /\[(\d+)\]/g;
-      return text.replaceAll(sourcesRegex, (match, p1) => {
-        console.log('p1', p1);
-        const source = findSource(p1);
-        return source ? `SOURCE HERE` : match;
-      });
-    },
-    [data],
-  );
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showOverlay>
-        <DialogHeader>
-          <DialogTitle>More about {cleanNameDisplay(person.name)}</DialogTitle>
-        </DialogHeader>
-        <div className="mt-4 flex justify-center">
-          {isPending ? (
-            <Loader2 className="animate-spin" />
-          ) : data ? (
-            <StreamingText text={replaceSourcesInText(data.text)} />
-          ) : error ? (
-            <p>Error: {error.message}</p>
-          ) : (
-            <Loader2 className="animate-spin" />
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
-const MoreAboutQuery = ({
-  query,
-  open,
-  onOpenChange,
-}: {
-  query: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) => {
-  const trpc = useTRPC();
-  const {
-    mutate: doSearch,
-    isPending,
-    data,
-    error,
-  } = useMutation(trpc.ai.webSearch.mutationOptions());
-
-  const handleSearch = useCallback(() => {
-    doSearch({
-      query: query,
-    });
-  }, [query, doSearch]);
-
-  useEffect(() => {
-    if (open && query) {
-      handleSearch();
-    }
-  }, [open, query, handleSearch]);
-
-  const findSource = useCallback(
-    (id: string) => {
-      const sources = data?.sources;
-      if (!sources) return;
-      return sources.find((source) => source.id === id);
-    },
-    [data],
-  );
-
-  const replaceSourcesInText = useCallback(
-    (text: string) => {
-      const sources = data?.sources;
-      if (!sources) return text;
-      const sourcesRegex = /\[(\d+)\]/g;
-      return text.replaceAll(sourcesRegex, (match, p1) => {
-        const source = findSource(p1);
-        return source ? `SOURCE HERE` : match;
-      });
-    },
-    [data, findSource],
-  );
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showOverlay>
-        <DialogHeader>
-          <DialogTitle>Search Results</DialogTitle>
-        </DialogHeader>
-        <div className="mt-4 flex justify-center">
-          {isPending ? (
-            <Loader2 className="animate-spin" />
-          ) : data ? (
-            <StreamingText text={replaceSourcesInText(data.text)} />
-          ) : error ? (
-            <p>Error: {error.message}</p>
-          ) : (
-            <Loader2 className="animate-spin" />
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
 const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }: Props) => {
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   const { data: threadData } = useThread(emailData.threadId ?? null);
@@ -667,10 +423,6 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
     emailData.tags ? emailData.tags.map((l) => l.id) : [],
   );
   const { data: activeConnection } = useActiveConnection();
-  const [researchSender, setResearchSender] = useState<Sender | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string | null>(null);
-  //   const trpc = useTRPC();
-
   const isLastEmail = useMemo(
     () => emailData.id === threadData?.latest?.id,
     [emailData.id, threadData?.latest?.id],
@@ -1224,20 +976,6 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
       }}
     >
       <>
-        {searchQuery && (
-          <MoreAboutQuery
-            query={searchQuery}
-            open={!!searchQuery}
-            onOpenChange={(open) => (open ? void 0 : setSearchQuery(null))}
-          />
-        )}
-        {researchSender && (
-          <MoreAboutPerson
-            open={!!researchSender}
-            onOpenChange={(open) => (open ? void 0 : setResearchSender(null))}
-            person={researchSender}
-          />
-        )}
         <div className="relative h-full overflow-y-auto">
           <div className={cn('px-4', index === 0 && 'border-b py-4')}>
             {index === 0 && (
@@ -1298,7 +1036,6 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                     })()}
                   </div>
                 </div>
-                <AiSummary />
                 {threadAttachments && threadAttachments.length > 0 && (
                   <ThreadAttachments attachments={threadAttachments} />
                 )}
@@ -1320,18 +1057,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                       <div className="flex w-full items-center justify-between">
                         <div className="flex items-center gap-1">
                           <div className="flex items-center gap-2">
-                            <span
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                setResearchSender({
-                                  name: emailData?.sender?.name || '',
-                                  email: emailData?.sender?.email || '',
-                                  //   extra: emailData?.sender?.extra || '',
-                                });
-                              }}
-                              className="hover:bg-muted font-semibold"
-                            >
+                            <span className="font-semibold">
                               {cleanNameDisplay(emailData?.sender?.name)}
                             </span>
                             <EmailVerificationBadge messageId={emailData?.id} />
