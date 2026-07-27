@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { skipToken, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router';
 import { useQueryState } from 'nuqs';
 import { useMemo } from 'react';
@@ -41,7 +41,7 @@ export const useThreads = ({ enabled = true }: { enabled?: boolean } = {}) => {
         route,
         text: searchValue.value,
       })
-    : { accountId: '', limit: 50 };
+    : skipToken;
   const threadsQuery = useInfiniteQuery(
     trpc.mail.view.threadPage.infiniteQueryOptions(input, {
       initialCursor: undefined,
@@ -68,7 +68,14 @@ export const useThreads = ({ enabled = true }: { enabled?: boolean } = {}) => {
     await threadsQuery.fetchNextPage();
   };
 
-  return [threadsQuery, threads, isReachingEnd, loadMore] as const;
+  const guardedThreadsQuery = canQuery
+    ? threadsQuery
+    : {
+        ...threadsQuery,
+        refetch: async () => threadsQuery,
+      };
+
+  return [guardedThreadsQuery, threads, isReachingEnd, loadMore] as const;
 };
 
 export const useThread = (threadId: string | null) => {
@@ -80,15 +87,7 @@ export const useThread = (threadId: string | null) => {
   const canQuery = status === 'ready' && Boolean(account && id);
   const threadQuery = useQuery(
     trpc.mail.view.threadDetail.queryOptions(
-      canQuery
-        ? buildThreadDetailInput(account!.id, id!)
-        : {
-            accountId: '',
-            threadId: '',
-            fetchTextBodyValues: true,
-            fetchHTMLBodyValues: true,
-            maxBodyValueBytes: 256_000,
-          },
+      canQuery ? buildThreadDetailInput(account!.id, id!) : skipToken,
       {
         enabled: canQuery,
         staleTime: 60_000,
@@ -128,5 +127,12 @@ export const useThread = (threadId: string | null) => {
     };
   }, [account, mailboxQuery.mailboxes, threadQuery.data]);
 
-  return { ...threadQuery, ...derived };
+  const guardedThreadQuery = canQuery
+    ? threadQuery
+    : {
+        ...threadQuery,
+        refetch: async () => threadQuery,
+      };
+
+  return { ...guardedThreadQuery, ...derived };
 };
