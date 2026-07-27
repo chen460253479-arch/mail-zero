@@ -12,6 +12,9 @@ export type DiscoverySyncRecord = {
   provider: string;
   scope: IngressScope;
   checkpoint: VersionedProviderState | null;
+  requestedGeneration: number;
+  completedGeneration: number;
+  pendingCursorHint: string | null;
 };
 
 type FailureTransitionInput = {
@@ -27,12 +30,23 @@ type DiscoveryRepository = {
     owner: string;
     leaseForMs: number;
   }): Promise<DiscoverySyncRecord | null>;
+  renewSyncLease(input: { syncId: string; owner: string; leaseForMs: number }): Promise<boolean>;
   persistDiscoveryPage(input: {
     syncId: string;
     owner: string;
     events: IngressMessageAdded[];
-    checkpoint: VersionedProviderState;
   }): Promise<{ inserted: number }>;
+  completeDiscoveryRun(input: {
+    syncId: string;
+    owner: string;
+    completedGeneration: number;
+    checkpoint: VersionedProviderState;
+    reconcileAfterMs: number;
+  }): Promise<{
+    requestedGeneration: number;
+    completedGeneration: number;
+    checkpoint: VersionedProviderState;
+  }>;
   releaseSyncLease(input: { syncId: string; owner: string }): Promise<void>;
   pauseSync(input: FailureTransitionInput): Promise<void>;
   markAuthError(input: FailureTransitionInput): Promise<void>;
@@ -53,6 +67,7 @@ export const discoverIncremental = async (
     syncId: string;
     owner: string;
     leaseForMs: number;
+    reconcileAfterMs?: number;
   },
   dependencies: {
     repository: DiscoveryRepository;
@@ -77,26 +92,60 @@ export const discoverIncremental = async (
     }
 
     let checkpoint = sync.checkpoint;
-    let pageToken: string | null = null;
+    let targetGeneration = sync.requestedGeneration;
+    const reconcileAfterMs = input.reconcileAfterMs ?? 5 * 60_000;
+    const renewLease = async (): Promise<void> => {
+      const renewed = await dependencies.repository.renewSyncLease({
+        syncId: sync.id,
+        owner: input.owner,
+        leaseForMs: input.leaseForMs,
+      });
+      if (!renewed) {
+        throw new MailSyncError('MAIL_SYNC_LEASE_LOST', 'retryable');
+      }
+    };
+
     try {
       do {
-        const page = await adapter.discover({
-          scope: sync.scope,
-          checkpoint,
-          pageToken,
-        });
-        const persisted = await dependencies.repository.persistDiscoveryPage({
+        let pageToken: string | null = null;
+        let finalCheckpoint = checkpoint;
+        do {
+          await renewLease();
+          const page = await adapter.discover({
+            scope: sync.scope,
+            checkpoint,
+            pageToken,
+          });
+          await renewLease();
+          const persisted = await dependencies.repository.persistDiscoveryPage({
+            syncId: sync.id,
+            owner: input.owner,
+            events: page.events,
+          });
+          inserted += persisted.inserted;
+          finalCheckpoint = page.checkpoint;
+          pageToken = page.nextPageToken;
+        } while (pageToken !== null);
+
+        await renewLease();
+        const completed = await dependencies.repository.completeDiscoveryRun({
           syncId: sync.id,
           owner: input.owner,
-          events: page.events,
-          checkpoint: page.checkpoint,
+          completedGeneration: targetGeneration,
+          checkpoint: finalCheckpoint,
+          reconcileAfterMs,
         });
-        inserted += persisted.inserted;
-        checkpoint = page.checkpoint;
-        pageToken = page.nextPageToken;
-      } while (pageToken !== null);
+        checkpoint = completed.checkpoint;
+        if (completed.requestedGeneration <= completed.completedGeneration) {
+          break;
+        }
+        targetGeneration = completed.requestedGeneration;
+      } while (true);
       return { status: 'completed', inserted };
     } catch (error) {
+      if (error instanceof MailSyncError && error.code.startsWith('MAIL_SYNC_')) {
+        throw error;
+      }
       const classification = adapter.classifyError(error);
       const details = errorDetails(error);
       if (classification === 'authentication') {

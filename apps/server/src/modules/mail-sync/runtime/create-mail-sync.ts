@@ -9,6 +9,7 @@ import { discoverIncremental } from '../application/discover-incremental';
 import type { ImportPendingResult } from '../application/import-pending';
 import { receiveInboundSignal } from '../application/receive-signal';
 import type { MailIngressCommand } from '../application/commands';
+import { MailSyncError } from '../domain/errors';
 
 export type MailIngressRuntime = {
   importBatchSize?: number;
@@ -117,4 +118,83 @@ export const processMailIngressCommand = async (
     case 'renew':
       await runtime.renew(command);
   }
+};
+
+type DueDispatchRepository = Pick<
+  PostgresMailSyncRepository,
+  'claimDueDispatches' | 'confirmDispatch' | 'deferDispatch'
+>;
+
+export const dispatchDueMailSyncWork = async (
+  input: {
+    owner: string;
+    limit: number;
+    claimLeaseForMs: number;
+    confirmedLeaseForMs: number;
+    retryAfterMs: number;
+    reconcileBefore: Date;
+    renewalBefore: Date;
+    importBefore: Date;
+  },
+  dependencies: {
+    repository: DueDispatchRepository;
+    enqueue(command: MailIngressCommand): Promise<void>;
+  },
+): Promise<{ reconciliations: number; renewals: number; imports: number }> => {
+  const dispatches = await dependencies.repository.claimDueDispatches({
+    owner: input.owner,
+    limit: input.limit,
+    leaseForMs: input.claimLeaseForMs,
+    reconcileBefore: input.reconcileBefore,
+    renewalBefore: input.renewalBefore,
+    importBefore: input.importBefore,
+  });
+  const result = { reconciliations: 0, renewals: 0, imports: 0 };
+  const errors: unknown[] = [];
+
+  for (const dispatch of dispatches) {
+    const commands: MailIngressCommand[] = [];
+    if (dispatch.discover) {
+      commands.push({ type: 'discover', syncId: dispatch.syncId });
+    }
+    if (dispatch.renew) {
+      commands.push({ type: 'renew', syncId: dispatch.syncId });
+    }
+    if (dispatch.importPending) {
+      commands.push({ type: 'import', syncId: dispatch.syncId });
+    }
+
+    try {
+      for (const command of commands) {
+        await dependencies.enqueue(command);
+      }
+      const confirmed = await dependencies.repository.confirmDispatch({
+        syncId: dispatch.syncId,
+        owner: input.owner,
+        leaseForMs: input.confirmedLeaseForMs,
+      });
+      if (!confirmed) {
+        throw new MailSyncError('MAIL_SYNC_DISPATCH_LEASE_LOST', 'retryable');
+      }
+      result.reconciliations += dispatch.discover ? 1 : 0;
+      result.renewals += dispatch.renew ? 1 : 0;
+      result.imports += dispatch.importPending ? 1 : 0;
+    } catch (error) {
+      errors.push(error);
+      try {
+        await dependencies.repository.deferDispatch({
+          syncId: dispatch.syncId,
+          owner: input.owner,
+          retryAfterMs: input.retryAfterMs,
+        });
+      } catch (deferError) {
+        errors.push(deferError);
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    throw errors[0];
+  }
+  return result;
 };

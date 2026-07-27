@@ -562,10 +562,16 @@ CREATE TABLE "integration"."inbound_sync" (
 	"last_signal_at" timestamp with time zone,
 	"last_discovered_at" timestamp with time zone,
 	"last_reconciled_at" timestamp with time zone,
+	"requested_generation" integer DEFAULT 0 NOT NULL,
+	"completed_generation" integer DEFAULT 0 NOT NULL,
+	"pending_cursor_hint" text,
+	"next_reconcile_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"last_error_code" text,
 	"last_error_message" text,
 	"lease_owner" text,
 	"lease_expires_at" timestamp with time zone,
+	"dispatch_lease_owner" text,
+	"dispatch_lease_expires_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "inbound_sync_status_chk" CHECK ("integration"."inbound_sync"."status" IN ('activating', 'active', 'paused', 'auth_error')),
@@ -584,7 +590,10 @@ CREATE TABLE "integration"."inbound_sync" (
         END
       )),
 	CONSTRAINT "inbound_sync_active_checkpoint_chk" CHECK ("integration"."inbound_sync"."status" <> 'active' OR "integration"."inbound_sync"."checkpoint" IS NOT NULL),
-	CONSTRAINT "inbound_sync_lease_pair_chk" CHECK (("integration"."inbound_sync"."lease_owner" IS NULL) = ("integration"."inbound_sync"."lease_expires_at" IS NULL))
+	CONSTRAINT "inbound_sync_lease_pair_chk" CHECK (("integration"."inbound_sync"."lease_owner" IS NULL) = ("integration"."inbound_sync"."lease_expires_at" IS NULL)),
+	CONSTRAINT "inbound_sync_dispatch_lease_pair_chk" CHECK (("integration"."inbound_sync"."dispatch_lease_owner" IS NULL) = ("integration"."inbound_sync"."dispatch_lease_expires_at" IS NULL)),
+	CONSTRAINT "inbound_sync_generation_nonnegative_chk" CHECK ("integration"."inbound_sync"."requested_generation" >= 0 AND "integration"."inbound_sync"."completed_generation" >= 0),
+	CONSTRAINT "inbound_sync_generation_order_chk" CHECK ("integration"."inbound_sync"."completed_generation" <= "integration"."inbound_sync"."requested_generation")
 );
 --> statement-breakpoint
 CREATE TABLE "integration"."inbound_sync_attempt" (
@@ -844,9 +853,11 @@ CREATE INDEX "thread_account_latest_id_idx" ON "mail"."thread" USING btree ("mai
 CREATE INDEX "thread_reference_account_thread_idx" ON "mail"."thread_reference" USING btree ("mail_account_id","thread_id");--> statement-breakpoint
 CREATE INDEX "thread_reference_account_email_idx" ON "mail"."thread_reference" USING btree ("mail_account_id","email_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "inbound_sync_account_provider_scope_uidx" ON "integration"."inbound_sync" USING btree ("account_id","provider","scope_key");--> statement-breakpoint
-CREATE INDEX "inbound_sync_due_reconcile_idx" ON "integration"."inbound_sync" USING btree ("last_reconciled_at","id") WHERE "integration"."inbound_sync"."status" = 'active';--> statement-breakpoint
+CREATE INDEX "inbound_sync_due_reconcile_idx" ON "integration"."inbound_sync" USING btree ("next_reconcile_at","id") WHERE "integration"."inbound_sync"."status" = 'active';--> statement-breakpoint
 CREATE INDEX "inbound_sync_due_renewal_idx" ON "integration"."inbound_sync" USING btree ("subscription_expires_at","id") WHERE "integration"."inbound_sync"."status" = 'active' AND "integration"."inbound_sync"."subscription_expires_at" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "inbound_sync_lease_idx" ON "integration"."inbound_sync" USING btree ("lease_expires_at","id") WHERE "integration"."inbound_sync"."lease_expires_at" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "inbound_sync_due_dispatch_idx" ON "integration"."inbound_sync" USING btree ("requested_generation","completed_generation","next_reconcile_at","id") WHERE "integration"."inbound_sync"."status" = 'active';--> statement-breakpoint
+CREATE INDEX "inbound_sync_dispatch_lease_idx" ON "integration"."inbound_sync" USING btree ("dispatch_lease_expires_at","id") WHERE "integration"."inbound_sync"."dispatch_lease_expires_at" IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "inbound_sync_attempt_item_number_uidx" ON "integration"."inbound_sync_attempt" USING btree ("item_id","attempt_number");--> statement-breakpoint
 CREATE UNIQUE INDEX "inbound_sync_item_remote_message_uidx" ON "integration"."inbound_sync_item" USING btree ("sync_id","remote_message_id");--> statement-breakpoint
 CREATE INDEX "inbound_sync_item_pending_idx" ON "integration"."inbound_sync_item" USING btree ("sync_id","next_attempt_at","id") WHERE "integration"."inbound_sync_item"."status" = 'pending';--> statement-breakpoint

@@ -4,6 +4,7 @@ import { ulid } from 'ulid';
 
 import {
   createMailIngressRuntime,
+  dispatchDueMailSyncWork,
   processMailIngressCommand,
   type MailIngressRuntime,
 } from '../../modules/mail-sync/runtime/create-mail-sync';
@@ -250,30 +251,22 @@ export const enqueueDueMailIngressWork = async (
   try {
     const repository = createPostgresMailSyncRepository(db);
     const now = Date.now();
-    const reconciliations = await repository.findDueReconciliations({
-      before: new Date(now - 5 * 60_000),
-      limit: 100,
-    });
-    const renewals = await repository.findDueRenewals({
-      before: new Date(now + 24 * 60 * 60_000),
-      limit: 100,
-    });
-    const imports = await repository.findSyncsWithDueItems({
-      before: new Date(now),
-      limit: 100,
-    });
-    await Promise.all([
-      ...reconciliations.map((syncId) =>
-        runtimeEnv.MAIL_INGRESS_QUEUE.send({ type: 'reconcile', syncId }),
-      ),
-      ...renewals.map((syncId) => runtimeEnv.MAIL_INGRESS_QUEUE.send({ type: 'renew', syncId })),
-      ...imports.map((syncId) => runtimeEnv.MAIL_INGRESS_QUEUE.send({ type: 'import', syncId })),
-    ]);
-    return {
-      reconciliations: reconciliations.length,
-      renewals: renewals.length,
-      imports: imports.length,
-    };
+    return await dispatchDueMailSyncWork(
+      {
+        owner: crypto.randomUUID(),
+        limit: 100,
+        claimLeaseForMs: 30_000,
+        confirmedLeaseForMs: 120_000,
+        retryAfterMs: 5_000,
+        reconcileBefore: new Date(now),
+        renewalBefore: new Date(now + 24 * 60 * 60_000),
+        importBefore: new Date(now),
+      },
+      {
+        repository,
+        enqueue: (command) => runtimeEnv.MAIL_INGRESS_QUEUE.send(command),
+      },
+    );
   } finally {
     await conn.end();
   }

@@ -25,7 +25,16 @@ describe('mail sync database schema', () => {
           AND table_name = 'inbound_sync'
       `;
       expect(syncColumns.map(({ column_name }) => column_name)).toEqual(
-        expect.arrayContaining(['last_error_code', 'last_error_message']),
+        expect.arrayContaining([
+          'last_error_code',
+          'last_error_message',
+          'requested_generation',
+          'completed_generation',
+          'pending_cursor_hint',
+          'next_reconcile_at',
+          'dispatch_lease_owner',
+          'dispatch_lease_expires_at',
+        ]),
       );
 
       const indexes = await sql<{ indexname: string }[]>`
@@ -39,6 +48,8 @@ describe('mail sync database schema', () => {
           'inbound_sync_due_reconcile_idx',
           'inbound_sync_due_renewal_idx',
           'inbound_sync_lease_idx',
+          'inbound_sync_due_dispatch_idx',
+          'inbound_sync_dispatch_lease_idx',
           'inbound_sync_item_pending_idx',
           'inbound_sync_item_due_pending_idx',
           'inbound_sync_item_lease_idx',
@@ -112,6 +123,30 @@ describe('mail sync database schema', () => {
           )
         `,
       ).rejects.toThrow(/inbound_sync_scope_version_chk/u);
+
+      await expect(
+        sql`
+          UPDATE integration.inbound_sync
+          SET requested_generation = -1
+          WHERE id = 'sync-1'
+        `,
+      ).rejects.toThrow(/inbound_sync_generation_nonnegative_chk/u);
+
+      await expect(
+        sql`
+          UPDATE integration.inbound_sync
+          SET requested_generation = 1, completed_generation = 2
+          WHERE id = 'sync-1'
+        `,
+      ).rejects.toThrow(/inbound_sync_generation_order_chk/u);
+
+      await expect(
+        sql`
+          UPDATE integration.inbound_sync
+          SET dispatch_lease_owner = 'scheduler-1', dispatch_lease_expires_at = NULL
+          WHERE id = 'sync-1'
+        `,
+      ).rejects.toThrow(/inbound_sync_dispatch_lease_pair_chk/u);
     });
   });
 

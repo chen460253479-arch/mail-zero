@@ -100,6 +100,8 @@ describe('Gmail inbound push handler', () => {
     {},
     { emailAddress: '', historyId: '123' },
     { emailAddress: 'user@example.com', historyId: '' },
+    { emailAddress: 'user@example.com', historyId: 'not-a-number' },
+    { emailAddress: 'user@example.com', historyId: '1'.repeat(129) },
     { emailAddress: 'not-an-email', historyId: '123' },
   ])('rejects malformed notification payload %o', async (payload) => {
     await expect(

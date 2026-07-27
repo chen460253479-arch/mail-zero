@@ -47,7 +47,6 @@ describe('pending import integration', () => {
             remoteThreadId: 'gmail-thread-ignored-for-local-threading',
           },
         ],
-        checkpoint: { version: 1, historyId: '101' },
       });
       await repository.releaseSyncLease({
         syncId: sync.id,

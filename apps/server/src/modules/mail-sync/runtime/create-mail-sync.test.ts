@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { processMailIngressCommand, type MailIngressRuntime } from './create-mail-sync';
+import {
+  dispatchDueMailSyncWork,
+  processMailIngressCommand,
+  type MailIngressRuntime,
+} from './create-mail-sync';
 import { parseMailIngressCommand } from '../application/commands';
 
 const createRuntime = (overrides: Partial<MailIngressRuntime> = {}): MailIngressRuntime => ({
@@ -90,5 +94,138 @@ describe('mail ingress queue command processor', () => {
     await processMailIngressCommand({ type: 'renew', syncId: 'sync-1' }, runtime);
 
     expect(calls).toEqual(['signal', 'discover', 'renew']);
+  });
+});
+
+describe('mail ingress due-work dispatcher', () => {
+  const dispatchInput = {
+    owner: 'scheduler-1',
+    limit: 10,
+    claimLeaseForMs: 30_000,
+    confirmedLeaseForMs: 120_000,
+    retryAfterMs: 5_000,
+    reconcileBefore: new Date('2026-01-01T00:00:00.000Z'),
+    renewalBefore: new Date('2026-01-02T00:00:00.000Z'),
+    importBefore: new Date('2026-01-01T00:00:00.000Z'),
+  };
+
+  it('enqueues all claimed responsibilities and confirms the durable dispatch', async () => {
+    const calls: unknown[] = [];
+    const result = await dispatchDueMailSyncWork(dispatchInput, {
+      repository: {
+        claimDueDispatches: async () => [
+          {
+            syncId: 'sync-1',
+            discover: true,
+            renew: true,
+            importPending: true,
+          },
+        ],
+        confirmDispatch: async (input) => {
+          calls.push({ confirm: input });
+          return true;
+        },
+        deferDispatch: async (input) => {
+          calls.push({ defer: input });
+        },
+      },
+      enqueue: async (command) => {
+        calls.push(command);
+      },
+    });
+
+    expect(result).toEqual({ reconciliations: 1, renewals: 1, imports: 1 });
+    expect(calls).toEqual([
+      { type: 'discover', syncId: 'sync-1' },
+      { type: 'renew', syncId: 'sync-1' },
+      { type: 'import', syncId: 'sync-1' },
+      {
+        confirm: {
+          syncId: 'sync-1',
+          owner: 'scheduler-1',
+          leaseForMs: 120_000,
+        },
+      },
+    ]);
+  });
+
+  it('shortens the dispatch lease when queue publication fails', async () => {
+    const deferred: unknown[] = [];
+    const failure = new Error('queue unavailable');
+
+    await expect(
+      dispatchDueMailSyncWork(dispatchInput, {
+        repository: {
+          claimDueDispatches: async () => [
+            {
+              syncId: 'sync-1',
+              discover: true,
+              renew: false,
+              importPending: false,
+            },
+          ],
+          confirmDispatch: async () => true,
+          deferDispatch: async (input) => {
+            deferred.push(input);
+          },
+        },
+        enqueue: async () => {
+          throw failure;
+        },
+      }),
+    ).rejects.toBe(failure);
+    expect(deferred).toEqual([
+      {
+        syncId: 'sync-1',
+        owner: 'scheduler-1',
+        retryAfterMs: 5_000,
+      },
+    ]);
+  });
+
+  it('continues dispatching other claimed syncs after one queue publication fails', async () => {
+    const calls: unknown[] = [];
+    const failure = new Error('first sync queue unavailable');
+
+    await expect(
+      dispatchDueMailSyncWork(dispatchInput, {
+        repository: {
+          claimDueDispatches: async () => [
+            {
+              syncId: 'sync-1',
+              discover: true,
+              renew: false,
+              importPending: false,
+            },
+            {
+              syncId: 'sync-2',
+              discover: false,
+              renew: false,
+              importPending: true,
+            },
+          ],
+          confirmDispatch: async (input) => {
+            calls.push({ confirm: input.syncId });
+            return true;
+          },
+          deferDispatch: async (input) => {
+            calls.push({ defer: input.syncId });
+          },
+        },
+        enqueue: async (command) => {
+          calls.push(command);
+          if ('syncId' in command && command.syncId === 'sync-1') {
+            throw failure;
+          }
+        },
+      }),
+    ).rejects.toBe(failure);
+
+    expect(calls).toEqual([
+      { type: 'discover', syncId: 'sync-1' },
+      { defer: 'sync-1' },
+      { type: 'import', syncId: 'sync-2' },
+      { confirm: 'sync-2' },
+    ]);
   });
 });

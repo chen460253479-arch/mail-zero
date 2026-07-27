@@ -4,7 +4,10 @@ import { ulid } from 'ulid';
 import type {
   AcquireSyncLeaseInput,
   ActivateSyncInput,
+  ClaimDueDispatchesInput,
   ClaimPendingItemsInput,
+  ClaimedMailSyncDispatch,
+  CompleteDiscoveryRunInput,
   CreateActivatingSyncInput,
   InboundSyncItemRecord,
   InboundSyncRecord,
@@ -14,7 +17,11 @@ import type {
   ScheduleRetryInput,
   StoreActivationCheckpointInput,
 } from './types';
-import { parseIngressScope, parseVersionedProviderState } from '../domain/sync-state';
+import {
+  parseIngressScope,
+  parseVersionedProviderState,
+  type VersionedProviderState,
+} from '../domain/sync-state';
 import { inboundSync, inboundSyncAttempt, inboundSyncItem } from './schema';
 import { mailAccount } from '../../mail/postgres/schema/accounts';
 import { MailSyncError } from '../domain/errors';
@@ -37,6 +44,31 @@ const requirePositiveInteger = (value: number, code: string): void => {
   if (!Number.isSafeInteger(value) || value < 1) {
     throw new MailSyncError(code, 'permanent');
   }
+};
+
+const decimalCursorPattern = /^\d+$/u;
+
+const normalizeDecimalCursor = (value: string): string => {
+  const normalized = value.replace(/^0+(?=\d)/u, '');
+  return normalized.length === 0 ? '0' : normalized;
+};
+
+const mergeCursorHint = (
+  current: string | null,
+  incoming: string | undefined,
+): string | null => {
+  if (incoming === undefined) return current;
+  if (current === null) return incoming;
+  if (!decimalCursorPattern.test(current) || !decimalCursorPattern.test(incoming)) {
+    return incoming;
+  }
+
+  const currentDecimal = normalizeDecimalCursor(current);
+  const incomingDecimal = normalizeDecimalCursor(incoming);
+  if (currentDecimal.length !== incomingDecimal.length) {
+    return incomingDecimal.length > currentDecimal.length ? incoming : current;
+  }
+  return incomingDecimal > currentDecimal ? incoming : current;
 };
 
 export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOptions = {}) => {
@@ -169,6 +201,8 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
         .set({
           leaseOwner: input.owner,
           leaseExpiresAt: sql`now() + (${input.leaseForMs} * interval '1 millisecond')`,
+          dispatchLeaseOwner: null,
+          dispatchLeaseExpiresAt: null,
           updatedAt: sql`now()`,
         })
         .where(
@@ -186,6 +220,29 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
       return rows[0] ?? null;
     },
 
+    renewSyncLease: async (input: AcquireSyncLeaseInput): Promise<boolean> => {
+      requirePositiveInteger(input.leaseForMs, 'MAIL_SYNC_INVALID_LEASE_DURATION');
+      if (input.owner.length === 0) {
+        throw new MailSyncError('MAIL_SYNC_INVALID_LEASE_OWNER', 'permanent');
+      }
+      const rows = await db
+        .update(inboundSync)
+        .set({
+          leaseExpiresAt: sql`now() + (${input.leaseForMs} * interval '1 millisecond')`,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(inboundSync.id, input.syncId),
+            eq(inboundSync.status, 'active'),
+            eq(inboundSync.leaseOwner, input.owner),
+            gt(inboundSync.leaseExpiresAt, sql`now()`),
+          ),
+        )
+        .returning({ id: inboundSync.id });
+      return rows.length === 1;
+    },
+
     releaseSyncLease: async (input: { syncId: string; owner: string }): Promise<void> => {
       await db
         .update(inboundSync)
@@ -200,7 +257,6 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
     persistDiscoveryPage: async (
       input: PersistDiscoveryPageInput,
     ): Promise<{ inserted: number }> => {
-      const checkpoint = parseVersionedProviderState(input.checkpoint);
       return db.transaction(async (transaction) => {
         const leased = await transaction
           .select({ id: inboundSync.id })
@@ -242,15 +298,87 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
         await transaction
           .update(inboundSync)
           .set({
-            checkpoint,
             lastDiscoveredAt: sql`now()`,
-            lastReconciledAt: sql`now()`,
             lastErrorCode: null,
             lastErrorMessage: null,
             updatedAt: sql`now()`,
           })
           .where(and(eq(inboundSync.id, input.syncId), eq(inboundSync.leaseOwner, input.owner)));
         return { inserted: inserted.length };
+      });
+    },
+
+    completeDiscoveryRun: async (
+      input: CompleteDiscoveryRunInput,
+    ): Promise<{
+      requestedGeneration: number;
+      completedGeneration: number;
+      checkpoint: VersionedProviderState;
+    }> => {
+      requirePositiveInteger(input.reconcileAfterMs, 'MAIL_SYNC_INVALID_RECONCILE_DELAY');
+      if (!Number.isSafeInteger(input.completedGeneration) || input.completedGeneration < 0) {
+        throw new MailSyncError('MAIL_SYNC_INVALID_GENERATION', 'permanent');
+      }
+      const checkpoint = parseVersionedProviderState(input.checkpoint);
+      return db.transaction(async (transaction) => {
+        const rows = await transaction
+          .select({
+            requestedGeneration: inboundSync.requestedGeneration,
+            completedGeneration: inboundSync.completedGeneration,
+          })
+          .from(inboundSync)
+          .where(
+            and(
+              eq(inboundSync.id, input.syncId),
+              eq(inboundSync.status, 'active'),
+              eq(inboundSync.leaseOwner, input.owner),
+              gt(inboundSync.leaseExpiresAt, sql`now()`),
+            ),
+          )
+          .for('update')
+          .limit(1);
+        const current = rows[0] ?? leaseLost();
+        if (
+          input.completedGeneration < current.completedGeneration ||
+          input.completedGeneration > current.requestedGeneration
+        ) {
+          throw new MailSyncError('MAIL_SYNC_INVALID_GENERATION', 'permanent');
+        }
+
+        const updated = await transaction
+          .update(inboundSync)
+          .set({
+            checkpoint,
+            completedGeneration: input.completedGeneration,
+            pendingCursorHint: sql`CASE
+              WHEN ${inboundSync.requestedGeneration} <= ${input.completedGeneration}
+              THEN NULL
+              ELSE ${inboundSync.pendingCursorHint}
+            END`,
+            lastDiscoveredAt: sql`now()`,
+            lastReconciledAt: sql`now()`,
+            nextReconcileAt: sql`now() + (${input.reconcileAfterMs} * interval '1 millisecond')`,
+            lastErrorCode: null,
+            lastErrorMessage: null,
+            updatedAt: sql`now()`,
+          })
+          .where(
+            and(
+              eq(inboundSync.id, input.syncId),
+              eq(inboundSync.leaseOwner, input.owner),
+              gt(inboundSync.leaseExpiresAt, sql`now()`),
+            ),
+          )
+          .returning({
+            requestedGeneration: inboundSync.requestedGeneration,
+            completedGeneration: inboundSync.completedGeneration,
+            checkpoint: inboundSync.checkpoint,
+          });
+        const result = updated[0] ?? leaseLost();
+        return {
+          ...result,
+          checkpoint: parseVersionedProviderState(result.checkpoint),
+        };
       });
     },
 
@@ -518,10 +646,12 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
       externalAccount: string;
       cursorHint?: string;
     }): Promise<string[]> => {
-      void input.cursorHint;
       return db.transaction(async (transaction) => {
         const matches = await transaction
-          .select({ id: inboundSync.id })
+          .select({
+            id: inboundSync.id,
+            pendingCursorHint: inboundSync.pendingCursorHint,
+          })
           .from(inboundSync)
           .innerJoin(mailAccount, eq(mailAccount.id, inboundSync.accountId))
           .innerJoin(connection, eq(connection.id, mailAccount.connectionId))
@@ -531,81 +661,173 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
               eq(inboundSync.provider, input.provider),
               eq(connection.normalizedEmail, input.externalAccount),
             ),
-          );
+          )
+          .for('update', { of: inboundSync });
         if (matches.length === 0) {
           return [];
         }
-        const ids = matches.map(({ id }) => id);
-        await transaction
-          .update(inboundSync)
-          .set({ lastSignalAt: sql`now()`, updatedAt: sql`now()` })
-          .where(inArray(inboundSync.id, ids));
-        return ids;
+        const updated: string[] = [];
+        for (const { id, pendingCursorHint } of matches) {
+          const rows = await transaction
+            .update(inboundSync)
+            .set({
+              requestedGeneration: sql`${inboundSync.requestedGeneration} + 1`,
+              pendingCursorHint: mergeCursorHint(pendingCursorHint, input.cursorHint),
+              lastSignalAt: sql`now()`,
+              updatedAt: sql`now()`,
+            })
+            .where(and(eq(inboundSync.id, id), eq(inboundSync.status, 'active')))
+            .returning({ id: inboundSync.id });
+          if (rows[0] !== undefined) {
+            updated.push(rows[0].id);
+          }
+        }
+        return updated;
       });
     },
 
-    findDueReconciliations: async (input: { before: Date; limit: number }): Promise<string[]> => {
+    claimDueDispatches: async (
+      input: ClaimDueDispatchesInput,
+    ): Promise<ClaimedMailSyncDispatch[]> => {
       requirePositiveInteger(input.limit, 'MAIL_SYNC_INVALID_DUE_LIMIT');
-      return (
-        await db
-          .select({ id: inboundSync.id })
-          .from(inboundSync)
-          .where(
-            and(
-              eq(inboundSync.status, 'active'),
-              or(
-                isNull(inboundSync.lastReconciledAt),
-                lte(inboundSync.lastReconciledAt, input.before),
-              ),
-            ),
-          )
-          .orderBy(sql`${inboundSync.lastReconciledAt} ASC NULLS FIRST`, asc(inboundSync.id))
-          .limit(input.limit)
-      ).map(({ id }) => id);
-    },
+      requirePositiveInteger(input.leaseForMs, 'MAIL_SYNC_INVALID_LEASE_DURATION');
+      if (input.owner.length === 0) {
+        throw new MailSyncError('MAIL_SYNC_INVALID_LEASE_OWNER', 'permanent');
+      }
 
-    findDueRenewals: async (input: { before: Date; limit: number }): Promise<string[]> => {
-      requirePositiveInteger(input.limit, 'MAIL_SYNC_INVALID_DUE_LIMIT');
-      return (
-        await db
-          .select({ id: inboundSync.id })
-          .from(inboundSync)
-          .where(
-            and(
-              eq(inboundSync.status, 'active'),
-              lte(inboundSync.subscriptionExpiresAt, input.before),
-            ),
-          )
-          .orderBy(asc(inboundSync.subscriptionExpiresAt), asc(inboundSync.id))
-          .limit(input.limit)
-      ).map(({ id }) => id);
-    },
-
-    findSyncsWithDueItems: async (input: { before: Date; limit: number }): Promise<string[]> => {
-      requirePositiveInteger(input.limit, 'MAIL_SYNC_INVALID_DUE_LIMIT');
-      return (
-        await db
-          .selectDistinct({ id: inboundSyncItem.syncId })
+      return db.transaction(async (transaction) => {
+        const dueItems = transaction
+          .select({ id: inboundSyncItem.id })
           .from(inboundSyncItem)
-          .innerJoin(inboundSync, eq(inboundSync.id, inboundSyncItem.syncId))
           .where(
             and(
-              eq(inboundSync.status, 'active'),
+              eq(inboundSyncItem.syncId, inboundSync.id),
               or(
                 and(
                   eq(inboundSyncItem.status, 'pending'),
-                  lte(inboundSyncItem.nextAttemptAt, input.before),
+                  lte(inboundSyncItem.nextAttemptAt, input.importBefore),
                 ),
                 and(
                   eq(inboundSyncItem.status, 'processing'),
-                  lte(inboundSyncItem.leaseExpiresAt, input.before),
+                  lte(inboundSyncItem.leaseExpiresAt, input.importBefore),
                 ),
               ),
             ),
+          );
+        const candidates = await transaction
+          .select({
+            id: inboundSync.id,
+            requestedGeneration: inboundSync.requestedGeneration,
+            completedGeneration: inboundSync.completedGeneration,
+            discover: sql<boolean>`(
+              ${inboundSync.requestedGeneration} > ${inboundSync.completedGeneration}
+              OR ${inboundSync.nextReconcileAt} <= ${input.reconcileBefore}
+            )`,
+            renew: sql<boolean>`(
+              ${inboundSync.subscriptionExpiresAt} IS NOT NULL
+              AND ${inboundSync.subscriptionExpiresAt} <= ${input.renewalBefore}
+            )`,
+            importPending: sql<boolean>`EXISTS (${dueItems})`,
+          })
+          .from(inboundSync)
+          .where(
+            and(
+              eq(inboundSync.status, 'active'),
+              or(
+                isNull(inboundSync.dispatchLeaseExpiresAt),
+                lte(inboundSync.dispatchLeaseExpiresAt, sql`now()`),
+              ),
+              or(
+                gt(inboundSync.requestedGeneration, inboundSync.completedGeneration),
+                lte(inboundSync.nextReconcileAt, input.reconcileBefore),
+                lte(inboundSync.subscriptionExpiresAt, input.renewalBefore),
+                exists(dueItems),
+              ),
+            ),
           )
-          .orderBy(asc(inboundSyncItem.syncId))
-          .limit(input.limit)
-      ).map(({ id }) => id);
+          .orderBy(asc(inboundSync.nextReconcileAt), asc(inboundSync.id))
+          .for('update', { skipLocked: true })
+          .limit(input.limit);
+
+        const claimed: ClaimedMailSyncDispatch[] = [];
+        for (const candidate of candidates) {
+          const rows = await transaction
+            .update(inboundSync)
+            .set({
+              requestedGeneration:
+                candidate.discover &&
+                candidate.requestedGeneration === candidate.completedGeneration
+                  ? candidate.requestedGeneration + 1
+                  : candidate.requestedGeneration,
+              dispatchLeaseOwner: input.owner,
+              dispatchLeaseExpiresAt: sql`now() + (${input.leaseForMs} * interval '1 millisecond')`,
+              updatedAt: sql`now()`,
+            })
+            .where(
+              and(
+                eq(inboundSync.id, candidate.id),
+                eq(inboundSync.status, 'active'),
+                or(
+                  isNull(inboundSync.dispatchLeaseExpiresAt),
+                  lte(inboundSync.dispatchLeaseExpiresAt, sql`now()`),
+                ),
+              ),
+            )
+            .returning({ id: inboundSync.id });
+          if (rows.length === 1) {
+            claimed.push({
+              syncId: candidate.id,
+              discover: candidate.discover,
+              renew: candidate.renew,
+              importPending: candidate.importPending,
+            });
+          }
+        }
+        return claimed;
+      });
+    },
+
+    confirmDispatch: async (input: {
+      syncId: string;
+      owner: string;
+      leaseForMs: number;
+    }): Promise<boolean> => {
+      requirePositiveInteger(input.leaseForMs, 'MAIL_SYNC_INVALID_LEASE_DURATION');
+      const rows = await db
+        .update(inboundSync)
+        .set({
+          dispatchLeaseExpiresAt: sql`now() + (${input.leaseForMs} * interval '1 millisecond')`,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(inboundSync.id, input.syncId),
+            eq(inboundSync.dispatchLeaseOwner, input.owner),
+            gt(inboundSync.dispatchLeaseExpiresAt, sql`now()`),
+          ),
+        )
+        .returning({ id: inboundSync.id });
+      return rows.length === 1;
+    },
+
+    deferDispatch: async (input: {
+      syncId: string;
+      owner: string;
+      retryAfterMs: number;
+    }): Promise<void> => {
+      requirePositiveInteger(input.retryAfterMs, 'MAIL_SYNC_INVALID_DISPATCH_RETRY_DELAY');
+      await db
+        .update(inboundSync)
+        .set({
+          dispatchLeaseExpiresAt: sql`now() + (${input.retryAfterMs} * interval '1 millisecond')`,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(inboundSync.id, input.syncId),
+            eq(inboundSync.dispatchLeaseOwner, input.owner),
+          ),
+        );
     },
 
     updateSubscription: async (input: {

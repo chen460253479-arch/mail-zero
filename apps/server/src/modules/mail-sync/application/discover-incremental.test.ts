@@ -15,6 +15,9 @@ const activeSync: DiscoverySyncRecord = {
   provider: 'gmail',
   scope,
   checkpoint: { version: 1, historyId: '100' },
+  requestedGeneration: 1,
+  completedGeneration: 0,
+  pendingCursorHint: '102',
 };
 
 describe('incremental mail discovery', () => {
@@ -71,10 +74,26 @@ describe('incremental mail discovery', () => {
             calls.push('lease');
             return activeSync;
           },
+          renewSyncLease: async () => {
+            calls.push('renew');
+            return true;
+          },
           persistDiscoveryPage: async (input) => {
             calls.push(`persist:${input.events[0]?.remoteMessageId}`);
             persisted.push(input);
             return { inserted: input.events.length };
+          },
+          completeDiscoveryRun: async (input) => {
+            calls.push('complete');
+            expect(input).toMatchObject({
+              completedGeneration: 1,
+              checkpoint: { version: 1, historyId: '102' },
+            });
+            return {
+              requestedGeneration: 1,
+              completedGeneration: 1,
+              checkpoint: input.checkpoint,
+            };
           },
           releaseSyncLease: async () => {
             calls.push('release');
@@ -94,10 +113,16 @@ describe('incremental mail discovery', () => {
     expect(result).toEqual({ status: 'completed', inserted: 2 });
     expect(calls).toEqual([
       'lease',
+      'renew',
       'discover:first',
+      'renew',
       'persist:message-1',
+      'renew',
       'discover:next',
+      'renew',
       'persist:message-2',
+      'renew',
+      'complete',
       'release',
     ]);
     expect(persisted).toHaveLength(2);
@@ -110,7 +135,11 @@ describe('incremental mail discovery', () => {
       {
         repository: {
           acquireSyncLease: async () => null,
+          renewSyncLease: async () => true,
           persistDiscoveryPage: async () => ({ inserted: 0 }),
+          completeDiscoveryRun: async () => {
+            throw new Error('must not complete');
+          },
           releaseSyncLease: async () => undefined,
           pauseSync: async () => undefined,
           markAuthError: async () => undefined,
@@ -155,7 +184,11 @@ describe('incremental mail discovery', () => {
         {
           repository: {
             acquireSyncLease: async () => activeSync,
+            renewSyncLease: async () => true,
             persistDiscoveryPage: async () => ({ inserted: 0 }),
+            completeDiscoveryRun: async () => {
+              throw new Error('must not complete');
+            },
             releaseSyncLease: async () => {
               transitions.push('release');
             },
@@ -197,10 +230,14 @@ describe('incremental mail discovery', () => {
       discoverIncremental(
         { syncId: 'sync-1', owner: 'worker-1', leaseForMs: 60_000 },
         {
-          repository: {
-            acquireSyncLease: async () => activeSync,
-            persistDiscoveryPage: async () => ({ inserted: 0 }),
-            releaseSyncLease: async () => {
+        repository: {
+          acquireSyncLease: async () => activeSync,
+          renewSyncLease: async () => true,
+          persistDiscoveryPage: async () => ({ inserted: 0 }),
+          completeDiscoveryRun: async () => {
+            throw new Error('must not complete');
+          },
+          releaseSyncLease: async () => {
               transitions.push('release');
             },
             pauseSync: async () => {
@@ -216,5 +253,106 @@ describe('incremental mail discovery', () => {
       ),
     ).rejects.toBe(retryable);
     expect(transitions).toEqual(['release']);
+  });
+
+  it('continues with the latest generation when a signal arrives during discovery', async () => {
+    const checkpoints: string[] = [];
+    const completedGenerations: number[] = [];
+    let discoveryRun = 0;
+    const adapter: InboundMailAdapter = {
+      provider: 'gmail',
+      establishCheckpoint: async () => {
+        throw new Error('unused');
+      },
+      discover: async ({ checkpoint }) => {
+        checkpoints.push(String((checkpoint as unknown as { historyId: string }).historyId));
+        discoveryRun += 1;
+        return {
+          events: [],
+          checkpoint: { version: 1, historyId: String(100 + discoveryRun) },
+          nextPageToken: null,
+        };
+      },
+      fetchRawMessage: async () => {
+        throw new Error('unused');
+      },
+      classifyError: () => 'retryable',
+    };
+
+    const result = await discoverIncremental(
+      { syncId: 'sync-1', owner: 'worker-1', leaseForMs: 60_000 },
+      {
+        repository: {
+          acquireSyncLease: async () => activeSync,
+          renewSyncLease: async () => true,
+          persistDiscoveryPage: async () => ({ inserted: 0 }),
+          completeDiscoveryRun: async (input) => {
+            completedGenerations.push(input.completedGeneration);
+            return {
+              completedGeneration: input.completedGeneration,
+              requestedGeneration: 2,
+              checkpoint: input.checkpoint,
+            };
+          },
+          releaseSyncLease: async () => undefined,
+          pauseSync: async () => undefined,
+          markAuthError: async () => undefined,
+        },
+        getAdapterFactory: () => ({ create: async () => adapter }),
+        resolveConnectionId: async () => 'connection-1',
+      },
+    );
+
+    expect(result).toEqual({ status: 'completed', inserted: 0 });
+    expect(checkpoints).toEqual(['100', '101']);
+    expect(completedGenerations).toEqual([1, 2]);
+  });
+
+  it('stops before persisting when the synchronization lease cannot be renewed', async () => {
+    let renewals = 0;
+    let persisted = false;
+    const adapter: InboundMailAdapter = {
+      provider: 'gmail',
+      establishCheckpoint: async () => {
+        throw new Error('unused');
+      },
+      discover: async () => ({
+        events: [],
+        checkpoint: { version: 1, historyId: '101' },
+        nextPageToken: null,
+      }),
+      fetchRawMessage: async () => {
+        throw new Error('unused');
+      },
+      classifyError: () => 'retryable',
+    };
+
+    await expect(
+      discoverIncremental(
+        { syncId: 'sync-1', owner: 'worker-1', leaseForMs: 60_000 },
+        {
+          repository: {
+            acquireSyncLease: async () => activeSync,
+            renewSyncLease: async () => {
+              renewals += 1;
+              return renewals === 1;
+            },
+            persistDiscoveryPage: async () => {
+              persisted = true;
+              return { inserted: 0 };
+            },
+            completeDiscoveryRun: async () => {
+              throw new Error('must not complete');
+            },
+            releaseSyncLease: async () => undefined,
+            pauseSync: async () => undefined,
+            markAuthError: async () => undefined,
+          },
+          getAdapterFactory: () => ({ create: async () => adapter }),
+          resolveConnectionId: async () => 'connection-1',
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'MAIL_SYNC_LEASE_LOST' });
+    expect(persisted).toBe(false);
   });
 });

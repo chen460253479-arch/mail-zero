@@ -32,7 +32,30 @@ export type PersistDiscoveryPageInput = {
   syncId: string;
   owner: string;
   events: IngressMessageAdded[];
+};
+
+export type CompleteDiscoveryRunInput = {
+  syncId: string;
+  owner: string;
+  completedGeneration: number;
   checkpoint: VersionedProviderState;
+  reconcileAfterMs: number;
+};
+
+export type ClaimDueDispatchesInput = {
+  owner: string;
+  limit: number;
+  leaseForMs: number;
+  reconcileBefore: Date;
+  renewalBefore: Date;
+  importBefore: Date;
+};
+
+export type ClaimedMailSyncDispatch = {
+  syncId: string;
+  discover: boolean;
+  renew: boolean;
+  importPending: boolean;
 };
 
 export type ClaimPendingItemsInput = {

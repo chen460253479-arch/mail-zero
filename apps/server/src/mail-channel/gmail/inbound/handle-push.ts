@@ -36,7 +36,7 @@ const parseGmailPush = (payload: unknown): { emailAddress: string; historyId: st
   }
   const emailAddress = record.emailAddress.trim().toLocaleLowerCase('und');
   const historyId = record.historyId.trim();
-  if (!/^[^@\s]+@[^@\s]+$/u.test(emailAddress) || historyId.length === 0) {
+  if (!/^[^@\s]+@[^@\s]+$/u.test(emailAddress) || !/^\d{1,128}$/u.test(historyId)) {
     return null;
   }
   return { emailAddress, historyId };

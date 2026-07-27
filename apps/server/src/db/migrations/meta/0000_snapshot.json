@@ -1,5 +1,5 @@
 {
-  "id": "456b7abc-a0d7-4749-a7cf-28f6fb2d16d7",
+  "id": "9cea03d4-fc51-4c59-9bb5-617d29018d4e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -5447,6 +5447,33 @@
           "primaryKey": false,
           "notNull": false
         },
+        "requested_generation": {
+          "name": "requested_generation",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "completed_generation": {
+          "name": "completed_generation",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "pending_cursor_hint": {
+          "name": "pending_cursor_hint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "next_reconcile_at": {
+          "name": "next_reconcile_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
         "last_error_code": {
           "name": "last_error_code",
           "type": "text",
@@ -5467,6 +5494,18 @@
         },
         "lease_expires_at": {
           "name": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dispatch_lease_owner": {
+          "name": "dispatch_lease_owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dispatch_lease_expires_at": {
+          "name": "dispatch_lease_expires_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
@@ -5518,7 +5557,7 @@
           "name": "inbound_sync_due_reconcile_idx",
           "columns": [
             {
-              "expression": "last_reconciled_at",
+              "expression": "next_reconcile_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5579,6 +5618,62 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "inbound_sync_due_dispatch_idx": {
+          "name": "inbound_sync_due_dispatch_idx",
+          "columns": [
+            {
+              "expression": "requested_generation",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "completed_generation",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "next_reconcile_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"integration\".\"inbound_sync\".\"status\" = 'active'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "inbound_sync_dispatch_lease_idx": {
+          "name": "inbound_sync_dispatch_lease_idx",
+          "columns": [
+            {
+              "expression": "dispatch_lease_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"integration\".\"inbound_sync\".\"dispatch_lease_expires_at\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -5620,6 +5715,18 @@
         "inbound_sync_lease_pair_chk": {
           "name": "inbound_sync_lease_pair_chk",
           "value": "(\"integration\".\"inbound_sync\".\"lease_owner\" IS NULL) = (\"integration\".\"inbound_sync\".\"lease_expires_at\" IS NULL)"
+        },
+        "inbound_sync_dispatch_lease_pair_chk": {
+          "name": "inbound_sync_dispatch_lease_pair_chk",
+          "value": "(\"integration\".\"inbound_sync\".\"dispatch_lease_owner\" IS NULL) = (\"integration\".\"inbound_sync\".\"dispatch_lease_expires_at\" IS NULL)"
+        },
+        "inbound_sync_generation_nonnegative_chk": {
+          "name": "inbound_sync_generation_nonnegative_chk",
+          "value": "\"integration\".\"inbound_sync\".\"requested_generation\" >= 0 AND \"integration\".\"inbound_sync\".\"completed_generation\" >= 0"
+        },
+        "inbound_sync_generation_order_chk": {
+          "name": "inbound_sync_generation_order_chk",
+          "value": "\"integration\".\"inbound_sync\".\"completed_generation\" <= \"integration\".\"inbound_sync\".\"requested_generation\""
         }
       },
       "isRLSEnabled": false

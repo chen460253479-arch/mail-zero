@@ -34,10 +34,18 @@ export const inboundSync = createIntegrationTable(
     lastSignalAt: timestamp('last_signal_at', { withTimezone: true }),
     lastDiscoveredAt: timestamp('last_discovered_at', { withTimezone: true }),
     lastReconciledAt: timestamp('last_reconciled_at', { withTimezone: true }),
+    requestedGeneration: integer('requested_generation').notNull().default(0),
+    completedGeneration: integer('completed_generation').notNull().default(0),
+    pendingCursorHint: text('pending_cursor_hint'),
+    nextReconcileAt: timestamp('next_reconcile_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     lastErrorCode: text('last_error_code'),
     lastErrorMessage: text('last_error_message'),
     leaseOwner: text('lease_owner'),
     leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+    dispatchLeaseOwner: text('dispatch_lease_owner'),
+    dispatchLeaseExpiresAt: timestamp('dispatch_lease_expires_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -80,8 +88,20 @@ export const inboundSync = createIntegrationTable(
       'inbound_sync_lease_pair_chk',
       sql`(${t.leaseOwner} IS NULL) = (${t.leaseExpiresAt} IS NULL)`,
     ),
+    check(
+      'inbound_sync_dispatch_lease_pair_chk',
+      sql`(${t.dispatchLeaseOwner} IS NULL) = (${t.dispatchLeaseExpiresAt} IS NULL)`,
+    ),
+    check(
+      'inbound_sync_generation_nonnegative_chk',
+      sql`${t.requestedGeneration} >= 0 AND ${t.completedGeneration} >= 0`,
+    ),
+    check(
+      'inbound_sync_generation_order_chk',
+      sql`${t.completedGeneration} <= ${t.requestedGeneration}`,
+    ),
     index('inbound_sync_due_reconcile_idx')
-      .on(t.lastReconciledAt, t.id)
+      .on(t.nextReconcileAt, t.id)
       .where(sql`${t.status} = 'active'`),
     index('inbound_sync_due_renewal_idx')
       .on(t.subscriptionExpiresAt, t.id)
@@ -89,6 +109,12 @@ export const inboundSync = createIntegrationTable(
     index('inbound_sync_lease_idx')
       .on(t.leaseExpiresAt, t.id)
       .where(sql`${t.leaseExpiresAt} IS NOT NULL`),
+    index('inbound_sync_due_dispatch_idx')
+      .on(t.requestedGeneration, t.completedGeneration, t.nextReconcileAt, t.id)
+      .where(sql`${t.status} = 'active'`),
+    index('inbound_sync_dispatch_lease_idx')
+      .on(t.dispatchLeaseExpiresAt, t.id)
+      .where(sql`${t.dispatchLeaseExpiresAt} IS NOT NULL`),
   ],
 );
 

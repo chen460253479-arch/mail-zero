@@ -32,4 +32,34 @@ describe('inbound provider signal', () => {
       { type: 'discover', syncId: 'sync-2' },
     ]);
   });
+
+  it('records and dispatches a synchronization request even when no cursor hint is available', async () => {
+    const recorded: unknown[] = [];
+    const commands: unknown[] = [];
+
+    const result = await receiveInboundSignal(
+      {
+        provider: 'gmail',
+        externalAccount: 'user@example.com',
+      },
+      {
+        recordSignal: async (input) => {
+          recorded.push(input);
+          return ['sync-1'];
+        },
+        enqueue: async (command) => {
+          commands.push(command);
+        },
+      },
+    );
+
+    expect(recorded).toEqual([
+      {
+        provider: 'gmail',
+        externalAccount: 'user@example.com',
+      },
+    ]);
+    expect(commands).toEqual([{ type: 'discover', syncId: 'sync-1' }]);
+    expect(result).toEqual({ matched: 1 });
+  });
 });
