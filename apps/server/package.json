@@ -36,7 +36,6 @@
     "@sentry/cloudflare": "9.43.0",
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",
-    "@tsndr/cloudflare-worker-jwt": "3.2.0",
     "@upstash/ratelimit": "^2.0.5",
     "@upstash/redis": "^1.34.9",
     "@zero/mail-core": "workspace:*",

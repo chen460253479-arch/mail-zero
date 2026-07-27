@@ -1,13 +1,12 @@
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
 const srcRoot = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(srcRoot, '../../..');
-const readSource = (path: string): string =>
-  readFileSync(resolve(repositoryRoot, path), 'utf8');
+const readSource = (path: string): string => readFileSync(resolve(repositoryRoot, path), 'utf8');
 
 describe('Agent, Chat, Brain, and mail AI removal', () => {
   it('removes backend AI entrypoints and implementations instead of retaining stubs', () => {
@@ -148,5 +147,37 @@ describe('Agent, Chat, Brain, and mail AI removal', () => {
     );
 
     expect(violations).toEqual([]);
+  });
+
+  it('removes Live Support, Feedback, and their dedicated third-party runtime', () => {
+    const sources = [
+      'apps/mail/components/ui/nav-main.tsx',
+      'apps/mail/components/icons/icons.tsx',
+      'apps/mail/package.json',
+      'apps/server/src/trpc/routes/user.ts',
+      'apps/server/package.json',
+    ].map((path) => ({ path, source: readSource(path) }));
+    const forbiddenTokens = [
+      '@intercom/messenger-js-sdk',
+      '@tsndr/cloudflare-worker-jwt',
+      'getIntercomToken',
+      'feedback.0.email',
+      'Live Support',
+      'OldPhone',
+      'MessageSquare',
+    ];
+    const sourceViolations = sources.flatMap(({ path, source }) =>
+      forbiddenTokens.filter((token) => source.includes(token)).map((token) => `${path}:${token}`),
+    );
+    const localeViolations = readdirSync(resolve(repositoryRoot, 'apps/mail/messages'))
+      .filter((file) => file.endsWith('.json'))
+      .flatMap((file) => {
+        const source = readSource(`apps/mail/messages/${file}`);
+        return ['"livesupport":', '"feedback":']
+          .filter((token) => source.includes(token))
+          .map((token) => `apps/mail/messages/${file}:${token}`);
+      });
+
+    expect([...sourceViolations, ...localeViolations]).toEqual([]);
   });
 });

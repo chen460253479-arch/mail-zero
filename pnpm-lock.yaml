@@ -122,9 +122,6 @@ importers:
       '@hookform/resolvers':
         specifier: 4.1.2
         version: 4.1.2(react-hook-form@7.54.2(react@19.1.0))
-      '@intercom/messenger-js-sdk':
-        specifier: 0.0.14
-        version: 0.0.14
       '@react-email/components':
         specifier: ^0.0.36
         version: 0.0.36(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -504,9 +501,6 @@ importers:
       '@trpc/server':
         specifier: 'catalog:'
         version: 11.4.3(typescript@5.8.3)
-      '@tsndr/cloudflare-worker-jwt':
-        specifier: 3.2.0
-        version: 3.2.0
       '@upstash/ratelimit':
         specifier: ^2.0.5
         version: 2.0.5(@upstash/redis@1.35.0)
@@ -2126,9 +2120,6 @@ packages:
     peerDependenciesMeta:
       '@types/node':
         optional: true
-
-  '@intercom/messenger-js-sdk@0.0.14':
-    resolution: {integrity: sha512-2dH4BDAh9EI90K7hUkAdZ76W79LM45Sd1OBX7t6Vzy8twpNiQ5X+7sH9G5hlJlkSGnf+vFWlFcy9TOYAyEs1hA==}
 
   '@isaacs/balanced-match@4.0.1':
     resolution: {integrity: sha512-yzMTt9lEb8Gv7zRioUilSglI0c0smZ9k5D65677DLWLtWJaXIS3CqcGyUFByYKlnUj6TkjLVs54fBl6+TiGQDQ==}
@@ -4512,9 +4503,6 @@ packages:
       react: '>=18.2.0'
       react-dom: '>=18.2.0'
       typescript: '>=5.7.2'
-
-  '@tsndr/cloudflare-worker-jwt@3.2.0':
-    resolution: {integrity: sha512-y45452JzKxFDfCUHNGrdgIcrJTkYa6xtrKtCQTjKj+hjzw8dOHF9R0uGuU8WxvCCMi4sMzZ1KREnZTsTy7DsiQ==}
 
   '@types/accept-language-parser@1.5.8':
     resolution: {integrity: sha512-6+dKdh9q/I8xDBnKQKddCBKaWBWLmJ97HTiSbAXVpL7LEgDfOkKF98UVCaZ5KJrtdN5Wa5ndXUiqD3XR9XGqWQ==}
@@ -11081,8 +11069,6 @@ snapshots:
     optionalDependencies:
       '@types/node': 24.3.0
 
-  '@intercom/messenger-js-sdk@0.0.14': {}
-
   '@isaacs/balanced-match@4.0.1': {}
 
   '@isaacs/brace-expansion@5.0.0':
@@ -13647,8 +13633,6 @@ snapshots:
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
       typescript: 5.8.3
-
-  '@tsndr/cloudflare-worker-jwt@3.2.0': {}
 
   '@types/accept-language-parser@1.5.8': {}
 
