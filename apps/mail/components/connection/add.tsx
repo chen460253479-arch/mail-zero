@@ -14,7 +14,6 @@ import { Plus, UserPlus } from 'lucide-react';
 import { m } from '@/paraglide/messages';
 import { motion } from 'motion/react';
 import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 
@@ -48,7 +47,7 @@ export const AddConnectionDialog = ({
       window.location.assign(`${baseUrl}/api/integrations/gmail/connect/start`);
       return;
     }
-    if (options.data.mode === 'choice' || options.data.mode === 'nango') {
+    if (options.data.mode === 'nango') {
       setDialogOpen(false);
       setGmailOpen(true);
     }
@@ -101,14 +100,6 @@ export const AddConnectionDialog = ({
                   >
                     <Icon className="size-6!" />
                     <span className="text-xs">{provider.name}</span>
-                    {options.data?.nangoAvailable ? (
-                      <Badge
-                        variant="outline"
-                        className="absolute right-2 top-2 px-1.5 py-0 text-[10px]"
-                      >
-                        Nango
-                      </Badge>
-                    ) : null}
                   </Button>
                 </motion.div>
               );
@@ -141,8 +132,6 @@ export const AddConnectionDialog = ({
       </Dialog>
       <GmailConnectDialog
         open={gmailOpen}
-        zeroOAuthAvailable={options.data?.zeroOAuthAvailable ?? false}
-        nangoAvailable={options.data?.nangoAvailable ?? false}
         onOpenChange={setGmailOpen}
         onConnected={() => {
           setDialogOpen(false);

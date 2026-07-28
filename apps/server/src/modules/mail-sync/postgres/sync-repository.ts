@@ -1,4 +1,4 @@
-import { and, asc, eq, exists, gt, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, eq, exists, gt, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import type {
@@ -178,8 +178,8 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
         .set({
           status: 'active',
           subscriptionExpiresAt: input.subscriptionExpiresAt,
-          lastErrorCode: null,
-          lastErrorMessage: null,
+          lastErrorCode: input.subscriptionWarning?.code ?? null,
+          lastErrorMessage: input.subscriptionWarning?.message ?? null,
           updatedAt: sql`now()`,
         })
         .where(
@@ -665,23 +665,31 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
       cursorHint?: string;
     }): Promise<string[]> => {
       return db.transaction(async (transaction) => {
+        const matchingConnectedAccount = transaction
+          .select({ id: mailAccount.id })
+          .from(mailAccount)
+          .innerJoin(connection, eq(connection.id, mailAccount.connectionId))
+          .where(
+            and(
+              eq(mailAccount.id, inboundSync.accountId),
+              eq(connection.normalizedEmail, input.externalAccount),
+              eq(connection.status, 'connected'),
+            ),
+          );
         const matches = await transaction
           .select({
             id: inboundSync.id,
             pendingCursorHint: inboundSync.pendingCursorHint,
           })
           .from(inboundSync)
-          .innerJoin(mailAccount, eq(mailAccount.id, inboundSync.accountId))
-          .innerJoin(connection, eq(connection.id, mailAccount.connectionId))
           .where(
             and(
               eq(inboundSync.status, 'active'),
               eq(inboundSync.provider, input.provider),
-              eq(connection.normalizedEmail, input.externalAccount),
-              eq(connection.status, 'connected'),
+              exists(matchingConnectedAccount),
             ),
           )
-          .for('update', { of: inboundSync });
+          .for('update');
         if (matches.length === 0) {
           return [];
         }
@@ -733,42 +741,37 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
               ),
             ),
           );
+        const discoverDue = or(
+          gt(inboundSync.requestedGeneration, inboundSync.completedGeneration),
+          lte(inboundSync.nextReconcileAt, input.reconcileBefore),
+        )!;
+        const renewalDue = and(
+          isNotNull(inboundSync.subscriptionExpiresAt),
+          lte(inboundSync.subscriptionExpiresAt, input.renewalBefore),
+        )!;
         const candidates = await transaction
           .select({
             id: inboundSync.id,
             requestedGeneration: inboundSync.requestedGeneration,
             completedGeneration: inboundSync.completedGeneration,
-            discover: sql<boolean>`(
-              ${inboundSync.requestedGeneration} > ${inboundSync.completedGeneration}
-              OR ${inboundSync.nextReconcileAt} <= ${input.reconcileBefore}
-            )`,
-            renew: sql<boolean>`(
-              ${inboundSync.subscriptionExpiresAt} IS NOT NULL
-              AND ${inboundSync.subscriptionExpiresAt} <= ${input.renewalBefore}
-            )`,
+            discover: sql<boolean>`${discoverDue}`,
+            renew: sql<boolean>`${renewalDue}`,
             importPending: sql<boolean>`EXISTS (${dueItems})`,
           })
           .from(inboundSync)
-          .innerJoin(mailAccount, eq(mailAccount.id, inboundSync.accountId))
-          .innerJoin(connection, eq(connection.id, mailAccount.connectionId))
           .where(
             and(
               eq(inboundSync.status, 'active'),
-              eq(connection.status, 'connected'),
+              exists(connectedAccount),
               or(
                 isNull(inboundSync.dispatchLeaseExpiresAt),
                 lte(inboundSync.dispatchLeaseExpiresAt, sql`now()`),
               ),
-              or(
-                gt(inboundSync.requestedGeneration, inboundSync.completedGeneration),
-                lte(inboundSync.nextReconcileAt, input.reconcileBefore),
-                lte(inboundSync.subscriptionExpiresAt, input.renewalBefore),
-                exists(dueItems),
-              ),
+              or(discoverDue, renewalDue, exists(dueItems)),
             ),
           )
           .orderBy(asc(inboundSync.nextReconcileAt), asc(inboundSync.id))
-          .for('update', { of: inboundSync, skipLocked: true })
+          .for('update', { skipLocked: true })
           .limit(input.limit);
 
         const claimed: ClaimedMailSyncDispatch[] = [];
@@ -849,17 +852,28 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
         );
     },
 
+    markSubscriptionsDue: async (input: { provider: string; dueAt: Date }): Promise<void> => {
+      await db
+        .update(inboundSync)
+        .set({
+          subscriptionExpiresAt: input.dueAt,
+          updatedAt: sql`now()`,
+        })
+        .where(and(eq(inboundSync.provider, input.provider), eq(inboundSync.status, 'active')));
+    },
+
     updateSubscription: async (input: {
       syncId: string;
       owner: string;
       subscriptionExpiresAt: Date | null;
+      subscriptionWarning: { code: string; message: string } | null;
     }): Promise<void> => {
       const rows = await db
         .update(inboundSync)
         .set({
           subscriptionExpiresAt: input.subscriptionExpiresAt,
-          lastErrorCode: null,
-          lastErrorMessage: null,
+          lastErrorCode: input.subscriptionWarning?.code ?? null,
+          lastErrorMessage: input.subscriptionWarning?.message ?? null,
           updatedAt: sql`now()`,
         })
         .where(

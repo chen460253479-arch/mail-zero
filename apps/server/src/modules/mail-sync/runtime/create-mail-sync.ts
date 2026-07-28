@@ -22,9 +22,9 @@ export type MailIngressRuntime = {
   importPending(
     command: Extract<MailIngressCommand, { type: 'import' }>,
   ): Promise<ImportPendingResult>;
-  renew(
-    command: Extract<MailIngressCommand, { type: 'renew' }>,
-  ): Promise<{ status: 'busy' | 'renewed' | 'paused' | 'auth_error' }>;
+  renew(command: Extract<MailIngressCommand, { type: 'renew' }>): Promise<{
+    status: 'busy' | 'renewed' | 'warning' | 'disabled' | 'paused' | 'auth_error';
+  }>;
   enqueue(command: MailIngressCommand): Promise<void>;
 };
 
@@ -33,7 +33,7 @@ export const createMailIngressRuntime = (dependencies: {
   getAdapterFactory(provider: string): InboundMailAdapterFactory;
   resolveConnectionId(accountId: string): Promise<string>;
   resolveImportContext(syncId: string): Promise<ImportContext>;
-  resolveSubscriptionTarget(syncId: string): Promise<VersionedProviderState>;
+  resolveSubscriptionTarget(syncId: string): Promise<VersionedProviderState | null>;
   mailCore: Pick<MailCore, 'importEmail'>;
   onAuthenticationError(input: {
     syncId: string;
@@ -43,6 +43,7 @@ export const createMailIngressRuntime = (dependencies: {
   enqueue(command: MailIngressCommand): Promise<void>;
   newLeaseOwner(): string;
   clock: { now(): Date };
+  reconcileAfterMs?: number;
 }): MailIngressRuntime => ({
   importBatchSize: 25,
   enqueue: dependencies.enqueue,
@@ -57,6 +58,7 @@ export const createMailIngressRuntime = (dependencies: {
         syncId: command.syncId,
         owner: dependencies.newLeaseOwner(),
         leaseForMs: 120_000,
+        reconcileAfterMs: dependencies.reconcileAfterMs,
       },
       dependencies,
     ),
@@ -79,16 +81,19 @@ export const createMailIngressRuntime = (dependencies: {
         onAuthenticationError: dependencies.onAuthenticationError,
       },
     ),
-  renew: async (command) =>
-    renewInboundSubscription(
+  renew: async (command) => {
+    const subscriptionTarget = await dependencies.resolveSubscriptionTarget(command.syncId);
+    if (subscriptionTarget === null) return { status: 'disabled' };
+    return renewInboundSubscription(
       {
         syncId: command.syncId,
         owner: dependencies.newLeaseOwner(),
         leaseForMs: 120_000,
-        subscriptionTarget: await dependencies.resolveSubscriptionTarget(command.syncId),
+        subscriptionTarget,
       },
       dependencies,
-    ),
+    );
+  },
 });
 
 export const processMailIngressCommand = async (

@@ -61,6 +61,22 @@ CREATE TABLE "integration"."authorization_binding" (
       ))
 );
 --> statement-breakpoint
+CREATE TABLE "integration"."channel_config" (
+	"id" text PRIMARY KEY NOT NULL,
+	"channel_id" text NOT NULL,
+	"auth_source" text NOT NULL,
+	"inbox_watch_enabled" boolean DEFAULT false NOT NULL,
+	"scheduled_sync_enabled" boolean DEFAULT true NOT NULL,
+	"sync_interval_minutes" integer DEFAULT 10 NOT NULL,
+	"provider_config" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"updated_by" text NOT NULL,
+	"created_at" timestamp with time zone NOT NULL,
+	"updated_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "channel_config_channel_id_unique" UNIQUE("channel_id"),
+	CONSTRAINT "channel_config_auth_source_chk" CHECK ("integration"."channel_config"."auth_source" IN ('zero_oauth', 'nango', 'manual')),
+	CONSTRAINT "channel_config_sync_interval_chk" CHECK ("integration"."channel_config"."sync_interval_minutes" BETWEEN 1 AND 1440)
+);
+--> statement-breakpoint
 CREATE TABLE "integration"."channel_mapping" (
 	"id" text PRIMARY KEY NOT NULL,
 	"channel_id" text NOT NULL,
@@ -148,47 +164,6 @@ CREATE TABLE "app"."note" (
 	"order" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "auth"."oauth_access_token" (
-	"id" text PRIMARY KEY NOT NULL,
-	"access_token" text,
-	"refresh_token" text,
-	"access_token_expires_at" timestamp,
-	"refresh_token_expires_at" timestamp,
-	"client_id" text,
-	"user_id" text,
-	"scopes" text,
-	"created_at" timestamp,
-	"updated_at" timestamp,
-	CONSTRAINT "oauth_access_token_access_token_unique" UNIQUE("access_token"),
-	CONSTRAINT "oauth_access_token_refresh_token_unique" UNIQUE("refresh_token")
-);
---> statement-breakpoint
-CREATE TABLE "auth"."oauth_application" (
-	"id" text PRIMARY KEY NOT NULL,
-	"name" text,
-	"icon" text,
-	"metadata" text,
-	"client_id" text,
-	"client_secret" text,
-	"redirect_u_r_ls" text,
-	"type" text,
-	"disabled" boolean,
-	"user_id" text,
-	"created_at" timestamp,
-	"updated_at" timestamp,
-	CONSTRAINT "oauth_application_client_id_unique" UNIQUE("client_id")
-);
---> statement-breakpoint
-CREATE TABLE "auth"."oauth_consent" (
-	"id" text PRIMARY KEY NOT NULL,
-	"client_id" text,
-	"user_id" text,
-	"scopes" text,
-	"created_at" timestamp,
-	"updated_at" timestamp,
-	"consent_given" boolean
 );
 --> statement-breakpoint
 CREATE TABLE "auth"."session" (
@@ -719,6 +694,7 @@ CREATE TABLE "mail"."thread_snooze" (
 --> statement-breakpoint
 ALTER TABLE "auth"."account" ADD CONSTRAINT "account_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."authorization_binding" ADD CONSTRAINT "authorization_binding_connection_id_connection_id_fk" FOREIGN KEY ("connection_id") REFERENCES "integration"."connection"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "integration"."channel_config" ADD CONSTRAINT "channel_config_updated_by_user_account_id_fk" FOREIGN KEY ("updated_by") REFERENCES "auth"."user_account"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."connection" ADD CONSTRAINT "connection_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "app"."email_template" ADD CONSTRAINT "email_template_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."oauth_session" ADD CONSTRAINT "oauth_session_created_by_user_account_id_fk" FOREIGN KEY ("created_by") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -796,14 +772,6 @@ CREATE INDEX "integration_oauth_session_created_by_idx" ON "integration"."oauth_
 CREATE INDEX "jwks_created_at_idx" ON "auth"."jwks" USING btree ("created_at");--> statement-breakpoint
 CREATE INDEX "note_connection_id_idx" ON "app"."note" USING btree ("connection_id");--> statement-breakpoint
 CREATE INDEX "note_user_connection_thread_idx" ON "app"."note" USING btree ("user_id","connection_id","thread_id");--> statement-breakpoint
-CREATE INDEX "oauth_access_token_user_id_idx" ON "auth"."oauth_access_token" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "oauth_access_token_client_id_idx" ON "auth"."oauth_access_token" USING btree ("client_id");--> statement-breakpoint
-CREATE INDEX "oauth_access_token_expires_at_idx" ON "auth"."oauth_access_token" USING btree ("access_token_expires_at");--> statement-breakpoint
-CREATE INDEX "oauth_application_user_id_idx" ON "auth"."oauth_application" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "oauth_application_disabled_idx" ON "auth"."oauth_application" USING btree ("disabled");--> statement-breakpoint
-CREATE INDEX "oauth_consent_user_id_idx" ON "auth"."oauth_consent" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "oauth_consent_client_id_idx" ON "auth"."oauth_consent" USING btree ("client_id");--> statement-breakpoint
-CREATE INDEX "oauth_consent_given_idx" ON "auth"."oauth_consent" USING btree ("consent_given");--> statement-breakpoint
 CREATE INDEX "session_user_id_idx" ON "auth"."session" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "session_expires_at_idx" ON "auth"."session" USING btree ("expires_at");--> statement-breakpoint
 CREATE INDEX "user_hotkeys_shortcuts_idx" ON "app"."user_hotkeys" USING btree ("shortcuts");--> statement-breakpoint

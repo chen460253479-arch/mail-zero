@@ -1,11 +1,11 @@
 import { getContext } from 'hono/context-storage';
 
 import { createPostgresConnectionRepository } from '../modules/mail-accounts/postgres/connection-repository';
-import { user } from '../db/schema';
-import { createDb } from '../db';
 import type { HonoContext } from '../ctx';
-import { env } from '../env';
+import { user } from '../db/schema';
 import { eq } from 'drizzle-orm';
+import { createDb } from '../db';
+import { env } from '../env';
 
 export const getZeroDB = async (userId: string) => {
   const stub = env.ZERO_DB.get(env.ZERO_DB.idFromName(userId));
@@ -40,14 +40,10 @@ export const getActiveConnection = async () => {
 
   try {
     if (auth) {
-      await auth.api.revokeSession({ headers: c.req.raw.headers });
       await auth.api.signOut({ headers: c.req.raw.headers });
     }
   } catch (error) {
-    console.warn(
-      `[getActiveConnection] Session cleanup failed for user ${sessionUser.id}:`,
-      error,
-    );
+    console.warn(`[getActiveConnection] Session cleanup failed for user ${sessionUser.id}:`, error);
   }
   throw new Error('No connections found for user');
 };

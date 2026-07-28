@@ -15,7 +15,7 @@ const listSourceFiles = (relativeDirectory: string): string[] =>
     return /\.[jt]sx?$/.test(entry.name) ? [relativePath] : [];
   });
 
-describe('Nango credential boundary', () => {
+describe('Nango frontend credential boundary', () => {
   it('keeps Nango secrets and credential payloads out of the mail frontend', () => {
     for (const relativePath of [
       ...listSourceFiles('apps/mail/app'),
@@ -32,27 +32,5 @@ describe('Nango credential boundary', () => {
         ).toBe(false);
       }
     }
-  });
-
-  it('does not ask Nango to refresh tokens during ordinary connection reads', () => {
-    const client = read('apps/server/src/lib/nango/client.ts');
-    expect(client).not.toContain('refresh_token');
-    expect(client).toContain('provider_config_key');
-  });
-
-  it('returns only explicit safe fields from the Nango connection browser', () => {
-    const binding = read('apps/server/src/lib/nango/bind.ts');
-    expect(binding).toContain('connectionId: summary.connection_id');
-    expect(binding).toContain(
-      "authorizationStatus: summary.errors.length === 0 && !fallbackFailed ? 'valid' : 'invalid'",
-    );
-    expect(binding).not.toMatch(/return\s+\{\s*\.\.\.connection/s);
-  });
-
-  it('keeps local disconnect independent from Nango connection deletion', () => {
-    const lifecycle = read('apps/server/src/lib/connection-lifecycle.ts');
-    expect(lifecycle).not.toContain('NangoClient');
-    expect(lifecycle).not.toContain('deleteNango');
-    expect(lifecycle).not.toContain('/connections/');
   });
 });

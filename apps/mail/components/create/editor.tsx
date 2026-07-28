@@ -10,13 +10,12 @@ import {
 
 import { suggestionItems } from '@/components/create/slash-command';
 import { defaultExtensions } from '@/components/create/extensions';
-import EditorMenu from '@/components/create/editor-menu';
 import { Editor as TiptapEditor } from '@tiptap/react';
 import { handleCommandNavigation } from 'novel';
 import { handleImageDrop } from 'novel';
 
 import { AutoComplete } from './editor-autocomplete';
-import { useReducer, useRef } from 'react';
+import { useRef } from 'react';
 
 import { TextSelection } from 'prosemirror-state';
 
@@ -64,34 +63,6 @@ interface EditorProps {
   hideToolbar?: boolean;
 }
 
-interface EditorState {
-  openNode: boolean;
-  openColor: boolean;
-  openLink: boolean;
-  openAI: boolean;
-}
-
-type EditorAction =
-  | { type: 'TOGGLE_NODE'; payload: boolean }
-  | { type: 'TOGGLE_COLOR'; payload: boolean }
-  | { type: 'TOGGLE_LINK'; payload: boolean }
-  | { type: 'TOGGLE_AI'; payload: boolean };
-
-function editorReducer(state: EditorState, action: EditorAction): EditorState {
-  switch (action.type) {
-    case 'TOGGLE_NODE':
-      return { ...state, openNode: action.payload };
-    case 'TOGGLE_COLOR':
-      return { ...state, openColor: action.payload };
-    case 'TOGGLE_LINK':
-      return { ...state, openLink: action.payload };
-    case 'TOGGLE_AI':
-      return { ...state, openAI: action.payload };
-    default:
-      return state;
-  }
-}
-
 export default function Editor({
   initialValue,
   onChange,
@@ -106,18 +77,9 @@ export default function Editor({
   myInfo,
   readOnly,
 }: EditorProps) {
-  const [state, dispatch] = useReducer(editorReducer, {
-    openNode: false,
-    openColor: false,
-    openLink: false,
-    openAI: false,
-  });
-
   const contentRef = useRef<string>('');
   const [editor, setEditor] = useState<TiptapEditor | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  const { openAI } = state;
 
   // Function to focus the editor
   const focusEditor = () => {
@@ -352,15 +314,6 @@ export default function Editor({
               ))}
             </EditorCommandList>
           </EditorCommand>
-
-          {/* Replace the default editor menu with just our TextButtons */}
-          <EditorMenu
-            open={openAI}
-            onOpenChange={(open) => dispatch({ type: 'TOGGLE_AI', payload: open })}
-          >
-            {/* Empty children to satisfy the type requirement */}
-            <div></div>
-          </EditorMenu>
         </EditorContent>
       </EditorRoot>
     </div>

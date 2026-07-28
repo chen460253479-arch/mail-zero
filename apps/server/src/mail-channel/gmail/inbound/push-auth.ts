@@ -1,6 +1,8 @@
 import { OAuth2Client } from 'google-auth-library';
 
-import type { GmailInboundConfig } from '../../../runtime/mail/gmail-inbound-config';
+import type { GmailChannelProviderConfig } from '../config';
+
+export type GmailPushAuthenticationConfig = Required<GmailChannelProviderConfig>;
 
 type TokenPayload = {
   iss?: unknown;
@@ -34,7 +36,7 @@ export const authenticateGmailPush = async (
     authorizationHeader: string | undefined;
     subscriptionName: string | undefined;
   },
-  config: GmailInboundConfig,
+  config: GmailPushAuthenticationConfig,
   verifier: IdTokenVerifier = defaultVerifier,
 ): Promise<boolean> => {
   if (input.subscriptionName !== config.subscriptionName) return false;

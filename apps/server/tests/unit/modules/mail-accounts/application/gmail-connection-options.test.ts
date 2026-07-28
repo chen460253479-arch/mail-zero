@@ -4,14 +4,21 @@ import { resolveGmailConnectMode } from '../../../../../src/modules/mail-account
 
 describe('resolveGmailConnectMode', () => {
   it.each([
-    [true, true, 'choice'],
-    [true, false, 'zero_oauth'],
-    [false, true, 'nango'],
-    [false, false, 'unavailable'],
+    ['zero_oauth', true, true, 'zero_oauth'],
+    ['zero_oauth', false, true, 'unavailable'],
+    ['nango', true, true, 'nango'],
+    ['nango', true, false, 'unavailable'],
+    [null, true, true, 'unavailable'],
   ] as const)(
-    'resolves Zero OAuth=%s and Nango=%s to %s',
-    (zeroOAuthAvailable, nangoAvailable, expected) => {
-      expect(resolveGmailConnectMode({ zeroOAuthAvailable, nangoAvailable })).toBe(expected);
+    'routes selected source=%s with Zero OAuth=%s and Nango=%s to %s',
+    (selectedAuthSource, zeroOAuthAvailable, nangoAvailable, expected) => {
+      expect(
+        resolveGmailConnectMode({
+          selectedAuthSource,
+          zeroOAuthAvailable,
+          nangoAvailable,
+        }),
+      ).toBe(expected);
     },
   );
 });

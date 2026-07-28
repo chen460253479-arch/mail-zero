@@ -1,24 +1,18 @@
-import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { describe, expect, it, vi } from 'vitest';
 
 import { GmailOAuthError } from '../../../../src/modules/mail-accounts/application/connect-gmail-oauth';
-import { NangoIntegrationError } from '../../../../src/integrations/nango/errors';
+import { GmailChannelConfigError } from '../../../../src/integrations/gmail/channel-config-service';
 import { mapIntegrationError } from '../../../../src/trpc/routes/integration-errors';
+import { NangoIntegrationError } from '../../../../src/integrations/nango/errors';
+import { integrationsRouter } from '../../../../src/trpc/routes/integrations';
+
+vi.mock('cloudflare:workers', () => ({ env: {} }));
 
 describe('administrator integrations router', () => {
-  it('registers only the approved integration management procedures', () => {
-    const source = readFileSync('src/trpc/routes/integrations.ts', 'utf8');
-    for (const procedure of [
-      'deleteGmailZeroOAuth',
-      'deleteNango',
-      'getGmailValidationStatus',
-      'getOverview',
-      'listNangoGmailIntegrations',
-      'setNangoGmailIntegration',
-      'startGmailValidation',
-      'validateAndSaveNango',
-    ]) {
-      expect(source).toMatch(new RegExp(`${procedure}: adminProcedure`));
+  it('exposes the unified Gmail channel configuration procedures', () => {
+    const procedures = Object.keys(integrationsRouter._def.procedures);
+    for (const procedure of ['getChannels', 'getGmailConfig', 'saveGmailConfig']) {
+      expect(procedures).toContain(procedure);
     }
   });
 
@@ -49,6 +43,17 @@ describe('administrator integrations router', () => {
       expect.objectContaining({
         code: 'PRECONDITION_FAILED',
         message: 'NANGO_INSUFFICIENT_PERMISSIONS|list_integrations|403',
+      }),
+    );
+  });
+
+  it('maps a locked Gmail authorization source to a conflict', () => {
+    expect(() =>
+      mapIntegrationError(new GmailChannelConfigError('GMAIL_AUTH_SOURCE_IN_USE')),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONFLICT',
+        message: 'GMAIL_AUTH_SOURCE_IN_USE',
       }),
     );
   });

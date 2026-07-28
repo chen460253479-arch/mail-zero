@@ -97,7 +97,6 @@ This is a pnpm workspace monorepo with the following structure:
 ## Notes
 
 - Uses Husky for git hooks
-- Integrates with Sentry for error tracking
 - Uses Cloudflare Workers for backend deployment
 - iOS app is part of the monorepo
 - CLI tool `nizzy` helps manage environment and sync operations

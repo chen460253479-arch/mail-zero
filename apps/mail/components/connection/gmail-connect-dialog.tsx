@@ -10,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { GmailColor } from '@/components/icons/icons';
 import { useTRPC } from '@/providers/query-provider';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,30 +17,17 @@ import { cn } from '@/lib/utils';
 
 type GmailConnectDialogProps = {
   open: boolean;
-  zeroOAuthAvailable: boolean;
-  nangoAvailable: boolean;
   onOpenChange(open: boolean): void;
   onConnected(): void;
 };
 
-const startZeroOAuth = () => {
-  const baseUrl = import.meta.env.VITE_PUBLIC_BACKEND_URL.replace(/\/+$/, '');
-  window.location.assign(`${baseUrl}/api/integrations/gmail/connect/start`);
-};
-
-export function GmailConnectDialog({
-  open,
-  zeroOAuthAvailable,
-  nangoAvailable,
-  onOpenChange,
-  onConnected,
-}: GmailConnectDialogProps) {
+export function GmailConnectDialog({ open, onOpenChange, onConnected }: GmailConnectDialogProps) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const connections = useQuery(
     trpc.connections.listNangoGmailConnections.queryOptions(undefined, {
-      enabled: open && nangoAvailable,
+      enabled: open,
     }),
   );
   const bind = useMutation(trpc.connections.bindNango.mutationOptions());
@@ -76,87 +62,60 @@ export function GmailConnectDialog({
       <DialogContent showOverlay>
         <DialogHeader>
           <DialogTitle>Connect Gmail</DialogTitle>
-          <DialogDescription>
-            Use Zero OAuth or select an existing authorization managed by Nango.
-          </DialogDescription>
+          <DialogDescription>Select an existing Gmail authorization.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
-          {zeroOAuthAvailable ? (
-            <Button
-              variant="outline"
-              className="h-auto w-full justify-start gap-3 p-4"
-              onClick={startZeroOAuth}
-            >
-              <GmailColor className="size-6 shrink-0" />
-              <span className="text-left">
-                <span className="block text-sm font-medium">Authorize with Zero</span>
-                <span className="text-muted-foreground block text-xs">
-                  Start a new Gmail OAuth authorization
-                </span>
-              </span>
-            </Button>
-          ) : null}
-
-          {nangoAvailable ? (
-            <section className="space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">Existing authorizations</p>
-                <Badge variant="outline">Nango</Badge>
-              </div>
-
-              {connections.isLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="text-muted-foreground size-5 animate-spin" />
-                </div>
-              ) : connections.data?.length ? (
-                <div className="max-h-72 space-y-2 overflow-y-auto">
-                  {connections.data.map((connection) => {
-                    const invalid = connection.authorizationStatus !== 'valid';
-                    return (
-                      <button
-                        key={connection.connectionId}
-                        type="button"
-                        disabled={invalid}
-                        onClick={() => setSelectedConnectionId(connection.connectionId)}
-                        className={cn(
-                          'flex w-full items-center gap-3 rounded-lg border p-3 text-left',
-                          'transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-                          selectedConnectionId === connection.connectionId
-                            ? 'border-primary bg-primary/5'
-                            : 'hover:bg-muted/50',
-                        )}
-                      >
-                        <Mail className="size-5 shrink-0" />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">
-                            {connection.email || connection.displayName}
-                          </span>
-                          {connection.displayName && connection.displayName !== connection.email ? (
-                            <span className="text-muted-foreground block truncate text-xs">
-                              {connection.displayName}
-                            </span>
-                          ) : null}
+          {connections.isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="text-muted-foreground size-5 animate-spin" />
+            </div>
+          ) : connections.data?.length ? (
+            <div className="max-h-72 space-y-2 overflow-y-auto">
+              {connections.data.map((connection) => {
+                const invalid = connection.authorizationStatus !== 'valid';
+                return (
+                  <button
+                    key={connection.connectionId}
+                    type="button"
+                    disabled={invalid}
+                    onClick={() => setSelectedConnectionId(connection.connectionId)}
+                    className={cn(
+                      'flex w-full items-center gap-3 rounded-lg border p-3 text-left',
+                      'transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                      selectedConnectionId === connection.connectionId
+                        ? 'border-primary bg-primary/5'
+                        : 'hover:bg-muted/50',
+                    )}
+                  >
+                    <Mail className="size-5 shrink-0" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">
+                        {connection.email || connection.displayName}
+                      </span>
+                      {connection.displayName && connection.displayName !== connection.email ? (
+                        <span className="text-muted-foreground block truncate text-xs">
+                          {connection.displayName}
                         </span>
-                        {invalid ? <Badge variant="destructive">Needs attention</Badge> : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-muted-foreground py-8 text-center text-sm">
-                  No authorized Gmail mailboxes are available in Nango.
-                </p>
-              )}
+                      ) : null}
+                    </span>
+                    {invalid ? <Badge variant="destructive">Needs attention</Badge> : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-muted-foreground py-8 text-center text-sm">
+              No authorized Gmail mailboxes are available.
+            </p>
+          )}
 
-              <div className="flex justify-end">
-                <Button onClick={save} disabled={!selectedConnectionId || bind.isPending}>
-                  {bind.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-                  Connect selected mailbox
-                </Button>
-              </div>
-            </section>
-          ) : null}
+          <div className="flex justify-end">
+            <Button onClick={save} disabled={!selectedConnectionId || bind.isPending}>
+              {bind.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+              Connect selected mailbox
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

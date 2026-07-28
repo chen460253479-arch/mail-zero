@@ -12,6 +12,7 @@ const readSource = (path: string): string => readFileSync(resolve(repositoryRoot
 type PackageManifest = {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  scripts?: Record<string, string>;
 };
 
 const readManifest = (path: string): PackageManifest =>
@@ -67,9 +68,43 @@ describe('external analytics and error-reporting removal', () => {
     expect(violations).toEqual([]);
   });
 
-  it('contains no direct or locked Dub and Sentry dependencies', () => {
-    const manifests = ['apps/mail/package.json', 'apps/server/package.json'];
-    const forbiddenDependencies = ['@dub/analytics', '@dub/better-auth', '@sentry/react', 'dub'];
+  it('does not retain PostHog browser analytics or public configuration', () => {
+    const providerPath = resolve(repositoryRoot, 'apps/mail/lib/posthog-provider.tsx');
+    const entrypoints = [
+      'apps/mail/providers/client-providers.tsx',
+      'apps/mail/components/create/create-email.tsx',
+      'apps/mail/components/mail/reply-composer.tsx',
+      'apps/mail/hooks/use-optimistic-actions.ts',
+      'apps/server/src/env.ts',
+    ];
+    const forbiddenTokens = [
+      'posthog-js',
+      'PostHogProvider',
+      'posthog.capture',
+      'posthog.identify',
+      'VITE_PUBLIC_POSTHOG_KEY',
+      'VITE_PUBLIC_POSTHOG_HOST',
+    ];
+    const violations = entrypoints.flatMap((path) => {
+      const source = readSource(path);
+      return forbiddenTokens
+        .filter((token) => source.includes(token))
+        .map((token) => `${path}:${token}`);
+    });
+
+    expect(existsSync(providerPath)).toBe(false);
+    expect(violations).toEqual([]);
+  });
+
+  it('contains no direct or locked external telemetry dependencies', () => {
+    const manifests = ['package.json', 'apps/mail/package.json', 'apps/server/package.json'];
+    const forbiddenDependencies = [
+      '@dub/analytics',
+      '@dub/better-auth',
+      '@sentry/react',
+      'dub',
+      'posthog-js',
+    ];
     const manifestViolations = manifests.flatMap((path) => {
       const dependencies = dependencyNames(readManifest(path));
       return forbiddenDependencies
@@ -86,10 +121,24 @@ describe('external analytics and error-reporting removal', () => {
       "'@sentry/core@",
       "'@sentry/react@",
       'dub@0.',
+      'posthog-js@',
     ];
 
     expect(manifestViolations).toEqual([]);
     expect(workspace).not.toContain('@sentry/cli');
     expect(forbiddenLockfileRecords.filter((record) => lockfile.includes(record))).toEqual([]);
+  });
+
+  it('does not retain Sentry upload scripts or configuration scaffolding', () => {
+    const rootManifest = readManifest('package.json');
+    const scriptViolations = Object.entries(rootManifest.scripts ?? {})
+      .filter(
+        ([name, command]) => name.toLowerCase().includes('sentry') || command.includes('sentry'),
+      )
+      .map(([name]) => `package.json:${name}`);
+    const mailGitignore = readSource('apps/mail/.gitignore');
+
+    expect(scriptViolations).toEqual([]);
+    expect(mailGitignore.toLowerCase()).not.toContain('sentry');
   });
 });

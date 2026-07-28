@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { createPostgresMailSyncRepository } from '../../../src/modules/mail-sync/postgres/sync-repository';
-import { insertMailSyncAccountFixture, withMailSyncTestDatabase } from '../../helpers/mail-sync/database';
+import {
+  insertMailSyncAccountFixture,
+  withMailSyncTestDatabase,
+} from '../../helpers/mail-sync/database';
 import type { IngressScope } from '../../../src/modules/mail-sync';
 
 const scope: IngressScope = {
@@ -11,6 +14,50 @@ const scope: IngressScope = {
 };
 
 describe('mail sync scheduler claims', () => {
+  it('makes active subscriptions due when a provider Watch policy is enabled', async () => {
+    await withMailSyncTestDatabase(async ({ db, sql }) => {
+      await insertMailSyncAccountFixture(sql);
+      const repository = createPostgresMailSyncRepository(db);
+      const sync = await repository.createActivatingSync({
+        accountId: 'account-1',
+        provider: 'gmail',
+        scopeKey: 'inbox',
+        scope,
+      });
+      await repository.storeActivationCheckpoint({
+        syncId: sync.id,
+        checkpoint: { version: 1, historyId: '100' },
+      });
+      await repository.activate({
+        syncId: sync.id,
+        subscriptionExpiresAt: null,
+      });
+
+      await repository.markSubscriptionsDue({
+        provider: 'gmail',
+        dueAt: new Date('2026-07-28T08:00:00.000Z'),
+      });
+
+      await expect(
+        repository.claimDueDispatches({
+          owner: 'scheduler-a',
+          limit: 10,
+          leaseForMs: 60_000,
+          reconcileBefore: new Date(0),
+          renewalBefore: new Date('2026-07-29T08:00:00.000Z'),
+          importBefore: new Date(0),
+        }),
+      ).resolves.toEqual([
+        {
+          syncId: sync.id,
+          discover: false,
+          renew: true,
+          importPending: false,
+        },
+      ]);
+    });
+  });
+
   it('atomically assigns due work to one scheduler and permits recovery after lease expiry', async () => {
     await withMailSyncTestDatabase(async ({ db, sql }) => {
       await insertMailSyncAccountFixture(sql);

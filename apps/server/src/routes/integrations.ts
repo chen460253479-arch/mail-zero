@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import { createPostgresConnectionRepository } from '../modules/mail-accounts/postgres/connection-repository';
 import { provisionGmailMailboxInDatabase } from '../modules/mail-accounts/runtime/provision-gmail-mailbox';
+import { createChannelConfigRepository } from '../integrations/core/channel-config-repository';
 import { normalizeMailboxEmail } from '../modules/mail-accounts/application/mailbox-identity';
 import { GmailOAuthError } from '../modules/mail-accounts/application/connect-gmail-oauth';
 import { createSystemIntegrationRepository } from '../integrations/core/repository';
@@ -61,12 +62,20 @@ const createService = (c: {
     backendUrl: c.env.VITE_PUBLIC_BACKEND_URL,
   });
 
+const assertZeroOAuthSelected = async (db: DB): Promise<void> => {
+  const config = await createChannelConfigRepository(db).get('gmail');
+  if (config?.authSource !== 'zero_oauth') {
+    throw new GmailOAuthError('GMAIL_OAUTH_NOT_CONFIGURED');
+  }
+};
+
 integrationOAuthRouter.get('/gmail/connect/start', async (c) => {
   const sessionUser = c.var.sessionUser;
   if (!sessionUser) return c.json({ error: 'UNAUTHORIZED' }, 401);
 
   const { db, conn } = createDb(c.env.HYPERDRIVE.connectionString);
   try {
+    await assertZeroOAuthSelected(db);
     const result = await createService({
       env: c.env,
       db,
@@ -97,6 +106,7 @@ integrationOAuthRouter.get('/gmail/connect/callback', async (c) => {
 
   const { db, conn } = createDb(c.env.HYPERDRIVE.connectionString);
   try {
+    await assertZeroOAuthSelected(db);
     await createService({
       env: c.env,
       db,
@@ -122,7 +132,7 @@ integrationOAuthRouter.get('/gmail/validation/callback', async (c) => {
     c.redirect(
       resultRedirect(
         c.env.VITE_PUBLIC_APP_URL,
-        '/settings/integrations',
+        '/settings/integrations/gmail',
         'gmailValidation',
         'error',
       ),
@@ -147,7 +157,7 @@ integrationOAuthRouter.get('/gmail/validation/callback', async (c) => {
     return c.redirect(
       resultRedirect(
         c.env.VITE_PUBLIC_APP_URL,
-        '/settings/integrations',
+        '/settings/integrations/gmail',
         'gmailValidation',
         'success',
       ),

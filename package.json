@@ -28,7 +28,6 @@
     "db:migrate": "dotenv -- pnpm run -C apps/server db:migrate",
     "db:push": "dotenv -- pnpm run -C apps/server db:push",
     "db:studio": "dotenv -- pnpm run -C apps/server db:studio",
-    "sentry:sourcemaps": "sentry-cli sourcemaps inject --org zero-7y --project nextjs ./apps/mail/.next && sentry-cli sourcemaps upload --org zero-7y --project nextjs ./apps/mail/.next",
     "scripts": "dotenv -- pnpx tsx ./scripts/run.ts",
     "test": "pnpm --filter=@zero/testing test",
     "test:mail-core": "pnpm --filter=@zero/mail-core test && pnpm --dir apps/server test:mail-core",

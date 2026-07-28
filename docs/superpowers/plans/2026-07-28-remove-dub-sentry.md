@@ -1,16 +1,16 @@
-# Dub Analytics and Sentry Removal Implementation Plan
+# External Telemetry Removal Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Completely remove Dub Analytics and Sentry from Zero's browser and server runtimes.
+**Goal:** Completely remove Dub Analytics, Sentry, and PostHog from Zero's browser and server runtimes.
 
-**Architecture:** Express the no-telemetry decision as an architecture regression test, then remove the frontend SDK entrypoints, Better Auth plugin, Sentry relay route, workspace build allowance, and all direct/lockfile dependencies. Nango, BIMI, PostHog, and mail behavior remain unchanged.
+**Architecture:** Express the no-telemetry decision as an architecture regression test, then remove the frontend SDK entrypoints, event calls, Better Auth plugin, Sentry relay route, workspace build allowance, environment variables, and all direct/lockfile dependencies. Nango, BIMI, and mail behavior remain unchanged.
 
 **Tech Stack:** TypeScript, React Router, Hono, Better Auth, Vitest, pnpm workspaces.
 
 ## Global Constraints
 
-- Do not modify Nango, BIMI, PostHog, mail synchronization, outbound delivery, authentication behavior, or mailbox persistence.
+- Do not modify Nango, BIMI, mail synchronization, outbound delivery, authentication behavior, or mailbox persistence.
 - Do not download or install dependencies; update the lockfile with pnpm's offline lockfile-only mode.
 - Do not create a Git commit until the user explicitly requests one.
 - Work directly on the current branch in `D:\WorkSpace\Zero`; do not create a worktree.
@@ -160,3 +160,29 @@ git grep -n -I -E '@sentry|SENTRY_|monitoring/sentry|DubAnalytics|dubAnalytics|@
 ```
 
 Expected: only the planned source, manifest, lockfile, test, and plan/spec files changed; the final grep produces no runtime or dependency matches.
+
+### Task 4: Remove PostHog browser analytics
+
+**Files:**
+
+- Modify: `apps/server/tests/architecture/no-external-telemetry-surface.test.ts`
+- Delete: `apps/mail/lib/posthog-provider.tsx`
+- Modify: `apps/mail/providers/client-providers.tsx`
+- Modify: `apps/mail/components/create/create-email.tsx`
+- Modify: `apps/mail/components/mail/reply-composer.tsx`
+- Modify: `apps/mail/hooks/use-optimistic-actions.ts`
+- Modify: `apps/server/src/env.ts`
+- Modify: `apps/mail/package.json`
+- Modify: `pnpm-lock.yaml`
+
+**Interfaces:**
+
+- Removes: PostHog initialization, user identification, page-view capture, mail-action events, public PostHog configuration, and dependency records.
+- Preserves: provider composition and every underlying mail operation.
+
+- [x] Extend the no-telemetry architecture test to reject PostHog paths, tokens, environment variables, manifest entries, and lockfile records.
+- [x] Run the test and verify it fails on the current PostHog runtime and dependency surfaces.
+- [x] Delete the provider, unwrap application children, and remove all capture calls and imports.
+- [x] Remove the two PostHog environment declarations and the direct dependency.
+- [x] Remove PostHog-only lockfile records without installing packages or running lifecycle scripts.
+- [x] Run architecture tests, frontend TypeScript, targeted ESLint/Oxlint, residue scans, and `git diff --check`.

@@ -69,6 +69,7 @@ export interface SystemIntegrationRepository {
   ): Promise<typeof channelIntegrationMapping.$inferSelect | null>;
   setMapping(channelId: MailChannelId, authSource: 'nango', integrationId: string): Promise<void>;
   deleteMapping(channelId: MailChannelId, authSource: 'nango'): Promise<void>;
+  countBindings(channelId: MailChannelId, authSource?: 'zero_oauth' | 'nango'): Promise<number>;
   countNangoBindings(providerConfigKey?: string): Promise<number>;
   countZeroOAuthBindings(channelId: MailChannelId): Promise<number>;
   listNangoReferences(): Promise<Array<{ integrationId: string; connectionId: string }>>;
@@ -168,6 +169,19 @@ export const createSystemIntegrationRepository = (db: DB): SystemIntegrationRepo
           eq(channelIntegrationMapping.authSource, authSource),
         ),
       );
+  },
+
+  countBindings: async (channelId, authSource) => {
+    const predicates = [eq(connection.channelId, channelId)];
+    if (authSource !== undefined) {
+      predicates.push(eq(authorizationBinding.authSource, authSource));
+    }
+    const [result] = await db
+      .select({ value: count() })
+      .from(authorizationBinding)
+      .innerJoin(connection, eq(connection.id, authorizationBinding.connectionId))
+      .where(and(...predicates));
+    return result?.value ?? 0;
   },
 
   countNangoBindings: async (providerConfigKey) => {

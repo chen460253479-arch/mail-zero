@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  createMailIngressRuntime,
   dispatchDueMailSyncWork,
   processMailIngressCommand,
   type MailIngressRuntime,
 } from '../../../../../src/modules/mail-sync/runtime/create-mail-sync';
+import type { PostgresMailSyncRepository } from '../../../../../src/modules/mail-sync/postgres/sync-repository';
+import type { CompleteDiscoveryRunInput } from '../../../../../src/modules/mail-sync/postgres/types';
 import { parseMailIngressCommand } from '../../../../../src/modules/mail-sync/application/commands';
 
 const createRuntime = (overrides: Partial<MailIngressRuntime> = {}): MailIngressRuntime => ({
@@ -22,6 +25,73 @@ const createRuntime = (overrides: Partial<MailIngressRuntime> = {}): MailIngress
 });
 
 describe('mail ingress queue command processor', () => {
+  it('uses the channel reconciliation interval when discovery completes', async () => {
+    let reconcileAfterMs: number | null = null;
+    const runtime = createMailIngressRuntime({
+      repository: {
+        acquireSyncLease: async () => ({
+          id: 'sync-1',
+          accountId: 'account-1',
+          provider: 'gmail',
+          scope: {
+            version: 1,
+            mailboxRoles: ['inbox'],
+            initialSync: 'none',
+          },
+          checkpoint: { version: 1, historyId: '100' },
+          requestedGeneration: 0,
+          completedGeneration: 0,
+          pendingCursorHint: null,
+        }),
+        renewSyncLease: async () => true,
+        persistDiscoveryPage: async () => ({ inserted: 0 }),
+        completeDiscoveryRun: async (input: CompleteDiscoveryRunInput) => {
+          reconcileAfterMs = input.reconcileAfterMs;
+          return {
+            requestedGeneration: 0,
+            completedGeneration: 0,
+            checkpoint: input.checkpoint,
+          };
+        },
+        releaseSyncLease: async () => undefined,
+      } as unknown as PostgresMailSyncRepository,
+      getAdapterFactory: () => ({
+        create: async () => ({
+          provider: 'gmail',
+          establishCheckpoint: async () => ({ version: 1, historyId: '100' }),
+          discover: async () => ({
+            events: [],
+            checkpoint: { version: 1, historyId: '100' },
+            nextPageToken: null,
+          }),
+          fetchRawMessage: async () => {
+            throw new Error('unused');
+          },
+          classifyError: () => 'retryable',
+        }),
+      }),
+      resolveConnectionId: async () => 'connection-1',
+      resolveImportContext: async () => {
+        throw new Error('unused');
+      },
+      resolveSubscriptionTarget: async () => null,
+      mailCore: {
+        importEmail: async () => {
+          throw new Error('unused');
+        },
+      },
+      onAuthenticationError: async () => undefined,
+      enqueue: async () => undefined,
+      newLeaseOwner: () => 'worker-1',
+      clock: { now: () => new Date('2026-07-28T08:00:00.000Z') },
+      reconcileAfterMs: 30 * 60_000,
+    });
+
+    await runtime.discover({ type: 'reconcile', syncId: 'sync-1' });
+
+    expect(reconcileAfterMs).toBe(30 * 60_000);
+  });
+
   it('rejects malformed queue commands as permanent input errors', () => {
     expect(() => parseMailIngressCommand({ type: 'discover' })).toThrow(
       'MAIL_SYNC_INVALID_COMMAND',

@@ -24,6 +24,7 @@ type ActivationRepository = {
   activate(input: {
     syncId: string;
     subscriptionExpiresAt: Date | null;
+    subscriptionWarning: { code: string; message: string } | null;
   }): Promise<ActivationSyncRecord>;
 };
 
@@ -33,7 +34,7 @@ export type ActivateInboundSyncInput = {
   provider: string;
   scopeKey: string;
   scope: IngressScope;
-  subscriptionTarget: VersionedProviderState;
+  subscriptionTarget: VersionedProviderState | null;
 };
 
 export const activateInboundSync = async (
@@ -74,17 +75,33 @@ export const activateInboundSync = async (
   if (sync.checkpoint === null) {
     throw new MailSyncError('MAIL_SYNC_ACTIVATION_CHECKPOINT_MISSING', 'permanent');
   }
-  if (adapter.subscribe === undefined) {
-    throw new MailSyncError('MAIL_SYNC_SUBSCRIPTION_UNSUPPORTED', 'permanent');
+  let subscriptionExpiresAt: Date | null = null;
+  let subscriptionWarning: { code: string; message: string } | null = null;
+  if (input.subscriptionTarget !== null) {
+    if (adapter.subscribe === undefined) {
+      subscriptionWarning = {
+        code: 'MAIL_SYNC_SUBSCRIPTION_UNSUPPORTED',
+        message: 'MAIL_SYNC_SUBSCRIPTION_UNSUPPORTED',
+      };
+    } else {
+      try {
+        const subscription = await adapter.subscribe({
+          scope: input.scope,
+          checkpoint: sync.checkpoint,
+          target: input.subscriptionTarget,
+        });
+        subscriptionExpiresAt = subscription.expiresAt;
+      } catch (error) {
+        subscriptionWarning = {
+          code: error instanceof MailSyncError ? error.code : 'MAIL_SYNC_SUBSCRIPTION_FAILED',
+          message: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
   }
-
-  const subscription = await adapter.subscribe({
-    scope: input.scope,
-    checkpoint: sync.checkpoint,
-    target: input.subscriptionTarget,
-  });
   return dependencies.repository.activate({
     syncId: sync.id,
-    subscriptionExpiresAt: subscription.expiresAt,
+    subscriptionExpiresAt,
+    subscriptionWarning,
   });
 };

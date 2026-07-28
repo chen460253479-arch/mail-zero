@@ -16,8 +16,6 @@ export type ZeroEnv = {
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
   RESEND_API_KEY: string;
-  VITE_PUBLIC_POSTHOG_KEY: string;
-  VITE_PUBLIC_POSTHOG_HOST: string;
   COOKIE_DOMAIN: string;
   BETTER_AUTH_TRUSTED_ORIGINS: string;
   ZERO_ADMIN_AUTO_PROVISION?: 'true' | 'false';
@@ -32,10 +30,6 @@ export type ZeroEnv = {
   REDIS_TOKEN: string;
   EARLY_ACCESS_ENABLED: string;
   REACT_SCAN: string;
-  GMAIL_PUBSUB_TOPIC_NAME: string;
-  GMAIL_PUBSUB_SUBSCRIPTION_NAME: string;
-  GMAIL_PUBSUB_PUSH_AUDIENCE: string;
-  GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT: string;
   AXIOM_API_TOKEN: string;
   AXIOM_DATASET: string;
   THREADS_BUCKET: R2Bucket;

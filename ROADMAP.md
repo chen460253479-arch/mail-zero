@@ -12,7 +12,6 @@ This document outlines the development roadmap for 0.email. Our vision is to cre
 
 ### 2. Email Usage Improvements
 
-- AI-powered email assistance
 - Advanced drag-and-drop tools
 - Customizable keyboard shortcuts
 - Performance optimization

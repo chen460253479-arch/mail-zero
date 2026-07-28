@@ -90,7 +90,10 @@ const getChannel = (
 export const bindNangoMailbox = async (
   input: BindNangoMailboxInput,
   dependencies: BindNangoMailboxDependencies,
-): Promise<{ id: string }> => {
+): Promise<{
+  id: string;
+  identity: { email: string; name: string; picture: string };
+}> => {
   const channel = getChannel(input.channelId, dependencies.getChannel);
   if (!(await dependencies.isIntegrationAvailable(input.channelId, input.integrationId))) {
     throw new NangoBindingError('MAIL_CHANNEL_UNAVAILABLE');
@@ -154,29 +157,57 @@ export const bindNangoMailbox = async (
   }
 
   const now = dependencies.now();
-  return await dependencies.repository.save({
-    existingMailboxId: existing?.id ?? null,
-    mailbox: {
-      email: identity.email,
+  let saved: { id: string };
+  try {
+    saved = await dependencies.repository.save({
+      existingMailboxId: existing?.id ?? null,
+      mailbox: {
+        email: identity.email,
+        normalizedEmail,
+        name: identity.name,
+        picture: identity.picture,
+        channelId: input.channelId,
+        providerKey: channel.providerKey,
+      },
+      authorization: {
+        authSource: 'nango',
+        credentialType: 'oauth2',
+        encryptedCredentialSnapshot: await encryptCredential(
+          createNangoCredentialSnapshot(resolved.credential),
+          dependencies.encryptionKey,
+        ),
+        accessTokenExpiresAt: resolved.expiresAt,
+        credentialFetchedAt: now,
+        nangoConnectionId: input.connectionId,
+        nangoProviderConfigKey: input.integrationId,
+      },
+    });
+  } catch (error) {
+    const racedReference = await dependencies.repository.findByNangoReference(
+      input.integrationId,
+      input.connectionId,
+    );
+    if (racedReference !== null && racedReference.connectionId !== existing?.id) {
+      throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
+    }
+    const racedMailbox = await dependencies.repository.findMailboxByNormalizedEmail(
+      input.userId,
+      input.channelId,
       normalizedEmail,
-      name: identity.name,
-      picture: identity.picture,
-      channelId: input.channelId,
-      providerKey: channel.providerKey,
-    },
-    authorization: {
-      authSource: 'nango',
-      credentialType: 'oauth2',
-      encryptedCredentialSnapshot: await encryptCredential(
-        createNangoCredentialSnapshot(resolved.credential),
-        dependencies.encryptionKey,
-      ),
-      accessTokenExpiresAt: resolved.expiresAt,
-      credentialFetchedAt: now,
-      nangoConnectionId: input.connectionId,
-      nangoProviderConfigKey: input.integrationId,
-    },
-  });
+    );
+    if (racedMailbox !== null && racedMailbox.channelId !== input.channelId) {
+      throw new NangoBindingError('MAILBOX_IDENTITY_MISMATCH');
+    }
+    if (
+      racedMailbox !== null &&
+      racedMailbox.status !== 'disconnected' &&
+      !(racedMailbox.status === 'reconnect_required' && racedMailbox.userId === input.userId)
+    ) {
+      throw new NangoBindingError('MAILBOX_ALREADY_CONNECTED');
+    }
+    throw error;
+  }
+  return { ...saved, identity };
 };
 
 export type SafeNangoConnection = {

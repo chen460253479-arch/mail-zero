@@ -243,6 +243,31 @@ export const systemIntegrationConfig = createIntegrationTable(
   ],
 );
 
+export const channelConfig = createIntegrationTable(
+  'channel_config',
+  {
+    id: text('id').primaryKey(),
+    channelId: text('channel_id').$type<MailChannelId>().notNull().unique(),
+    authSource: text('auth_source').$type<'zero_oauth' | 'nango' | 'manual'>().notNull(),
+    inboxWatchEnabled: boolean('inbox_watch_enabled').notNull().default(false),
+    scheduledSyncEnabled: boolean('scheduled_sync_enabled').notNull().default(true),
+    syncIntervalMinutes: integer('sync_interval_minutes').notNull().default(10),
+    providerConfig: jsonb('provider_config').$type<Record<string, unknown>>().notNull().default({}),
+    updatedBy: text('updated_by')
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    check(
+      'channel_config_auth_source_chk',
+      sql`${t.authSource} IN ('zero_oauth', 'nango', 'manual')`,
+    ),
+    check('channel_config_sync_interval_chk', sql`${t.syncIntervalMinutes} BETWEEN 1 AND 1440`),
+  ],
+);
+
 export const channelIntegrationMapping = createIntegrationTable(
   'channel_mapping',
   {
@@ -336,67 +361,6 @@ export const jwks = createAuthTable(
     createdAt: timestamp('created_at').notNull(),
   },
   (t) => [index('jwks_created_at_idx').on(t.createdAt)],
-);
-
-export const oauthApplication = createAuthTable(
-  'oauth_application',
-  {
-    id: text('id').primaryKey(),
-    name: text('name'),
-    icon: text('icon'),
-    metadata: text('metadata'),
-    clientId: text('client_id').unique(),
-    clientSecret: text('client_secret'),
-    redirectURLs: text('redirect_u_r_ls'),
-    type: text('type'),
-    disabled: boolean('disabled'),
-    userId: text('user_id'),
-    createdAt: timestamp('created_at'),
-    updatedAt: timestamp('updated_at'),
-  },
-  (t) => [
-    index('oauth_application_user_id_idx').on(t.userId),
-    index('oauth_application_disabled_idx').on(t.disabled),
-  ],
-);
-
-export const oauthAccessToken = createAuthTable(
-  'oauth_access_token',
-  {
-    id: text('id').primaryKey(),
-    accessToken: text('access_token').unique(),
-    refreshToken: text('refresh_token').unique(),
-    accessTokenExpiresAt: timestamp('access_token_expires_at'),
-    refreshTokenExpiresAt: timestamp('refresh_token_expires_at'),
-    clientId: text('client_id'),
-    userId: text('user_id'),
-    scopes: text('scopes'),
-    createdAt: timestamp('created_at'),
-    updatedAt: timestamp('updated_at'),
-  },
-  (t) => [
-    index('oauth_access_token_user_id_idx').on(t.userId),
-    index('oauth_access_token_client_id_idx').on(t.clientId),
-    index('oauth_access_token_expires_at_idx').on(t.accessTokenExpiresAt),
-  ],
-);
-
-export const oauthConsent = createAuthTable(
-  'oauth_consent',
-  {
-    id: text('id').primaryKey(),
-    clientId: text('client_id'),
-    userId: text('user_id'),
-    scopes: text('scopes'),
-    createdAt: timestamp('created_at'),
-    updatedAt: timestamp('updated_at'),
-    consentGiven: boolean('consent_given'),
-  },
-  (t) => [
-    index('oauth_consent_user_id_idx').on(t.userId),
-    index('oauth_consent_client_id_idx').on(t.clientId),
-    index('oauth_consent_given_idx').on(t.consentGiven),
-  ],
 );
 
 export const emailTemplate = createAppTable(

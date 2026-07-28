@@ -6,8 +6,8 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { defaultUserSettings } from './schemas';
 import { APIError } from 'better-auth/api';
 import { getZeroDB } from './server-utils';
-import { redis, resend } from './services';
 import { connection } from '../db/schema';
+import { resend } from './services';
 import { eq } from 'drizzle-orm';
 import { createDb } from '../db';
 import { env } from '../env';
@@ -133,23 +133,9 @@ export const createAuth = () => {
 };
 
 const createAuthConfig = () => {
-  const cache = redis();
   const { db } = createDb(env.HYPERDRIVE.connectionString);
   return {
     database: drizzleAdapter(db, { provider: 'pg' }),
-    secondaryStorage: {
-      get: async (key: string) => {
-        const value = await cache.get(key);
-        return typeof value === 'string' ? value : value ? JSON.stringify(value) : null;
-      },
-      set: async (key: string, value: string, ttl?: number) => {
-        if (ttl) await cache.set(key, value, { ex: ttl });
-        else await cache.set(key, value);
-      },
-      delete: async (key: string) => {
-        await cache.del(key);
-      },
-    },
     advanced: {
       ipAddress: {
         disableIpTracking: true,
@@ -170,8 +156,7 @@ const createAuthConfig = () => {
     ],
     session: {
       cookieCache: {
-        enabled: true,
-        maxAge: 60 * 60 * 24 * 30, // 30 days
+        enabled: false,
       },
       expiresIn: 60 * 60 * 24 * 30, // 30 days
       updateAge: 60 * 60 * 24 * 3, // 1 day (every 1 day the session expiration is updated)

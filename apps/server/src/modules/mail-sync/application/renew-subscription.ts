@@ -23,6 +23,7 @@ type RenewalRepository = {
     syncId: string;
     owner: string;
     subscriptionExpiresAt: Date | null;
+    subscriptionWarning: { code: string; message: string } | null;
   }): Promise<void>;
   pauseSync(input: {
     syncId: string;
@@ -56,7 +57,7 @@ export const renewInboundSubscription = async (
     resolveConnectionId(accountId: string): Promise<string>;
     getAdapterFactory(provider: string): InboundMailAdapterFactory;
   },
-): Promise<{ status: 'busy' | 'renewed' | 'paused' | 'auth_error' }> => {
+): Promise<{ status: 'busy' | 'renewed' | 'warning' | 'paused' | 'auth_error' }> => {
   const sync = await dependencies.repository.acquireSyncLease(input);
   if (sync === null) {
     return { status: 'busy' };
@@ -72,17 +73,55 @@ export const renewInboundSubscription = async (
       throw new MailSyncError('MAIL_SYNC_PROVIDER_MISMATCH', 'permanent');
     }
     if (adapter.subscribe === undefined) {
-      throw new MailSyncError('MAIL_SYNC_SUBSCRIPTION_UNSUPPORTED', 'permanent');
+      await dependencies.repository.updateSubscription({
+        syncId: sync.id,
+        owner: input.owner,
+        subscriptionExpiresAt: null,
+        subscriptionWarning: {
+          code: 'MAIL_SYNC_SUBSCRIPTION_UNSUPPORTED',
+          message: 'MAIL_SYNC_SUBSCRIPTION_UNSUPPORTED',
+        },
+      });
+      return { status: 'warning' };
     }
-    const subscription = await adapter.subscribe({
-      scope: sync.scope,
-      checkpoint: sync.checkpoint,
-      target: input.subscriptionTarget,
-    });
+    let subscription: Awaited<ReturnType<NonNullable<typeof adapter.subscribe>>>;
+    try {
+      subscription = await adapter.subscribe({
+        scope: sync.scope,
+        checkpoint: sync.checkpoint,
+        target: input.subscriptionTarget,
+      });
+    } catch (error) {
+      const classification =
+        error instanceof MailSyncError ? error.classification : adapter.classifyError(error);
+      if (classification === 'authentication') {
+        await dependencies.repository.markAuthError({
+          syncId: sync.id,
+          owner: input.owner,
+          ...errorDetails(error),
+        });
+        return { status: 'auth_error' };
+      }
+      if (classification === 'permanent') {
+        const details = errorDetails(error);
+        await dependencies.repository.updateSubscription({
+          syncId: sync.id,
+          owner: input.owner,
+          subscriptionExpiresAt: null,
+          subscriptionWarning: {
+            code: details.errorCode,
+            message: details.errorMessage,
+          },
+        });
+        return { status: 'warning' };
+      }
+      throw error;
+    }
     await dependencies.repository.updateSubscription({
       syncId: sync.id,
       owner: input.owner,
       subscriptionExpiresAt: subscription.expiresAt,
+      subscriptionWarning: null,
     });
     return { status: 'renewed' };
   } catch (error) {

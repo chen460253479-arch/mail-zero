@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { createPostgresMailSyncRepository } from '../../../src/modules/mail-sync/postgres/sync-repository';
-import { insertMailSyncAccountFixture, withMailSyncTestDatabase } from '../../helpers/mail-sync/database';
+import {
+  insertMailSyncAccountFixture,
+  withMailSyncTestDatabase,
+} from '../../helpers/mail-sync/database';
 import type { IngressScope } from '../../../src/modules/mail-sync';
 
 const scope: IngressScope = {
@@ -513,6 +516,7 @@ describe('PostgreSQL mail sync repository', () => {
         syncId: sync.id,
         owner: 'renew-worker',
         subscriptionExpiresAt: new Date('2026-08-10T00:00:00.000Z'),
+        subscriptionWarning: null,
       });
 
       const [state] = await sql<
@@ -631,7 +635,7 @@ describe('PostgreSQL mail sync repository', () => {
       await expect(repository.prepareActivation({ syncId: ownedSync.id })).resolves.toMatchObject({
         id: ownedSync.id,
         status: 'activating',
-        checkpoint: { version: 1, historyId: '100' },
+        checkpoint: null,
         leaseOwner: null,
         leaseExpiresAt: null,
       });

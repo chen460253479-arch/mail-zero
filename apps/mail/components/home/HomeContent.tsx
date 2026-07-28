@@ -258,10 +258,10 @@ export default function HomeContent() {
                 <div className="justify-start self-stretch text-sm font-normal leading-normal text-white">
                   I took a look at the code review feedback. Really like the keyboard navigation -
                   it makes everything much faster to access. The search implementation is clean,
-                  though I'd love to see the link to test it out myself.
+                  though I&apos;d love to see the link to test it out myself.
                 </div>
                 <div className="justify-start self-stretch text-sm font-normal leading-normal text-white">
-                  Let me know when you can share the preview and I'll provide more detailed
+                  Let me know when you can share the preview and I&apos;ll provide more detailed
                   feedback.
                 </div>
               </div>
@@ -698,7 +698,6 @@ export default function HomeContent() {
                   </div>
 
                   <div className="from-tokens-scroll-overlay-primary to-tokens-scroll-overlay-top/0 bg-linear-to-l absolute left-0 top-[668.98px] h-12 w-[547.09px]" />
-                  <div className="bg-tokens-agent-surface/10 border-tokens-agent-stroke absolute left-[498.90px] top-[674.65px] h-8 w-8 rounded-full border-2 px-1 shadow-[0px_8.503936767578125px_17.00787353515625px_0px_rgba(0,0,0,0.15)] backdrop-blur-lg" />
                 </div>
                 <div className="absolute left-0 top-[121px] inline-flex w-[650px] flex-col items-start justify-start gap-4 overflow-hidden rounded-3xl border border-[#8B5CF6] bg-[#2A1D48] p-6 outline outline-[#3F325F]">
                   <div className="inline-flex items-center justify-start gap-1.5">
@@ -893,7 +892,7 @@ export default function HomeContent() {
                         </div>
                         <div className="inline-flex items-center justify-start gap-2.5 self-stretch">
                           <div className="text-base-gray-500/50 flex-1 justify-start text-sm font-normal leading-none">
-                            Comments on "Landing Page v2"
+                            Comments on &quot;Landing Page v2&quot;
                           </div>
                           <div className="flex items-start justify-start gap-1">
                             <div className="relative h-3.5 w-3.5 overflow-hidden" />

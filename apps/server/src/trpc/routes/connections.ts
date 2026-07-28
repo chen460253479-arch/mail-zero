@@ -7,6 +7,7 @@ import { createPostgresConnectionRepository } from '../../modules/mail-accounts/
 import { provisionGmailMailboxInDatabase } from '../../modules/mail-accounts/runtime/provision-gmail-mailbox';
 import { createMailboxLifecycleForDatabase } from '../../modules/mail-accounts/runtime/lifecycle-environment';
 import { resolveGmailConnectMode } from '../../modules/mail-accounts/application/gmail-connection-options';
+import { createChannelConfigRepository } from '../../integrations/core/channel-config-repository';
 import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router } from '../trpc';
 import { withNangoRuntime, type NangoRuntime } from '../../modules/mail-accounts/runtime/nango';
 import { resolveFetchedNangoCredential } from '../../modules/mail-accounts/credentials/nango';
@@ -18,6 +19,7 @@ import { Ratelimit } from '@upstash/ratelimit';
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
 import { createDb } from '../../db';
+import type { DB } from '../../db';
 import { env } from '../../env';
 import { z } from 'zod';
 
@@ -40,23 +42,34 @@ const withConfiguredNango = async <T>(run: (runtime: NangoRuntime) => Promise<T>
   }
 };
 
+const getGmailAuthorizationOptionsForDatabase = async (db: DB) => {
+  const repository = createSystemIntegrationRepository(db);
+  const channelRepository = createChannelConfigRepository(db);
+  const [zeroOAuth, nango, nangoMapping, channelConfig] = await Promise.all([
+    repository.get('gmail_zero_oauth'),
+    repository.get('nango'),
+    repository.getMapping('gmail', 'nango'),
+    channelRepository.get('gmail'),
+  ]);
+  const availability = {
+    zeroOAuthAvailable: zeroOAuth?.status === 'active',
+    nangoAvailable: nango?.status === 'active' && nangoMapping !== null,
+  };
+  const selectedAuthSource =
+    channelConfig?.authSource === 'zero_oauth' || channelConfig?.authSource === 'nango'
+      ? channelConfig.authSource
+      : null;
+  return {
+    ...availability,
+    selectedAuthSource,
+    mode: resolveGmailConnectMode({ ...availability, selectedAuthSource }),
+  };
+};
+
 const getGmailAuthorizationOptions = async () => {
   const { db, conn } = createDb(env.HYPERDRIVE.connectionString);
   try {
-    const repository = createSystemIntegrationRepository(db);
-    const [zeroOAuth, nango, nangoMapping] = await Promise.all([
-      repository.get('gmail_zero_oauth'),
-      repository.get('nango'),
-      repository.getMapping('gmail', 'nango'),
-    ]);
-    const availability = {
-      zeroOAuthAvailable: zeroOAuth?.status === 'active',
-      nangoAvailable: nango?.status === 'active' && nangoMapping !== null,
-    };
-    return {
-      ...availability,
-      mode: resolveGmailConnectMode(availability),
-    };
+    return await getGmailAuthorizationOptionsForDatabase(db);
   } finally {
     await conn.end();
   }
@@ -115,6 +128,12 @@ export const connectionsRouter = router({
     }),
   getGmailAuthorizationOptions: privateProcedure.query(getGmailAuthorizationOptions),
   listNangoGmailConnections: privateProcedure.query(async () => {
+    if ((await getGmailAuthorizationOptions()).mode !== 'nango') {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: 'MAIL_CHANNEL_UNAVAILABLE',
+      });
+    }
     return await withConfiguredNango(async (runtime) => {
       const mapping = await runtime.integrationRepository.getMapping('gmail', 'nango');
       if (!mapping) {
@@ -153,6 +172,9 @@ export const connectionsRouter = router({
     .mutation(async ({ input, ctx }) => {
       const database = createDb(env.HYPERDRIVE.connectionString);
       try {
+        if ((await getGmailAuthorizationOptionsForDatabase(database.db)).mode !== 'nango') {
+          throw new NangoBindingError('MAIL_CHANNEL_UNAVAILABLE');
+        }
         return await withConfiguredNango(async (runtime) => {
           const mapping = await runtime.integrationRepository.getMapping('gmail', 'nango');
           if (!mapping) {
@@ -160,7 +182,7 @@ export const connectionsRouter = router({
           }
           const integrationId = mapping.externalIntegrationId;
           const connectionRepository = createPostgresConnectionRepository(database.db);
-          return await bindNangoMailbox(
+          const binding = await bindNangoMailbox(
             {
               userId: ctx.sessionUser.id,
               channelId: 'gmail',
@@ -181,51 +203,25 @@ export const connectionsRouter = router({
                   ),
                 findByNangoReference: (candidateIntegrationId, connectionId) =>
                   connectionRepository.findByNangoReference(candidateIntegrationId, connectionId),
-                save: async ({ mailbox, authorization }) => {
-                  try {
-                    const result = await connectionRepository.saveBinding({
-                      userId: ctx.sessionUser.id,
-                      existingMailboxId: null,
-                      mailbox,
-                      authorization,
-                    });
-                    await provisionGmailMailboxInDatabase(database.db, env, {
-                      userId: ctx.sessionUser.id,
-                      connectionId: result.id,
-                      identity: {
-                        email: mailbox.email,
-                        name: mailbox.name,
-                      },
-                    });
-                    return result;
-                  } catch (error) {
-                    if (
-                      await connectionRepository.findByNangoReference(
-                        authorization.nangoProviderConfigKey,
-                        authorization.nangoConnectionId,
-                      )
-                    ) {
-                      throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
-                    }
-                    const existing = await connectionRepository.findMailboxByNormalizedEmail(
-                      ctx.sessionUser.id,
-                      mailbox.channelId,
-                      mailbox.normalizedEmail,
-                    );
-                    if (existing && existing.channelId !== mailbox.channelId) {
-                      throw new NangoBindingError('MAILBOX_IDENTITY_MISMATCH');
-                    }
-                    if (existing && existing.status !== 'disconnected') {
-                      throw new NangoBindingError('MAILBOX_ALREADY_CONNECTED');
-                    }
-                    throw error;
-                  }
-                },
+                save: (bindingInput) =>
+                  connectionRepository.saveBinding({
+                    userId: ctx.sessionUser.id,
+                    ...bindingInput,
+                  }),
               },
               encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
               now: () => new Date(),
             },
           );
+          await provisionGmailMailboxInDatabase(database.db, env, {
+            userId: ctx.sessionUser.id,
+            connectionId: binding.id,
+            identity: {
+              email: binding.identity.email,
+              name: binding.identity.name,
+            },
+          });
+          return { id: binding.id };
         });
       } catch (error) {
         mapNangoBindingError(error);

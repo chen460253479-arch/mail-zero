@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { createPostgresMailSyncRepository } from '../../../src/modules/mail-sync/postgres/sync-repository';
+import {
+  insertMailSyncAccountFixture,
+  withMailSyncTestDatabase,
+} from '../../helpers/mail-sync/database';
 import { discoverIncremental } from '../../../src/modules/mail-sync/application/discover-incremental';
-import { insertMailSyncAccountFixture, withMailSyncTestDatabase } from '../../helpers/mail-sync/database';
 import type { InboundMailAdapter, IngressScope } from '../../../src/modules/mail-sync';
 
 const scope: IngressScope = {
@@ -31,23 +34,21 @@ describe('incremental discovery integration', () => {
         subscriptionExpiresAt: null,
       });
 
-      let call = 0;
       const adapter: InboundMailAdapter = {
         provider: 'gmail',
         establishCheckpoint: async () => {
           throw new Error('unused');
         },
-        discover: async () => {
-          call += 1;
-          if (call % 2 === 0) {
+        discover: async ({ checkpoint, pageToken }) => {
+          if (pageToken !== null) {
             const [beforeFinalPage] = await sql<{ checkpoint: { historyId: string } }[]>`
               SELECT checkpoint
               FROM integration.inbound_sync
               WHERE id = ${sync.id}
             `;
-            expect(beforeFinalPage?.checkpoint).toEqual({ version: 1, historyId: '100' });
+            expect(beforeFinalPage?.checkpoint).toEqual(checkpoint);
           }
-          return call % 2 === 1
+          return pageToken === null
             ? {
                 events: [
                   {
@@ -56,7 +57,7 @@ describe('incremental discovery integration', () => {
                     remoteThreadId: null,
                   },
                 ],
-                checkpoint: { version: 1, historyId: '100' },
+                checkpoint,
                 nextPageToken: 'next',
               }
             : {

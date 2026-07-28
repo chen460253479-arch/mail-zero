@@ -77,6 +77,7 @@ const createRepository = () => {
     deleteMapping: vi.fn(async () => {
       mapping = null;
     }),
+    countBindings: vi.fn(async () => 0),
     countNangoBindings: vi.fn(async (providerConfigKey) =>
       providerConfigKey
         ? references.filter(({ integrationId }) => integrationId === providerConfigKey).length

@@ -69,6 +69,184 @@ describe('local mail account bootstrap', () => {
 });
 
 describe('inbound synchronization activation', () => {
+  it('activates from the current checkpoint without creating Watch when it is disabled', async () => {
+    const calls: string[] = [];
+    const activated = await activateInboundSync(
+      {
+        accountId: 'account-1',
+        connectionId: 'connection-1',
+        provider: 'gmail',
+        scopeKey: 'inbox',
+        scope,
+        subscriptionTarget: null,
+      },
+      {
+        adapterFactory: {
+          create: async () => ({
+            provider: 'gmail',
+            establishCheckpoint: async () => {
+              calls.push('checkpoint');
+              return { version: 1, historyId: '100' };
+            },
+            discover: async () => {
+              throw new Error('unused');
+            },
+            fetchRawMessage: async () => {
+              throw new Error('unused');
+            },
+            classifyError: () => 'permanent',
+          }),
+        },
+        repository: {
+          createActivatingSync: async () => ({
+            id: 'sync-1',
+            status: 'activating',
+            checkpoint: null,
+          }),
+          prepareActivation: async () => {
+            throw new Error('unused');
+          },
+          storeActivationCheckpoint: async ({ checkpoint }) => ({
+            id: 'sync-1',
+            status: 'activating',
+            checkpoint,
+          }),
+          activate: async ({ subscriptionExpiresAt, subscriptionWarning }) => {
+            calls.push('activate');
+            expect(subscriptionExpiresAt).toBeNull();
+            expect(subscriptionWarning).toBeNull();
+            return {
+              id: 'sync-1',
+              status: 'active',
+              checkpoint: { version: 1, historyId: '100' },
+              subscriptionExpiresAt,
+            };
+          },
+        },
+      },
+    );
+
+    expect(calls).toEqual(['checkpoint', 'activate']);
+    expect(activated.status).toBe('active');
+  });
+
+  it('keeps the checkpointed sync active and records a warning when Watch fails', async () => {
+    const watchFailure = new Error('topic permission denied');
+    const activated = await activateInboundSync(
+      {
+        accountId: 'account-1',
+        connectionId: 'connection-1',
+        provider: 'gmail',
+        scopeKey: 'inbox',
+        scope,
+        subscriptionTarget: {
+          version: 1,
+          topicName: 'projects/zero/topics/gmail-inbound',
+        },
+      },
+      {
+        adapterFactory: {
+          create: async () => ({
+            provider: 'gmail',
+            establishCheckpoint: async () => ({ version: 1, historyId: '100' }),
+            discover: async () => {
+              throw new Error('unused');
+            },
+            fetchRawMessage: async () => {
+              throw new Error('unused');
+            },
+            subscribe: async () => {
+              throw watchFailure;
+            },
+            classifyError: () => 'permanent',
+          }),
+        },
+        repository: {
+          createActivatingSync: async () => ({
+            id: 'sync-1',
+            status: 'activating',
+            checkpoint: null,
+          }),
+          prepareActivation: async () => {
+            throw new Error('unused');
+          },
+          storeActivationCheckpoint: async ({ checkpoint }) => ({
+            id: 'sync-1',
+            status: 'activating',
+            checkpoint,
+          }),
+          activate: async ({ subscriptionExpiresAt, subscriptionWarning }) => {
+            expect(subscriptionExpiresAt).toBeNull();
+            expect(subscriptionWarning).toEqual({
+              code: 'MAIL_SYNC_SUBSCRIPTION_FAILED',
+              message: 'topic permission denied',
+            });
+            return {
+              id: 'sync-1',
+              status: 'active',
+              checkpoint: { version: 1, historyId: '100' },
+              subscriptionExpiresAt,
+            };
+          },
+        },
+      },
+    );
+
+    expect(activated.status).toBe('active');
+  });
+
+  it('does not activate when establishing the provider checkpoint fails', async () => {
+    let activateCalls = 0;
+
+    await expect(
+      activateInboundSync(
+        {
+          accountId: 'account-1',
+          connectionId: 'connection-1',
+          provider: 'gmail',
+          scopeKey: 'inbox',
+          scope,
+          subscriptionTarget: null,
+        },
+        {
+          adapterFactory: {
+            create: async () => ({
+              provider: 'gmail',
+              establishCheckpoint: async () => {
+                throw new Error('invalid credentials');
+              },
+              discover: async () => {
+                throw new Error('unused');
+              },
+              fetchRawMessage: async () => {
+                throw new Error('unused');
+              },
+              classifyError: () => 'authentication',
+            }),
+          },
+          repository: {
+            createActivatingSync: async () => ({
+              id: 'sync-1',
+              status: 'activating',
+              checkpoint: null,
+            }),
+            prepareActivation: async () => {
+              throw new Error('unused');
+            },
+            storeActivationCheckpoint: async () => {
+              throw new Error('must not store');
+            },
+            activate: async () => {
+              activateCalls += 1;
+              throw new Error('must not activate');
+            },
+          },
+        },
+      ),
+    ).rejects.toThrow('invalid credentials');
+    expect(activateCalls).toBe(0);
+  });
+
   it('persists the provider baseline before subscribing and becoming active', async () => {
     const calls: string[] = [];
     let storedCheckpoint: { version: number; historyId: string } | null = null;

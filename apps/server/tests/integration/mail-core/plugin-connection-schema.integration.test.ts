@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { authorizationBinding, connection, user } from '../../../src/db/schema';
+import { authorizationBinding, channelConfig, connection, user } from '../../../src/db/schema';
 import { withMailTestDatabase } from '../../helpers/mail-core/database';
 
 const now = new Date('2026-07-26T00:00:00.000Z');
@@ -194,5 +194,72 @@ describe('plugin-neutral Connection schema', () => {
           updatedAt: now,
         }),
       ).rejects.toMatchObject({ code: '23514' });
+    }));
+
+  it('enforces one channel policy, interval bounds, and administrator ownership', () =>
+    withMailTestDatabase(async ({ db }) => {
+      await db.insert(user).values({
+        id: 'channel-config-admin',
+        name: 'Channel Config Admin',
+        email: 'channel-config-admin@example.test',
+        emailVerified: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await db.insert(channelConfig).values({
+        id: 'gmail-channel-config',
+        channelId: 'gmail',
+        authSource: 'zero_oauth',
+        inboxWatchEnabled: false,
+        scheduledSyncEnabled: true,
+        syncIntervalMinutes: 10,
+        providerConfig: {},
+        updatedBy: 'channel-config-admin',
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await expect(
+        db.insert(channelConfig).values({
+          id: 'duplicate-gmail-channel-config',
+          channelId: 'gmail',
+          authSource: 'nango',
+          inboxWatchEnabled: false,
+          scheduledSyncEnabled: false,
+          syncIntervalMinutes: 10,
+          providerConfig: {},
+          updatedBy: 'channel-config-admin',
+          createdAt: now,
+          updatedAt: now,
+        }),
+      ).rejects.toMatchObject({ code: '23505' });
+      await expect(
+        db.insert(channelConfig).values({
+          id: 'invalid-channel-interval',
+          channelId: 'outlook',
+          authSource: 'zero_oauth',
+          inboxWatchEnabled: false,
+          scheduledSyncEnabled: true,
+          syncIntervalMinutes: 0,
+          providerConfig: {},
+          updatedBy: 'channel-config-admin',
+          createdAt: now,
+          updatedAt: now,
+        }),
+      ).rejects.toMatchObject({ code: '23514' });
+      await expect(
+        db.insert(channelConfig).values({
+          id: 'missing-channel-admin',
+          channelId: 'zoho_mail',
+          authSource: 'zero_oauth',
+          inboxWatchEnabled: false,
+          scheduledSyncEnabled: true,
+          syncIntervalMinutes: 10,
+          providerConfig: {},
+          updatedBy: 'missing-administrator',
+          createdAt: now,
+          updatedAt: now,
+        }),
+      ).rejects.toMatchObject({ code: '23503' });
     }));
 });

@@ -45,6 +45,8 @@ describe('Agent, Chat, Brain, and mail AI removal', () => {
       "route('/ai'",
       "mount('/sse'",
       "mount('/mcp'",
+      'oauth-authorization-server',
+      'oAuthDiscoveryMetadata',
       'agentsMiddleware',
       'ZeroAgent',
       'ZeroMCP',
@@ -64,10 +66,32 @@ describe('Agent, Chat, Brain, and mail AI removal', () => {
     expect(forbiddenTrpcTokens.filter((token) => trpc.includes(token))).toEqual([]);
   });
 
+  it('removes MCP OIDC Provider storage while preserving Zero JWT authentication', () => {
+    const schema = readSource('apps/server/src/db/schema.ts');
+    const auth = readSource('apps/server/src/lib/auth.ts');
+    const retiredModels = [
+      'oauthApplication',
+      'oauthAccessToken',
+      'oauthConsent',
+      "'oauth_application'",
+      "'oauth_access_token'",
+      "'oauth_consent'",
+    ];
+
+    expect(retiredModels.filter((model) => schema.includes(model))).toEqual([]);
+    expect(schema).toMatch(/export const jwks = createAuthTable\(\s*'jwks'/u);
+    expect(auth).toContain('jwt()');
+    expect(auth).toContain('bearer()');
+    expect(auth).not.toContain('mcp(');
+  });
+
   it('removes frontend AI, voice-agent, summary, and natural-language search surfaces', () => {
     const retiredPaths = [
       'apps/mail/components/ai-toggle-button.tsx',
       'apps/mail/components/create/ai-chat.tsx',
+      'apps/mail/components/create/ai-textarea.tsx',
+      'apps/mail/components/create/editor-menu.tsx',
+      'apps/mail/components/party.tsx',
       'apps/mail/components/ui/ai-sidebar.tsx',
       'apps/mail/components/ui/prompts-dialog.tsx',
       'apps/mail/components/voice-button.tsx',
@@ -88,7 +112,9 @@ describe('Agent, Chat, Brain, and mail AI removal', () => {
     ];
     const frontendEntrypoints = [
       'apps/mail/components/context/command-palette-context.tsx',
+      'apps/mail/components/create/editor.tsx',
       'apps/mail/components/create/email-composer.tsx',
+      'apps/mail/components/home/HomeContent.tsx',
       'apps/mail/components/mail/mail-display.tsx',
       'apps/mail/components/mail/mail.tsx',
       'apps/mail/components/mail/thread-display.tsx',
@@ -107,6 +133,9 @@ describe('Agent, Chat, Brain, and mail AI removal', () => {
       'aiCompose',
       'generateEmailSubject',
       'generateSearchQuery',
+      'openAI',
+      'TOGGLE_AI',
+      'tokens-agent-',
       'Zero AI',
       'Chat with Zero',
       'AI-powered',
@@ -120,6 +149,14 @@ describe('Agent, Chat, Brain, and mail AI removal', () => {
 
     expect(retiredPaths.filter((path) => existsSync(resolve(repositoryRoot, path)))).toEqual([]);
     expect(violations).toEqual([]);
+  });
+
+  it('removes retired AI and telemetry claims from repository documentation', () => {
+    const roadmap = readSource('ROADMAP.md');
+    const agentGuide = readSource('AGENT.md');
+
+    expect(roadmap).not.toContain('AI-powered email assistance');
+    expect(agentGuide).not.toContain('Integrates with Sentry for error tracking');
   });
 
   it('removes direct Agent, AI, MCP, and voice dependencies from application manifests', () => {

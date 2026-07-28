@@ -1,4 +1,9 @@
 import {
+  enqueueDueMailIngressWork,
+  handleGmailWebhookForEnvironment,
+  runMailIngressCommand,
+} from './runtime/mail/gmail-inbound';
+import {
   account,
   note,
   session,
@@ -7,24 +12,16 @@ import {
   userSettings,
   emailTemplate,
 } from './db/schema';
-import {
-  enqueueDueMailIngressWork,
-  recordGmailPushSignal,
-  runMailIngressCommand,
-} from './runtime/mail/gmail-inbound';
 import { enqueueDueMailOutboundWork, runMailOutboundCommand } from './runtime/mail/outbound';
 import { MailOutboundError, parseMailOutboundCommand } from './modules/mail-outbound';
 import { parseMailIngressCommand } from './modules/mail-sync/application/commands';
 import { WorkerEntrypoint, DurableObject, RpcTarget } from 'cloudflare:workers';
 import { wakeDueMailSnoozes } from './modules/mail-snooze/runtime/environment';
-import { authenticateGmailPush } from './mail-channel/gmail/inbound/push-auth';
-import { readGmailInboundConfig } from './runtime/mail/gmail-inbound-config';
-import { oAuthDiscoveryMetadata } from 'better-auth/plugins';
-// import { instrument, type ResolveConfigFn } from '@microlabs/otel-cf-workers';
-import { getZeroDB } from './lib/server-utils';
 import { registerMailBlobRoutes } from './modules/mail-api';
 import { eq, and, desc, asc, inArray } from 'drizzle-orm';
 import { MailSyncError } from './modules/mail-sync';
+// import { instrument, type ResolveConfigFn } from '@microlabs/otel-cf-workers';
+import { getZeroDB } from './lib/server-utils';
 
 import { ensureConfiguredAdmin } from './lib/admin-provisioning';
 import { integrationOAuthRouter } from './routes/integrations';
@@ -33,7 +30,6 @@ import { defaultUserSettings } from './lib/schemas';
 import { createLocalJWKSet, jwtVerify } from 'jose';
 import { trpcServer } from '@hono/trpc-server';
 import { publicRouter } from './routes/auth';
-import { initTracing } from './lib/tracing';
 import { env, type ZeroEnv } from './env';
 import type { HonoContext } from './ctx';
 import { createDb, type DB } from './db';
@@ -602,63 +598,10 @@ const app = new Hono<HonoContext>()
       exposeHeaders: ['X-Zero-Redirect'],
     }),
   )
-  .get('.well-known/oauth-authorization-server', async (c) => {
-    const auth = createAuth();
-    return oAuthDiscoveryMetadata(auth)(c.req.raw);
-  })
   .route('/api', api)
   .get('/health', (c) => c.json({ message: 'Zero Server is Up!' }))
   .get('/', (c) => c.redirect(`${env.VITE_PUBLIC_APP_URL}`))
-  .post('/api/mail/channels/gmail/push', async (c) => {
-    const tracer = initTracing();
-    const span = tracer.startSpan('mail.gmail.push', {
-      attributes: {
-        'provider.id': 'gmail',
-        'notification.type': 'email_notification',
-        'http.method': c.req.method,
-        'http.url': c.req.url,
-      },
-    });
-
-    try {
-      if (!c.req.header('Authorization')) {
-        span.setAttributes({ 'auth.status': 'missing' });
-        return c.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-      const subHeader = c.req.header('x-goog-pubsub-subscription-name');
-      span.setAttributes({
-        'subscription.name': subHeader || 'missing',
-      });
-
-      const config = readGmailInboundConfig(c.env);
-      const isValid = await authenticateGmailPush(
-        {
-          authorizationHeader: c.req.header('Authorization'),
-          subscriptionName: subHeader,
-        },
-        config,
-      );
-      if (!isValid) {
-        span.setAttributes({ 'auth.status': 'invalid' });
-        return c.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-
-      span.setAttributes({ 'auth.status': 'valid' });
-      const body = await c.req.json<unknown>();
-      const handled = await recordGmailPushSignal(c.env, body);
-      span.setAttributes({
-        'mail.sync.matched': handled.matched,
-        'queue.message_sent': handled.queued,
-      });
-      return c.json({ message: 'OK' }, { status: 200 });
-    } catch (error) {
-      span.recordException(error as Error);
-      span.setStatus({ code: 2, message: (error as Error).message });
-      throw error;
-    } finally {
-      span.end();
-    }
-  });
+  .post('/api/mail/channels/gmail/push', (c) => handleGmailWebhookForEnvironment(c.env, c.req.raw));
 const handler = {
   async fetch(request: Request, env: ZeroEnv, ctx: ExecutionContext): Promise<Response> {
     return app.fetch(request, env, ctx);

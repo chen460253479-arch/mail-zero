@@ -4,14 +4,19 @@ import {
   createNangoIntegrationService,
   type NangoIntegrationService,
 } from '../../integrations/nango/service';
-import { NangoChannelMappingService } from '../../modules/mail-accounts/application/nango-channel-mapping';
-import { type GmailOAuthService } from '../../modules/mail-accounts/application/connect-gmail-oauth';
-import { createSystemIntegrationRepository } from '../../integrations/core/repository';
-import { createGmailOAuthApplication } from '../../runtime/mail/gmail-oauth';
 import { createPostgresConnectionRepository } from '../../modules/mail-accounts/postgres/connection-repository';
 import { provisionGmailMailboxInDatabase } from '../../modules/mail-accounts/runtime/provision-gmail-mailbox';
+import { NangoChannelMappingService } from '../../modules/mail-accounts/application/nango-channel-mapping';
+import { type GmailOAuthService } from '../../modules/mail-accounts/application/connect-gmail-oauth';
+import { createPostgresMailSyncRepository } from '../../modules/mail-sync/postgres/sync-repository';
+import { createChannelConfigRepository } from '../../integrations/core/channel-config-repository';
+import { createGmailChannelConfigService } from '../../integrations/gmail/channel-config-service';
 import { normalizeMailboxEmail } from '../../modules/mail-accounts/application/mailbox-identity';
+import { createSystemIntegrationRepository } from '../../integrations/core/repository';
+import { gmailChannelConfigInputSchema } from '../../mail-channel/gmail/config';
+import { createGmailOAuthApplication } from '../../runtime/mail/gmail-oauth';
 import { defaultMailChannelRegistry } from '../../mail-channel/registry';
+import { mailChannelIds } from '../../mail-channel/contracts';
 import { mapIntegrationError } from './integration-errors';
 import { adminProcedure, router } from '../trpc';
 import type { ZeroEnv } from '../../env';
@@ -22,6 +27,7 @@ type IntegrationServices = {
   nango: NangoIntegrationService;
   nangoChannels: NangoChannelMappingService;
   gmail: GmailOAuthService;
+  gmailChannel: ReturnType<typeof createGmailChannelConfigService>;
 };
 
 const withIntegrationServices = async <T>(
@@ -31,6 +37,7 @@ const withIntegrationServices = async <T>(
   const { db, conn } = createDb(env.HYPERDRIVE.connectionString);
   try {
     const repository = createSystemIntegrationRepository(db);
+    const channelConfigs = createChannelConfigRepository(db);
     const nango = createNangoIntegrationService({
       repository,
       encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
@@ -70,6 +77,17 @@ const withIntegrationServices = async <T>(
         encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
         backendUrl: env.VITE_PUBLIC_BACKEND_URL,
       }),
+      gmailChannel: createGmailChannelConfigService({
+        channels: channelConfigs,
+        integrations: repository,
+        publicBackendUrl: env.VITE_PUBLIC_BACKEND_URL,
+        requestSubscriptionRefresh: async (provider) => {
+          await createPostgresMailSyncRepository(db).markSubscriptionsDue({
+            provider,
+            dueAt: new Date(),
+          });
+        },
+      }),
     });
   } finally {
     await conn.end();
@@ -87,6 +105,47 @@ const gmailCandidateSchema = z.object({
 });
 
 export const integrationsRouter = router({
+  getChannels: adminProcedure.query(async ({ ctx }) => {
+    return await withIntegrationServices(ctx.c.env, async ({ gmailChannel }) => {
+      const gmailConfig = await gmailChannel.get();
+      const displayNames = {
+        gmail: 'Gmail',
+        outlook: 'Outlook',
+        zoho_mail: 'Zoho Mail',
+        imap_smtp: 'IMAP/SMTP',
+      } as const;
+      return mailChannelIds.map((channelId) => {
+        const plugin = defaultMailChannelRegistry.find(channelId);
+        return {
+          channelId,
+          displayName: plugin?.displayName ?? displayNames[channelId],
+          available: plugin !== undefined,
+          configured: channelId === 'gmail' && gmailConfig.configured,
+        };
+      });
+    });
+  }),
+
+  getGmailConfig: adminProcedure.query(async ({ ctx }) => {
+    try {
+      return await withIntegrationServices(ctx.c.env, ({ gmailChannel }) => gmailChannel.get());
+    } catch (error) {
+      mapIntegrationError(error);
+    }
+  }),
+
+  saveGmailConfig: adminProcedure
+    .input(gmailChannelConfigInputSchema)
+    .mutation(async ({ input, ctx }) => {
+      try {
+        return await withIntegrationServices(ctx.c.env, ({ gmailChannel }) =>
+          gmailChannel.save({ ...input, updatedBy: ctx.sessionUser.id }),
+        );
+      } catch (error) {
+        mapIntegrationError(error);
+      }
+    }),
+
   getOverview: adminProcedure.query(async ({ ctx }) => {
     return await withIntegrationServices(ctx.c.env, async ({ repository, nango, gmail }) => {
       const [nangoConfig, gmailConfig, gmailMapping, nangoBindingCount, gmailBindingCount] =

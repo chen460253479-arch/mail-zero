@@ -76,7 +76,7 @@ describe('Nango mailbox binding', () => {
   it('verifies the mailbox identity through the selected channel', async () => {
     const { channel, repository, dependencies } = createDependencies();
 
-    await bindNangoMailbox(input, dependencies);
+    const result = await bindNangoMailbox(input, dependencies);
 
     expect(channel.resolveIdentity).toHaveBeenCalledWith({
       credential: {
@@ -100,6 +100,14 @@ describe('Nango mailbox binding', () => {
       'gmail',
       'owner@example.com',
     );
+    expect(result).toEqual({
+      id: 'zero-mailbox-1',
+      identity: {
+        email: 'Owner@Example.com',
+        name: 'Mailbox Owner',
+        picture: 'https://example.com/avatar.png',
+      },
+    });
   });
 
   it('rejects an already-connected normalized email', async () => {
@@ -186,6 +194,18 @@ describe('Nango mailbox binding', () => {
       code: 'NANGO_CONNECTION_ALREADY_BOUND',
     } satisfies Partial<NangoBindingError>);
     expect(repository.save).not.toHaveBeenCalled();
+  });
+
+  it('maps only a binding-write race to NANGO_CONNECTION_ALREADY_BOUND', async () => {
+    const { repository, dependencies } = createDependencies();
+    vi.mocked(repository.findByNangoReference)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ connectionId: 'other-mailbox' });
+    vi.mocked(repository.save).mockRejectedValue(new Error('unique conflict'));
+
+    await expect(bindNangoMailbox(input, dependencies)).rejects.toMatchObject({
+      code: 'NANGO_CONNECTION_ALREADY_BOUND',
+    } satisfies Partial<NangoBindingError>);
   });
 
   it('does not persist anything when identity verification fails', async () => {

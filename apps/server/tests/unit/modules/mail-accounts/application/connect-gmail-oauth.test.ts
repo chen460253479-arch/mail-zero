@@ -56,6 +56,7 @@ const createRepository = () => {
     getMapping: vi.fn(async () => null),
     setMapping: vi.fn(),
     deleteMapping: vi.fn(),
+    countBindings: vi.fn(async () => 0),
     countNangoBindings: vi.fn(async () => 0),
     countZeroOAuthBindings: vi.fn(async () => 0),
     listNangoReferences: vi.fn(async () => []),

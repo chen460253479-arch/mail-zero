@@ -20,6 +20,7 @@ export type StoreActivationCheckpointInput = {
 export type ActivateSyncInput = {
   syncId: string;
   subscriptionExpiresAt: Date | null;
+  subscriptionWarning?: { code: string; message: string } | null;
 };
 
 export type AcquireSyncLeaseInput = {

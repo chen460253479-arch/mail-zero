@@ -6,14 +6,21 @@ const root = resolve(process.cwd(), '../..');
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 
 describe('Gmail connection UI boundary', () => {
-  it('renders Nango as a Gmail authorization source instead of a platform card', () => {
+  it('routes mailbox connection through the one globally selected authorization source', () => {
     const addDialog = read('apps/mail/components/connection/add.tsx');
     const gmailDialog = read('apps/mail/components/connection/gmail-connect-dialog.tsx');
 
     expect(addDialog).toContain('emailProviders.map');
-    expect(addDialog).toContain('options.data?.nangoAvailable');
+    expect(addDialog).toContain("options.data.mode === 'zero_oauth'");
+    expect(addDialog).toContain("options.data.mode === 'nango'");
+    expect(addDialog).not.toContain("mode === 'choice'");
+    expect(addDialog).not.toContain('zeroOAuthAvailable=');
+    expect(addDialog).not.toContain('nangoAvailable=');
     expect(addDialog).not.toContain('NangoConnectDialog');
     expect(gmailDialog).toContain('listNangoGmailConnections');
+    expect(gmailDialog).not.toContain('startZeroOAuth');
+    expect(gmailDialog).not.toContain('zeroOAuthAvailable');
+    expect(gmailDialog).not.toContain('>Nango<');
   });
 
   it('does not use social login or accept client-selected Nango integrations', () => {

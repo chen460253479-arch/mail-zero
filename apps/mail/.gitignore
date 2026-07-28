@@ -42,9 +42,3 @@ next-env.d.ts
 
 # ide
 .idea
-
-# Sentry Config File
-.env.sentry-build-plugin
-
-# Sentry Config File
-.sentryclirc
