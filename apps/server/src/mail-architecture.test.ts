@@ -20,7 +20,20 @@ const canonicalRoots = [
   'runtime/mail',
 ] as const;
 
+type PackageManifest = {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+};
+
 const normalizePath = (value: string): string => value.split(sep).join('/');
+
+const readManifest = (path: string): PackageManifest =>
+  JSON.parse(readFileSync(resolve(repositoryRoot, path), 'utf8')) as PackageManifest;
+
+const dependencyNames = (manifest: PackageManifest): string[] => [
+  ...Object.keys(manifest.dependencies ?? {}),
+  ...Object.keys(manifest.devDependencies ?? {}),
+];
 
 const collectTypeScriptFiles = (directory: string): string[] =>
   readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -138,6 +151,115 @@ describe('mail server architecture', () => {
     ];
 
     expect(retiredPackageRecords.filter((record) => source.includes(record))).toEqual([]);
+  });
+
+  it('keeps root, Mail Core, and server dependencies owned by their consumers', () => {
+    const rootManifest = readManifest('package.json');
+    const mailCoreManifest = readManifest('packages/mail-core/package.json');
+    const serverManifest = readManifest('apps/server/package.json');
+    const retiredServerDependencies = [
+      '@sentry/cloudflare',
+      '@trpc/client',
+      'cloudflare',
+      'date-fns',
+      'dedent',
+      'jsonrepair',
+      'mimetext',
+      'mime-types',
+      'p-retry',
+      'remeda',
+      'string-strip-html',
+      '@types/uuid',
+    ];
+    const serverDependencies = dependencyNames(serverManifest);
+
+    expect(Object.keys(rootManifest.dependencies ?? {})).toEqual([]);
+    expect(dependencyNames(mailCoreManifest)).not.toContain('ulid');
+    expect(dependencyNames(mailCoreManifest)).toEqual(
+      expect.arrayContaining(['mimetext', 'postal-mime', 'zod']),
+    );
+    expect(
+      retiredServerDependencies.filter((dependency) => serverDependencies.includes(dependency)),
+    ).toEqual([]);
+    expect(serverManifest.dependencies).not.toHaveProperty('wrangler');
+    expect(serverManifest.devDependencies).toHaveProperty('wrangler');
+    expect(serverManifest.dependencies).toEqual(
+      expect.objectContaining({
+        '@googleapis/gmail': expect.any(String),
+        '@zero/mail-core': expect.any(String),
+        'drizzle-orm': expect.any(String),
+        hono: expect.any(String),
+        postgres: expect.any(String),
+      }),
+    );
+  });
+
+  it('keeps mail frontend dependencies minimal and enables Typography', () => {
+    const mailManifest = readManifest('apps/mail/package.json');
+    const globalsCss = readFileSync(resolve(repositoryRoot, 'apps/mail/app/globals.css'), 'utf8');
+    const retiredMailDependencies = [
+      '@dnd-kit/modifiers',
+      '@react-email/html',
+      '@react-email/render',
+      '@sentry/react-router',
+      '@tanstack/query-sync-storage-persister',
+      '@tiptap/extension-bold',
+      '@tiptap/extension-document',
+      '@tiptap/extension-link',
+      '@tiptap/extension-paragraph',
+      '@tiptap/extension-text',
+      '@tiptap/html',
+      '@tiptap/starter-kit',
+      '@trpc/server',
+      'accept-language-parser',
+      'eslint-plugin-react-hooks',
+      'mimetext',
+      'prosemirror-model',
+      'prosemirror-view',
+      'react-colorful',
+      'resend',
+      'tiptap-extension-auto-joiner',
+      'tiptap-extension-global-drag-handle',
+      'workers-og',
+      '@types/accept-language-parser',
+      'drizzle-kit',
+    ];
+    const buildOnlyMailDependencies = [
+      '@react-router/dev',
+      '@tailwindcss/vite',
+      'babel-plugin-react-compiler',
+      'oxlint',
+      'tailwindcss-animate',
+      'vite-plugin-babel',
+      'vite-plugin-oxlint',
+    ];
+    const mailDependencies = dependencyNames(mailManifest);
+    const runtimeDependencies = Object.keys(mailManifest.dependencies ?? {});
+    const developmentDependencies = Object.keys(mailManifest.devDependencies ?? {});
+
+    expect(
+      retiredMailDependencies.filter((dependency) => mailDependencies.includes(dependency)),
+    ).toEqual([]);
+    expect(
+      buildOnlyMailDependencies.filter((dependency) => runtimeDependencies.includes(dependency)),
+    ).toEqual([]);
+    expect(
+      buildOnlyMailDependencies.filter(
+        (dependency) => !developmentDependencies.includes(dependency),
+      ),
+    ).toEqual([]);
+    expect(mailManifest.devDependencies).toHaveProperty('@tailwindcss/typography');
+    expect(globalsCss).toContain('@plugin "@tailwindcss/typography";');
+    expect(mailDependencies).toEqual(
+      expect.arrayContaining([
+        'lowlight',
+        'novel',
+        '@tiptap/core',
+        '@tiptap/pm',
+        '@tiptap/react',
+        'prosemirror-state',
+      ]),
+    );
   });
 
   it('keeps every canonical mail module in its declared root', () => {

@@ -9,6 +9,7 @@
 @import 'tailwindcss';
 
 /* Plugins */
+@plugin "@tailwindcss/typography";
 @plugin "tailwindcss-animate";
 @plugin "tailwind-scrollbar" {
   nocompatible: true;

@@ -47,11 +47,5 @@
     "tsx": "4.20.5",
     "turbo": "^2.5.6",
     "typescript": "catalog:"
-  },
-  "dependencies": {
-    "drizzle-kit": "catalog:",
-    "react-router": "^7.6.3",
-    "zod": "4.1.1",
-    "zod-to-json-schema": "3.24.6"
   }
 }

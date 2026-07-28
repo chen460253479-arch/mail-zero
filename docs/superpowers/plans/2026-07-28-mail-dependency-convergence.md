@@ -29,7 +29,7 @@
 - Consumes: 根目录、`packages/mail-core`、`apps/server`、`apps/mail` 的 `package.json`，以及 `apps/mail/app/globals.css`。
 - Produces: 两个架构约束测试，分别保护后端依赖所有权和前端依赖所有权/插件启用状态。
 
-- [ ] **Step 1: 增加清单读取辅助函数**
+- [x] **Step 1: 增加清单读取辅助函数**
 
 在测试文件中增加：
 
@@ -48,7 +48,7 @@ const dependencyNames = (manifest: PackageManifest): string[] => [
 ];
 ```
 
-- [ ] **Step 2: 增加后端依赖所有权测试**
+- [x] **Step 2: 增加后端依赖所有权测试**
 
 新增测试，断言：
 
@@ -58,9 +58,11 @@ expect(dependencyNames(mailCoreManifest)).not.toContain('ulid');
 expect(dependencyNames(mailCoreManifest)).toEqual(
   expect.arrayContaining(['mimetext', 'postal-mime', 'zod']),
 );
-expect(dependencyNames(serverManifest)).not.toEqual(
-  expect.arrayContaining(retiredServerDependencies),
-);
+expect(
+  retiredServerDependencies.filter((dependency) =>
+    dependencyNames(serverManifest).includes(dependency),
+  ),
+).toEqual([]);
 expect(serverManifest.dependencies).not.toHaveProperty('wrangler');
 expect(serverManifest.devDependencies).toHaveProperty('wrangler');
 expect(serverManifest.dependencies).toEqual(
@@ -76,22 +78,26 @@ expect(serverManifest.dependencies).toEqual(
 
 `retiredServerDependencies` 使用设计文档中列出的 12 个服务端删除项。
 
-- [ ] **Step 3: 增加前端依赖所有权和 Typography 测试**
+- [x] **Step 3: 增加前端依赖所有权和 Typography 测试**
 
 新增测试，断言：
 
 ```ts
-expect(dependencyNames(mailManifest)).not.toEqual(
-  expect.arrayContaining(retiredMailDependencies),
-);
-expect(Object.keys(mailManifest.dependencies ?? {})).not.toEqual(
-  expect.arrayContaining(buildOnlyMailDependencies),
-);
-expect(mailManifest.devDependencies).toEqual(
-  expect.objectContaining(
-    Object.fromEntries(buildOnlyMailDependencies.map((name) => [name, expect.any(String)])),
+expect(
+  retiredMailDependencies.filter((dependency) =>
+    dependencyNames(mailManifest).includes(dependency),
   ),
-);
+).toEqual([]);
+expect(
+  buildOnlyMailDependencies.filter((dependency) =>
+    Object.keys(mailManifest.dependencies ?? {}).includes(dependency),
+  ),
+).toEqual([]);
+expect(
+  buildOnlyMailDependencies.filter(
+    (dependency) => !Object.keys(mailManifest.devDependencies ?? {}).includes(dependency),
+  ),
+).toEqual([]);
 expect(mailManifest.devDependencies).toHaveProperty('@tailwindcss/typography');
 expect(globalsCss).toContain('@plugin "@tailwindcss/typography";');
 expect(dependencyNames(mailManifest)).toEqual(
@@ -109,7 +115,7 @@ expect(dependencyNames(mailManifest)).toEqual(
 `retiredMailDependencies` 使用设计文档中列出的 25 个前端删除项，不包含保留并启用的
 `@tailwindcss/typography`；`buildOnlyMailDependencies` 使用设计文档中列出的 7 个移动项。
 
-- [ ] **Step 4: 运行测试并确认 RED**
+- [x] **Step 4: 运行测试并确认 RED**
 
 Run:
 
@@ -135,7 +141,7 @@ Expected: FAIL；后端测试报告旧依赖或 `wrangler` 所在区域错误，
 - Consumes: Task 1 的后端依赖所有权测试。
 - Produces: 根目录零业务依赖、Mail Core 最小依赖和正确分类的服务端依赖。
 
-- [ ] **Step 1: 修改三份依赖清单**
+- [x] **Step 1: 修改三份依赖清单**
 
 从根目录删除：
 
@@ -168,7 +174,7 @@ string-strip-html
 将服务端 `wrangler` 从 `dependencies` 移入 `devDependencies`，版本继续使用
 `catalog:`。
 
-- [ ] **Step 2: 离线同步锁文件**
+- [x] **Step 2: 离线同步锁文件**
 
 Run:
 
@@ -178,7 +184,7 @@ pnpm install --lockfile-only --offline --ignore-scripts
 
 Expected: exit 0；不下载包、不修改 `node_modules`、不运行 `postinstall` 或 `prepare`。
 
-- [ ] **Step 3: 运行后端依赖测试并确认 GREEN**
+- [x] **Step 3: 运行后端依赖测试并确认 GREEN**
 
 Run:
 
@@ -188,7 +194,7 @@ pnpm --filter @zero/server exec vitest run src/mail-architecture.test.ts -t "kee
 
 Expected: PASS。
 
-- [ ] **Step 4: 验证第一批功能边界**
+- [x] **Step 4: 验证第一批功能边界**
 
 Run:
 
@@ -216,7 +222,7 @@ Expected: 全部 exit 0。
 - Consumes: Task 1 的前端依赖所有权测试和现有 Tailwind 4 插件区。
 - Produces: 去除旧/重复声明的前端依赖、正确分类的构建工具和实际启用的 Typography。
 
-- [ ] **Step 1: 删除无调用方和重复的前端直接依赖**
+- [x] **Step 1: 删除无调用方和重复的前端直接依赖**
 
 删除：
 
@@ -248,7 +254,7 @@ workers-og
 drizzle-kit
 ```
 
-- [ ] **Step 2: 移动构建期依赖**
+- [x] **Step 2: 移动构建期依赖**
 
 把以下依赖从 `dependencies` 移入 `devDependencies`，保持原版本：
 
@@ -262,7 +268,7 @@ vite-plugin-babel
 vite-plugin-oxlint
 ```
 
-- [ ] **Step 3: 显式启用 Typography**
+- [x] **Step 3: 显式启用 Typography**
 
 在 `apps/mail/app/globals.css` 的插件区写入：
 
@@ -275,7 +281,7 @@ vite-plugin-oxlint
 }
 ```
 
-- [ ] **Step 4: 离线同步锁文件**
+- [x] **Step 4: 离线同步锁文件**
 
 Run:
 
@@ -285,7 +291,7 @@ pnpm install --lockfile-only --offline --ignore-scripts
 
 Expected: exit 0；不下载包、不修改 `node_modules`、不运行安装脚本。
 
-- [ ] **Step 5: 运行前端依赖测试并确认 GREEN**
+- [x] **Step 5: 运行前端依赖测试并确认 GREEN**
 
 Run:
 
@@ -295,7 +301,7 @@ pnpm --filter @zero/server exec vitest run src/mail-architecture.test.ts -t "kee
 
 Expected: PASS。
 
-- [ ] **Step 6: 验证前端**
+- [x] **Step 6: 验证前端**
 
 Run:
 
@@ -322,7 +328,7 @@ Expected: 全部 exit 0；最后一条命令至少返回一个包含 `.prose` �
 - Consumes: Tasks 1–3 的依赖清单、锁文件和测试。
 - Produces: 可提交的干净工作区变更与验证记录。
 
-- [ ] **Step 1: 运行完整架构与邮箱回归测试**
+- [x] **Step 1: 运行完整架构与邮箱回归测试**
 
 Run:
 
@@ -334,7 +340,7 @@ pnpm --filter @zero/mail test
 
 Expected: 全部 PASS。
 
-- [ ] **Step 2: 验证锁文件一致性**
+- [x] **Step 2: 验证锁文件一致性**
 
 Run:
 
@@ -344,7 +350,7 @@ pnpm install --lockfile-only --offline --ignore-scripts --frozen-lockfile
 
 Expected: exit 0，`pnpm-lock.yaml` 不再变化。
 
-- [ ] **Step 3: 检查残留和工作区卫生**
+- [x] **Step 3: 检查残留和工作区卫生**
 
 Run:
 
@@ -356,6 +362,6 @@ git status --short
 Expected: 只有计划内文件发生变化；不存在 `.wrangler`、`node-compile-cache`、
 `update-check` 或其他生成文件的未跟踪记录。
 
-- [ ] **Step 4: 更新计划复选框**
+- [x] **Step 4: 更新计划复选框**
 
 完成每个步骤后，将本文件对应的 `- [ ]` 更新为 `- [x]`，确保计划和实际验证一致。
