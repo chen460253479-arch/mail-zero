@@ -14,19 +14,6 @@ test.describe('Signing In, Sending mail, Replying to a mail', () => {
     await page.waitForLoadState('domcontentloaded');
     console.log('Successfully accessed mail inbox');
 
-    await page.waitForTimeout(2000);
-    try {
-      const welcomeModal = page.getByText('Welcome to Zero Email!');
-      if (await welcomeModal.isVisible({ timeout: 2000 })) {
-        console.log('Onboarding modal detected, clicking outside to dismiss...');
-        await page.locator('body').click({ position: { x: 100, y: 100 } });
-        await page.waitForTimeout(1500);
-        console.log('Modal successfully dismissed');
-      }
-    } catch {
-      console.log('No onboarding modal found, proceeding...');
-    }
-
     await expect(page.getByText('Inbox')).toBeVisible();
     await mailApi.expectProcedure('mail.view.threadPage');
     console.log('Mail inbox is now visible');

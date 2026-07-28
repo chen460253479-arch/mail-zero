@@ -262,6 +262,18 @@ describe('mail server architecture', () => {
     );
   });
 
+  it('declares no retired mail onboarding module or dependency', () => {
+    const onboardingPath = resolve(repositoryRoot, 'apps/mail/components/onboarding.tsx');
+    const dependencies = dependencyNames(readManifest('apps/mail/package.json'));
+
+    expect(existsSync(onboardingPath)).toBe(false);
+    expect(
+      ['canvas-confetti', '@types/canvas-confetti'].filter((name) =>
+        dependencies.includes(name),
+      ),
+    ).toEqual([]);
+  });
+
   it('keeps every canonical mail module in its declared root', () => {
     const missing = canonicalRoots.filter((root) => !existsSync(resolve(srcRoot, root)));
     expect(missing).toEqual([]);
