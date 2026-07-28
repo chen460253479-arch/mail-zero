@@ -121,10 +121,6 @@ export default function GeneralPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { mutateAsync: saveUserSettings } = useMutation(trpc.settings.save.mutationOptions());
-  //   const { mutateAsync: setLocaleCookie } = useMutation(
-  //     trpc.cookiePreferences.setLocaleCookie.mutationOptions(),
-  //   );
-  //   const { revalidate } = useRevalidator();
 
   const form = useForm<z.infer<typeof userSettingsSchema>>({
     resolver: zodResolver(userSettingsSchema),

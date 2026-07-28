@@ -126,12 +126,6 @@ export default function SignupZero() {
           >
             Terms of Service
           </a>
-          <a
-            href="/privacy"
-            className="text-[10px] text-gray-500 transition-colors hover:text-gray-300"
-          >
-            Privacy Policy
-          </a>
         </div>
       </footer>
     </div>

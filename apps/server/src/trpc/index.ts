@@ -1,6 +1,5 @@
 import { type inferRouterInputs, type inferRouterOutputs } from '@trpc/server';
 import { integrationsRouter } from './routes/integrations';
-import { cookiePreferencesRouter } from './routes/cookies';
 import { connectionsRouter } from './routes/connections';
 import { categoriesRouter } from './routes/categories';
 import { templatesRouter } from './routes/templates';
@@ -20,7 +19,6 @@ export const appRouter = router({
   categories: categoriesRouter,
   connections: connectionsRouter,
   integrations: integrationsRouter,
-  cookiePreferences: cookiePreferencesRouter,
   mail: mailApiRouter,
   notes: notesRouter,
   shortcut: shortcutRouter,

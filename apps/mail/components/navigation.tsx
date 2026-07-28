@@ -7,16 +7,14 @@ import {
   ListItem,
 } from '@/components/ui/navigation-menu';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { GitHub, Twitter, Discord, LinkedIn, Star } from './icons/icons';
-import { AnimatedNumber } from '@/components/ui/animated-number';
+import { GitHub, Twitter, Discord, LinkedIn } from './icons/icons';
 import { Separator } from '@/components/ui/separator';
-import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/lib/auth-client';
-import { useState, useEffect } from 'react';
 import { Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useState } from 'react';
 
 const resources = [
   {
@@ -52,19 +50,9 @@ const aboutLinks = [
     description: 'Learn more about Zero and our mission.',
   },
   {
-    title: 'Privacy',
-    href: '/privacy',
-    description: 'Read our privacy policy and data handling practices.',
-  },
-  {
     title: 'Terms of Service',
     href: '/terms',
     description: 'Review our terms of service and usage guidelines.',
-  },
-  {
-    title: 'Contributors',
-    href: '/contributors',
-    description: 'See the contributors to Zero.',
   },
 ];
 
@@ -75,36 +63,10 @@ const IconComponent = {
   linkedin: LinkedIn,
 };
 
-interface GitHubApiResponse {
-  stargazers_count: number;
-}
-
 export function Navigation() {
   const [open, setOpen] = useState(false);
-  const [stars, setStars] = useState(0); // Default fallback value
   const { data: session } = useSession();
   const navigate = useNavigate();
-
-  const { data: githubData } = useQuery({
-    queryKey: ['githubStars'],
-    queryFn: async () => {
-      const response = await fetch('https://api.github.com/repos/Mail-0/Zero', {
-        headers: {
-          Accept: 'application/vnd.github.v3+json',
-        },
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch GitHub stars');
-      }
-      return response.json() as Promise<GitHubApiResponse>;
-    },
-  });
-
-  useEffect(() => {
-    if (githubData) {
-      setStars(githubData.stargazers_count || 0);
-    }
-  }, [githubData]);
 
   return (
     <>
@@ -153,13 +115,6 @@ export function Navigation() {
                     </ul>
                   </NavigationMenuContent>
                 </NavigationMenuItem>
-                <NavigationMenuItem className="cursor-pointer bg-transparent text-white">
-                  <a href="/privacy">
-                    <Button variant="ghost" className="ml-1 h-9 bg-transparent">
-                      Privacy
-                    </Button>
-                  </a>
-                </NavigationMenuItem>
               </NavigationMenuList>
             </NavigationMenu>
           </div>
@@ -176,10 +131,6 @@ export function Navigation() {
                 <GitHub className="mr-1 size-4 fill-white" />
                 <span className="ml-1 lg:hidden">Star</span>
                 <span className="ml-1 hidden lg:inline">GitHub</span>
-              </div>
-              <div className="flex items-center gap-1 text-sm">
-                <Star className="relative top-px size-4 fill-gray-400 duration-300 group-hover:fill-yellow-400 group-hover:drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
-                <AnimatedNumber value={stars} className="font-medium text-white" />
               </div>
             </a>
             <Button

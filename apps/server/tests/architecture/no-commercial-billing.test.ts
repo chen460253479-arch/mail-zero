@@ -126,11 +126,6 @@ describe('self-hosted commercial billing removal', () => {
 
     expectNoTokens('apps/mail/app/routes.ts', ["route('/pricing'"]);
     expectNoTokens('apps/mail/components/navigation.tsx', ['/pricing', '>Pricing<']);
-    expectNoTokens('apps/mail/app/(full-width)/privacy.tsx', [
-      'Pricing and Refund Policy',
-      'subscription fees',
-      '7-day free trial',
-    ]);
     expectNoTokens('apps/server/src/lib/auth.ts', ['Mail0ProEmail']);
     expectNoTokens('README.md', ['Autumn Setup', 'AUTUMN_SECRET_KEY']);
     expectNoTokens('AGENT.md', ['AUTUMN_SECRET_KEY']);

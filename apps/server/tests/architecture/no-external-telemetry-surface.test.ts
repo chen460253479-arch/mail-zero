@@ -99,8 +99,11 @@ describe('external analytics and error-reporting removal', () => {
   it('contains no direct or locked external telemetry dependencies', () => {
     const manifests = ['package.json', 'apps/mail/package.json', 'apps/server/package.json'];
     const forbiddenDependencies = [
+      '@coinbase/cookie-manager',
       '@dub/analytics',
       '@dub/better-auth',
+      '@microlabs/otel-cf-workers',
+      '@opentelemetry/api',
       '@sentry/react',
       'dub',
       'posthog-js',
@@ -116,6 +119,8 @@ describe('external analytics and error-reporting removal', () => {
     const forbiddenLockfileRecords = [
       "'@dub/analytics@",
       "'@dub/better-auth@",
+      "'@coinbase/cookie-manager@",
+      "'@microlabs/otel-cf-workers@",
       "'@sentry-internal/",
       "'@sentry/browser@",
       "'@sentry/core@",
@@ -127,6 +132,46 @@ describe('external analytics and error-reporting removal', () => {
     expect(manifestViolations).toEqual([]);
     expect(workspace).not.toContain('@sentry/cli');
     expect(forbiddenLockfileRecords.filter((record) => lockfile.includes(record))).toEqual([]);
+  });
+
+  it('contains no dormant telemetry, analytics consent, or non-essential remote UI surface', () => {
+    const sourceFiles = [
+      'apps/mail/app/root.tsx',
+      'apps/mail/app/routes.ts',
+      'apps/mail/components/home/footer.tsx',
+      'apps/mail/components/home/HomeContent.tsx',
+      'apps/mail/components/navigation.tsx',
+      'apps/server/src/env.ts',
+      'apps/server/src/main.ts',
+      'apps/server/src/trpc/index.ts',
+      'apps/server/wrangler.jsonc',
+    ];
+    const forbiddenTokens = [
+      'react-scan',
+      'unpkg.com',
+      'api.axiom.co',
+      'AXIOM_',
+      'OTEL_',
+      'api.github.com/repos/',
+      'placehold.co',
+      'cookiePreferencesRouter',
+      '/contributors',
+    ];
+    const violations = sourceFiles.flatMap((path) => {
+      const source = readSource(path);
+      return forbiddenTokens
+        .filter((token) => source.includes(token))
+        .map((token) => `${path}:${token}`);
+    });
+    const removedPaths = [
+      'apps/mail/app/(full-width)/contributors.tsx',
+      'apps/server/src/lib/cookies.ts',
+      'apps/server/src/lib/tracing.ts',
+      'apps/server/src/trpc/routes/cookies.ts',
+    ];
+
+    expect(violations).toEqual([]);
+    expect(removedPaths.filter((path) => existsSync(resolve(repositoryRoot, path)))).toEqual([]);
   });
 
   it('does not retain Sentry upload scripts or configuration scaffolding', () => {

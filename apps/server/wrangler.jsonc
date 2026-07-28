@@ -75,8 +75,6 @@
         "VITE_PUBLIC_APP_URL": "http://localhost:3000",
         "JWT_SECRET": "secret",
         "MEET_AUTH_HEADER": "",
-        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://api.axiom.co/v1/traces",
-        "OTEL_SERVICE_NAME": "zero-email-server-local",
       },
     },
     "staging": {
@@ -152,8 +150,6 @@
         "COOKIE_DOMAIN": "0.email",
         "VITE_PUBLIC_BACKEND_URL": "https://sapi.0.email",
         "VITE_PUBLIC_APP_URL": "https://staging.0.email",
-        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://api.axiom.co/v1/traces",
-        "OTEL_SERVICE_NAME": "zero-email-server-staging",
       },
     },
     "production": {
@@ -226,8 +222,6 @@
         "COOKIE_DOMAIN": "0.email",
         "VITE_PUBLIC_BACKEND_URL": "https://api.0.email",
         "VITE_PUBLIC_APP_URL": "https://0.email",
-        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://api.axiom.co/v1/traces",
-        "OTEL_SERVICE_NAME": "zero-email-server-production",
       },
     },
   },

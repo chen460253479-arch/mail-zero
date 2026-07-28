@@ -29,17 +29,11 @@ export type ZeroEnv = {
   REDIS_URL: string;
   REDIS_TOKEN: string;
   EARLY_ACCESS_ENABLED: string;
-  REACT_SCAN: string;
-  AXIOM_API_TOKEN: string;
-  AXIOM_DATASET: string;
   THREADS_BUCKET: R2Bucket;
   DEV_PROXY: string;
   MEET_AUTH_HEADER: string;
   MEET_API_URL: string;
   ENABLE_MEET: 'true' | 'false';
-  OTEL_EXPORTER_OTLP_ENDPOINT?: string;
-  OTEL_EXPORTER_OTLP_HEADERS?: string;
-  OTEL_SERVICE_NAME?: string;
 };
 
 const env = _env as unknown as ZeroEnv;

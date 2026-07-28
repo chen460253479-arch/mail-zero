@@ -20,7 +20,6 @@ import { wakeDueMailSnoozes } from './modules/mail-snooze/runtime/environment';
 import { registerMailBlobRoutes } from './modules/mail-api';
 import { eq, and, desc, asc, inArray } from 'drizzle-orm';
 import { MailSyncError } from './modules/mail-sync';
-// import { instrument, type ResolveConfigFn } from '@microlabs/otel-cf-workers';
 import { getZeroDB } from './lib/server-utils';
 
 import { ensureConfiguredAdmin } from './lib/admin-provisioning';
@@ -607,26 +606,6 @@ const handler = {
     return app.fetch(request, env, ctx);
   },
 };
-
-// const config: ResolveConfigFn = (env: ZeroEnv) => {
-//   return {
-//     exporter: {
-//       url: env.OTEL_EXPORTER_OTLP_ENDPOINT || 'https://api.axiom.co/v1/traces',
-//       headers: env.OTEL_EXPORTER_OTLP_HEADERS
-//         ? Object.fromEntries(
-//             env.OTEL_EXPORTER_OTLP_HEADERS.split(',').map((header: string) => {
-//               const [key, value] = header.split('=');
-//               return [key.trim(), value.trim()];
-//             }),
-//           )
-//         : {},
-//     },
-//     service: {
-//       name: env.OTEL_SERVICE_NAME || 'zero-email-server',
-//       version: '1.0.0',
-//     },
-//   };
-// };
 
 export default class Entry extends WorkerEntrypoint<ZeroEnv> {
   async fetch(request: Request): Promise<Response> {
