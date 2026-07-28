@@ -1,4 +1,4 @@
-# Zero 邮件后端切换与资源退役清单
+# Zero 邮件后端全新部署与验收清单
 
 日期：2026-07-27
 适用范围：`local`、`staging`、`production`
@@ -6,10 +6,12 @@
 ## 1. 执行边界
 
 - 本清单只记录部署和验收动作，不授权自动修改 Cloudflare、GCP、Nango 或 Gmail 外部资源。
-- 必须先部署只使用 Mail Core、Mail Accounts、Mail Sync、Mail Outbound 和新
-  MailChannel 的版本，再退役旧资源。
+- 本清单只适用于全新创建或明确允许清空重建的 Cloudflare Worker；不得直接用于仍承载
+  原 Zero Durable Object 历史的同名 Worker。
+- Worker 只使用 Mail Core、Mail Accounts、Mail Sync、Mail Outbound 和新 MailChannel。
 - PostgreSQL 仍处于允许清空重建的开发阶段，数据库初始化继续使用当前唯一模板；
   本阶段不创建时间线增量 SQL。
+- Wrangler 的三个环境同样只维护当前初始化基线：`v1` 创建 SQLite `ZeroDB`。
 - `THREADS_BUCKET` 已承载正式 Mail Core Blob，禁止因旧名称而删除。
 - `ZERO_DB` 仍承载 Notes、Templates、Settings 等非邮件业务，禁止删除。
 - 每个 GCP Project 只部署一组共享 Gmail Topic/Subscription；断开或删除单个邮箱账号
@@ -17,6 +19,9 @@
 
 ## 2. 发布前检查
 
+- [ ] 目标 Worker 尚未部署，或已经明确删除并允许重建；不存在需要保留的旧 Durable Object 数据。
+- [ ] local、staging、production 均只有一个 `v1` migration，且仅声明
+      `new_sqlite_classes: ["ZeroDB"]`。
 - [ ] 数据库已由当前模板清空重建，`mail`、`integration`、`app`、`auth` Schema 与代码一致。
 - [ ] `MAIL_INGRESS_QUEUE`、`MAIL_OUTBOUND_QUEUE` 已创建且生产者、消费者均绑定。
 - [ ] `THREADS_BUCKET` 和 `HYPERDRIVE` 仍指向当前环境的正式资源。
@@ -49,76 +54,26 @@
 - [ ] Topic/Subscription 由部署任务管理；普通账号绑定、断开和删除流程无创建、修改或
       删除共享资源的权限。
 
-## 4. 环境级旧 Cloudflare 资源
+## 4. Cloudflare Worker 当前基线
 
-先停止旧生产者并检查积压消息；只有确认新链路稳定且旧消息不再需要处理后，才删除外部资源。
-
-### local
-
-- [ ] 旧 Queue：`thread-queue`、`subscribe-queue`、`send-email-queue`。
-- [ ] 旧 Workflow：`sync-threads-workflow`、`sync-threads-coordinator-workflow`。
-- [ ] 旧 KV Binding/Namespace：
-      `gmail_history_id` (`4e814c70e35d413d99c923029928efae`)、
-      `gmail_processing_threads` (`b7db3a98a80f4e16a8b6edc5fa8c7b76`)、
-      `subscribed_accounts` (`7e6eadacf19c4c56a9ec3c357adb584a`)、
-      `connection_labels` (`4d3a28d3265a4388aae2e9e9b534d019`)、
-      `prompts_storage` (`620e710aaea744e59df4788f9ec18ff9`)、
-      `gmail_sub_age` (`c55e692bb71d4e5bae23dded092b09d5`)、
-      `pending_emails_status` (`7f277903ebab4b4d89f5d59b1f531073`)、
-      `pending_emails_payload` (`d5da698931524da9992fe398e095fc32`)、
-      `scheduled_emails` (`444cad0e54114635b5199ffae9542bd5`)、
-      `snoozed_emails` (`f3a30ed7198542d890db172536bade33`)。
-
-### staging
-
-- [ ] 旧 Queue：`thread-queue-staging`、`subscribe-queue-staging`、
-      `send-email-queue-staging`。
-- [ ] 旧 Workflow：`sync-threads-workflow-staging`、
-      `sync-threads-coordinator-workflow-staging`。
-- [ ] 历史配置与 local 共用了上列 KV Namespace ID；删除前必须确认 local 与 staging
-      均已停止访问，不能按单一环境提前删除。
-
-### production
-
-- [ ] 旧 Queue：`thread-queue-prod`、`subscribe-queue-prod`、
-      `send-email-queue-prod`。
-- [ ] 旧 Workflow：`sync-threads-workflow-prod`、
-      `sync-threads-coordinator-workflow-prod`。
-- [ ] 旧 KV Binding/Namespace：
-      `gmail_history_id` (`10005d74e84f4f18a17c9618d9e9cecf`)、
-      `gmail_processing_threads` (`3348ff0976284269a8d8a5e6e4c04c56`)、
-      `subscribed_accounts` (`5902b3b948ff4c4ba1aedbbbbe25503d`)、
-      `connection_labels` (`9a13290a55ad4f62824c67005dd66f6f`)、
-      `prompts_storage` (`2a4ebda553f3456085cfcf92cc0f570f`)、
-      `gmail_sub_age` (`0591e91fffcc4675aaf00f909bee77d2`)、
-      `pending_emails_status`（历史配置 ID：
-      `e65f8f72441d4eadb9d5ae36269316c9`）、
-      `pending_emails_payload`、`scheduled_emails`（历史配置使用派生占位 ID，删除前必须从
-      Cloudflare 实际环境重新解析真实 Namespace ID）、
-      `snoozed_emails` (`f0952e9c3b024cb499c4b9dfe8bb603e`)。
-
-### 所有环境
-
-- [ ] Agent/Chat/Brain 的 AI Binding 已从 Worker 配置移除。
-- [ ] 不再使用的 Vectorize Index：
-      local/staging 的 `threads-vector-staging`、`messages-vector-staging`，
-      production 的 `threads-vector`、`messages-vector`；确认无其他应用共享后再删除。
-- [ ] `ZeroAgent`、`ZeroMCP`、`ZeroDriver`、`ThinkingMCP`、`WorkflowRunner`、
-      `ThreadSyncWorker`、`ShardRegistry` 已通过新增 `deleted_classes` migration 退役。
-- [ ] 不改写 Wrangler 历史 migration；部署成功后再核对旧 DO 类实例已清理。
+- [ ] 每个环境只绑定 `ZERO_DB` 一个 Durable Object 类，类名为 `ZeroDB`。
+- [ ] `ZeroDB` 使用 SQLite Durable Object 初始化，不再创建 legacy KV Durable Object。
+- [ ] Worker 配置只包含 `MAIL_INGRESS_QUEUE` 和 `MAIL_OUTBOUND_QUEUE` 两条邮件 Queue。
+- [ ] Worker 配置不包含旧邮件 KV、Workflow、Vectorize、Agent、Chat、Brain 或 Driver 资源。
+- [ ] `THREADS_BUCKET`、Hyperdrive、`ZERO_DB` 和两条新邮件 Queue 指向本项目当前环境资源。
+- [ ] 如果 Cloudflare 账号中仍存在原 Zero 的外部资源，应先核对所有权和调用流量，再通过
+      独立的基础设施退役任务处理；不得为了兼容这些资源把旧 migration 或绑定重新写回仓库。
 
 ## 5. 发布顺序
 
-1. [ ] 备份当前部署配置与 PostgreSQL（即使开发库允许重建，也保留问题定位依据）。
-2. [ ] 创建/核对新 PostgreSQL Schema、共享 Gmail Pub/Sub 和两条新 Queue。
-3. [ ] 部署包含 `deleted_classes`、新 Mail Sync/Outbound 和已移除旧绑定的 Worker。
-4. [ ] 验证新 Worker 只产生和消费 `MAIL_INGRESS_QUEUE`、`MAIL_OUTBOUND_QUEUE`。
-5. [ ] 完成第 6 节真实运行验收并观察错误率、Queue 积压、租约恢复和数据库状态。
-6. [ ] 停止旧 Queue/Workflow 的生产者与消费者。
-7. [ ] 检查并处理旧 Queue 剩余消息；记录丢弃理由与数量。
-8. [ ] 移除旧 Binding 后再次部署，确认没有代码读取旧资源。
-9. [ ] 按环境删除旧 Queue、Workflow、KV、Vectorize 等外部资源。
-10. [ ] 保留 Wrangler migration 历史、`ZERO_DB`、`THREADS_BUCKET`、Hyperdrive 和两条新 Queue。
+1. [ ] 备份当前部署配置与 PostgreSQL，保留问题定位依据。
+2. [ ] 确认目标 Worker 是全新或可重建环境；如果同名 Worker 承载原 Zero 历史，停止部署并
+       改用新 Worker 名称，或先由基础设施负责人明确删除旧 Worker。
+3. [ ] 创建/核对当前 PostgreSQL Schema、共享 Gmail Pub/Sub 和两条新 Queue。
+4. [ ] 使用单一 `ZeroDB` migration 部署新 Mail Sync/Outbound Worker。
+5. [ ] 验证新 Worker 只产生和消费 `MAIL_INGRESS_QUEUE`、`MAIL_OUTBOUND_QUEUE`。
+6. [ ] 完成第 6 节真实运行验收并观察错误率、Queue 积压、租约恢复和数据库状态。
+7. [ ] 保留 `ZERO_DB`、`THREADS_BUCKET`、Hyperdrive 和两条新 Queue。
 
 ## 6. 真实运行验收
 
@@ -154,8 +109,8 @@
 - Queue 积压持续增长且调度扫描无法重新唤醒；
 - Discovery/Delivery 租约持续无法释放或接管；
 - Draft 已从本地消失但 Submission/Delivery 未形成最终状态；
-- 旧资源退役前发现仍有正式调用流量。
+- 目标 Worker 并非全新环境，或发现仍需保留的原 Zero Durable Object 数据。
 
-触发任一条件时，停止外部资源删除；保留数据库权威状态和新 Queue 消息，回滚 Worker
+触发任一条件时，停止部署；保留数据库权威状态和新 Queue 消息，回滚 Worker
 版本或修复配置。不得恢复旧远端 Gmail 状态作为本地事实来源，也不得同时启用新旧两套
 邮件消费者。

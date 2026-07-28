@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const srcRoot = dirname(fileURLToPath(import.meta.url));
+const repositoryRoot = resolve(srcRoot, '../../..');
 
 const canonicalRoots = [
   'modules/mail',
@@ -94,6 +95,49 @@ describe('mail server architecture', () => {
     });
 
     expect(violations).toEqual([]);
+  });
+
+  it('declares only the fresh ZeroDB Durable Object baseline', () => {
+    const source = readFileSync(resolve(srcRoot, '../wrangler.jsonc'), 'utf8');
+    const retiredClasses = [
+      'DurableMailbox',
+      'ZeroAgent',
+      'ZeroMCP',
+      'ZeroDriver',
+      'ThinkingMCP',
+      'WorkflowRunner',
+      'ThreadSyncWorker',
+      'ShardRegistry',
+    ];
+    const forbiddenDirectives = ['"new_classes"', '"deleted_classes"'];
+
+    expect(
+      retiredClasses
+        .filter((className) => source.includes(className))
+        .map((className) => `wrangler.jsonc:${className}`),
+    ).toEqual([]);
+    expect(forbiddenDirectives.filter((directive) => source.includes(directive))).toEqual([]);
+    expect(source.match(/"migrations":/gu)).toHaveLength(3);
+    expect(source.match(/"tag": "v1"/gu)).toHaveLength(3);
+    expect(source.match(/"new_sqlite_classes": \["ZeroDB"\]/gu)).toHaveLength(3);
+  });
+
+  it('contains no retired Agent runtime records in the workspace lockfile', () => {
+    const source = readFileSync(resolve(repositoryRoot, 'pnpm-lock.yaml'), 'utf8');
+    const retiredPackageRecords = [
+      "'@ai-sdk/",
+      "'@elevenlabs/",
+      'agents@0.0.',
+      'ai@4.3.16',
+      'dormroom@1.0.1',
+      'hono-agents@0.0.83',
+      'hono-party@0.0.12',
+      'partyserver@0.0.',
+      'partysocket@1.1.4',
+      'twilio@5.7.0',
+    ];
+
+    expect(retiredPackageRecords.filter((record) => source.includes(record))).toEqual([]);
   });
 
   it('keeps every canonical mail module in its declared root', () => {
