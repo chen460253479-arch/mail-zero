@@ -10,9 +10,7 @@ export type NangoIntegrationErrorCode =
   | 'NANGO_INSUFFICIENT_PERMISSIONS'
   | 'NANGO_INVALID_RESPONSE'
   | 'NANGO_NOT_CONFIGURED'
-  | 'NANGO_PERMISSION_VALIDATION_FAILED'
   | 'NANGO_REQUEST_FAILED'
-  | 'NANGO_SECRET_REQUIRED'
   | 'NANGO_UNREACHABLE';
 
 export class NangoIntegrationError extends Error {
@@ -28,7 +26,7 @@ export class NangoIntegrationError extends Error {
 
 export const mapNangoClientError = (error: unknown): NangoIntegrationError => {
   if (!(error instanceof NangoClientError)) {
-    return new NangoIntegrationError('NANGO_PERMISSION_VALIDATION_FAILED');
+    return new NangoIntegrationError('NANGO_REQUEST_FAILED');
   }
 
   const code: NangoIntegrationErrorCode =

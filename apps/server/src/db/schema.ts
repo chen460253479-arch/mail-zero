@@ -223,10 +223,7 @@ export const systemIntegrationConfig = createIntegrationTable(
   'system_config',
   {
     id: text('id').primaryKey(),
-    integrationKey: text('integration_key')
-      .$type<'nango' | 'gmail_zero_oauth'>()
-      .notNull()
-      .unique(),
+    integrationKey: text('integration_key').$type<'gmail_zero_oauth'>().notNull().unique(),
     publicConfig: jsonb('public_config').notNull(),
     encryptedSecret: text('encrypted_secret').notNull(),
     status: text('status').$type<'active' | 'error'>().notNull(),
@@ -238,7 +235,7 @@ export const systemIntegrationConfig = createIntegrationTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
   (t) => [
-    check('system_integration_key_chk', sql`${t.integrationKey} IN ('nango', 'gmail_zero_oauth')`),
+    check('system_integration_key_chk', sql`${t.integrationKey} IN ('gmail_zero_oauth')`),
     check('system_integration_status_chk', sql`${t.status} IN ('active', 'error')`),
   ],
 );

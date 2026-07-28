@@ -15,6 +15,7 @@ import {
 import { enqueueDueMailOutboundWork, runMailOutboundCommand } from './runtime/mail/outbound';
 import { MailOutboundError, parseMailOutboundCommand } from './modules/mail-outbound';
 import { parseMailIngressCommand } from './modules/mail-sync/application/commands';
+import { startNangoValidationForEnvironment } from './integrations/nango/runtime';
 import { WorkerEntrypoint, DurableObject, RpcTarget } from 'cloudflare:workers';
 import { wakeDueMailSnoozes } from './modules/mail-snooze/runtime/environment';
 import { registerMailBlobRoutes } from './modules/mail-api';
@@ -609,9 +610,11 @@ const handler = {
 
 export default class Entry extends WorkerEntrypoint<ZeroEnv> {
   async fetch(request: Request): Promise<Response> {
+    startNangoValidationForEnvironment(this.env, this.ctx);
     return handler.fetch(request, this.env, this.ctx);
   }
   async queue(batch: MessageBatch<unknown>) {
+    startNangoValidationForEnvironment(this.env, this.ctx);
     switch (true) {
       case batch.queue.startsWith('mail-ingress-queue'): {
         const messages = batch.messages as Message<unknown>[];
@@ -659,6 +662,7 @@ export default class Entry extends WorkerEntrypoint<ZeroEnv> {
     }
   }
   async scheduled() {
+    startNangoValidationForEnvironment(this.env, this.ctx);
     console.log('Running scheduled tasks...');
 
     await enqueueDueMailIngressWork(this.env);

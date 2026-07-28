@@ -10,18 +10,14 @@ import {
   type GmailChannelConfigServiceDependencies,
 } from '../../../../src/integrations/gmail/channel-config-service';
 import type { SystemIntegrationRecord } from '../../../../src/integrations/core/repository';
+import type { NangoRuntimeStatus } from '../../../../src/integrations/nango/service';
 
 const now = new Date('2026-07-28T08:00:00.000Z');
 
-const activeIntegration = (
-  integrationKey: 'nango' | 'gmail_zero_oauth',
-): SystemIntegrationRecord => ({
-  id: `${integrationKey}-config`,
-  integrationKey,
-  publicConfig:
-    integrationKey === 'nango'
-      ? { baseUrl: 'https://api.nango.dev' }
-      : { clientId: 'gmail-client-id' },
+const activeIntegration = (): SystemIntegrationRecord => ({
+  id: 'gmail_zero_oauth-config',
+  integrationKey: 'gmail_zero_oauth',
+  publicConfig: { clientId: 'gmail-client-id' },
   encryptedSecret: 'ciphertext',
   status: 'active',
   validatedAt: now,
@@ -54,6 +50,7 @@ describe('Gmail channel configuration service', () => {
   let gmailMapping: { externalIntegrationId: string } | null;
   let bindingCounts: { nango: number; zero_oauth: number };
   let subscriptionRefreshes: string[];
+  let nangoStatus: NangoRuntimeStatus;
   let dependencies: GmailChannelConfigServiceDependencies;
 
   beforeEach(() => {
@@ -62,6 +59,11 @@ describe('Gmail channel configuration service', () => {
     gmailMapping = null;
     bindingCounts = { nango: 0, zero_oauth: 0 };
     subscriptionRefreshes = [];
+    nangoStatus = {
+      state: 'unconfigured',
+      checkedAt: null,
+      errorCode: null,
+    };
     dependencies = {
       channels,
       integrations: {
@@ -73,14 +75,49 @@ describe('Gmail channel configuration service', () => {
             : bindingCounts[authSource],
       },
       publicBackendUrl: 'https://mail.example.test/',
+      getNangoStatus: () => nangoStatus,
       requestSubscriptionRefresh: async (provider) => {
         subscriptionRefreshes.push(provider);
       },
     };
   });
 
-  it('rejects Nango mode until Nango and its Gmail mapping are active', async () => {
-    integrations.set('nango', activeIntegration('nango'));
+  it.each(['unconfigured', 'validating', 'unavailable'] as const)(
+    'rejects Nango mode while the environment runtime is %s',
+    async (state) => {
+      nangoStatus =
+        state === 'unavailable'
+          ? {
+              state,
+              checkedAt: now,
+              errorCode: 'NANGO_UNREACHABLE',
+            }
+          : {
+              state,
+              checkedAt: null,
+              errorCode: null,
+            };
+      gmailMapping = { externalIntegrationId: 'gmail-integration' };
+
+      await expect(
+        createGmailChannelConfigService(dependencies).save({
+          authSource: 'nango',
+          inboxWatchEnabled: false,
+          scheduledSyncEnabled: true,
+          syncIntervalMinutes: 10,
+          providerConfig: {},
+          updatedBy: 'admin-1',
+        }),
+      ).rejects.toMatchObject({ code: 'GMAIL_AUTH_SOURCE_NOT_CONFIGURED' });
+    },
+  );
+
+  it('rejects Nango mode until a Gmail Integration mapping is selected', async () => {
+    nangoStatus = {
+      state: 'available',
+      checkedAt: now,
+      errorCode: null,
+    };
 
     await expect(
       createGmailChannelConfigService(dependencies).save({
@@ -92,6 +129,36 @@ describe('Gmail channel configuration service', () => {
         updatedBy: 'admin-1',
       }),
     ).rejects.toMatchObject({ code: 'GMAIL_AUTH_SOURCE_NOT_CONFIGURED' });
+  });
+
+  it('allows Nango mode when the environment runtime and Gmail mapping are ready', async () => {
+    nangoStatus = {
+      state: 'available',
+      checkedAt: now,
+      errorCode: null,
+    };
+    gmailMapping = { externalIntegrationId: 'gmail-integration' };
+
+    await expect(
+      createGmailChannelConfigService(dependencies).save({
+        authSource: 'nango',
+        inboxWatchEnabled: false,
+        scheduledSyncEnabled: true,
+        syncIntervalMinutes: 10,
+        providerConfig: {},
+        updatedBy: 'admin-1',
+      }),
+    ).resolves.toMatchObject({
+      authSource: 'nango',
+      authorizationSources: {
+        nango: {
+          state: 'available',
+          checkedAt: now,
+          errorCode: null,
+          gmailIntegrationId: 'gmail-integration',
+        },
+      },
+    });
   });
 
   it('rejects Zero OAuth mode until its validated configuration is active', async () => {
@@ -108,7 +175,6 @@ describe('Gmail channel configuration service', () => {
   });
 
   it('blocks changing the authorization source while Gmail bindings exist', async () => {
-    integrations.set('nango', activeIntegration('nango'));
     gmailMapping = { externalIntegrationId: 'gmail-integration' };
     bindingCounts.zero_oauth = 1;
     channels.current = {
@@ -137,7 +203,7 @@ describe('Gmail channel configuration service', () => {
   });
 
   it('rejects a mixed authorization binding state even when the saved source matches', async () => {
-    integrations.set('gmail_zero_oauth', activeIntegration('gmail_zero_oauth'));
+    integrations.set('gmail_zero_oauth', activeIntegration());
     bindingCounts = { nango: 1, zero_oauth: 1 };
     channels.current = {
       id: 'gmail-channel-config',
@@ -165,7 +231,7 @@ describe('Gmail channel configuration service', () => {
   });
 
   it('allows trigger settings to change while the selected source has bindings', async () => {
-    integrations.set('gmail_zero_oauth', activeIntegration('gmail_zero_oauth'));
+    integrations.set('gmail_zero_oauth', activeIntegration());
     bindingCounts.zero_oauth = 1;
     channels.current = {
       id: 'gmail-channel-config',
@@ -208,8 +274,9 @@ describe('Gmail channel configuration service', () => {
           },
         },
         nango: {
-          configured: false,
-          serviceConfigured: false,
+          state: 'unconfigured',
+          checkedAt: null,
+          errorCode: null,
           bindingCount: 0,
         },
       },
@@ -217,7 +284,7 @@ describe('Gmail channel configuration service', () => {
   });
 
   it('marks every existing Gmail subscription due when Watch is enabled', async () => {
-    integrations.set('gmail_zero_oauth', activeIntegration('gmail_zero_oauth'));
+    integrations.set('gmail_zero_oauth', activeIntegration());
     channels.current = {
       id: 'gmail-channel-config',
       channelId: 'gmail',
@@ -249,7 +316,7 @@ describe('Gmail channel configuration service', () => {
   });
 
   it('does not request a subscription refresh while Watch is disabled', async () => {
-    integrations.set('gmail_zero_oauth', activeIntegration('gmail_zero_oauth'));
+    integrations.set('gmail_zero_oauth', activeIntegration());
 
     await createGmailChannelConfigService(dependencies).save({
       authSource: 'zero_oauth',

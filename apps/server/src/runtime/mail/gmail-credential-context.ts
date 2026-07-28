@@ -6,11 +6,10 @@ import { resolveConnectionCredential } from '../../modules/mail-accounts/credent
 import { createGoogleGmailApiExecutor } from '../../mail-channel/gmail/shared/google-api';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import type { GmailApiExecutor } from '../../mail-channel/gmail/shared/api-transport';
-import { NangoIntegrationService } from '../../integrations/nango/service';
+import { getNangoServiceForEnvironment } from '../../integrations/nango/runtime';
 import { createCredentialAwareGmailExecutor } from './gmail-api-executor';
 import type { ResolvedCredential } from '../../mail-channel/contracts';
 import { authorizationBinding, connection } from '../../db/schema';
-import { NangoClient } from '../../integrations/nango/client';
 import type { ZeroEnv } from '../../env';
 import type { DB } from '../../db';
 
@@ -43,15 +42,10 @@ const findConnection = async (db: DB, connectionId: string) => {
 };
 
 const createNangoResolver = async (db: DB, runtimeEnv: ZeroEnv) => {
-  const service = new NangoIntegrationService({
-    repository: createSystemIntegrationRepository(db),
-    encryptionKey: runtimeEnv.CREDENTIAL_ENCRYPTION_KEY,
-    createClient: (config) => new NangoClient({ ...config, fetch }),
-    now: () => new Date(),
-  });
-  const config = await service.getRuntimeConfig();
+  const service = getNangoServiceForEnvironment(runtimeEnv);
+  await service.initialize();
   return {
-    client: new NangoClient({ ...config, fetch }),
+    client: service,
     repository: createNangoCredentialRepository(db),
   };
 };

@@ -1,9 +1,5 @@
 import { z } from 'zod';
 
-import {
-  createNangoIntegrationService,
-  type NangoIntegrationService,
-} from '../../integrations/nango/service';
 import { createPostgresConnectionRepository } from '../../modules/mail-accounts/postgres/connection-repository';
 import { provisionGmailMailboxInDatabase } from '../../modules/mail-accounts/runtime/provision-gmail-mailbox';
 import { NangoChannelMappingService } from '../../modules/mail-accounts/application/nango-channel-mapping';
@@ -13,6 +9,8 @@ import { createChannelConfigRepository } from '../../integrations/core/channel-c
 import { createGmailChannelConfigService } from '../../integrations/gmail/channel-config-service';
 import { normalizeMailboxEmail } from '../../modules/mail-accounts/application/mailbox-identity';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
+import { getNangoServiceForEnvironment } from '../../integrations/nango/runtime';
+import type { NangoIntegrationService } from '../../integrations/nango/service';
 import { gmailChannelConfigInputSchema } from '../../mail-channel/gmail/config';
 import { createGmailOAuthApplication } from '../../runtime/mail/gmail-oauth';
 import { defaultMailChannelRegistry } from '../../mail-channel/registry';
@@ -23,7 +21,6 @@ import type { ZeroEnv } from '../../env';
 import { createDb } from '../../db';
 
 type IntegrationServices = {
-  repository: ReturnType<typeof createSystemIntegrationRepository>;
   nango: NangoIntegrationService;
   nangoChannels: NangoChannelMappingService;
   gmail: GmailOAuthService;
@@ -38,14 +35,8 @@ const withIntegrationServices = async <T>(
   try {
     const repository = createSystemIntegrationRepository(db);
     const channelConfigs = createChannelConfigRepository(db);
-    const nango = createNangoIntegrationService({
-      repository,
-      encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
-      fetch,
-      now: () => new Date(),
-    });
+    const nango = getNangoServiceForEnvironment(env);
     return await run({
-      repository,
       nango,
       nangoChannels: new NangoChannelMappingService({
         repository,
@@ -80,6 +71,7 @@ const withIntegrationServices = async <T>(
       gmailChannel: createGmailChannelConfigService({
         channels: channelConfigs,
         integrations: repository,
+        getNangoStatus: () => nango.getStatus(),
         publicBackendUrl: env.VITE_PUBLIC_BACKEND_URL,
         requestSubscriptionRefresh: async (provider) => {
           await createPostgresMailSyncRepository(db).markSubscriptionsDue({
@@ -93,11 +85,6 @@ const withIntegrationServices = async <T>(
     await conn.end();
   }
 };
-
-const nangoCandidateSchema = z.object({
-  baseUrl: z.string().url(),
-  secretKey: z.string().optional(),
-});
 
 const gmailCandidateSchema = z.object({
   clientId: z.string().trim().min(1),
@@ -145,51 +132,6 @@ export const integrationsRouter = router({
         mapIntegrationError(error);
       }
     }),
-
-  getOverview: adminProcedure.query(async ({ ctx }) => {
-    return await withIntegrationServices(ctx.c.env, async ({ repository, nango, gmail }) => {
-      const [nangoConfig, gmailConfig, gmailMapping, nangoBindingCount, gmailBindingCount] =
-        await Promise.all([
-          nango.getSafeConfig(),
-          gmail.getSafeConfig(),
-          repository.getMapping('gmail', 'nango'),
-          repository.countNangoBindings(),
-          repository.countZeroOAuthBindings('gmail'),
-        ]);
-      return {
-        nango: {
-          ...nangoConfig,
-          gmailIntegrationId: gmailMapping?.externalIntegrationId ?? null,
-          bindingCount: nangoBindingCount,
-        },
-        gmail: {
-          ...gmailConfig,
-          bindingCount: gmailBindingCount,
-        },
-      };
-    });
-  }),
-
-  validateAndSaveNango: adminProcedure
-    .input(nangoCandidateSchema)
-    .mutation(async ({ input, ctx }) => {
-      try {
-        return await withIntegrationServices(ctx.c.env, ({ nango }) =>
-          nango.validateAndSave({ ...input, updatedBy: ctx.sessionUser.id }),
-        );
-      } catch (error) {
-        mapIntegrationError(error);
-      }
-    }),
-
-  deleteNango: adminProcedure.mutation(async ({ ctx }) => {
-    try {
-      await withIntegrationServices(ctx.c.env, ({ nango }) => nango.delete());
-      return { deleted: true };
-    } catch (error) {
-      mapIntegrationError(error);
-    }
-  }),
 
   listNangoGmailIntegrations: adminProcedure.query(async ({ ctx }) => {
     try {

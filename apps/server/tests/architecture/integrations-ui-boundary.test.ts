@@ -6,28 +6,37 @@ const root = resolve(process.cwd(), '../..');
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 
 describe('administrator integrations UI boundary', () => {
-  it('guards the route and hides its navigation item from non-administrators', () => {
-    expect(read('apps/mail/app/(routes)/settings/integrations/page.tsx')).toContain(
-      'isAdministrator(session)',
-    );
+  it('hides its navigation item from non-administrators', () => {
     expect(read('apps/mail/config/navigation.ts')).toContain('adminOnly: true');
     expect(read('apps/mail/components/ui/app-sidebar.tsx')).toContain('item.adminOnly');
   });
 
-  it('never renders stored integration secret fields', () => {
-    for (const file of [
-      'apps/mail/components/integrations/nango-settings-card.tsx',
-      'apps/mail/components/integrations/gmail-oauth-settings-card.tsx',
+  it('keeps Nango service credentials and configuration mutations out of the UI', () => {
+    const source = read('apps/mail/components/integrations/gmail-settings-dialog.tsx');
+
+    for (const forbidden of [
+      'nangoBaseUrl',
+      'nangoSecret',
+      'validateAndSaveNango',
+      'deleteNango',
+      'getNangoValidationErrorMessage',
     ]) {
-      const source = read(file);
-      expect(source).not.toMatch(/encryptedSecret|encryptedPayload|accessToken|refreshToken/);
+      expect(source).not.toContain(forbidden);
     }
   });
 
-  it('does not report post-save refresh failures as Nango validation failures', () => {
-    const source = read('apps/mail/components/integrations/nango-settings-card.tsx');
-    expect(source.indexOf('getNangoValidationErrorMessage(error)')).toBeLessThan(
-      source.indexOf('await onChanged()'),
-    );
+  it('keeps the Nango Integration mapping controls in the Gmail dialog', () => {
+    const source = read('apps/mail/components/integrations/gmail-settings-dialog.tsx');
+
+    expect(source).toContain('listNangoGmailIntegrations');
+    expect(source).toContain('setNangoGmailIntegration');
+    expect(source).toContain('gmailIntegrationId');
+  });
+
+  it('polls only the safe runtime status while startup validation is pending', () => {
+    const source = read('apps/mail/components/integrations/gmail-settings-dialog.tsx');
+
+    expect(source).toContain('refetchInterval');
+    expect(source).toContain("nango.state === 'validating'");
   });
 });

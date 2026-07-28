@@ -1,23 +1,17 @@
 import { z } from 'zod';
 
-export const integrationKeys = ['nango', 'gmail_zero_oauth'] as const;
+export const integrationKeys = ['gmail_zero_oauth'] as const;
 export type IntegrationKey = (typeof integrationKeys)[number];
-
-const nangoPublicConfigSchema = z.object({
-  baseUrl: z.string().url(),
-});
 
 const gmailZeroOAuthPublicConfigSchema = z.object({
   clientId: z.string().trim().min(1),
 });
 
 export const integrationPublicSchemas = {
-  nango: nangoPublicConfigSchema,
   gmail_zero_oauth: gmailZeroOAuthPublicConfigSchema,
 } satisfies Record<IntegrationKey, z.ZodTypeAny>;
 
 export type IntegrationPublicConfigMap = {
-  nango: z.infer<typeof nangoPublicConfigSchema>;
   gmail_zero_oauth: z.infer<typeof gmailZeroOAuthPublicConfigSchema>;
 };
 

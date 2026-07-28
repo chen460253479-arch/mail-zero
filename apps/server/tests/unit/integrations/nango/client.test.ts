@@ -19,6 +19,27 @@ const createClient = (fetchMock: typeof fetch) =>
   });
 
 describe('Nango client', () => {
+  it('validates integrations and one bounded connections page', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ data: [] }))
+      .mockResolvedValueOnce(Response.json({ connections: [] }));
+
+    await createClient(fetchMock).validateAccess();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.nango.dev/integrations');
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://api.nango.dev/connections?limit=1&page=0');
+  });
+
+  it('applies a timeout signal to every Nango request', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ data: [] }));
+
+    await createClient(fetchMock).listIntegrations();
+
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
   it('sends the secret only in the Authorization header', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({
@@ -30,6 +51,7 @@ describe('Nango client', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('https://api.nango.dev/integrations', {
       headers: { Authorization: 'Bearer nango-secret' },
+      signal: expect.any(AbortSignal),
     });
     expect(fetchMock.mock.calls[0]?.[0]).not.toContain('nango-secret');
   });
@@ -97,6 +119,7 @@ describe('Nango client', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('https://api.nango.dev/connections?limit=100&page=0', {
       headers: { Authorization: 'Bearer nango-secret' },
+      signal: expect.any(AbortSignal),
     });
   });
 
@@ -117,7 +140,10 @@ describe('Nango client', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       'https://api.nango.dev/connections?limit=100&page=1',
-      { headers: { Authorization: 'Bearer nango-secret' } },
+      {
+        headers: { Authorization: 'Bearer nango-secret' },
+        signal: expect.any(AbortSignal),
+      },
     );
   });
 
@@ -138,7 +164,10 @@ describe('Nango client', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.nango.dev/connections/mailbox%2F1?provider_config_key=gmail+primary',
-      { headers: { Authorization: 'Bearer nango-secret' } },
+      {
+        headers: { Authorization: 'Bearer nango-secret' },
+        signal: expect.any(AbortSignal),
+      },
     );
   });
 

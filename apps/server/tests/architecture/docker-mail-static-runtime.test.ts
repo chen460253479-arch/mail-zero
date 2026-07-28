@@ -56,6 +56,8 @@ describe('Docker Mail static runtime', () => {
     expect(buildArgs).not.toHaveProperty('VITE_INTERNAL_BACKEND_URL');
     expect(buildArgs).not.toHaveProperty('DATABASE_URL');
     expect(buildArgs).not.toHaveProperty('REDIS_TOKEN');
+    expect(buildArgs).not.toHaveProperty('NANGO_BASE_URL');
+    expect(buildArgs).not.toHaveProperty('NANGO_SECRET_KEY');
   });
 
   it('keeps Server on the persisted development runtime', () => {

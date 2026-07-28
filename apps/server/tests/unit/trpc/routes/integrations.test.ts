@@ -11,12 +11,21 @@ vi.mock('cloudflare:workers', () => ({ env: {} }));
 describe('administrator integrations router', () => {
   it('exposes the unified Gmail channel configuration procedures', () => {
     const procedures = Object.keys(integrationsRouter._def.procedures);
-    for (const procedure of ['getChannels', 'getGmailConfig', 'saveGmailConfig']) {
+    for (const procedure of [
+      'getChannels',
+      'getGmailConfig',
+      'saveGmailConfig',
+      'listNangoGmailIntegrations',
+      'setNangoGmailIntegration',
+    ]) {
       expect(procedures).toContain(procedure);
+    }
+    for (const removedProcedure of ['getOverview', 'validateAndSaveNango', 'deleteNango']) {
+      expect(procedures).not.toContain(removedProcedure);
     }
   });
 
-  it('maps occupied integration errors to conflict without provider details', () => {
+  it('maps an occupied Nango channel mapping to conflict', () => {
     expect(() => mapIntegrationError(new NangoIntegrationError('INTEGRATION_IN_USE'))).toThrow(
       expect.objectContaining({
         code: 'CONFLICT',

@@ -4,16 +4,12 @@ import { parsePublicConfig, toSafeIntegration } from '../../../../src/integratio
 
 describe('system integration repository', () => {
   it('parses public configuration by integration key', () => {
-    expect(parsePublicConfig('nango', { baseUrl: 'https://api.nango.dev' })).toEqual({
-      baseUrl: 'https://api.nango.dev',
-    });
     expect(parsePublicConfig('gmail_zero_oauth', { clientId: 'client-id' })).toEqual({
       clientId: 'client-id',
     });
   });
 
   it('rejects public configuration for the wrong integration key', () => {
-    expect(() => parsePublicConfig('nango', { clientId: 'client-id' })).toThrow();
     expect(() =>
       parsePublicConfig('gmail_zero_oauth', { baseUrl: 'https://api.nango.dev' }),
     ).toThrow();
@@ -23,8 +19,8 @@ describe('system integration repository', () => {
     const validatedAt = new Date('2026-07-24T08:00:00.000Z');
     const safe = toSafeIntegration({
       id: 'integration-1',
-      integrationKey: 'nango',
-      publicConfig: { baseUrl: 'https://api.nango.dev' },
+      integrationKey: 'gmail_zero_oauth',
+      publicConfig: { clientId: 'client-id' },
       encryptedSecret: 'ciphertext',
       status: 'active',
       validatedAt,
@@ -35,8 +31,8 @@ describe('system integration repository', () => {
 
     expect(safe).toEqual({
       configured: true,
-      key: 'nango',
-      publicConfig: { baseUrl: 'https://api.nango.dev' },
+      key: 'gmail_zero_oauth',
+      publicConfig: { clientId: 'client-id' },
       secretConfigured: true,
       status: 'active',
       validatedAt,

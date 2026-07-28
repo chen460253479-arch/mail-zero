@@ -189,7 +189,7 @@ CREATE TABLE "integration"."system_config" (
 	"created_at" timestamp with time zone NOT NULL,
 	"updated_at" timestamp with time zone NOT NULL,
 	CONSTRAINT "system_config_integration_key_unique" UNIQUE("integration_key"),
-	CONSTRAINT "system_integration_key_chk" CHECK ("integration"."system_config"."integration_key" IN ('nango', 'gmail_zero_oauth')),
+	CONSTRAINT "system_integration_key_chk" CHECK ("integration"."system_config"."integration_key" IN ('gmail_zero_oauth')),
 	CONSTRAINT "system_integration_status_chk" CHECK ("integration"."system_config"."status" IN ('active', 'error'))
 );
 --> statement-breakpoint

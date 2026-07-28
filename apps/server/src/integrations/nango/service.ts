@@ -1,188 +1,253 @@
-import {
-  parsePublicConfig,
-  toSafeIntegration,
-  type SafeIntegration,
-  type SystemIntegrationRepository,
-} from '../../integrations/core/repository';
-import {
-  decryptCredential,
-  encryptCredential,
-} from '../../infrastructure/security/credential-encryption';
+import type { NangoConnection, NangoConnectionSummary, NangoIntegration } from './schemas';
+import { NangoClient, NangoClientError, type NangoOperation } from './client';
 import { mapNangoClientError, NangoIntegrationError } from './errors';
-import type { NangoIntegration } from './schemas';
-import { NangoClient } from './client';
-
-type NangoClientLike = Pick<NangoClient, 'listIntegrations' | 'listConnections' | 'getConnection'>;
-
-type NangoSecret = {
-  secretKey: string;
-};
 
 type NangoRuntimeConfig = {
   baseUrl: string;
   secretKey: string;
 };
 
+type NangoClientLike = Pick<
+  NangoClient,
+  'validateAccess' | 'listIntegrations' | 'listConnections' | 'getConnection'
+>;
+
+export type NangoRuntimeErrorCode =
+  | 'NANGO_ENV_INCOMPLETE'
+  | 'NANGO_ENV_INVALID'
+  | 'NANGO_API_KEY_INVALID'
+  | 'NANGO_ENDPOINT_NOT_FOUND'
+  | 'NANGO_INSUFFICIENT_PERMISSIONS'
+  | 'NANGO_INVALID_RESPONSE'
+  | 'NANGO_REQUEST_FAILED'
+  | 'NANGO_UNREACHABLE';
+
+export type NangoRuntimeStatus =
+  | { state: 'unconfigured'; checkedAt: null; errorCode: null }
+  | { state: 'validating'; checkedAt: null; errorCode: null }
+  | { state: 'available'; checkedAt: Date; errorCode: null }
+  | {
+      state: 'unavailable';
+      checkedAt: Date;
+      errorCode: NangoRuntimeErrorCode;
+    };
+
 type NangoIntegrationServiceDependencies = {
-  repository: SystemIntegrationRepository;
-  encryptionKey: string;
+  baseUrl?: string;
+  secretKey?: string;
   createClient(config: NangoRuntimeConfig): NangoClientLike;
   now(): Date;
+  logError(
+    code: NangoRuntimeErrorCode,
+    details: { operation: NangoOperation | null; status: number | null },
+  ): void;
 };
 
-const normalizeBaseUrl = (value: string): string => new URL(value).toString().replace(/\/+$/, '');
+const unconfiguredStatus = (): NangoRuntimeStatus => ({
+  state: 'unconfigured',
+  checkedAt: null,
+  errorCode: null,
+});
 
-const uniqueReferences = (
-  references: Array<{ integrationId: string; connectionId: string }>,
-): Array<{ integrationId: string; connectionId: string }> => [
-  ...new Map(
-    references.map((reference) => [
-      `${reference.integrationId}\u0000${reference.connectionId}`,
-      reference,
-    ]),
-  ).values(),
-];
+const validatingStatus = (): NangoRuntimeStatus => ({
+  state: 'validating',
+  checkedAt: null,
+  errorCode: null,
+});
 
-const mapWithConcurrency = async <T>(
-  values: T[],
-  concurrency: number,
-  run: (value: T) => Promise<void>,
-): Promise<void> => {
-  let index = 0;
-  const worker = async () => {
-    while (index < values.length) {
-      const value = values[index++];
-      if (value !== undefined) await run(value);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, worker));
-};
+const normalizeRuntimeConfig = (
+  input: Pick<NangoIntegrationServiceDependencies, 'baseUrl' | 'secretKey'>,
+):
+  | { kind: 'unconfigured' }
+  | { kind: 'invalid'; errorCode: NangoRuntimeErrorCode }
+  | { kind: 'configured'; config: NangoRuntimeConfig } => {
+  const baseUrl = input.baseUrl?.trim() ?? '';
+  const secretKey = input.secretKey?.trim() ?? '';
 
-export class NangoIntegrationService {
-  constructor(private readonly dependencies: NangoIntegrationServiceDependencies) {}
-
-  async getSafeConfig(): Promise<SafeIntegration<'nango'> | { configured: false }> {
-    const record = await this.dependencies.repository.get('nango');
-    return record
-      ? toSafeIntegration({ ...record, integrationKey: 'nango' })
-      : { configured: false };
+  if (!baseUrl && !secretKey) return { kind: 'unconfigured' };
+  if (!baseUrl || !secretKey) {
+    return { kind: 'invalid', errorCode: 'NANGO_ENV_INCOMPLETE' };
   }
 
-  async getRuntimeConfig(): Promise<NangoRuntimeConfig> {
-    const record = await this.dependencies.repository.get('nango');
-    if (!record) throw new NangoIntegrationError('NANGO_NOT_CONFIGURED');
-    const publicConfig = parsePublicConfig('nango', record.publicConfig);
-    const secret = await decryptCredential<NangoSecret>(
-      record.encryptedSecret,
-      this.dependencies.encryptionKey,
-    );
-    if (!secret.secretKey) throw new NangoIntegrationError('NANGO_NOT_CONFIGURED');
-    return { baseUrl: publicConfig.baseUrl, secretKey: secret.secretKey };
-  }
-
-  async validateAndSave(input: {
-    baseUrl: string;
-    secretKey?: string;
-    updatedBy: string;
-  }): Promise<SafeIntegration<'nango'>> {
-    const baseUrl = normalizeBaseUrl(input.baseUrl);
-    const [current, references] = await Promise.all([
-      this.dependencies.repository.get('nango'),
-      this.dependencies.repository.listNangoReferences(),
-    ]);
-
-    if (current && references.length > 0) {
-      const currentConfig = parsePublicConfig('nango', current.publicConfig);
-      if (normalizeBaseUrl(currentConfig.baseUrl) !== baseUrl) {
-        throw new NangoIntegrationError('INTEGRATION_IN_USE');
-      }
+  try {
+    const url = new URL(baseUrl);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return { kind: 'invalid', errorCode: 'NANGO_ENV_INVALID' };
     }
-
-    const secretKey = input.secretKey?.trim() || (await this.readExistingSecret(current));
-    if (!secretKey) throw new NangoIntegrationError('NANGO_SECRET_REQUIRED');
-
-    const client = this.dependencies.createClient({ baseUrl, secretKey });
-    await this.validatePermissions(client, references);
-
-    const validatedAt = this.dependencies.now();
-    const encryptedSecret = await encryptCredential(
-      { secretKey } satisfies NangoSecret,
-      this.dependencies.encryptionKey,
-    );
-    await this.dependencies.repository.saveActive({
-      integrationKey: 'nango',
-      publicConfig: { baseUrl },
-      encryptedSecret,
-      updatedBy: input.updatedBy,
-      validatedAt,
-    });
-
     return {
-      configured: true,
-      key: 'nango',
-      publicConfig: { baseUrl },
-      secretConfigured: true,
-      status: 'active',
-      validatedAt,
+      kind: 'configured',
+      config: {
+        baseUrl: url.toString().replace(/\/+$/, ''),
+        secretKey,
+      },
+    };
+  } catch {
+    return { kind: 'invalid', errorCode: 'NANGO_ENV_INVALID' };
+  }
+};
+
+const toRuntimeFailure = (
+  error: unknown,
+): {
+  errorCode: NangoRuntimeErrorCode;
+  operation: NangoOperation | null;
+  status: number | null;
+} => {
+  if (!(error instanceof NangoClientError)) {
+    return {
+      errorCode: 'NANGO_REQUEST_FAILED',
+      operation: null,
+      status: null,
     };
   }
 
+  const errorCode: NangoRuntimeErrorCode =
+    error.code === 'INVALID_API_KEY'
+      ? 'NANGO_API_KEY_INVALID'
+      : error.code === 'INSUFFICIENT_PERMISSIONS'
+        ? 'NANGO_INSUFFICIENT_PERMISSIONS'
+        : error.code === 'ENDPOINT_NOT_FOUND'
+          ? 'NANGO_ENDPOINT_NOT_FOUND'
+          : error.code === 'INVALID_RESPONSE'
+            ? 'NANGO_INVALID_RESPONSE'
+            : error.status === null
+              ? 'NANGO_UNREACHABLE'
+              : 'NANGO_REQUEST_FAILED';
+
+  return {
+    errorCode,
+    operation: error.operation,
+    status: error.status,
+  };
+};
+
+export class NangoIntegrationService {
+  private status: NangoRuntimeStatus;
+  private initialization: Promise<NangoRuntimeStatus> | undefined;
+  private client: NangoClientLike | undefined;
+
+  constructor(private readonly dependencies: NangoIntegrationServiceDependencies) {
+    this.status =
+      dependencies.baseUrl?.trim() || dependencies.secretKey?.trim()
+        ? validatingStatus()
+        : unconfiguredStatus();
+  }
+
+  getStatus(): NangoRuntimeStatus {
+    return this.status;
+  }
+
+  initialize(): Promise<NangoRuntimeStatus> {
+    if (!this.initialization) {
+      this.initialization = this.runInitialization();
+    }
+    return this.initialization;
+  }
+
   async listIntegrations(): Promise<NangoIntegration[]> {
-    const client = this.dependencies.createClient(await this.getRuntimeConfig());
     try {
-      return await client.listIntegrations();
+      return await (await this.getValidatedClient()).listIntegrations();
     } catch (error) {
+      if (error instanceof NangoIntegrationError) throw error;
       throw mapNangoClientError(error);
     }
   }
 
-  async delete(): Promise<void> {
-    if ((await this.dependencies.repository.countNangoBindings()) > 0) {
-      throw new NangoIntegrationError('INTEGRATION_IN_USE');
-    }
-    await this.dependencies.repository.deleteNangoConfiguration();
-  }
-
-  private async readExistingSecret(
-    current: Awaited<ReturnType<SystemIntegrationRepository['get']>>,
-  ): Promise<string | undefined> {
-    if (!current) return undefined;
-    const secret = await decryptCredential<NangoSecret>(
-      current.encryptedSecret,
-      this.dependencies.encryptionKey,
-    );
-    return secret.secretKey;
-  }
-
-  private async validatePermissions(
-    client: NangoClientLike,
-    references: Array<{ integrationId: string; connectionId: string }>,
-  ): Promise<void> {
+  async listConnections(integrationId?: string): Promise<NangoConnectionSummary[]> {
     try {
-      await client.listIntegrations();
-      await client.listConnections();
-      if (references.length > 0) {
-        await mapWithConcurrency(uniqueReferences(references), 5, async (reference) => {
-          await client.getConnection(reference.connectionId, reference.integrationId);
-        });
-      }
+      return await (await this.getValidatedClient()).listConnections(integrationId);
     } catch (error) {
+      if (error instanceof NangoIntegrationError) throw error;
       throw mapNangoClientError(error);
     }
+  }
+
+  async getConnection(connectionId: string, integrationId: string): Promise<NangoConnection> {
+    try {
+      return await (await this.getValidatedClient()).getConnection(connectionId, integrationId);
+    } catch (error) {
+      if (error instanceof NangoIntegrationError) throw error;
+      throw mapNangoClientError(error);
+    }
+  }
+
+  private async runInitialization(): Promise<NangoRuntimeStatus> {
+    const result = normalizeRuntimeConfig(this.dependencies);
+
+    if (result.kind === 'unconfigured') {
+      this.status = unconfiguredStatus();
+      return this.status;
+    }
+
+    if (result.kind === 'invalid') {
+      return this.recordFailure(result.errorCode, null, null);
+    }
+
+    this.status = validatingStatus();
+
+    try {
+      this.client = this.dependencies.createClient(result.config);
+      await this.client.validateAccess();
+      this.status = {
+        state: 'available',
+        checkedAt: this.dependencies.now(),
+        errorCode: null,
+      };
+      return this.status;
+    } catch (error) {
+      this.client = undefined;
+      const failure = toRuntimeFailure(error);
+      return this.recordFailure(failure.errorCode, failure.operation, failure.status);
+    }
+  }
+
+  private async getValidatedClient(): Promise<NangoClientLike> {
+    const status = await this.initialize();
+    if (status.state === 'unconfigured') {
+      throw new NangoIntegrationError('NANGO_NOT_CONFIGURED');
+    }
+    if (status.state !== 'available' || !this.client) {
+      throw new NangoIntegrationError('NANGO_INTEGRATION_UNAVAILABLE');
+    }
+    return this.client;
+  }
+
+  private recordFailure(
+    errorCode: NangoRuntimeErrorCode,
+    operation: NangoOperation | null,
+    status: number | null,
+  ): NangoRuntimeStatus {
+    this.status = {
+      state: 'unavailable',
+      checkedAt: this.dependencies.now(),
+      errorCode,
+    };
+    this.dependencies.logError(errorCode, { operation, status });
+    return this.status;
   }
 }
 
 export { NangoIntegrationError } from './errors';
 
 export const createNangoIntegrationService = (input: {
-  repository: SystemIntegrationRepository;
-  encryptionKey: string;
+  baseUrl?: string;
+  secretKey?: string;
   fetch: typeof fetch;
   now(): Date;
+  logError?: NangoIntegrationServiceDependencies['logError'];
 }): NangoIntegrationService =>
   new NangoIntegrationService({
-    repository: input.repository,
-    encryptionKey: input.encryptionKey,
+    baseUrl: input.baseUrl,
+    secretKey: input.secretKey,
     createClient: (config) => new NangoClient({ ...config, fetch: input.fetch }),
     now: input.now,
+    logError:
+      input.logError ??
+      ((code, details) => {
+        console.error('Nango runtime validation failed', {
+          code,
+          operation: details.operation,
+          status: details.status,
+        });
+      }),
   });

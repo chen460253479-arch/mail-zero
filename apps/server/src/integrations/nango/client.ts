@@ -42,15 +42,23 @@ export class NangoClientError extends Error {
 
 export class NangoClient {
   private readonly baseUrl: string;
+  private readonly timeoutMs: number;
 
   constructor(
     private readonly config: {
       baseUrl: string;
       secretKey: string;
       fetch: typeof fetch;
+      timeoutMs?: number;
     },
   ) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, '');
+    this.timeoutMs = config.timeoutMs ?? 10_000;
+  }
+
+  async validateAccess(): Promise<void> {
+    await this.listIntegrations();
+    await this.listConnectionsPage(1, 0);
   }
 
   async listIntegrations(): Promise<NangoIntegration[]> {
@@ -60,16 +68,12 @@ export class NangoClient {
   }
 
   async listConnections(integrationId?: string): Promise<NangoConnectionSummary[]> {
-    const operation = 'list_connections';
     const pageSize = 100;
     const connections: NangoConnectionSummary[] = [];
     const seen = new Set<string>();
 
     for (let page = 0; ; page++) {
-      const query = new URLSearchParams({ limit: String(pageSize), page: String(page) });
-      const payload = await this.request(`/connections?${query.toString()}`, operation);
-      const result = this.parse(connectionListSchema, payload, operation);
-      const pageConnections = 'data' in result ? result.data : result.connections;
+      const pageConnections = await this.listConnectionsPage(pageSize, page);
       let added = 0;
 
       for (const connection of pageConnections) {
@@ -105,6 +109,7 @@ export class NangoClient {
       const fetchImpl = this.config.fetch;
       response = await fetchImpl(`${this.baseUrl}${path}`, {
         headers: { Authorization: `Bearer ${this.config.secretKey}` },
+        signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {
       throw new NangoClientError('REQUEST_FAILED', null, operation, { cause: error });
@@ -129,6 +134,17 @@ export class NangoClient {
     } catch (error) {
       throw new NangoClientError('INVALID_RESPONSE', response.status, operation, { cause: error });
     }
+  }
+
+  private async listConnectionsPage(
+    limit: number,
+    page: number,
+  ): Promise<NangoConnectionSummary[]> {
+    const operation = 'list_connections';
+    const query = new URLSearchParams({ limit: String(limit), page: String(page) });
+    const payload = await this.request(`/connections?${query.toString()}`, operation);
+    const result = this.parse(connectionListSchema, payload, operation);
+    return 'data' in result ? result.data : result.connections;
   }
 
   private parse<T extends z.ZodTypeAny>(

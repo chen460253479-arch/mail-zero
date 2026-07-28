@@ -1355,7 +1355,7 @@
       "checkConstraints": {
         "system_integration_key_chk": {
           "name": "system_integration_key_chk",
-          "value": "\"integration\".\"system_config\".\"integration_key\" IN ('nango', 'gmail_zero_oauth')"
+          "value": "\"integration\".\"system_config\".\"integration_key\" IN ('gmail_zero_oauth')"
         },
         "system_integration_status_chk": {
           "name": "system_integration_status_chk",

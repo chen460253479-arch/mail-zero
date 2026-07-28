@@ -62,7 +62,6 @@ export interface SystemIntegrationRepository {
   get<K extends IntegrationKey>(key: K): Promise<SystemIntegrationRecord | null>;
   saveActive<K extends IntegrationKey>(input: SaveActiveIntegrationInput<K>): Promise<void>;
   delete(key: IntegrationKey): Promise<void>;
-  deleteNangoConfiguration(): Promise<void>;
   getMapping(
     channelId: MailChannelId,
     authSource: 'nango',
@@ -72,7 +71,6 @@ export interface SystemIntegrationRepository {
   countBindings(channelId: MailChannelId, authSource?: 'zero_oauth' | 'nango'): Promise<number>;
   countNangoBindings(providerConfigKey?: string): Promise<number>;
   countZeroOAuthBindings(channelId: MailChannelId): Promise<number>;
-  listNangoReferences(): Promise<Array<{ integrationId: string; connectionId: string }>>;
   createOAuthSession(input: CreateOAuthSessionInput): Promise<string>;
   getOAuthSession(input: {
     id: string;
@@ -121,17 +119,6 @@ export const createSystemIntegrationRepository = (db: DB): SystemIntegrationRepo
 
   delete: async (key) => {
     await db.delete(systemIntegrationConfig).where(eq(systemIntegrationConfig.integrationKey, key));
-  },
-
-  deleteNangoConfiguration: async () => {
-    await db.transaction(async (tx) => {
-      await tx
-        .delete(channelIntegrationMapping)
-        .where(eq(channelIntegrationMapping.authSource, 'nango'));
-      await tx
-        .delete(systemIntegrationConfig)
-        .where(eq(systemIntegrationConfig.integrationKey, 'nango'));
-    });
   },
 
   getMapping: async (channelId, authSource) =>
@@ -205,19 +192,6 @@ export const createSystemIntegrationRepository = (db: DB): SystemIntegrationRepo
       );
     return result?.value ?? 0;
   },
-
-  listNangoReferences: async () =>
-    (
-      await db
-        .select({
-          integrationId: authorizationBinding.nangoProviderConfigKey,
-          connectionId: authorizationBinding.nangoConnectionId,
-        })
-        .from(authorizationBinding)
-        .where(eq(authorizationBinding.authSource, 'nango'))
-    ).flatMap(({ integrationId, connectionId }) =>
-      integrationId && connectionId ? [{ integrationId, connectionId }] : [],
-    ),
 
   createOAuthSession: async (input) => {
     const id = crypto.randomUUID();

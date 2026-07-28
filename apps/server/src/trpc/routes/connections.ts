@@ -12,6 +12,7 @@ import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router 
 import { withNangoRuntime, type NangoRuntime } from '../../modules/mail-accounts/runtime/nango';
 import { resolveFetchedNangoCredential } from '../../modules/mail-accounts/credentials/nango';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
+import { getNangoServiceForEnvironment } from '../../integrations/nango/runtime';
 import { defaultMailChannelRegistry } from '../../mail-channel/registry';
 import { NangoIntegrationError } from '../../integrations/nango/errors';
 import { user as userTable } from '../../db/schema';
@@ -25,14 +26,18 @@ import { z } from 'zod';
 
 const nangoRuntimeConfig = () => ({
   databaseUrl: env.HYPERDRIVE.connectionString,
-  encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
+  NANGO_BASE_URL: env.NANGO_BASE_URL,
+  NANGO_SECRET_KEY: env.NANGO_SECRET_KEY,
 });
 
 const withConfiguredNango = async <T>(run: (runtime: NangoRuntime) => Promise<T>): Promise<T> => {
   try {
     return await withNangoRuntime(nangoRuntimeConfig(), run);
   } catch (error) {
-    if (error instanceof NangoIntegrationError && error.code === 'NANGO_NOT_CONFIGURED') {
+    if (
+      error instanceof NangoIntegrationError &&
+      (error.code === 'NANGO_NOT_CONFIGURED' || error.code === 'NANGO_INTEGRATION_UNAVAILABLE')
+    ) {
       throw new TRPCError({
         code: 'PRECONDITION_FAILED',
         message: error.code,
@@ -45,15 +50,15 @@ const withConfiguredNango = async <T>(run: (runtime: NangoRuntime) => Promise<T>
 const getGmailAuthorizationOptionsForDatabase = async (db: DB) => {
   const repository = createSystemIntegrationRepository(db);
   const channelRepository = createChannelConfigRepository(db);
-  const [zeroOAuth, nango, nangoMapping, channelConfig] = await Promise.all([
+  const [zeroOAuth, nangoMapping, channelConfig] = await Promise.all([
     repository.get('gmail_zero_oauth'),
-    repository.get('nango'),
     repository.getMapping('gmail', 'nango'),
     channelRepository.get('gmail'),
   ]);
+  const nangoStatus = getNangoServiceForEnvironment(env).getStatus();
   const availability = {
     zeroOAuthAvailable: zeroOAuth?.status === 'active',
-    nangoAvailable: nango?.status === 'active' && nangoMapping !== null,
+    nangoAvailable: nangoStatus.state === 'available' && nangoMapping !== null,
   };
   const selectedAuthSource =
     channelConfig?.authSource === 'zero_oauth' || channelConfig?.authSource === 'nango'
