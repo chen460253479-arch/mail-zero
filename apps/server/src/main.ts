@@ -42,9 +42,6 @@ import { appRouter } from './trpc';
 import { cors } from 'hono/cors';
 import { Hono } from 'hono';
 
-const SENTRY_HOST = 'o4509328786915328.ingest.us.sentry.io';
-const SENTRY_PROJECT_IDS = new Set(['4509328795303936']);
-
 export class DbRpcDO extends RpcTarget {
   constructor(
     private mainDo: ZeroDB,
@@ -612,35 +609,6 @@ const app = new Hono<HonoContext>()
   .route('/api', api)
   .get('/health', (c) => c.json({ message: 'Zero Server is Up!' }))
   .get('/', (c) => c.redirect(`${env.VITE_PUBLIC_APP_URL}`))
-  .post('/monitoring/sentry', async (c) => {
-    try {
-      const envelopeBytes = await c.req.arrayBuffer();
-      const envelope = new TextDecoder().decode(envelopeBytes);
-      const piece = envelope.split('\n')[0];
-      const header = JSON.parse(piece);
-      const dsn = new URL(header['dsn']);
-      const project_id = dsn.pathname?.replace('/', '');
-
-      if (dsn.hostname !== SENTRY_HOST) {
-        throw new Error(`Invalid sentry hostname: ${dsn.hostname}`);
-      }
-
-      if (!project_id || !SENTRY_PROJECT_IDS.has(project_id)) {
-        throw new Error(`Invalid sentry project id: ${project_id}`);
-      }
-
-      const upstream_sentry_url = `https://${SENTRY_HOST}/api/${project_id}/envelope/`;
-      await fetch(upstream_sentry_url, {
-        method: 'POST',
-        body: envelopeBytes,
-      });
-
-      return c.json({}, { status: 200 });
-    } catch (e) {
-      console.error('error tunneling to sentry', e);
-      return c.json({ error: 'error tunneling to sentry' }, { status: 500 });
-    }
-  })
   .post('/api/mail/channels/gmail/push', async (c) => {
     const tracer = initTracing();
     const span = tracer.startSpan('mail.gmail.push', {

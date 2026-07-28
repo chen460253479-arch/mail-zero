@@ -9,12 +9,11 @@ import {
   useNavigate,
   type MetaFunction,
 } from 'react-router';
-import { Analytics as DubAnalytics } from '@dub/analytics/react';
 import { ServerProviders } from '@/providers/server-providers';
 import { ClientProviders } from '@/providers/client-providers';
 import { getServerBackendUrl } from '@/lib/server-backend-url';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
-import { useEffect, type PropsWithChildren } from 'react';
+import type { PropsWithChildren } from 'react';
 import type { AppRouter } from '@zero/server/trpc';
 import { Button } from '@/components/ui/button';
 import { getLocale } from '@/paraglide/runtime';
@@ -25,7 +24,6 @@ import type { Route } from './+types/root';
 import { AlertCircle } from 'lucide-react';
 import { m } from '@/paraglide/messages';
 import { ArrowLeft } from 'lucide-react';
-import * as Sentry from '@sentry/react';
 import superjson from 'superjson';
 import './globals.css';
 
@@ -81,11 +79,6 @@ export function Layout({ children }: PropsWithChildren) {
       <body className="antialiased">
         <ServerProviders userId={userId}>
           <ClientProviders>{children}</ClientProviders>
-          <DubAnalytics
-            domainsConfig={{
-              refer: 'mail0.com',
-            }}
-          />
         </ServerProviders>
         <ScrollRestoration />
         <Scripts />
@@ -107,55 +100,9 @@ export default function App() {
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  let message = 'Oops!';
-  let details = 'An unexpected error occurred.';
-  let stack: string | undefined;
-
-  if (isRouteErrorResponse(error)) {
-    message = error.status === 404 ? '404' : 'Error';
-    details =
-      error.status === 404 ? 'The requested page could not be found.' : error.statusText || details;
-    if (error.status === 404) {
-      return <NotFound />;
-    }
-  } else if (import.meta.env.DEV && error && error instanceof Error) {
-    details = error.message;
-    stack = error.stack;
+  if (isRouteErrorResponse(error) && error.status === 404) {
+    return <NotFound />;
   }
-
-  useEffect(() => {
-    console.error(error);
-    console.error({ message, details, stack });
-
-    // Report error to Sentry
-    if (isRouteErrorResponse(error)) {
-      Sentry.captureException(new Error(`Route Error ${error.status}: ${error.statusText}`), {
-        tags: {
-          type: 'route_error',
-          status: error.status,
-        },
-        extra: {
-          statusText: error.statusText,
-          data: error.data,
-        },
-      });
-    } else if (error instanceof Error) {
-      Sentry.captureException(error, {
-        tags: {
-          type: 'app_error',
-        },
-      });
-    } else {
-      Sentry.captureException(new Error('Unknown error occurred'), {
-        tags: {
-          type: 'unknown_error',
-        },
-        extra: {
-          error: error,
-        },
-      });
-    }
-  }, [error, message, details, stack]);
 
   return (
     <div className="dark:bg-background flex w-full items-center justify-center bg-white text-center">

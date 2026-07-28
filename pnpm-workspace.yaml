@@ -19,7 +19,6 @@ catalog:
   zod: ^3.25.42
 
 onlyBuiltDependencies:
-  - '@sentry/cli'
   - '@tailwindcss/oxide'
   - better-sqlite3
   - core-js

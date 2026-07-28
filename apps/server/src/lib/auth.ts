@@ -3,7 +3,6 @@ import { createAuthMiddleware, jwt, bearer } from 'better-auth/plugins';
 import { getBrowserTimezone, isValidTimezone } from './timezones';
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { dubAnalytics } from '@dub/better-auth';
 import { defaultUserSettings } from './schemas';
 import { APIError } from 'better-auth/api';
 import { getZeroDB } from './server-utils';
@@ -12,19 +11,10 @@ import { connection } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { createDb } from '../db';
 import { env } from '../env';
-import { Dub } from 'dub';
 
 export const createAuth = () => {
-  const dub = new Dub();
-
   return betterAuth({
-    plugins: [
-      dubAnalytics({
-        dubClient: dub,
-      }),
-      jwt(),
-      bearer(),
-    ],
+    plugins: [jwt(), bearer()],
     user: {
       additionalFields: {
         role: {

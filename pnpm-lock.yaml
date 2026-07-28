@@ -94,9 +94,6 @@ importers:
       '@dnd-kit/utilities':
         specifier: 3.2.2
         version: 3.2.2(react@19.1.0)
-      '@dub/analytics':
-        specifier: 0.0.29
-        version: 0.0.29
       '@fontsource-variable/geist':
         specifier: 5.2.6
         version: 5.2.6
@@ -109,9 +106,6 @@ importers:
       '@react-email/components':
         specifier: ^0.0.36
         version: 0.0.36(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@sentry/react':
-        specifier: 9.40.0
-        version: 9.40.0(react@19.1.0)
       '@tanstack/react-query':
         specifier: ^5.74.4
         version: 5.81.5(react@19.1.0)
@@ -374,9 +368,6 @@ importers:
       '@coinbase/cookie-manager':
         specifier: 1.1.8
         version: 1.1.8
-      '@dub/better-auth':
-        specifier: 0.0.3
-        version: 0.0.3
       '@googleapis/gmail':
         specifier: 12.0.0
         version: 12.0.0
@@ -422,9 +413,6 @@ importers:
       drizzle-orm:
         specifier: 'catalog:'
         version: 0.43.1(@opentelemetry/api@1.9.0)(@types/pg@8.6.1)(better-sqlite3@11.10.0)(kysely@0.28.5)(postgres@3.4.5)
-      dub:
-        specifier: 0.64.2
-        version: 0.64.2(zod@3.25.67)
       effect:
         specifier: 3.16.12
         version: 3.16.12
@@ -1009,12 +997,6 @@ packages:
 
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
-
-  '@dub/analytics@0.0.29':
-    resolution: {integrity: sha512-/h6KyOdhCFy+pHEOQB/82uCCLU4x9PPtQuw6TZ9iqgaDZXQjL0+M6LZ0B0k4vIQkuLMyRwcvx4Mjl1YPMqoADw==}
-
-  '@dub/better-auth@0.0.3':
-    resolution: {integrity: sha512-5haJGPt8Xab1L4De6naqEwC8k2KJrxI2iAfs5t9u6iNob3DNBTsbSZGb2godIigg9ZsS2J+joKKG5hDK6jT0UQ==}
 
   '@effect/language-service@0.31.1':
     resolution: {integrity: sha512-XnnM1crPsikx/qT5nSkOgmdXBsaucZPa3O5tO63mqqFxqiThkhKb8XTUCrixJmcbcAcGAxm4eUZUQVjXJnXf6g==}
@@ -3464,36 +3446,6 @@ packages:
   '@selderee/plugin-htmlparser2@0.11.0':
     resolution: {integrity: sha512-P33hHGdldxGabLFjPPpaTxVolMrzrcegejx+0GxjrIb9Zv48D8yAIA/QTDR2dFl7Uz7urX8aX6+5bCZslr+gWQ==}
 
-  '@sentry-internal/browser-utils@9.40.0':
-    resolution: {integrity: sha512-Ajvz6jN+EEMKrOHcUv2+HlhbRUh69uXhhRoBjJw8sc61uqA2vv3QWyBSmTRoHdTnLGboT5bKEhHIkzVXb+YgEw==}
-    engines: {node: '>=18'}
-
-  '@sentry-internal/feedback@9.40.0':
-    resolution: {integrity: sha512-39UbLdGWGvSJ7bAzRnkv91cBdd6fLbdkLVVvqE2ZUfegm7+rH1mRPglmEhw4VE4mQfKZM1zWr/xus2+XPqJcYw==}
-    engines: {node: '>=18'}
-
-  '@sentry-internal/replay-canvas@9.40.0':
-    resolution: {integrity: sha512-GLoJ4R4Uipd7Vb+0LzSJA2qCyN1J6YalQIoDuOJTfYyykHvKltds5D8a/5S3Q6d8PcL/nxTn93fynauGEZt2Ow==}
-    engines: {node: '>=18'}
-
-  '@sentry-internal/replay@9.40.0':
-    resolution: {integrity: sha512-WrmCvqbLJQC45IFRVN3k0J5pU5NkdX0e9o6XxjcmDiATKk00RHnW4yajnCJ8J1cPR4918yqiJHPX5xpG08BZNA==}
-    engines: {node: '>=18'}
-
-  '@sentry/browser@9.40.0':
-    resolution: {integrity: sha512-qz/1Go817vcsbcIwgrz4/T34vi3oQ4UIqikosuaCTI9wjZvK0HyW3QmLvTbAnsE7G7h6+UZsVkpO5R16IQvQhQ==}
-    engines: {node: '>=18'}
-
-  '@sentry/core@9.40.0':
-    resolution: {integrity: sha512-cZkuz6BDna6VXSqvlWnrRsaDx4QBKq1PcfQrqhVz8ljs0M7Gcl+Mtj8dCzUxx12fkYM62hQXG72DEGNlAQpH/Q==}
-    engines: {node: '>=18'}
-
-  '@sentry/react@9.40.0':
-    resolution: {integrity: sha512-y00d33qozmQAKroQ4Kk2jxhznprPBOb55SL4LOpNPRHGEomxZCUeM3geltczrf14JsGowCr5+xlT+cZQ2XcNlA==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      react: ^16.14.0 || 17.x || 18.x || 19.x
-
   '@simplewebauthn/browser@13.1.2':
     resolution: {integrity: sha512-aZnW0KawAM83fSBUgglP5WofbrLbLyr7CoPqYr66Eppm7zO86YX6rrCjRB3hQKPrL7ATvY4FVXlykZ6w6FwYYw==}
 
@@ -4926,16 +4878,6 @@ packages:
       sqlite3:
         optional: true
 
-  dub@0.64.2:
-    resolution: {integrity: sha512-9Zn+kN1tix/qgPUe+8W4tX3XbcqueUuyHDuW4X+GKG/PDZ+vgXR0aQPk9gy6IWuffaJIaknwXtYslzS+2zfNTg==}
-    hasBin: true
-    peerDependencies:
-      '@modelcontextprotocol/sdk': '>=1.5.0 <1.10.0'
-      zod: ^3
-    peerDependenciesMeta:
-      '@modelcontextprotocol/sdk':
-        optional: true
-
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
@@ -5506,9 +5448,6 @@ packages:
   highlight.js@11.11.1:
     resolution: {integrity: sha512-Xwwo44whKBVCYoliBQwaPvtd/2tYFkRQtXDWj1nackaV2JPXx3L0+Jvd8/qCJ2p+ML0/XVkJ2q+Mr+UVdpJK5w==}
     engines: {node: '>=12.0.0'}
-
-  hoist-non-react-statics@3.3.2:
-    resolution: {integrity: sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw==}
 
   hono@4.8.3:
     resolution: {integrity: sha512-jYZ6ZtfWjzBdh8H/0CIFfCBHaFL75k+KMzaM177hrWWm2TWL39YMYaJgB74uK/niRc866NMlH9B8uCvIo284WQ==}
@@ -7224,9 +7163,6 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
-  server-only@0.0.1:
-    resolution: {integrity: sha512-qepMx2JxAa5jjfzxG79yPPq+8BuFToHd1hm7kI+Z4zAq1ftQiP7HcxMhDDItrbtwVeLg/cY2JnKnrcFkmiswNA==}
-
   set-cookie-parser@2.7.1:
     resolution: {integrity: sha512-IOc8uWeOZgnb3ptbCURJWNjWUPcO3ZnTTdzsurqERrP6nPyv+paC55vJM0LpOlT2ne+Ix+9+CRG1MNLlyZ4GjQ==}
 
@@ -8710,14 +8646,6 @@ snapshots:
       tslib: 2.8.1
 
   '@drizzle-team/brocli@0.10.2': {}
-
-  '@dub/analytics@0.0.29':
-    dependencies:
-      server-only: 0.0.1
-
-  '@dub/better-auth@0.0.3':
-    dependencies:
-      zod: 3.25.67
 
   '@effect/language-service@0.31.1': {}
 
@@ -10962,41 +10890,6 @@ snapshots:
       domhandler: 5.0.3
       selderee: 0.11.0
 
-  '@sentry-internal/browser-utils@9.40.0':
-    dependencies:
-      '@sentry/core': 9.40.0
-
-  '@sentry-internal/feedback@9.40.0':
-    dependencies:
-      '@sentry/core': 9.40.0
-
-  '@sentry-internal/replay-canvas@9.40.0':
-    dependencies:
-      '@sentry-internal/replay': 9.40.0
-      '@sentry/core': 9.40.0
-
-  '@sentry-internal/replay@9.40.0':
-    dependencies:
-      '@sentry-internal/browser-utils': 9.40.0
-      '@sentry/core': 9.40.0
-
-  '@sentry/browser@9.40.0':
-    dependencies:
-      '@sentry-internal/browser-utils': 9.40.0
-      '@sentry-internal/feedback': 9.40.0
-      '@sentry-internal/replay': 9.40.0
-      '@sentry-internal/replay-canvas': 9.40.0
-      '@sentry/core': 9.40.0
-
-  '@sentry/core@9.40.0': {}
-
-  '@sentry/react@9.40.0(react@19.1.0)':
-    dependencies:
-      '@sentry/browser': 9.40.0
-      '@sentry/core': 9.40.0
-      hoist-non-react-statics: 3.3.2
-      react: 19.1.0
-
   '@simplewebauthn/browser@13.1.2': {}
 
   '@simplewebauthn/server@13.1.2':
@@ -12518,10 +12411,6 @@ snapshots:
       kysely: 0.28.5
       postgres: 3.4.5
 
-  dub@0.64.2(zod@3.25.67):
-    dependencies:
-      zod: 3.25.67
-
   dunder-proto@1.0.1:
     dependencies:
       call-bind-apply-helpers: 1.0.2
@@ -13339,10 +13228,6 @@ snapshots:
       hermes-estree: 0.25.1
 
   highlight.js@11.11.1: {}
-
-  hoist-non-react-statics@3.3.2:
-    dependencies:
-      react-is: 16.13.1
 
   hono@4.8.3: {}
 
@@ -15403,8 +15288,6 @@ snapshots:
   semver@6.3.1: {}
 
   semver@7.7.2: {}
-
-  server-only@0.0.1: {}
 
   set-cookie-parser@2.7.1: {}
 
