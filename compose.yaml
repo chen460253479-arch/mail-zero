@@ -29,9 +29,16 @@ x-zero-development: &zero-development
 
 services:
   mail:
-    <<: *zero-development
+    image: zero-mail-runtime
+    build:
+      context: .
+      dockerfile: docker/mail/Dockerfile
+      args:
+        VITE_PUBLIC_APP_URL: ${VITE_PUBLIC_APP_URL:-http://localhost:3000}
+        VITE_PUBLIC_BACKEND_URL: ${VITE_PUBLIC_BACKEND_URL:-http://localhost:8787}
+        VITE_PUBLIC_IMAGE_PROXY: ${VITE_PUBLIC_IMAGE_PROXY:-}
+        VITE_PUBLIC_IMAGE_API_URL: ${VITE_PUBLIC_IMAGE_API_URL:-}
     container_name: zerodotemail-mail
-    command: ['mail']
     restart: unless-stopped
     depends_on:
       server:
@@ -39,17 +46,11 @@ services:
     ports:
       - '${ZERO_MAIL_PORT:-3000}:3000'
     healthcheck:
-      test:
-        [
-          'CMD',
-          'node',
-          '-e',
-          "fetch('http://127.0.0.1:3000/@vite/client').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
-        ]
+      test: ['CMD', 'wget', '--spider', '--quiet', 'http://127.0.0.1:3000/health']
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 30s
+      start_period: 10s
 
   server:
     <<: *zero-development

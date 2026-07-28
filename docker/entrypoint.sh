@@ -60,9 +60,6 @@ if [ "${dependencies_current}" = false ]; then
 fi
 
 case "${1:-}" in
-  mail)
-    exec pnpm --dir apps/mail dev --host 0.0.0.0 --port 3000
-    ;;
   server)
     exec pnpm --dir apps/server exec wrangler dev \
       --ip 0.0.0.0 \

@@ -25,9 +25,9 @@ const reactCompilerPlugins =
         }),
       ];
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [
-    oxlintPlugin(),
+    ...(command === 'serve' ? [oxlintPlugin()] : []),
     reactRouter(),
     cloudflare(),
     ...reactCompilerPlugins,
@@ -78,4 +78,4 @@ export default defineConfig({
       tslib: 'tslib/tslib.es6.js',
     },
   },
-});
+}));

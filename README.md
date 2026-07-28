@@ -105,18 +105,29 @@ You can set up Zero in two ways:
 3. **Start the complete development stack**
 
    ```bash
-   docker compose up --build --detach
+   pnpm docker:deploy
    ```
 
-   Docker manages the Mail frontend, Wrangler backend, PostgreSQL, Valkey, and the Redis HTTP
-   proxy. Source changes are hot-reloaded without running `pnpm dev` on the host.
+   Docker runs Mail as a prebuilt Nginx static site and keeps the Wrangler backend in development
+   mode. The deployment command builds both images, initializes the Docker dependency volumes,
+   starts the complete stack, waits for every service to become healthy, and prints the final
+   service status. It does not initialize, migrate, or clear application database schemas.
+
+   Server source changes are hot-reloaded. Rebuild only Mail after changing frontend source or any
+   `VITE_PUBLIC_*` value:
+
+   ```bash
+   docker compose up --detach --build --no-deps mail
+   ```
+
+   `docker compose restart mail` only restarts the existing frontend image.
 
 4. **Manage the stack**
 
    ```bash
    docker compose ps
    docker compose logs --follow
-   docker compose restart mail server
+   docker compose restart server
    docker compose down
    ```
 

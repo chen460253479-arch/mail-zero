@@ -6,7 +6,23 @@ const root = resolve(process.cwd(), '../..');
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 
 describe('Docker development stack', () => {
-  it('uses one development-only Compose file', () => {
+  it('provides a safe full-stack Docker deployment command', () => {
+    const packageJson = JSON.parse(read('package.json')) as {
+      scripts: Record<string, string>;
+    };
+    const deployCommand = packageJson.scripts['docker:deploy'] ?? '';
+    const deploySteps = deployCommand.split(/\s*&&\s*/);
+
+    expect(deploySteps).toEqual([
+      'docker compose build',
+      'docker compose run --rm --no-deps server install-dependencies',
+      'docker compose up --detach --wait --wait-timeout 180',
+      'docker compose ps',
+    ]);
+    expect(deployCommand).not.toMatch(/\bdown\b|--volumes|db:push|db:migrate|db:seed/);
+  });
+
+  it('uses one local Compose file during the static Mail transition', () => {
     const compose = read('compose.yaml');
     const env = read('.env.example');
     const packageJson = read('package.json');
@@ -43,9 +59,10 @@ describe('Docker development stack', () => {
     expect(compose).toContain('image: docker.io/bitnami/valkey:latest');
     expect(compose).toContain('postgres-data:/var/lib/postgresql/data');
     expect(compose).toContain('valkey-data:/bitnami/valkey/data');
-    expect(compose).toContain("fetch('http://127.0.0.1:3000/@vite/client')");
+    expect(compose).toContain('http://127.0.0.1:3000/health');
+    expect(compose).not.toContain('/@vite/client');
     expect(compose).toContain("fetch('http://127.0.0.1:8787/health')");
-    expect([...compose.matchAll(/process\.exit\(response\.ok \? 0 : 1\)/g)]).toHaveLength(2);
+    expect([...compose.matchAll(/process\.exit\(response\.ok \? 0 : 1\)/g)]).toHaveLength(1);
   });
 
   it('keeps Linux dependencies outside the Windows source mount', () => {
@@ -67,18 +84,29 @@ describe('Docker development stack', () => {
     const compose = read('compose.yaml');
     const dockerfile = read('docker/Dockerfile');
     const entrypoint = read('docker/entrypoint.sh');
+    const mailDockerfile = read('docker/mail/Dockerfile');
+    const mailNginx = read('docker/mail/nginx.conf');
 
     expect(compose).toMatch(/  server:\n(?:    .*\n)*?    build:/);
     expect(compose.match(/dockerfile: docker\/Dockerfile/g)).toHaveLength(1);
+    expect(compose).toContain('dockerfile: docker/mail/Dockerfile');
     expect(dockerfile).toContain('FROM node:22-bookworm-slim');
     expect(dockerfile).toContain('libc++1');
     expect(dockerfile).toContain('pnpm@10.15.0');
     expect(dockerfile).toContain('COPY docker/entrypoint.sh /usr/local/bin/zero-dev-entrypoint');
     expect(dockerfile).toContain('ENTRYPOINT ["zero-dev-entrypoint"]');
-    expect(entrypoint).toContain('pnpm --dir apps/mail dev');
+    expect(entrypoint).not.toContain('pnpm --dir apps/mail dev');
     expect(entrypoint).toContain('wrangler dev');
     expect(entrypoint).not.toContain('migrations)');
     expect(entrypoint).not.toContain('db:push');
+    expect(mailDockerfile).toContain('FROM node:22-bookworm-slim AS builder');
+    expect(mailDockerfile).toContain('pnpm@10.15.0');
+    expect(mailDockerfile).toContain('pnpm --filter @zero/mail build');
+    expect(mailDockerfile).toContain('FROM nginx:1.28-alpine AS runtime');
+    expect(mailDockerfile).toContain('apps/mail/build/client');
+    expect(mailNginx).toContain('location = /health');
+    expect(mailNginx).toContain('max-age=31536000, immutable');
+    expect(mailNginx).toContain('try_files $uri $uri/ /index.html');
   });
 
   it('keeps the development runtime script with its image', () => {
@@ -106,7 +134,10 @@ describe('Docker development stack', () => {
 
     expect(readme).toContain('docker compose up --build --detach');
     expect(readme).toContain('docker compose logs --follow');
-    expect(readme).toContain('Source changes are hot-reloaded');
+    expect(readme).toContain('Mail as a prebuilt Nginx static site');
+    expect(readme).toContain('Server source changes are hot-reloaded');
+    expect(readme).toContain('docker compose up --detach --build --no-deps mail');
+    expect(readme).toContain('docker compose restart mail');
     expect(readme).not.toContain('COMPOSE_PROFILES');
     expect(readme).not.toContain('production application container');
     expect(readme).not.toContain('applies migrations automatically');
