@@ -79,6 +79,9 @@ const environmentSchema = z
     GITHUB_CLIENT_ID: optionalString,
     GITHUB_CLIENT_SECRET: optionalString,
     MAIL_PROTOCOL_ALLOWED_HOSTS: optionalString,
+    INTEGRATION_API_TOKEN: optionalString,
+    MAIL_WEBHOOK_ENABLED: booleanFromEnvironment(false),
+    MAIL_WEBHOOK_URL: optionalUrl,
   })
   .superRefine((value, context) => {
     if ((value.NANGO_BASE_URL === undefined) !== (value.NANGO_SECRET_KEY === undefined)) {
@@ -86,6 +89,13 @@ const environmentSchema = z
         code: z.ZodIssueCode.custom,
         message: 'NANGO_BASE_URL and NANGO_SECRET_KEY must be configured together',
         path: ['NANGO_BASE_URL'],
+      });
+    }
+    if (value.MAIL_WEBHOOK_ENABLED && value.MAIL_WEBHOOK_URL === undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'MAIL_WEBHOOK_URL is required when MAIL_WEBHOOK_ENABLED is true',
+        path: ['MAIL_WEBHOOK_URL'],
       });
     }
   });
@@ -125,6 +135,13 @@ export type RuntimeConfig = {
   };
   github: { clientId?: string; clientSecret?: string };
   protocolAllowedHosts?: string;
+  externalIntegration: {
+    apiToken?: string;
+    webhook: {
+      enabled: boolean;
+      url?: string;
+    };
+  };
 };
 
 export type RuntimeEnvironmentSource = Readonly<Record<string, string | undefined>>;
@@ -187,5 +204,14 @@ export const parseRuntimeConfig = (source: RuntimeEnvironmentSource): RuntimeCon
     ...(parsed.MAIL_PROTOCOL_ALLOWED_HOSTS === undefined
       ? {}
       : { protocolAllowedHosts: parsed.MAIL_PROTOCOL_ALLOWED_HOSTS }),
+    externalIntegration: {
+      ...(parsed.INTEGRATION_API_TOKEN === undefined
+        ? {}
+        : { apiToken: parsed.INTEGRATION_API_TOKEN }),
+      webhook: {
+        enabled: parsed.MAIL_WEBHOOK_ENABLED,
+        ...(parsed.MAIL_WEBHOOK_URL === undefined ? {} : { url: parsed.MAIL_WEBHOOK_URL }),
+      },
+    },
   };
 };

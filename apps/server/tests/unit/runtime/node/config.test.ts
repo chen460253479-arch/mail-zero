@@ -29,6 +29,35 @@ const validEnvironment = (): Record<string, string | undefined> => ({
 });
 
 describe('parseRuntimeConfig', () => {
+  it('parses generic external integration configuration', () => {
+    expect(
+      parseRuntimeConfig({
+        ...validEnvironment(),
+        INTEGRATION_API_TOKEN: 'integration-secret',
+        MAIL_WEBHOOK_ENABLED: 'true',
+        MAIL_WEBHOOK_URL: 'https://external.example.test/mail-events',
+      }),
+    ).toMatchObject({
+      externalIntegration: {
+        apiToken: 'integration-secret',
+        webhook: {
+          enabled: true,
+          url: 'https://external.example.test/mail-events',
+        },
+      },
+    });
+  });
+
+  it('requires a webhook URL when mail notifications are enabled', () => {
+    expect(() =>
+      parseRuntimeConfig({
+        ...validEnvironment(),
+        MAIL_WEBHOOK_ENABLED: 'true',
+        MAIL_WEBHOOK_URL: '',
+      }),
+    ).toThrow(/MAIL_WEBHOOK_URL/u);
+  });
+
   it('normalizes the complete self-hosted runtime boundary', () => {
     const source: RuntimeEnvironmentSource = validEnvironment();
 

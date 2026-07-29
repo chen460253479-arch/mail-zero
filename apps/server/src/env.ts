@@ -12,6 +12,9 @@ export type ZeroEnv = {
   NANGO_ZOHO_MAIL_INTEGRATION_KEY?: string;
   NANGO_IMAP_SMTP_INTEGRATION_KEY?: string;
   MAIL_PROTOCOL_ALLOWED_HOSTS?: string;
+  INTEGRATION_API_TOKEN?: string;
+  MAIL_WEBHOOK_ENABLED?: 'true' | 'false';
+  MAIL_WEBHOOK_URL?: string;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
   RESEND_API_KEY: string;
