@@ -34,7 +34,41 @@ describe('mail notification worker', () => {
     });
 
     worker.start();
-    await vi.waitFor(() => expect(deliver).toHaveBeenCalledWith(event));
+    await vi.waitFor(() => expect(deliver).toHaveBeenCalledWith(event, expect.any(AbortSignal)));
     await worker.stop();
+  });
+
+  it('aborts an active delivery when the worker stops', async () => {
+    const claim = vi.fn().mockResolvedValueOnce([event]).mockResolvedValue([]);
+    let deliverySignal: AbortSignal | undefined;
+    const deliver = vi.fn(
+      async (_event: ClaimedMailNotification, signal: AbortSignal) =>
+        await new Promise<void>((resolve) => {
+          deliverySignal = signal;
+          signal.addEventListener('abort', () => resolve(), { once: true });
+        }),
+    );
+    const worker = createMailNotificationWorker({
+      repository: {
+        claim,
+      },
+      deliver,
+      concurrency: 1,
+      pollIntervalMs: 10,
+      leaseForMs: 60_000,
+      clock: {
+        now: () => new Date('2026-07-29T10:00:00.000Z'),
+      },
+      newOwner: () => 'worker-1',
+      logger: {
+        error: vi.fn(),
+      },
+    });
+
+    worker.start();
+    await vi.waitFor(() => expect(deliverySignal).toBeDefined());
+    await worker.stop();
+
+    expect(deliverySignal?.aborted).toBe(true);
   });
 });

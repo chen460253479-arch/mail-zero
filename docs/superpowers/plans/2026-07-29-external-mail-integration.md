@@ -1549,3 +1549,13 @@ git diff --check
 git add apps/server/tests
 git commit -m "test(integration): verify external mail flow"
 ```
+
+---
+
+### 审查修正：外部会话路由与 Webhook Worker 生命周期
+
+- [x] 移除 `/mail/[folder]`、`/mail/compose`、`/mail/create` 的 Better Auth 二次校验，由支持外部会话的父级邮件访问边界统一鉴权。
+- [x] 增加携带 `zero-external-session` Cookie 访问 `/mail/inbox` 的 Loader 回归测试。
+- [x] 将通知 Worker 的中止信号传入 Webhook 投递，并增加小于租约和关闭宽限期的投递超时。
+- [x] 将超时和关闭中止视为可重试投递失败，保留原 `eventId` 并由 Outbox 仓储重新调度。
+- [x] 端到端测试改为使用生产绑定服务、受控 Nango 客户端、生产账号编排和实际通知 Worker。

@@ -18,6 +18,8 @@ type DeliverPendingEventDependencies = {
   webhookUrl: string;
   fetch: typeof fetch;
   repository: MailNotificationDeliveryRepository;
+  signal?: AbortSignal;
+  timeoutMs: number;
   clock: {
     now(): Date;
   };
@@ -36,6 +38,22 @@ export const deliverPendingEvent = async (
   event: ClaimedMailNotification,
   dependencies: DeliverPendingEventDependencies,
 ): Promise<void> => {
+  if (!Number.isSafeInteger(dependencies.timeoutMs) || dependencies.timeoutMs < 1) {
+    throw new Error('MAIL_NOTIFICATION_DELIVERY_INVALID_TIMEOUT_MS');
+  }
+
+  const controller = new AbortController();
+  const abortFromWorker = () => controller.abort(dependencies.signal?.reason);
+  if (dependencies.signal?.aborted) {
+    abortFromWorker();
+  } else {
+    dependencies.signal?.addEventListener('abort', abortFromWorker, { once: true });
+  }
+  const timeout = setTimeout(
+    () => controller.abort(new Error('MAIL_NOTIFICATION_DELIVERY_TIMEOUT')),
+    dependencies.timeoutMs,
+  );
+
   try {
     const response = await dependencies.fetch(dependencies.webhookUrl, {
       method: 'POST',
@@ -46,6 +64,7 @@ export const deliverPendingEvent = async (
         eventId: event.eventId,
         messageId: event.messageId,
       }),
+      signal: controller.signal,
     });
     if (!response.ok) {
       throw new Error(`MAIL_NOTIFICATION_DELIVERY_FAILED:${response.status}`);
@@ -68,5 +87,8 @@ export const deliverPendingEvent = async (
     });
     const cause = error instanceof Error ? error : undefined;
     throw new Error('MAIL_NOTIFICATION_DELIVERY_FAILED', { cause });
+  } finally {
+    clearTimeout(timeout);
+    dependencies.signal?.removeEventListener('abort', abortFromWorker);
   }
 };

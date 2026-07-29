@@ -29,6 +29,7 @@ describe('mail notification delivery', () => {
       webhookUrl: 'https://external.example.test/mail-events',
       fetch,
       repository,
+      timeoutMs: 15_000,
       clock: {
         now: () => new Date('2026-07-29T10:00:00.000Z'),
       },
@@ -43,6 +44,7 @@ describe('mail notification delivery', () => {
         eventId: 'evt-1',
         messageId: 'email-1',
       }),
+      signal: expect.any(AbortSignal),
     });
   });
 
@@ -55,6 +57,7 @@ describe('mail notification delivery', () => {
         webhookUrl: 'https://external.example.test/mail-events',
         fetch,
         repository,
+        timeoutMs: 15_000,
         clock: {
           now: () => new Date('2026-07-29T10:00:00.000Z'),
         },
@@ -77,6 +80,7 @@ describe('mail notification delivery', () => {
       webhookUrl: 'https://external.example.test/mail-events',
       fetch,
       repository: createRepository(),
+      timeoutMs: 15_000,
       clock: {
         now: () => new Date('2026-07-29T10:00:00.000Z'),
       },
@@ -86,5 +90,45 @@ describe('mail notification delivery', () => {
     expect(request.headers).toEqual({
       'Content-Type': 'application/json',
     });
+  });
+
+  it('aborts a stalled delivery and schedules a retry', async () => {
+    vi.useFakeTimers();
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      async (_input, init) =>
+        await new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            'abort',
+            () => reject(init.signal?.reason ?? new Error('aborted')),
+            { once: true },
+          );
+        }),
+    );
+    const repository = createRepository();
+
+    try {
+      const delivery = deliverPendingEvent(event, {
+        webhookUrl: 'https://external.example.test/mail-events',
+        fetch,
+        repository,
+        clock: {
+          now: () => new Date('2026-07-29T10:00:00.000Z'),
+        },
+        timeoutMs: 1_000,
+      });
+      const rejected = expect(delivery).rejects.toThrow('MAIL_NOTIFICATION_DELIVERY_FAILED');
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await rejected;
+
+      expect(repository.scheduleRetry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventId: 'evt-1',
+          owner: 'worker-1',
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

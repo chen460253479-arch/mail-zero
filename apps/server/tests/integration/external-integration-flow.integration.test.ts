@@ -8,12 +8,19 @@ import {
 import { createPostgresConnectionRepository } from '../../src/modules/mail-accounts/postgres/connection-repository';
 import { createPostgresExternalAccessRepository } from '../../src/modules/external-integration/postgres/repository';
 import { createPostgresMailNotificationRepository } from '../../src/modules/mail-notifications/postgres/repository';
+import { connectNangoMailbox } from '../../src/modules/mail-accounts/application/connect-nango-mailbox';
 import { deliverPendingEvent } from '../../src/modules/mail-notifications/application/deliver-pending';
 import { resolveExternalBrowserSession } from '../../src/modules/external-integration/session/resolve';
 import { createChannelConfigRepository } from '../../src/integrations/core/channel-config-repository';
 import { createExternalIntegrationRouter } from '../../src/modules/external-integration/http/router';
+import { createMailNotificationWorker } from '../../src/modules/mail-notifications/runtime/worker';
+import { bindNangoMailbox } from '../../src/modules/mail-accounts/application/bind-nango-mailbox';
+import { provisionMailbox } from '../../src/modules/mail-accounts/application/provision-mailbox';
+import { PostgresMailUnitOfWork } from '../../src/modules/mail/postgres/postgres-unit-of-work';
 import { createNodeApplication } from '../../src/runtime/node/application';
 import { createMailCoreForEnvironment } from '../../src/runtime/mail/core';
+import type { MailChannelPlugin } from '../../src/mail-channel/contracts';
+import type { NangoClient } from '../../src/integrations/nango/client';
 import type { RuntimeServices } from '../../src/runtime/node/services';
 import { withMailTestDatabase } from '../helpers/mail-core/database';
 import type { RuntimeConfig } from '../../src/runtime/node/config';
@@ -74,6 +81,8 @@ const createServices = (input: {
     environment: {
       NODE_ENV: 'local',
       BETTER_AUTH_SECRET: config.betterAuthSecret,
+      CREDENTIAL_ENCRYPTION_KEY: config.credentialEncryptionKey,
+      VITE_PUBLIC_BACKEND_URL: config.publicBackendUrl,
     },
     database: {
       db: input.db,
@@ -153,50 +162,101 @@ describe('external mail integration flow', () => {
         notificationsEnabled: true,
       });
       let accountId: MailAccountId | null = null;
+      const channel = {
+        id: 'gmail',
+        providerKey: 'gmail',
+        displayName: 'Gmail',
+        nangoProviders: ['google-mail'],
+        capabilities: new Set(['read_messages', 'send_messages']),
+        credentialTypes: new Set(['oauth2']),
+        resolveIdentity: vi.fn(async () => ({
+          email: EMAIL_ADDRESS,
+          name: 'Traveler',
+          picture: '',
+        })),
+      } satisfies MailChannelPlugin;
+      const nangoClient = {
+        getConnection: vi.fn(async () => ({
+          connection_id: NANGO_CONNECTION_ID,
+          provider_config_key: 'google-mail',
+          provider: 'google-mail',
+          metadata: null,
+          tags: {},
+          errors: [],
+          credentials: {
+            type: 'OAUTH2' as const,
+            access_token: 'controlled-nango-access-token',
+            expires_at: null,
+            raw: {},
+          },
+          connection_config: {},
+        })),
+      } as unknown as NangoClient;
 
       const serviceApi = createExternalIntegrationRouter(services, {
-        connect: async (input) => {
-          const configured = await createChannelConfigRepository(db).get(input.channelId);
-          if (configured?.authSource !== 'nango') {
-            throw new Error('MAIL_CHANNEL_NOT_CONFIGURED_FOR_NANGO');
-          }
-          const connection = await connectionRepository.saveBinding({
-            userId: input.userId,
-            existingMailboxId: null,
-            mailbox: {
-              email: EMAIL_ADDRESS,
-              normalizedEmail: EMAIL_ADDRESS,
-              name: 'Traveler',
-              picture: '',
-              channelId: input.channelId,
-              providerKey: 'gmail',
+        connect: async (input, runtimeServices) =>
+          await connectNangoMailbox(input, runtimeServices, {
+            assertNangoChannelAvailable: async (channelId) => {
+              const configured = await createChannelConfigRepository(db).get(channelId);
+              if (configured?.authSource !== 'nango') {
+                throw new Error('MAIL_CHANNEL_NOT_CONFIGURED_FOR_NANGO');
+              }
+              return 'google-mail';
             },
-            authorization: {
-              authSource: 'nango',
-              credentialType: 'oauth2',
-              encryptedCredentialSnapshot: 'encrypted-test-credential',
-              accessTokenExpiresAt: null,
-              credentialFetchedAt: new Date('2026-07-29T09:00:00.000Z'),
-              nangoConnectionId: input.connectionId,
-              nangoProviderConfigKey: 'google-mail',
+            bind: async (bindingInput) =>
+              await bindNangoMailbox(bindingInput, {
+                client: nangoClient,
+                getChannel: () => channel,
+                isIntegrationAvailable: async () => true,
+                repository: {
+                  findMailboxByNormalizedEmail: (userId, channelId, normalizedEmail) =>
+                    connectionRepository.findMailboxByNormalizedEmail(
+                      userId,
+                      channelId,
+                      normalizedEmail,
+                    ),
+                  findByNangoReference: (integrationId, connectionId) =>
+                    connectionRepository.findByNangoReference(integrationId, connectionId),
+                  save: (binding) =>
+                    connectionRepository.saveBinding({
+                      userId: bindingInput.userId,
+                      ...binding,
+                    }),
+                },
+                encryptionKey: services.config.credentialEncryptionKey,
+                now: () => new Date('2026-07-29T09:00:00.000Z'),
+              }),
+            provision: async (provisionInput) => {
+              const unitOfWork = new PostgresMailUnitOfWork(db);
+              const provisioned = await provisionMailbox(provisionInput, {
+                findAccountByConnectionId: (connectionId) =>
+                  unitOfWork.run((transaction) =>
+                    transaction.accounts.findByConnectionId(connectionId),
+                  ),
+                createAccount: (input) => core.createAccount(input),
+                listIdentities: (provisionedAccountId) =>
+                  core.listIdentities({
+                    accountId: provisionedAccountId as MailAccountId,
+                  }),
+                createIdentity: (identity) =>
+                  core.createIdentity({
+                    ...identity,
+                    accountId: identity.accountId as MailAccountId,
+                  }),
+                activateInbound: vi.fn(async () => undefined),
+                markReconnectRequired: (connectionId) =>
+                  connectionRepository.markReconnectRequired(provisionInput.userId, connectionId),
+              });
+              accountId = provisioned.accountId as MailAccountId;
             },
-          });
-          const account = await core.createAccount({
-            userId: input.userId,
-            connectionId: connection.id,
-            timezone: 'UTC',
-            storageQuotaBytes: null,
-          });
-          accountId = account.id;
-          return connection;
-        },
+          }),
       });
 
       await ensureExternalIntegrationPrincipal(db);
       await createChannelConfigRepository(db).save({
         channelId: 'gmail',
         authSource: 'nango',
-        inboxWatchEnabled: true,
+        inboxWatchEnabled: false,
         scheduledSyncEnabled: true,
         syncIntervalMinutes: 5,
         providerConfig: {},
@@ -250,29 +310,46 @@ describe('external mail integration flow', () => {
         enabled: true,
       });
       const deliveryTime = new Date(Date.now() + 1_000);
-      const [notification] = await notificationRepository.claim({
-        owner: 'external-flow-worker',
-        now: deliveryTime,
-        limit: 1,
-        leaseForMs: 60_000,
-      });
-      expect(notification).toBeDefined();
       let webhookBody: unknown;
-      await deliverPendingEvent(notification!, {
-        webhookUrl: services.config.externalIntegration.webhook.url!,
-        fetch: vi.fn(async (_input, init) => {
-          webhookBody = JSON.parse(String(init?.body));
-          return new Response(null, { status: 204 });
-        }),
+      const notificationWorker = createMailNotificationWorker({
         repository: notificationRepository,
+        deliver: async (event, signal) =>
+          await deliverPendingEvent(event, {
+            webhookUrl: services.config.externalIntegration.webhook.url!,
+            fetch: vi.fn(async (_input, init) => {
+              webhookBody = JSON.parse(String(init?.body));
+              return new Response(null, { status: 204 });
+            }),
+            repository: notificationRepository,
+            signal,
+            timeoutMs: 15_000,
+            clock: {
+              now: () => deliveryTime,
+            },
+          }),
+        concurrency: 1,
+        pollIntervalMs: 10,
+        leaseForMs: 60_000,
         clock: {
           now: () => deliveryTime,
         },
+        newOwner: () => 'external-flow-worker',
+        logger: {
+          error: vi.fn(),
+        },
       });
-      expect(webhookBody).toEqual({
-        eventId: notification!.eventId,
-        messageId: imported.emailId,
-      });
+      notificationWorker.start();
+      try {
+        notificationWorker.notify();
+        await vi.waitFor(() =>
+          expect(webhookBody).toEqual({
+            eventId: expect.any(String),
+            messageId: imported.emailId,
+          }),
+        );
+      } finally {
+        await notificationWorker.stop();
+      }
       expect(Object.keys(webhookBody as Record<string, unknown>)).toEqual(['eventId', 'messageId']);
 
       const readJson = async (path: string): Promise<Record<string, unknown>> => {

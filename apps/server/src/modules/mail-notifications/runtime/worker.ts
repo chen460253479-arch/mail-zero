@@ -15,7 +15,7 @@ type CreateMailNotificationWorkerDependencies = {
       leaseForMs: number;
     }): Promise<ClaimedMailNotification[]>;
   };
-  deliver(event: ClaimedMailNotification): Promise<void>;
+  deliver(event: ClaimedMailNotification, signal: AbortSignal): Promise<void>;
   concurrency: number;
   pollIntervalMs: number;
   leaseForMs: number;
@@ -86,7 +86,7 @@ export const createMailNotificationWorker = (
           await waitForPoll(signal, observedWakeVersion);
           continue;
         }
-        await dependencies.deliver(event);
+        await dependencies.deliver(event, signal);
       } catch (error) {
         logger.error('[MAIL_NOTIFICATION_WORKER] loop failed', error);
       }

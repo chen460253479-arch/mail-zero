@@ -126,6 +126,10 @@ export type CreateRuntimeServicesInput = {
   blobStore: LocalBlobStore;
 };
 
+const MAIL_NOTIFICATION_LEASE_FOR_MS = 5 * 60_000;
+const MAIL_NOTIFICATION_MAX_DELIVERY_TIMEOUT_MS = 15_000;
+const MAIL_NOTIFICATION_SHUTDOWN_BUFFER_MS = 250;
+
 const createCompatibilityEnvironment = (config: RuntimeConfig): ZeroEnv =>
   ({
     NODE_ENV: config.nodeEnv,
@@ -218,20 +222,27 @@ export const createRuntimeServices = async ({
     enabled: config.externalIntegration.webhook.enabled,
   });
   const webhookUrl = config.externalIntegration.webhook.url;
+  const notificationDeliveryTimeoutMs = Math.min(
+    MAIL_NOTIFICATION_MAX_DELIVERY_TIMEOUT_MS,
+    MAIL_NOTIFICATION_LEASE_FOR_MS - 1,
+    Math.max(1, config.shutdownGraceMs - MAIL_NOTIFICATION_SHUTDOWN_BUFFER_MS),
+  );
   const notificationWorker =
     config.externalIntegration.webhook.enabled && webhookUrl !== undefined
       ? createMailNotificationWorker({
           repository: notificationRepository,
-          deliver: async (event) =>
+          deliver: async (event, signal) =>
             await deliverPendingEvent(event, {
               webhookUrl,
               fetch,
               repository: notificationRepository,
+              signal,
+              timeoutMs: notificationDeliveryTimeoutMs,
               clock: { now: () => new Date() },
             }),
           concurrency: 2,
           pollIntervalMs: 1_000,
-          leaseForMs: 5 * 60_000,
+          leaseForMs: MAIL_NOTIFICATION_LEASE_FOR_MS,
           clock: { now: () => new Date() },
           newOwner: () => crypto.randomUUID(),
         })

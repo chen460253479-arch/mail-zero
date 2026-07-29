@@ -47,4 +47,15 @@ describe('external mail frontend boundary', () => {
     expect(mail).toContain("access.mode !== 'external'");
     expect(settings).toContain("throw redirect('/mail/inbox')");
   });
+
+  it('leaves mail route authentication to the external-aware parent boundary', () => {
+    const nestedMailRoutes = [
+      source('app/(routes)/mail/[folder]/page.tsx'),
+      source('app/(routes)/mail/compose/page.tsx'),
+      source('app/(routes)/mail/create/page.tsx'),
+    ].join('\n');
+
+    expect(nestedMailRoutes).not.toContain('authProxy.api.getSession');
+    expect(nestedMailRoutes).not.toContain('/login');
+  });
 });
