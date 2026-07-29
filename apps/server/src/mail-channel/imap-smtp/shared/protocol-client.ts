@@ -5,8 +5,8 @@ import type {
   ImapRawResponse,
   ProtocolVerifyResponse,
   SmtpSendResponse,
-} from '../../../protocol-worker/contracts';
-import { MailProtocolOperationError } from '../../../protocol-worker/errors';
+} from './contracts';
+import { MailProtocolOperationError } from './errors';
 import type { ImapSmtpProtocolExecutor } from '../runtime/protocol-executor';
 import type { ImapSmtpCredential } from '../../contracts';
 

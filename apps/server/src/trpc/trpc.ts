@@ -1,8 +1,8 @@
 import { assertAdministrator } from '../integrations/core/permissions';
 import { getActiveConnection } from '../lib/server-utils';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import { Ratelimit, type RatelimitConfig } from '@upstash/ratelimit';
 import type { HonoContext, HonoVariables } from '../ctx';
-import { getConnInfo } from 'hono/cloudflare-workers';
 import { initTRPC, TRPCError } from '@trpc/server';
 
 import { redis } from '../lib/services';

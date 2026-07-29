@@ -32,7 +32,6 @@ describe('third-party tRPC logging boundary', () => {
     expect(read('apps/server/package.json')).not.toContain('@datadog/datadog-api-client');
     expect(read('pnpm-lock.yaml')).not.toContain('@datadog/datadog-api-client');
     expect(read('apps/server/src/env.ts')).not.toMatch(/\bDD_(API_KEY|APP_KEY|SITE)\b/);
-    expect(read('apps/server/wrangler.jsonc')).not.toMatch(/\bDD_(API_KEY|APP_KEY|SITE)\b/);
     expect(read('apps/server/src/trpc/trpc.ts')).not.toContain('createLoggingMiddleware');
     expect(read('apps/server/src/trpc/index.ts')).not.toContain('loggingRouter');
   });
@@ -40,6 +39,6 @@ describe('third-party tRPC logging boundary', () => {
   it('keeps the internal request trace implementation available', () => {
     expect(existsSync(resolve(repoRoot, 'apps/server/src/lib/trace-context.ts'))).toBe(true);
     expect(read('apps/server/src/trpc/trpc.ts')).toContain("import('../lib/trace-context')");
-    expect(read('apps/server/src/main.ts')).toContain('finalizeRequestTrace');
+    expect(read('apps/server/src/runtime/node/application.ts')).toContain('finalizeRequestTrace');
   });
 });

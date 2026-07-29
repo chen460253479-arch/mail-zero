@@ -3,15 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-vi.mock('cloudflare:workers', () => {
-  class RuntimeBase {}
-  return {
-    env: {},
-    WorkerEntrypoint: RuntimeBase,
-    WorkflowEntrypoint: RuntimeBase,
-  };
-});
-
 import {
   createMailAccountProcedure,
   type OwnedMailApiRuntime,

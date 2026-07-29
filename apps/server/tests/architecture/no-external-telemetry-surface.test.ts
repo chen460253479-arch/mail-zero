@@ -144,7 +144,6 @@ describe('external analytics and error-reporting removal', () => {
       'apps/server/src/env.ts',
       'apps/server/src/main.ts',
       'apps/server/src/trpc/index.ts',
-      'apps/server/wrangler.jsonc',
     ];
     const forbiddenTokens = [
       'react-scan',

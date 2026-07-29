@@ -9,17 +9,13 @@
     "build": "vite build --config vite.node.config.ts",
     "start": "node dist/main.js",
     "dev": "tsx watch src/runtime/node/main.ts",
-    "deploy": "wrangler deploy",
-    "types": "wrangler types --env local",
     "lint": "eslint .",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "tsx src/db/push-development-database.ts",
     "db:push:drizzle": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "protocol-worker": "tsx src/protocol-worker/server.ts",
-    "test:mail-core": "vitest run tests/unit/mail-core tests/integration/mail-core",
-    "test:cron": "curl 'http://localhost:8787/cdn-cgi/handler/scheduled'"
+    "test:mail-core": "vitest run tests/unit/mail-core tests/integration/mail-core"
   },
   "exports": {
     "./trpc": "./src/trpc/index.ts",
@@ -74,7 +70,6 @@
     "jiti": "2.4.2",
     "typescript": "catalog:",
     "vite": "^6.3.5",
-    "vitest": "3.2.4",
-    "wrangler": "catalog:"
+    "vitest": "3.2.4"
   }
 }

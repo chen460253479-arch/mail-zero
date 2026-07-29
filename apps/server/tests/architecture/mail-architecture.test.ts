@@ -2,6 +2,7 @@ import { dirname, extname, relative, resolve, sep } from 'node:path';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 const architectureRoot = dirname(fileURLToPath(import.meta.url));
@@ -25,6 +26,7 @@ const canonicalRoots = [
 type PackageManifest = {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  scripts?: Record<string, string>;
 };
 
 const normalizePath = (value: string): string => value.split(sep).join('/');
@@ -44,12 +46,36 @@ const collectTypeScriptFiles = (directory: string): string[] =>
     return ['.ts', '.tsx'].includes(extname(entry.name)) ? [path] : [];
   });
 
-const importSpecifierPattern =
-  /(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/gu;
-
 const readImports = (file: string): string[] => {
   const source = readFileSync(file, 'utf8');
-  return [...source.matchAll(importSpecifierPattern)].map((match) => match[1] ?? match[2]!);
+  const sourceFile = ts.createSourceFile(
+    file,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const imports: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      imports.push(node.moduleSpecifier.text);
+    }
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length === 1 &&
+      ts.isStringLiteral(node.arguments[0])
+    ) {
+      imports.push(node.arguments[0].text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return imports;
 };
 
 const resolveLocalImport = (file: string, specifier: string): string | null => {
@@ -75,7 +101,14 @@ describe('mail server architecture', () => {
     expect(retiredPaths.filter((path) => existsSync(resolve(srcRoot, path)))).toEqual([]);
   });
 
-  it('contains no retired mail Queue or KV bindings in runtime configuration', () => {
+  it('contains no retired Cloudflare runtime files or bindings', () => {
+    const retiredRuntimePaths = [
+      'apps/server/wrangler.jsonc',
+      'apps/server/worker-configuration.d.ts',
+      'apps/server/src/protocol-worker',
+      'apps/server/src/modules/mail/blob/r2-blob-store.ts',
+      'apps/mail/wrangler.jsonc',
+    ];
     const retiredBindings = [
       'subscribe_queue',
       'send_email_queue',
@@ -93,8 +126,6 @@ describe('mail server architecture', () => {
     ];
     const configurationFiles = [
       resolve(srcRoot, 'env.ts'),
-      resolve(srcRoot, '../wrangler.jsonc'),
-      resolve(srcRoot, '../worker-configuration.d.ts'),
       resolve(srcRoot, '../../../compose.yaml'),
     ].filter(existsSync);
     const violations = configurationFiles.flatMap((file) => {
@@ -104,32 +135,63 @@ describe('mail server architecture', () => {
         .map((binding) => `${normalizePath(relative(srcRoot, file))}:${binding}`);
     });
 
+    expect(
+      retiredRuntimePaths.filter((path) => existsSync(resolve(repositoryRoot, path))),
+    ).toEqual([]);
     expect(violations).toEqual([]);
   });
 
-  it('declares only the fresh ZeroDB Durable Object baseline', () => {
-    const source = readFileSync(resolve(srcRoot, '../wrangler.jsonc'), 'utf8');
-    const retiredClasses = [
-      'DurableMailbox',
-      'ZeroAgent',
-      'ZeroMCP',
-      'ZeroDriver',
-      'ThinkingMCP',
-      'WorkflowRunner',
-      'ThreadSyncWorker',
-      'ShardRegistry',
-    ];
-    const forbiddenDirectives = ['"new_classes"', '"deleted_classes"'];
+  it('uses no Cloudflare runtime modules or binding types in production source', () => {
+    const forbiddenModules = new Set(['cloudflare:workers', 'hono/cloudflare-workers']);
+    const forbiddenBindingTypes = new Set([
+      'DurableObjectNamespace',
+      'ExecutionContext',
+      'Hyperdrive',
+      'KVNamespace',
+      'R2Bucket',
+    ]);
+    const compilerOptions: ts.CompilerOptions = {
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+    };
+    const violations = collectTypeScriptFiles(srcRoot).flatMap((file) => {
+      const source = readFileSync(file, 'utf8');
+      const sourceFile = ts.createSourceFile(
+        file,
+        source,
+        ts.ScriptTarget.Latest,
+        true,
+        file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+      );
+      const relativeFile = normalizePath(relative(srcRoot, file));
+      const fileViolations: string[] = [];
 
-    expect(
-      retiredClasses
-        .filter((className) => source.includes(className))
-        .map((className) => `wrangler.jsonc:${className}`),
-    ).toEqual([]);
-    expect(forbiddenDirectives.filter((directive) => source.includes(directive))).toEqual([]);
-    expect(source.match(/"migrations":/gu)).toHaveLength(3);
-    expect(source.match(/"tag": "v1"/gu)).toHaveLength(3);
-    expect(source.match(/"new_sqlite_classes": \["ZeroDB"\]/gu)).toHaveLength(3);
+      for (const specifier of readImports(file)) {
+        const resolved = ts.resolveModuleName(specifier, file, compilerOptions, ts.sys).resolvedModule;
+        if (
+          forbiddenModules.has(specifier) ||
+          (resolved?.resolvedFileName.includes('/wrangler/') ?? false) ||
+          (resolved?.resolvedFileName.includes('\\wrangler\\') ?? false)
+        ) {
+          fileViolations.push(`${relativeFile}:module:${specifier}`);
+        }
+      }
+
+      const visit = (node: ts.Node): void => {
+        if (
+          ts.isTypeReferenceNode(node) &&
+          ts.isIdentifier(node.typeName) &&
+          forbiddenBindingTypes.has(node.typeName.text)
+        ) {
+          fileViolations.push(`${relativeFile}:type:${node.typeName.text}`);
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(sourceFile);
+      return fileViolations;
+    });
+
+    expect(violations).toEqual([]);
   });
 
   it('contains no retired Agent runtime records in the workspace lockfile', () => {
@@ -179,7 +241,9 @@ describe('mail server architecture', () => {
       retiredServerDependencies.filter((dependency) => serverDependencies.includes(dependency)),
     ).toEqual([]);
     expect(serverManifest.dependencies).not.toHaveProperty('wrangler');
-    expect(serverManifest.devDependencies).toHaveProperty('wrangler');
+    expect(serverManifest.devDependencies).not.toHaveProperty('wrangler');
+    expect(Object.values(serverManifest.scripts ?? {}).some((script) => script.includes('wrangler')))
+      .toBe(false);
     expect(serverManifest.dependencies).toEqual(
       expect.objectContaining({
         '@googleapis/gmail': expect.any(String),
@@ -246,6 +310,10 @@ describe('mail server architecture', () => {
       ),
     ).toEqual([]);
     expect(mailManifest.devDependencies).toHaveProperty('@tailwindcss/typography');
+    expect(mailManifest.devDependencies).not.toHaveProperty('@cloudflare/vite-plugin');
+    expect(mailManifest.devDependencies).not.toHaveProperty('wrangler');
+    expect(Object.values(mailManifest.scripts ?? {}).some((script) => script.includes('wrangler')))
+      .toBe(false);
     expect(globalsCss).toContain('@plugin "@tailwindcss/typography";');
     expect(mailDependencies).toEqual(
       expect.arrayContaining([
@@ -257,6 +325,13 @@ describe('mail server architecture', () => {
         'prosemirror-state',
       ]),
     );
+  });
+
+  it('declares no workspace-owned Wrangler or workerd dependency', () => {
+    const workspace = readFileSync(resolve(repositoryRoot, 'pnpm-workspace.yaml'), 'utf8');
+
+    expect(workspace).not.toMatch(/^\s+wrangler:/mu);
+    expect(workspace).not.toMatch(/^\s+- workerd$/mu);
   });
 
   it('declares no retired mail onboarding module or dependency', () => {

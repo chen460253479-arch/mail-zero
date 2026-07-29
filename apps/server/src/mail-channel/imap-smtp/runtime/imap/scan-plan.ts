@@ -1,4 +1,4 @@
-import type { ImapPageCursor } from '../contracts';
+import type { ImapPageCursor } from '../../shared/contracts';
 
 const RECOVERY_OVERLAP_MS = 5 * 60_000;
 

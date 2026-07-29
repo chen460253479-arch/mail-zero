@@ -11,7 +11,7 @@ import {
   parseIngressScope,
   type InboundMailAdapter,
 } from '../../../modules/mail-sync';
-import { imapPageCursorSchema, type ImapPageCursor } from '../../../protocol-worker/contracts';
+import { imapPageCursorSchema, type ImapPageCursor } from '../shared/contracts';
 import { MailProtocolClientError, type MailProtocolClient } from '../shared/protocol-client';
 
 const PAGE_SIZE = 100;

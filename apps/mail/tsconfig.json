@@ -10,6 +10,6 @@
     },
     "rootDirs": [".", "./.react-router/types"]
   },
-  "include": ["**/*.ts", "**/*.tsx", "worker-configuration.d.ts"],
+  "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules"]
 }

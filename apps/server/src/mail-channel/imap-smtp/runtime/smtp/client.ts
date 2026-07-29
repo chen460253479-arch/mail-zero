@@ -5,8 +5,8 @@ import {
   type ImapSmtpCredentialInput,
   type SmtpSendRequest,
   type SmtpSendResponse,
-} from '../contracts';
-import { classifyMailProtocolError, MailProtocolOperationError } from '../errors';
+} from '../../shared/contracts';
+import { classifyMailProtocolError, MailProtocolOperationError } from '../../shared/errors';
 import { resolveMailEndpoint } from '../network';
 
 const MAX_RAW_MESSAGE_BYTES = 25 * 1024 * 1024;

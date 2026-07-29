@@ -15,7 +15,6 @@ catalog:
   react-dom: ^19.1.0
   superjson: ^2.2.2
   typescript: ^5.8.3
-  wrangler: ^4.32.0
   zod: ^3.25.42
 
 onlyBuiltDependencies:
@@ -27,7 +26,6 @@ onlyBuiltDependencies:
   - msw
   - sharp
   - unrs-resolver
-  - workerd
 
 patchedDependencies:
   novel: patches/novel.patch

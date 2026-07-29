@@ -17,17 +17,17 @@ import {
   type ProtocolVerifyResponse,
   type SmtpSendRequest,
   type SmtpSendResponse,
-} from '../../../protocol-worker/contracts';
+} from '../shared/contracts';
 import {
   discoverImapMessages,
   establishImapBaseline,
   fetchImapRawMessage,
-} from '../../../protocol-worker/imap/client';
+} from './imap/client';
 import {
   classifyMailProtocolError,
   MailProtocolOperationError,
-} from '../../../protocol-worker/errors';
-import { sendSmtpMessage, verifySmtpConnection } from '../../../protocol-worker/smtp/client';
+} from '../shared/errors';
+import { sendSmtpMessage, verifySmtpConnection } from './smtp/client';
 
 export interface ImapSmtpProtocolExecutor {
   verify(input: ProtocolVerifyRequest): Promise<ProtocolVerifyResponse>;

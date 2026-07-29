@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   createImapScanPlan,
   nextImapPageCursor,
-} from '../../../../src/protocol-worker/imap/scan-plan';
+} from '../../../../src/mail-channel/imap-smtp/runtime/imap/scan-plan';
 
-describe('IMAP protocol Worker scan planning', () => {
+describe('IMAP scan planning', () => {
   it('pins a normal incremental scan to the binding UID boundary', () => {
     expect(
       createImapScanPlan({

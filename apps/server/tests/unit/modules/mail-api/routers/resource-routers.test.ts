@@ -9,15 +9,6 @@ const runtimeMocks = vi.hoisted(() => ({
   close: vi.fn(async () => undefined),
 }));
 
-vi.mock('cloudflare:workers', () => {
-  class RuntimeBase {}
-  return {
-    env: {},
-    WorkerEntrypoint: RuntimeBase,
-    WorkflowEntrypoint: RuntimeBase,
-  };
-});
-
 vi.mock('../../../../../src/modules/mail-api/runtime/create-mail-api', async (importOriginal) => ({
   ...(await importOriginal()),
   openOwnedMailApiRuntime: runtimeMocks.openOwned,

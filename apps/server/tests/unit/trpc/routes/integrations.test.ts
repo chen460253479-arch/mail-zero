@@ -1,12 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { GmailOAuthError } from '../../../../src/modules/mail-accounts/application/connect-gmail-oauth';
 import { GmailChannelConfigError } from '../../../../src/integrations/gmail/channel-config-service';
 import { mapIntegrationError } from '../../../../src/trpc/routes/integration-errors';
 import { NangoIntegrationError } from '../../../../src/integrations/nango/errors';
 import { integrationsRouter } from '../../../../src/trpc/routes/integrations';
-
-vi.mock('cloudflare:workers', () => ({ env: {} }));
 
 describe('administrator integrations router', () => {
   it('exposes the unified Gmail channel configuration procedures', () => {

@@ -4,7 +4,7 @@ import {
   parseImapBaselineRequest,
   parseImapDiscoverResponse,
   parseSmtpSendRequest,
-} from '../../../src/protocol-worker/contracts';
+} from '../../../../src/mail-channel/imap-smtp/shared/contracts';
 
 const credential = {
   type: 'imap_smtp' as const,
@@ -15,7 +15,7 @@ const credential = {
   smtp: { host: 'smtp.example.test', port: 587, secure: false },
 };
 
-describe('mail protocol Worker contracts', () => {
+describe('IMAP/SMTP protocol contracts', () => {
   it('accepts a bounded IMAP baseline request and rejects unsupported mailboxes', () => {
     expect(parseImapBaselineRequest({ credential, mailbox: 'INBOX' })).toEqual({
       credential,

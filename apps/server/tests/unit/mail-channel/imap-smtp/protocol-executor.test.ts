@@ -4,18 +4,21 @@ import {
   discoverImapMessages,
   establishImapBaseline,
   fetchImapRawMessage,
-} from '../../../../src/protocol-worker/imap/client';
+} from '../../../../src/mail-channel/imap-smtp/runtime/imap/client';
 import { createImapSmtpProtocolExecutor } from '../../../../src/mail-channel/imap-smtp/runtime/protocol-executor';
-import { sendSmtpMessage, verifySmtpConnection } from '../../../../src/protocol-worker/smtp/client';
-import { MailProtocolOperationError } from '../../../../src/protocol-worker/errors';
+import {
+  sendSmtpMessage,
+  verifySmtpConnection,
+} from '../../../../src/mail-channel/imap-smtp/runtime/smtp/client';
+import { MailProtocolOperationError } from '../../../../src/mail-channel/imap-smtp/shared/errors';
 
-vi.mock('../../../../src/protocol-worker/imap/client', () => ({
+vi.mock('../../../../src/mail-channel/imap-smtp/runtime/imap/client', () => ({
   discoverImapMessages: vi.fn(),
   establishImapBaseline: vi.fn(),
   fetchImapRawMessage: vi.fn(),
 }));
 
-vi.mock('../../../../src/protocol-worker/smtp/client', () => ({
+vi.mock('../../../../src/mail-channel/imap-smtp/runtime/smtp/client', () => ({
   sendSmtpMessage: vi.fn(),
   verifySmtpConnection: vi.fn(),
 }));

@@ -10,8 +10,8 @@ import {
   type ImapDiscoverResponse,
   type ImapRawRequest,
   type ImapRawResponse,
-} from '../contracts';
-import { classifyMailProtocolError, MailProtocolOperationError } from '../errors';
+} from '../../shared/contracts';
+import { classifyMailProtocolError, MailProtocolOperationError } from '../../shared/errors';
 import { createImapScanPlan, nextImapPageCursor } from './scan-plan';
 import { resolveMailEndpoint } from '../network';
 

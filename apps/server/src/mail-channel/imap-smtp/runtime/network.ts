@@ -3,8 +3,8 @@ import { lookup } from 'node:dns/promises';
 import {
   assertResolvedMailEndpoint,
   parseAllowedMailHosts,
-} from '../mail-channel/imap-smtp/shared/endpoint-policy';
-import type { MailProtocolEndpoint } from '../mail-channel/contracts';
+} from '../shared/endpoint-policy';
+import type { MailProtocolEndpoint } from '../../contracts';
 
 export type ResolvedMailEndpoint = MailProtocolEndpoint & {
   originalHost: string;

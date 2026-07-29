@@ -1,13 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
-
-vi.mock('cloudflare:workers', () => {
-  class RuntimeBase {}
-  return {
-    env: {},
-    WorkerEntrypoint: RuntimeBase,
-    WorkflowEntrypoint: RuntimeBase,
-  };
-});
+import { describe, expect, it } from 'vitest';
 
 import { mailApiRouter } from '../../../../src/modules/mail-api';
 
