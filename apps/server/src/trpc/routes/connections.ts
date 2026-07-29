@@ -1,4 +1,15 @@
 import {
+  listScopedConnections,
+  setScopedActiveConnection,
+} from '../../modules/external-integration/application/list-scoped-connections';
+import {
+  createRateLimiterMiddleware,
+  mailSessionProcedure,
+  privateProcedure,
+  publicProcedure,
+  router,
+} from '../trpc';
+import {
   bindManualMailbox,
   ManualMailboxBindingError,
 } from '../../modules/mail-accounts/application/bind-manual-mailbox';
@@ -8,15 +19,16 @@ import {
 } from '../../modules/mail-accounts/application/bind-nango-mailbox';
 import { provisionChannelMailboxInDatabase } from '../../modules/mail-accounts/runtime/provision-channel-mailbox';
 import { createPostgresConnectionRepository } from '../../modules/mail-accounts/postgres/connection-repository';
+import { createPostgresExternalAccessRepository } from '../../modules/external-integration/postgres/repository';
 import { createMailboxLifecycleForDatabase } from '../../modules/mail-accounts/runtime/lifecycle-environment';
 import { resolveGmailConnectMode } from '../../modules/mail-accounts/application/gmail-connection-options';
 import { connectNangoMailbox } from '../../modules/mail-accounts/application/connect-nango-mailbox';
 import { createChannelConfigRepository } from '../../integrations/core/channel-config-repository';
-import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router } from '../trpc';
 import { manualCredentialSnapshotSchema } from '../../modules/mail-accounts/credentials/manual';
 import { resolveFetchedNangoCredential } from '../../modules/mail-accounts/credentials/nango';
 import { createIdentityMailChannelRegistry } from '../../runtime/mail/channel-registry';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
+import { ExternalIntegrationError } from '../../modules/external-integration/errors';
 import { mailChannelIds, type MailChannelId } from '../../mail-channel/contracts';
 import { createZohoWebhookSetup } from '../../runtime/mail/zoho-webhook-setup';
 import { mailAccount } from '../../modules/mail/postgres/schema/accounts';
@@ -196,18 +208,35 @@ const listChannelNangoConnections = async (services: RuntimeServices, channelId:
 };
 
 export const connectionsRouter = router({
-  list: privateProcedure
+  list: mailSessionProcedure
     .use(
       createRateLimiterMiddleware({
         limiter: Ratelimit.slidingWindow(120, '1m'),
-        generatePrefix: ({ sessionUser }) => `ratelimit:get-connections-${sessionUser?.id}`,
+        generatePrefix: ({ sessionUser, externalSession }) =>
+          `ratelimit:get-connections-${sessionUser?.id ?? externalSession?.id ?? 'anonymous'}`,
       }),
     )
     .query(async ({ ctx }) => {
-      const { sessionUser } = ctx;
+      if (ctx.mailAccess.kind === 'external') {
+        const records = await listScopedConnections(
+          ctx.externalSession!,
+          createPostgresExternalAccessRepository(ctx.c.var.services!.database.db),
+        );
+        return {
+          connections: records.map((record) => ({
+            ...record,
+            capabilities: Array.from(
+              defaultMailChannelRegistry.find(record.channelId)?.capabilities ?? [],
+            ),
+          })),
+          disconnectedIds: records
+            .filter(({ status }) => status === 'disconnected')
+            .map(({ id }) => id),
+        };
+      }
       const records = await createPostgresConnectionRepository(
         ctx.c.var.services!.database.db,
-      ).listConnectionsWithAuthorization(sessionUser.id);
+      ).listConnectionsWithAuthorization(ctx.mailAccess.userId);
 
       const disconnectedIds = records
         .filter(({ connection }) => connection.status === 'disconnected')
@@ -341,21 +370,39 @@ export const connectionsRouter = router({
       const setup = await createZohoWebhookSetup(services.environment, account.id);
       return { webhookUrl: setup.webhookUrl };
     }),
-  setDefault: privateProcedure
+  setDefault: mailSessionProcedure
     .input(z.object({ connectionId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const { connectionId } = input;
-      const user = ctx.sessionUser;
       const db = ctx.c.var.services!.database.db;
+      if (ctx.mailAccess.kind === 'external') {
+        try {
+          await setScopedActiveConnection(
+            ctx.externalSession!,
+            connectionId,
+            createPostgresExternalAccessRepository(db),
+            new Date(),
+          );
+          return;
+        } catch (error) {
+          if (
+            error instanceof ExternalIntegrationError &&
+            error.code === 'EXTERNAL_SESSION_SCOPE_NOT_FOUND'
+          ) {
+            throw new TRPCError({ code: 'NOT_FOUND' });
+          }
+          throw error;
+        }
+      }
       const foundConnection = await createPostgresConnectionRepository(db).findOwnedConnection(
-        user.id,
+        ctx.mailAccess.userId,
         connectionId,
       );
       if (!foundConnection) throw new TRPCError({ code: 'NOT_FOUND' });
       await db
         .update(userTable)
         .set({ defaultConnectionId: connectionId, updatedAt: new Date() })
-        .where(eq(userTable.id, user.id));
+        .where(eq(userTable.id, ctx.mailAccess.userId));
     }),
   disconnect: privateProcedure
     .input(
@@ -397,8 +444,23 @@ export const connectionsRouter = router({
       });
     }),
   getDefault: publicProcedure.query(async ({ ctx }) => {
-    if (!ctx.sessionUser) return null;
     const db = ctx.c.var.services!.database.db;
+    if (!ctx.sessionUser && ctx.externalSession) {
+      const records = await listScopedConnections(
+        ctx.externalSession,
+        createPostgresExternalAccessRepository(db),
+      );
+      const selectedConnection =
+        records.find(({ id }) => id === ctx.externalSession!.activeConnectionId) ?? records[0];
+      if (selectedConnection === undefined) return null;
+      return {
+        ...selectedConnection,
+        capabilities: Array.from(
+          defaultMailChannelRegistry.find(selectedConnection.channelId)?.capabilities ?? [],
+        ),
+      };
+    }
+    if (!ctx.sessionUser) return null;
     const repository = createPostgresConnectionRepository(db);
     const foundUser = await db.query.user.findFirst({
       where: eq(userTable.id, ctx.sessionUser.id),

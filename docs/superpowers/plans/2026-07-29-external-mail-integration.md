@@ -1087,7 +1087,7 @@ pnpm --dir apps/server exec tsc --noEmit
 
 预期：全部通过。
 
-- [ ] **步骤 10：提交任务 5**
+- [x] **步骤 10：提交任务 5**
 
 ```bash
 git add apps/server/src/modules/external-integration apps/server/src/db apps/server/tests
@@ -1141,7 +1141,7 @@ type MailAccessSubject =
 - 只有 `connections.list`、`connections.getDefault` 和 `connections.setDefault` 接受外部 Session。
 - 绑定、解绑、删除和集成管理接口继续使用 `privateProcedure`。
 
-- [ ] **步骤 1：编写失败的 Mail Account 权限测试**
+- [x] **步骤 1：编写失败的 Mail Account 权限测试**
 
 ```ts
 it('允许外部 Session 打开 Grant 中的 Mail Account', async () => {
@@ -1182,13 +1182,13 @@ it('保留普通用户原有 Ownership 校验', async () => {
 });
 ```
 
-- [ ] **步骤 2：运行测试并确认现有 Mail API 只支持用户 Session**
+- [x] **步骤 2：运行测试并确认现有 Mail API 只支持用户 Session**
 
 ```bash
 pnpm --dir apps/server exec vitest run tests/unit/modules/mail-api/procedures/mail-account-procedure.test.ts
 ```
 
-- [ ] **步骤 3：把外部 Session 解析到 Hono Context**
+- [x] **步骤 3：把外部 Session 解析到 Hono Context**
 
 读取 `zero-external-session` Cookie，计算 Digest，查询有效 Session，并在达到 3 天更新时间时执行滑动续期。
 
@@ -1196,14 +1196,14 @@ pnpm --dir apps/server exec vitest run tests/unit/modules/mail-api/procedures/ma
 
 当 Better Auth Session 和外部 Session 同时存在时，优先使用真实 Better Auth 用户。
 
-- [ ] **步骤 4：调整 Mail API 和 Blob HTTP 权限**
+- [x] **步骤 4：调整 Mail API 和 Blob HTTP 权限**
 
 - `mail.account.list` 对普通用户按 `userId` 查询。
 - `mail.account.list` 对外部 Session 只返回 Grant Scope 中的 Account。
 - Mail Account Procedure 必须校验外部 Scope。
 - Blob、附件和 Raw Email HTTP 路由必须执行相同 Scope 校验。
 
-- [ ] **步骤 5：编写失败的多账号范围测试**
+- [x] **步骤 5：编写失败的多账号范围测试**
 
 ```ts
 it('只列出 Grant 允许的连接', async () => {
@@ -1245,13 +1245,13 @@ it('外部 Session 不能调用绑定和解绑接口', async () => {
 });
 ```
 
-- [ ] **步骤 6：运行测试并确认受限连接目录不存在**
+- [x] **步骤 6：运行测试并确认受限连接目录不存在**
 
 ```bash
 pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration/trpc/router.test.ts tests/integration/modules/external-integration/scoped-mail-access.integration.test.ts tests/architecture/external-session-permissions.test.ts
 ```
 
-- [ ] **步骤 7：实现连接列表和当前账号存储**
+- [x] **步骤 7：实现连接列表和当前账号存储**
 
 外部 Session 使用服务端保存的 Scope。
 
@@ -1270,7 +1270,7 @@ pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration/t
 
 不得返回 `allowedNangoConnectIds` 或原始 Session Token。
 
-- [ ] **步骤 8：验证任务 6**
+- [x] **步骤 8：验证任务 6**
 
 ```bash
 pnpm --dir apps/server exec vitest run tests/unit/modules/mail-api/procedures/mail-account-procedure.test.ts tests/unit/modules/external-integration tests/integration/modules/external-integration tests/architecture/external-session-permissions.test.ts

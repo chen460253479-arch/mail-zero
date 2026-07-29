@@ -1,8 +1,8 @@
+import type { HonoContext, HonoVariables, MailAccessSubject } from '../ctx';
 import { assertAdministrator } from '../integrations/core/permissions';
 import { Ratelimit, type RatelimitConfig } from '@upstash/ratelimit';
 import { getActiveConnection } from '../lib/server-utils';
 import { getConnInfo } from '@hono/node-server/conninfo';
-import type { HonoContext, HonoVariables } from '../ctx';
 import { initTRPC, TRPCError } from '@trpc/server';
 
 import { redis } from '../lib/services';
@@ -60,6 +60,32 @@ export const privateProcedure = publicProcedure.use(async ({ ctx, next }) => {
   }
 
   return next({ ctx: { ...ctx, sessionUser: ctx.sessionUser } });
+});
+
+export const mailSessionProcedure = publicProcedure.use(async ({ ctx, next }) => {
+  let mailAccess: MailAccessSubject;
+  if (ctx.sessionUser !== undefined) {
+    mailAccess = {
+      kind: 'user',
+      userId: ctx.sessionUser.id,
+    };
+  } else if (ctx.externalSession !== undefined) {
+    mailAccess = {
+      kind: 'external',
+      sessionId: ctx.externalSession.id,
+      ownerUserId: ctx.externalSession.ownerUserId,
+      scopes: ctx.externalSession.scopes,
+      activeConnectionId: ctx.externalSession.activeConnectionId,
+    };
+  } else {
+    throw new TRPCError({ code: 'UNAUTHORIZED' });
+  }
+  return await next({
+    ctx: {
+      ...ctx,
+      mailAccess,
+    },
+  });
 });
 
 export const adminProcedure = privateProcedure.use(async ({ ctx, next }) => {

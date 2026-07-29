@@ -9,8 +9,8 @@ import {
 } from '../runtime/create-mail-api';
 import { mapMailCoreError } from '../errors/map-mail-core-error';
 import { mailAccountIdSchema } from '../contracts/common';
+import { mailSessionProcedure } from '../../../trpc/trpc';
 import { MailApiError } from '../errors/mail-api-error';
-import { privateProcedure } from '../../../trpc/trpc';
 
 export type { OwnedMailApiRuntime } from '../runtime/create-mail-api';
 
@@ -19,8 +19,6 @@ export type OpenOwnedMailApiRuntime = (
   accountId: MailAccountId,
   runtimeEnv: MailApiEnvironment,
 ) => Promise<OwnedMailApiRuntime>;
-
-export const mailSessionProcedure = privateProcedure;
 
 const trpcCode = (
   error: MailApiError,
@@ -48,10 +46,17 @@ export const createMailAccountProcedure = (
   mailSessionProcedure
     .input(z.object({ accountId: mailAccountIdSchema }).passthrough())
     .use(async ({ ctx, input, next }) => {
+      const access = ctx.mailAccess;
+      if (
+        access.kind === 'external' &&
+        !access.scopes.some(({ mailAccountId }) => mailAccountId === input.accountId)
+      ) {
+        throw new TRPCError({ code: 'NOT_FOUND' });
+      }
       let runtime: OwnedMailApiRuntime;
       try {
         runtime = await openRuntime(
-          ctx.sessionUser.id,
+          access.kind === 'user' ? access.userId : access.ownerUserId,
           input.accountId as MailAccountId,
           ctx.c.var.services!,
         );

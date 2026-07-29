@@ -1,9 +1,4 @@
 import {
-  mailAccountProcedure,
-  mailSessionProcedure,
-  toMailApiTrpcError,
-} from '../procedures/mail-account-procedure';
-import {
   openMailApiRuntime,
   type MailApiEnvironment,
   type OpenMailApiRuntime,
@@ -13,8 +8,9 @@ import {
   accountGetResultSchema,
   accountListResultSchema,
 } from '../contracts/account';
+import { mailAccountProcedure, toMailApiTrpcError } from '../procedures/mail-account-procedure';
 import { createAccountService } from '../application/account-service';
-import { router } from '../../../trpc/trpc';
+import { mailSessionProcedure, router } from '../../../trpc/trpc';
 
 export type OpenMailSessionRuntime = (
   environment: MailApiEnvironment,
@@ -26,7 +22,17 @@ export const createAccountRouter = (openRuntime: OpenMailSessionRuntime = openMa
       const runtime = await openRuntime(ctx.c.var.services!);
       try {
         try {
-          return await createAccountService(runtime.core).list({ userId: ctx.sessionUser.id });
+          const access = ctx.mailAccess;
+          const result = await createAccountService(runtime.core).list({
+            userId: access.kind === 'user' ? access.userId : access.ownerUserId,
+          });
+          if (access.kind === 'user') return result;
+          const allowedAccountIds = new Set(
+            access.scopes.map(({ mailAccountId }) => mailAccountId),
+          );
+          return {
+            accounts: result.accounts.filter(({ id }) => allowedAccountIds.has(id)),
+          };
         } catch (error) {
           throw toMailApiTrpcError(error);
         }

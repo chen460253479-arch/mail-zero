@@ -87,4 +87,50 @@ describe('Mail API resource Routers', () => {
     expect(runtimeMocks.openOwned).toHaveBeenCalledTimes(3);
     expect(runtimeMocks.close).toHaveBeenCalledTimes(4);
   });
+
+  it('lists only mail accounts granted to an external session', async () => {
+    const dependencies = createMemoryMailCoreDependencies();
+    const allowed = await createMailAccount(dependencies, {
+      userId: 'zero-external-integration',
+      connectionId: 'allowed-connection',
+      timezone: 'UTC',
+      storageQuotaBytes: null,
+    });
+    await createMailAccount(dependencies, {
+      userId: 'zero-external-integration',
+      connectionId: 'other-connection',
+      timezone: 'UTC',
+      storageQuotaBytes: null,
+    });
+    runtimeMocks.openSession.mockResolvedValue({
+      core: createMailCore(dependencies),
+      db: {},
+      close: runtimeMocks.close,
+    });
+    const caller = router({
+      account: accountRouter,
+    }).createCaller({
+      c: { env: {}, var: { services: {} } } as never,
+      sessionUser: undefined,
+      externalSession: {
+        id: 'external-session-1',
+        ownerUserId: 'zero-external-integration',
+        scopes: [
+          {
+            nangoConnectionId: 'connect-allowed',
+            connectionId: 'allowed-connection',
+            mailAccountId: allowed.id,
+          },
+        ],
+        activeConnectionId: 'allowed-connection',
+        expiresAt: new Date('2026-08-20T00:00:00.000Z'),
+        updatedAt: new Date('2026-07-29T00:00:00.000Z'),
+      },
+      auth: {} as never,
+    });
+
+    await expect(caller.account.list()).resolves.toMatchObject({
+      accounts: [{ id: allowed.id }],
+    });
+  });
 });

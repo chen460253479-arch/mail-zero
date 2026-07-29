@@ -1,9 +1,16 @@
 import { contextStorage } from 'hono/context-storage';
 import { createLocalJWKSet, jwtVerify } from 'jose';
+import { getCookie, setCookie } from 'hono/cookie';
 import { trpcServer } from '@hono/trpc-server';
 import { cors } from 'hono/cors';
 import { Hono } from 'hono';
 
+import {
+  EXTERNAL_SESSION_COOKIE_NAME,
+  externalSessionCookieOptions,
+} from '../../modules/external-integration/session/cookie';
+import { createPostgresExternalAccessRepository } from '../../modules/external-integration/postgres/repository';
+import { resolveExternalBrowserSession } from '../../modules/external-integration/session/resolve';
 import { createExternalIntegrationRouter } from '../../modules/external-integration';
 import { finalizeRequestTrace, TraceContext } from '../../lib/trace-context';
 import { integrationOAuthRouter } from '../../routes/integrations';
@@ -27,7 +34,22 @@ const hashIpAddress = (ip: string | undefined): string | undefined => {
 const coreIsReady = (services: RuntimeServices): boolean =>
   Object.values(services.readiness.snapshot).every(Boolean);
 
-const createApi = (services: RuntimeServices) => {
+export type NodeApplicationDependencies = {
+  resolveExternalSession(
+    sessionToken: string | undefined,
+    services: RuntimeServices,
+  ): ReturnType<typeof resolveExternalBrowserSession>;
+};
+
+const defaultApplicationDependencies: NodeApplicationDependencies = {
+  resolveExternalSession: async (sessionToken, services) =>
+    await resolveExternalBrowserSession(sessionToken, {
+      repository: createPostgresExternalAccessRepository(services.database.db),
+      clock: { now: () => new Date() },
+    }),
+};
+
+const createApi = (services: RuntimeServices, dependencies: NodeApplicationDependencies) => {
   const api = new Hono<HonoContext>()
     .use(contextStorage())
     .use('*', async (c, next) => {
@@ -63,6 +85,24 @@ const createApi = (services: RuntimeServices) => {
       c.set('auth', auth);
       const session = await auth.api.getSession({ headers: c.req.raw.headers });
       c.set('sessionUser', session?.user);
+      if (session?.user === undefined) {
+        const externalSessionToken = getCookie(c, EXTERNAL_SESSION_COOKIE_NAME);
+        const externalSession = await dependencies.resolveExternalSession(
+          externalSessionToken,
+          services,
+        );
+        c.set('externalSession', externalSession ?? undefined);
+        if (externalSession !== null && externalSessionToken !== undefined) {
+          setCookie(
+            c,
+            EXTERNAL_SESSION_COOKIE_NAME,
+            externalSessionToken,
+            externalSessionCookieOptions(services.config, externalSession.expiresAt),
+          );
+        }
+      } else {
+        c.set('externalSession', undefined);
+      }
 
       if (c.req.header('Authorization') && !session?.user) {
         const tokenSpan = TraceContext.startSpan(
@@ -102,6 +142,9 @@ const createApi = (services: RuntimeServices) => {
           });
         }
       }
+      if (c.var.sessionUser !== undefined) {
+        c.set('externalSession', undefined);
+      }
 
       TraceContext.completeSpan(traceId, authSpan.id, {
         authenticated: !!c.var.sessionUser,
@@ -109,7 +152,7 @@ const createApi = (services: RuntimeServices) => {
         authMethod: session?.user ? 'session' : c.req.header('Authorization') ? 'token' : 'none',
       });
       trace.metadata.userId = c.var.sessionUser?.id;
-      trace.metadata.sessionId = c.var.sessionUser?.id || 'anonymous';
+      trace.metadata.sessionId = c.var.sessionUser?.id ?? c.var.externalSession?.id ?? 'anonymous';
       const requestSpan = TraceContext.startSpan(traceId, 'request_processing', {
         authenticated: !!c.var.sessionUser,
         path: new URL(c.req.url).pathname,
@@ -124,6 +167,7 @@ const createApi = (services: RuntimeServices) => {
       } finally {
         finalizeRequestTrace(c, requestSpan.id, c.res.status, requestError);
         c.set('sessionUser', undefined);
+        c.set('externalSession', undefined);
       }
     })
     .route('/public', publicRouter)
@@ -138,6 +182,7 @@ const createApi = (services: RuntimeServices) => {
           services,
           auth: c.var.auth,
           sessionUser: c.var.sessionUser,
+          externalSession: c.var.externalSession,
           traceId: c.var.traceId,
           requestId: c.var.requestId,
         }),
@@ -161,8 +206,15 @@ const createApi = (services: RuntimeServices) => {
   return api;
 };
 
-export const createNodeApplication = (services: RuntimeServices) => {
-  const api = createApi(services);
+export const createNodeApplication = (
+  services: RuntimeServices,
+  dependencyOverrides: Partial<NodeApplicationDependencies> = {},
+) => {
+  const dependencies = {
+    ...defaultApplicationDependencies,
+    ...dependencyOverrides,
+  };
+  const api = createApi(services, dependencies);
   return new Hono<HonoContext>()
     .use('*', async (c, next) => {
       c.set('services', services);
