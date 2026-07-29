@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
-import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
+import { alias, type PgUpdateSetSource } from 'drizzle-orm/pg-core';
 
 import type {
   ClaimedDelivery,
@@ -20,6 +20,8 @@ import { mailAccount } from '../../mail/postgres/schema/accounts';
 import { outboundDelivery, sendAttempt } from './schema';
 import { MailOutboundError } from '../domain/errors';
 import { connection } from '../../../db/schema';
+
+const lockedConnection = alias(connection, 'locked_connection');
 
 export type InsertOutboundDelivery = {
   id: string;
@@ -236,15 +238,15 @@ export const createMailOutboundRepository = (
   isConnectionReady: (mailAccountId, connectionId) =>
     runOutboundAdapter(async () => {
       const rows = await db
-        .select({ id: connection.id })
-        .from(connection)
+        .select({ id: lockedConnection.id })
+        .from(lockedConnection)
         .innerJoin(
           mailAccount,
-          and(eq(mailAccount.id, mailAccountId), eq(mailAccount.connectionId, connection.id)),
+          and(eq(mailAccount.id, mailAccountId), eq(mailAccount.connectionId, lockedConnection.id)),
         )
-        .where(and(eq(connection.id, connectionId), eq(connection.status, 'connected')))
+        .where(and(eq(lockedConnection.id, connectionId), eq(lockedConnection.status, 'connected')))
         .limit(1)
-        .for('update', { of: connection });
+        .for('update', { of: lockedConnection });
       return rows.length === 1;
     }),
   insert: (input) =>
@@ -363,12 +365,12 @@ export const createMailOutboundRepository = (
     runOutboundAdapter(async () => {
       requireLeaseDuration(input.leaseForMs);
       const connectionRows = await db
-        .select({ status: connection.status })
+        .select({ status: lockedConnection.status })
         .from(outboundDelivery)
-        .innerJoin(connection, eq(connection.id, outboundDelivery.connectionId))
+        .innerJoin(lockedConnection, eq(lockedConnection.id, outboundDelivery.connectionId))
         .where(eq(outboundDelivery.id, input.deliveryId))
         .limit(1)
-        .for('update', { of: connection });
+        .for('update', { of: lockedConnection });
       if (connectionRows[0]?.status !== 'connected') {
         return null;
       }

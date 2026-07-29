@@ -11,6 +11,7 @@ import {
   createCredentialAwareOutlookClient,
   createCredentialAwareZohoMailClient,
 } from './channel-api-clients';
+import { createMailTaskQueuePortForDatabase, type MailTaskQueuePort } from './task-queue';
 import { PostgresSearchStore } from '../../modules/mail/search/postgres-search-store';
 import { createMailChannelCredentialContext } from './channel-credential-context';
 import { createGmailCredentialContext } from './gmail-credential-context';
@@ -30,6 +31,7 @@ const OUTBOUND_SCAN_LIMIT = 100;
 export const createMailOutboundRuntimeForEnvironment = (
   db: DB,
   runtimeEnv: ZeroEnv,
+  injectedTaskQueue?: MailTaskQueuePort,
 ): MailOutboundRuntime => {
   const clock = { now: () => new Date() };
   const blobStore = new R2BlobStore(runtimeEnv.THREADS_BUCKET);
@@ -100,6 +102,7 @@ export const createMailOutboundRuntimeForEnvironment = (
     }),
     createImapSmtpPluginForEnvironment(runtimeEnv),
   ]);
+  const taskQueue = injectedTaskQueue ?? createMailTaskQueuePortForDatabase(db);
 
   return createMailOutboundRuntime({
     unitOfWork,
@@ -115,7 +118,7 @@ export const createMailOutboundRuntimeForEnvironment = (
         await (await getContext(connectionId)).markReconnectRequired(),
     },
     wakeup: {
-      enqueue: async (command) => await runtimeEnv.MAIL_OUTBOUND_QUEUE.send(command),
+      enqueue: async (command) => await taskQueue.enqueueOutbound(command),
     },
     clock,
     nextId: () => ulid(),
@@ -130,10 +133,13 @@ export const createMailOutboundRuntimeForEnvironment = (
 export const runMailOutboundCommand = async (
   runtimeEnv: ZeroEnv,
   command: MailOutboundCommand,
+  injectedTaskQueue?: MailTaskQueuePort,
 ): Promise<void> => {
   const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
   try {
-    await createMailOutboundRuntimeForEnvironment(db, runtimeEnv).process(command);
+    await createMailOutboundRuntimeForEnvironment(db, runtimeEnv, injectedTaskQueue).process(
+      command,
+    );
   } finally {
     await conn.end();
   }
@@ -141,10 +147,15 @@ export const runMailOutboundCommand = async (
 
 export const enqueueDueMailOutboundWork = async (
   runtimeEnv: ZeroEnv,
+  injectedTaskQueue?: MailTaskQueuePort,
 ): Promise<{ due: number; expired: number; uncertain: number }> => {
   const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
   try {
-    return await createMailOutboundRuntimeForEnvironment(db, runtimeEnv).enqueueDue();
+    return await createMailOutboundRuntimeForEnvironment(
+      db,
+      runtimeEnv,
+      injectedTaskQueue,
+    ).enqueueDue();
   } finally {
     await conn.end();
   }

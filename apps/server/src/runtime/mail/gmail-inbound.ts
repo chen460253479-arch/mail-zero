@@ -6,6 +6,7 @@ import {
 import { createPostgresMailSyncRepository } from '../../modules/mail-sync/postgres/sync-repository';
 import { createChannelConfigRepository } from '../../integrations/core/channel-config-repository';
 import { activateChannelInboundForAccount, activateChannelInboundForConnection } from './inbound';
+import { createMailTaskQueuePortForDatabase, type MailTaskQueuePort } from './task-queue';
 import { handleGmailWebhookRequest } from '../../mail-channel/gmail/inbound/webhook';
 import { createGmailCredentialContext } from './gmail-credential-context';
 import { createGmailPlugin } from '../../mail-channel/gmail/plugin';
@@ -72,14 +73,16 @@ export const stopGmailWatchForConnection = async (
 export const handleGmailWebhookForEnvironment = async (
   runtimeEnv: ZeroEnv,
   request: Request,
+  injectedTaskQueue?: MailTaskQueuePort,
 ): Promise<Response> => {
   const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
   try {
     const repository = createPostgresMailSyncRepository(db);
+    const taskQueue = injectedTaskQueue ?? createMailTaskQueuePortForDatabase(db);
     return await handleGmailWebhookRequest(request, {
       getChannelConfig: () => readGmailChannelConfig(db),
       recordSignal: (signal) => repository.recordSignal(signal),
-      enqueueDiscover: (syncId) => runtimeEnv.MAIL_INGRESS_QUEUE.send({ type: 'discover', syncId }),
+      enqueueDiscover: (syncId) => taskQueue.enqueueIngress({ type: 'discover', syncId }),
     });
   } finally {
     await conn.end();

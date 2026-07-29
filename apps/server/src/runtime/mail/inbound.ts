@@ -23,6 +23,7 @@ import {
 import { createPostgresMailSyncRepository } from '../../modules/mail-sync/postgres/sync-repository';
 import { bootstrapLocalMailAccount } from '../../modules/mail-sync/application/bootstrap-account';
 import { createChannelConfigRepository } from '../../integrations/core/channel-config-repository';
+import { createMailTaskQueuePortForDatabase, type MailTaskQueuePort } from './task-queue';
 import { PostgresMailUnitOfWork } from '../../modules/mail/postgres/postgres-unit-of-work';
 import { encryptCredential } from '../../infrastructure/security/credential-encryption';
 import type { MailIngressCommand } from '../../modules/mail-sync/application/commands';
@@ -341,10 +342,14 @@ export const activateChannelInboundForConnection = async (
   }
 };
 
-const createRuntime = (db: DB, runtimeEnv: ZeroEnv): MailIngressRuntime => {
+const createRuntime = (
+  db: DB,
+  runtimeEnv: ZeroEnv,
+  taskQueue: MailTaskQueuePort,
+): MailIngressRuntime => {
   const repository = createPostgresMailSyncRepository(db);
   const adapterRuntime = createInboundAdapterRuntime(db, runtimeEnv);
-  const enqueue = (command: MailIngressCommand) => runtimeEnv.MAIL_INGRESS_QUEUE.send(command);
+  const enqueue = (command: MailIngressCommand) => taskQueue.enqueueIngress(command);
   const getAdapterFactory = (provider: string) => {
     adapterRuntime.registry.getInbound(provider);
     return adapterRuntime.adapterFactory;
@@ -391,10 +396,14 @@ const createRuntime = (db: DB, runtimeEnv: ZeroEnv): MailIngressRuntime => {
 export const runMailIngressCommand = async (
   runtimeEnv: ZeroEnv,
   command: MailIngressCommand,
+  injectedTaskQueue?: MailTaskQueuePort,
 ): Promise<void> => {
   const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
   try {
-    await processMailIngressCommand(command, createRuntime(db, runtimeEnv));
+    await processMailIngressCommand(
+      command,
+      createRuntime(db, runtimeEnv, injectedTaskQueue ?? createMailTaskQueuePortForDatabase(db)),
+    );
   } finally {
     await conn.end();
   }
@@ -402,10 +411,12 @@ export const runMailIngressCommand = async (
 
 export const enqueueDueMailIngressWork = async (
   runtimeEnv: ZeroEnv,
+  injectedTaskQueue?: MailTaskQueuePort,
 ): Promise<{ reconciliations: number; renewals: number; imports: number }> => {
   const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
   try {
     const now = new Date();
+    const taskQueue = injectedTaskQueue ?? createMailTaskQueuePortForDatabase(db);
     return await dispatchDueMailSyncWork(
       {
         owner: crypto.randomUUID(),
@@ -419,7 +430,7 @@ export const enqueueDueMailIngressWork = async (
       },
       {
         repository: createPostgresMailSyncRepository(db),
-        enqueue: (command) => runtimeEnv.MAIL_INGRESS_QUEUE.send(command),
+        enqueue: (command) => taskQueue.enqueueIngress(command),
       },
     );
   } finally {

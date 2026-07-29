@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 
 import { createPostgresMailSyncRepository } from '../../modules/mail-sync/postgres/sync-repository';
+import { createMailTaskQueuePortForDatabase, type MailTaskQueuePort } from './task-queue';
 import { handleOutlookWebhookRequest } from '../../mail-channel/outlook/inbound/webhook';
 import { decryptCredential } from '../../infrastructure/security/credential-encryption';
 import { inboundSync } from '../../db/schema';
@@ -30,10 +31,12 @@ const isMessageResource = (resource: string): boolean => {
 export const handleOutlookWebhookForEnvironment = async (
   runtimeEnv: ZeroEnv,
   request: Request,
+  injectedTaskQueue?: MailTaskQueuePort,
 ): Promise<Response> => {
   const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
   try {
     const repository = createPostgresMailSyncRepository(db);
+    const taskQueue = injectedTaskQueue ?? createMailTaskQueuePortForDatabase(db);
     return await handleOutlookWebhookRequest(request, {
       verifySubscription: async ({ subscriptionId, clientState, resource }) => {
         if (!isMessageResource(resource)) return false;
@@ -59,7 +62,7 @@ export const handleOutlookWebhookForEnvironment = async (
         }
       },
       recordSubscriptionSignal: (signal) => repository.recordSubscriptionSignal(signal),
-      enqueueDiscover: (syncId) => runtimeEnv.MAIL_INGRESS_QUEUE.send({ type: 'discover', syncId }),
+      enqueueDiscover: (syncId) => taskQueue.enqueueIngress({ type: 'discover', syncId }),
     });
   } finally {
     await conn.end();

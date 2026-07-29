@@ -1,4 +1,5 @@
 import { createPostgresMailSyncRepository } from '../../modules/mail-sync/postgres/sync-repository';
+import { createMailTaskQueuePortForDatabase, type MailTaskQueuePort } from './task-queue';
 import { handleZohoMailWebhookRequest } from '../../mail-channel/zoho-mail/inbound/webhook';
 import type { ZeroEnv } from '../../env';
 import { createDb } from '../../db';
@@ -14,10 +15,12 @@ export const handleZohoMailWebhookForEnvironment = async (
   runtimeEnv: ZeroEnv,
   request: Request,
   endpointToken: string,
+  injectedTaskQueue?: MailTaskQueuePort,
 ): Promise<Response> => {
   const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
   try {
     const repository = createPostgresMailSyncRepository(db);
+    const taskQueue = injectedTaskQueue ?? createMailTaskQueuePortForDatabase(db);
     const endpointTokenHash = await digestHex(endpointToken);
     return await handleZohoMailWebhookRequest(request, endpointToken, {
       recordEndpointSignal: async () =>
@@ -25,7 +28,7 @@ export const handleZohoMailWebhookForEnvironment = async (
           provider: 'zoho_mail',
           endpointTokenHash,
         }),
-      enqueueDiscover: (syncId) => runtimeEnv.MAIL_INGRESS_QUEUE.send({ type: 'discover', syncId }),
+      enqueueDiscover: (syncId) => taskQueue.enqueueIngress({ type: 'discover', syncId }),
     });
   } finally {
     await conn.end();
