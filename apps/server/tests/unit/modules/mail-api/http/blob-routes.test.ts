@@ -11,8 +11,6 @@ vi.mock('cloudflare:workers', () => {
   class RuntimeBase {}
   return {
     env: {},
-    DurableObject: RuntimeBase,
-    RpcTarget: RuntimeBase,
     WorkerEntrypoint: RuntimeBase,
     WorkflowEntrypoint: RuntimeBase,
   };
@@ -23,8 +21,8 @@ vi.mock('../../../../../src/modules/mail-api/runtime/create-mail-api', async (im
   openOwnedMailApiRuntime: runtimeMocks.openOwned,
 }));
 
-import type { HonoContext } from '../../../../../src/ctx';
 import { registerMailBlobRoutes } from '../../../../../src/modules/mail-api/http';
+import type { HonoContext } from '../../../../../src/ctx';
 
 const createApp = () => {
   const app = new Hono<HonoContext>();

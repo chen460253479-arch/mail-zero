@@ -1,16 +1,16 @@
 import { hashPassword } from 'better-auth/crypto';
 import { and, count, eq, sql } from 'drizzle-orm';
 
-import { createDb } from '../db';
-import { account, user } from '../db/schema';
-import { env } from '../env';
 import {
   parseAdminProvisioningConfig,
   validateAdminCredentials,
   type AdminCredentials,
 } from './admin-provisioning-policy';
+import { getUserWorkspace } from './server-utils';
 import { defaultUserSettings } from './schemas';
-import { getZeroDB } from './server-utils';
+import { account, user } from '../db/schema';
+import { createDb } from '../db';
+import { env } from '../env';
 
 export type ProvisionAdminResult = {
   created: boolean;
@@ -39,12 +39,7 @@ export const provisionAdmin = async (
           const [credentialAccount] = await tx
             .select()
             .from(account)
-            .where(
-              and(
-                eq(account.userId, existingUser.id),
-                eq(account.providerId, 'credential'),
-              ),
-            );
+            .where(and(eq(account.userId, existingUser.id), eq(account.providerId, 'credential')));
           if (credentialAccount) {
             return {
               created: false,
@@ -109,9 +104,9 @@ export const provisionAdmin = async (
       return { created: true, email: normalized.email, userId };
     });
 
-    const zeroDb = await getZeroDB(result.userId);
-    const settings = await zeroDb.findUserSettings();
-    if (!settings) await zeroDb.insertUserSettings(defaultUserSettings);
+    const workspace = getUserWorkspace(result.userId);
+    const settings = await workspace.findUserSettings();
+    if (!settings) await workspace.insertUserSettings(defaultUserSettings);
 
     return result;
   } finally {

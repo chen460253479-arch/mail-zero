@@ -1,9 +1,6 @@
-import type { ZeroDB } from './main';
-
 import { env as _env } from 'cloudflare:workers';
 
 export type ZeroEnv = {
-  ZERO_DB: DurableObjectNamespace<ZeroDB>;
   HYPERDRIVE: { connectionString: string };
   MAIL_INGRESS_QUEUE: Queue;
   MAIL_OUTBOUND_QUEUE: Queue;

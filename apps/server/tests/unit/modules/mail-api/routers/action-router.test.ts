@@ -10,8 +10,6 @@ vi.mock('cloudflare:workers', () => {
   class RuntimeBase {}
   return {
     env: {},
-    DurableObject: RuntimeBase,
-    RpcTarget: RuntimeBase,
     WorkerEntrypoint: RuntimeBase,
     WorkflowEntrypoint: RuntimeBase,
   };
@@ -22,8 +20,8 @@ vi.mock('../../../../../src/modules/mail-api/runtime/create-mail-api', async (im
   openOwnedMailApiRuntime: runtimeMocks.openOwned,
 }));
 
-import { router } from '../../../../../src/trpc/trpc';
 import { actionRouter } from '../../../../../src/modules/mail-api/routers/action';
+import { router } from '../../../../../src/trpc/trpc';
 
 describe('Action Router', () => {
   beforeEach(() => vi.clearAllMocks());

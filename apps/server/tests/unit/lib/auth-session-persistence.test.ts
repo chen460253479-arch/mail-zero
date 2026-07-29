@@ -39,7 +39,7 @@ vi.mock('../../../src/lib/services', () => ({
 }));
 
 vi.mock('../../../src/lib/server-utils', () => ({
-  getZeroDB: vi.fn(),
+  getUserWorkspace: vi.fn(),
 }));
 
 vi.mock('../../../src/modules/mail-accounts/runtime/lifecycle-environment', () => ({

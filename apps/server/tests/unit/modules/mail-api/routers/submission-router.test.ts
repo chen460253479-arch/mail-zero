@@ -10,8 +10,6 @@ vi.mock('cloudflare:workers', () => {
   class RuntimeBase {}
   return {
     env: {},
-    DurableObject: RuntimeBase,
-    RpcTarget: RuntimeBase,
     WorkerEntrypoint: RuntimeBase,
     WorkflowEntrypoint: RuntimeBase,
   };

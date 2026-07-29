@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getUserWorkspace } from '../../../src/lib/server-utils';
 import { NotesManager } from '../../../src/lib/notes-manager';
-import { getZeroDB } from '../../../src/lib/server-utils';
 
 vi.mock('../../../src/lib/server-utils', () => ({
-  getZeroDB: vi.fn(),
+  getUserWorkspace: vi.fn(),
 }));
 
 const storedNote = {
@@ -38,7 +38,7 @@ describe('NotesManager Connection isolation', () => {
 
   it('passes the authenticated Connection to list and create operations', async () => {
     const db = createDatabase();
-    vi.mocked(getZeroDB).mockResolvedValue(db as never);
+    vi.mocked(getUserWorkspace).mockReturnValue(db as never);
     const manager = new NotesManager();
 
     await manager.getThreadNotes('user-1', 'connection-1', 'thread-1');
@@ -54,7 +54,7 @@ describe('NotesManager Connection isolation', () => {
 
   it('passes the authenticated Connection to update and delete operations', async () => {
     const db = createDatabase();
-    vi.mocked(getZeroDB).mockResolvedValue(db as never);
+    vi.mocked(getUserWorkspace).mockReturnValue(db as never);
     const manager = new NotesManager();
 
     await manager.updateNote('user-1', 'connection-1', 'note-1', { content: 'updated' });
@@ -69,7 +69,7 @@ describe('NotesManager Connection isolation', () => {
 
   it('authorizes and updates every reorder within the authenticated Connection', async () => {
     const db = createDatabase();
-    vi.mocked(getZeroDB).mockResolvedValue(db as never);
+    vi.mocked(getUserWorkspace).mockReturnValue(db as never);
     const manager = new NotesManager();
     const reordered = [{ id: 'note-1', order: 2 }];
 

@@ -7,14 +7,15 @@ vi.mock('cloudflare:workers', () => {
   class RuntimeBase {}
   return {
     env: {},
-    DurableObject: RuntimeBase,
-    RpcTarget: RuntimeBase,
     WorkerEntrypoint: RuntimeBase,
     WorkflowEntrypoint: RuntimeBase,
   };
 });
 
-import { createMailAccountProcedure, type OwnedMailApiRuntime } from '../../../../../src/modules/mail-api/procedures/mail-account-procedure';
+import {
+  createMailAccountProcedure,
+  type OwnedMailApiRuntime,
+} from '../../../../../src/modules/mail-api/procedures/mail-account-procedure';
 import { router } from '../../../../../src/trpc/trpc';
 
 const account = (patch: Partial<MailAccountRecord> = {}): MailAccountRecord => ({

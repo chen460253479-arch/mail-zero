@@ -1,5 +1,9 @@
 import { getContext } from 'hono/context-storage';
 
+import {
+  createUserWorkspaceService,
+  type UserWorkspaceService,
+} from '../modules/user-workspace/service';
 import { createPostgresConnectionRepository } from '../modules/mail-accounts/postgres/connection-repository';
 import type { HonoContext } from '../ctx';
 import { user } from '../db/schema';
@@ -7,10 +11,20 @@ import { eq } from 'drizzle-orm';
 import { createDb } from '../db';
 import { env } from '../env';
 
-export const getZeroDB = async (userId: string) => {
-  const stub = env.ZERO_DB.get(env.ZERO_DB.idFromName(userId));
-  return await stub.setMetaData(userId);
+let workspaceService: UserWorkspaceService | undefined;
+
+export const configureUserWorkspaceService = (service: UserWorkspaceService) => {
+  workspaceService = service;
 };
+
+const getUserWorkspaceService = () => {
+  if (workspaceService) return workspaceService;
+  const database = createDb(env.HYPERDRIVE.connectionString);
+  workspaceService = createUserWorkspaceService({ db: database.db });
+  return workspaceService;
+};
+
+export const getUserWorkspace = (userId: string) => getUserWorkspaceService().forUser(userId);
 
 export const getActiveConnection = async () => {
   const c = getContext<HonoContext>();

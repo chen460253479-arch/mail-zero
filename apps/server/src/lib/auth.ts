@@ -3,9 +3,9 @@ import { createAuthMiddleware, jwt, bearer } from 'better-auth/plugins';
 import { getBrowserTimezone, isValidTimezone } from './timezones';
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { getUserWorkspace } from './server-utils';
 import { defaultUserSettings } from './schemas';
 import { APIError } from 'better-auth/api';
-import { getZeroDB } from './server-utils';
 import { connection } from '../db/schema';
 import { resend } from './services';
 import { eq } from 'drizzle-orm';
@@ -107,7 +107,7 @@ export const createAuth = () => {
           const newSession = ctx.context.newSession;
           if (newSession) {
             // Check if user already has settings
-            const db = await getZeroDB(newSession.user.id);
+            const db = getUserWorkspace(newSession.user.id);
             const existingSettings = await db.findUserSettings();
 
             if (!existingSettings) {

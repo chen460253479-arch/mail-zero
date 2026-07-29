@@ -13,8 +13,6 @@ vi.mock('cloudflare:workers', () => {
   class RuntimeBase {}
   return {
     env: {},
-    DurableObject: RuntimeBase,
-    RpcTarget: RuntimeBase,
     WorkerEntrypoint: RuntimeBase,
     WorkflowEntrypoint: RuntimeBase,
   };
@@ -26,11 +24,11 @@ vi.mock('../../../../../src/modules/mail-api/runtime/create-mail-api', async (im
   openMailApiRuntime: runtimeMocks.openSession,
 }));
 
-import { router } from '../../../../../src/trpc/trpc';
 import { identityRouter } from '../../../../../src/modules/mail-api/routers/identity';
 import { mailboxRouter } from '../../../../../src/modules/mail-api/routers/mailbox';
 import { accountRouter } from '../../../../../src/modules/mail-api/routers/account';
 import { threadRouter } from '../../../../../src/modules/mail-api/routers/thread';
+import { router } from '../../../../../src/trpc/trpc';
 
 describe('Mail API resource Routers', () => {
   beforeEach(() => {
