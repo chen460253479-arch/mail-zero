@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  MailProtocolWorkerError,
+  MailProtocolClientError,
   type MailProtocolClient,
 } from '../../../../../src/mail-channel/imap-smtp/shared/protocol-client';
 import { createImapSmtpOutboundAdapter } from '../../../../../src/mail-channel/imap-smtp/outbound/adapter';
@@ -67,14 +67,14 @@ describe('IMAP/SMTP outbound adapter', () => {
 
     expect(
       adapter.classifyError(
-        new MailProtocolWorkerError('SMTP_AUTHENTICATION_FAILED', 'authentication'),
+        new MailProtocolClientError('SMTP_AUTHENTICATION_FAILED', 'authentication'),
       ),
     ).toMatchObject({ kind: 'authentication_required' });
     expect(
-      adapter.classifyError(new MailProtocolWorkerError('SMTP_TEMPORARY_FAILURE', 'retryable')),
+      adapter.classifyError(new MailProtocolClientError('SMTP_TEMPORARY_FAILURE', 'retryable')),
     ).toMatchObject({ kind: 'temporary_failure' });
     expect(
-      adapter.classifyError(new MailProtocolWorkerError('SMTP_RESULT_UNKNOWN', 'uncertain')),
+      adapter.classifyError(new MailProtocolClientError('SMTP_RESULT_UNKNOWN', 'uncertain')),
     ).toMatchObject({ kind: 'uncertain', safeResponse: 'unknown_result' });
     await expect(
       adapter.reconcile?.({

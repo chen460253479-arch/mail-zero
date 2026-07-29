@@ -21,6 +21,7 @@ export type ZeroEnv = {
   NANGO_IMAP_SMTP_INTEGRATION_KEY?: string;
   MAIL_PROTOCOL_WORKER_URL?: string;
   MAIL_PROTOCOL_WORKER_SECRET?: string;
+  MAIL_PROTOCOL_ALLOWED_HOSTS?: string;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
   RESEND_API_KEY: string;

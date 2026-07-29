@@ -23,7 +23,7 @@ const requireCredential = (credential: ResolvedCredential): ImapSmtpCredential =
 
 const unavailableDependencies: ImapSmtpPluginDependencies = {
   createClient: async () => {
-    throw new Error('MAIL_PROTOCOL_WORKER_NOT_CONFIGURED');
+    throw new Error('MAIL_PROTOCOL_EXECUTOR_NOT_CONFIGURED');
   },
 };
 

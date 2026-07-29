@@ -12,7 +12,7 @@ import {
   type InboundMailAdapter,
 } from '../../../modules/mail-sync';
 import { imapPageCursorSchema, type ImapPageCursor } from '../../../protocol-worker/contracts';
-import { MailProtocolWorkerError, type MailProtocolClient } from '../shared/protocol-client';
+import { MailProtocolClientError, type MailProtocolClient } from '../shared/protocol-client';
 
 const PAGE_SIZE = 100;
 
@@ -110,7 +110,7 @@ export const createImapSmtpIngressAdapter = (
   },
 
   classifyError: (error) =>
-    error instanceof MailProtocolWorkerError
+    error instanceof MailProtocolClientError
       ? error.classification === 'uncertain'
         ? 'retryable'
         : error.classification

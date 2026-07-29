@@ -59,7 +59,7 @@ describe('managed mail-channel configuration', () => {
         errorCode: null,
       }),
       publicBackendUrl: 'https://mail.example.test/',
-      protocolWorkerAvailable: true,
+      protocolAvailable: true,
       requestSubscriptionRefresh: async (provider) => {
         refreshed.push(provider);
       },
@@ -113,7 +113,7 @@ describe('managed mail-channel configuration', () => {
   });
 
   it('supports manual IMAP/SMTP only when the protocol worker is configured', async () => {
-    dependencies.protocolWorkerAvailable = false;
+    dependencies.protocolAvailable = false;
     const input = {
       channelId: 'imap_smtp' as const,
       authSource: 'manual' as const,
@@ -128,7 +128,7 @@ describe('managed mail-channel configuration', () => {
       code: 'MAIL_CHANNEL_AUTH_SOURCE_NOT_CONFIGURED',
     });
 
-    dependencies.protocolWorkerAvailable = true;
+    dependencies.protocolAvailable = true;
     await expect(createMailChannelConfigService(dependencies).save(input)).resolves.toMatchObject({
       channelId: 'imap_smtp',
       authSource: 'manual',

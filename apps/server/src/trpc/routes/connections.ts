@@ -103,9 +103,7 @@ const getChannelAuthorizationOptionsForDatabase = async (db: DB, channelId: Mail
     zeroOAuthAvailable: zeroOAuth?.status === 'active',
     nangoAvailable: nangoStatus.state === 'available',
     manualAvailable:
-      channelId === 'imap_smtp' &&
-      env.MAIL_PROTOCOL_WORKER_URL !== undefined &&
-      env.MAIL_PROTOCOL_WORKER_SECRET !== undefined,
+      channelId === 'imap_smtp' && defaultMailChannelRegistry.find('imap_smtp') !== undefined,
   };
   const selectedAuthSource =
     channelConfig?.authSource === 'zero_oauth' ||

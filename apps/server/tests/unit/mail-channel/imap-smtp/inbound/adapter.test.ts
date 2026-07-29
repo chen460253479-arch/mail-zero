@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { MailProtocolClient } from '../../../../../src/mail-channel/imap-smtp/shared/protocol-client';
-import { MailProtocolWorkerError } from '../../../../../src/mail-channel/imap-smtp/shared/protocol-client';
+import { MailProtocolClientError } from '../../../../../src/mail-channel/imap-smtp/shared/protocol-client';
 import { createImapSmtpIngressAdapter } from '../../../../../src/mail-channel/imap-smtp/inbound/adapter';
 import { parseIngressScope } from '../../../../../src/modules/mail-sync';
 
@@ -117,7 +117,7 @@ describe('IMAP/SMTP inbound adapter', () => {
     const adapter = createImapSmtpIngressAdapter(createClient());
     expect(
       adapter.classifyError(
-        new MailProtocolWorkerError('IMAP_AUTHENTICATION_FAILED', 'authentication'),
+        new MailProtocolClientError('IMAP_AUTHENTICATION_FAILED', 'authentication'),
       ),
     ).toBe('authentication');
     expect(adapter.classifyError(new Error('unknown'))).toBe('retryable');

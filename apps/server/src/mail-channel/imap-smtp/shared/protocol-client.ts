@@ -1,17 +1,13 @@
-import {
-  parseImapBaselineResponse,
-  parseImapDiscoverResponse,
-  parseImapRawResponse,
-  parseProtocolVerifyResponse,
-  parseSmtpSendResponse,
-  protocolWorkerProblemSchema,
-  type ImapBaselineResponse,
-  type ImapDiscoverResponse,
-  type ImapPageCursor,
-  type ImapRawResponse,
-  type ProtocolVerifyResponse,
-  type SmtpSendResponse,
+import type {
+  ImapBaselineResponse,
+  ImapDiscoverResponse,
+  ImapPageCursor,
+  ImapRawResponse,
+  ProtocolVerifyResponse,
+  SmtpSendResponse,
 } from '../../../protocol-worker/contracts';
+import { MailProtocolOperationError } from '../../../protocol-worker/errors';
+import type { ImapSmtpProtocolExecutor } from '../runtime/protocol-executor';
 import type { ImapSmtpCredential } from '../../contracts';
 
 export type ProtocolFailureClassification =
@@ -20,14 +16,14 @@ export type ProtocolFailureClassification =
   | 'permanent'
   | 'uncertain';
 
-export class MailProtocolWorkerError extends Error {
+export class MailProtocolClientError extends Error {
   constructor(
     public readonly code: string,
     public readonly classification: ProtocolFailureClassification,
     options?: ErrorOptions,
   ) {
     super(code, options);
-    this.name = 'MailProtocolWorkerError';
+    this.name = 'MailProtocolClientError';
   }
 }
 
@@ -49,120 +45,71 @@ export type MailProtocolClient = {
   }): Promise<SmtpSendResponse>;
 };
 
-type ResponseParser<T> = (value: unknown) => T;
-
-const parseBaseUrl = (value: string): URL => {
-  const url = new URL(value);
-  if (
-    !['http:', 'https:'].includes(url.protocol) ||
-    url.username.length > 0 ||
-    url.password.length > 0 ||
-    url.search.length > 0 ||
-    url.hash.length > 0 ||
-    (url.pathname !== '' && url.pathname !== '/')
-  ) {
-    throw new Error('MAIL_PROTOCOL_WORKER_INVALID_URL');
-  }
-  return url;
-};
-
-const parseResponseBody = async (response: Response): Promise<unknown> => {
-  const text = await response.text();
-  if (text.length > 64 * 1024) {
-    throw new MailProtocolWorkerError('MAIL_PROTOCOL_WORKER_RESPONSE_TOO_LARGE', 'retryable');
-  }
+const invoke = async <T>(
+  run: () => Promise<T>,
+  fallbackClassification: ProtocolFailureClassification,
+): Promise<T> => {
   try {
-    return JSON.parse(text) as unknown;
+    return await run();
   } catch (error) {
-    throw new MailProtocolWorkerError('MAIL_PROTOCOL_WORKER_INVALID_RESPONSE', 'retryable', {
+    if (error instanceof MailProtocolClientError) throw error;
+    if (error instanceof MailProtocolOperationError) {
+      throw new MailProtocolClientError(error.code, error.classification, {
+        cause: error,
+      });
+    }
+    throw new MailProtocolClientError('MAIL_PROTOCOL_OPERATION_FAILED', fallbackClassification, {
       cause: error,
     });
   }
 };
 
-export const createMailProtocolWorkerClient = (input: {
-  baseUrl: string;
-  secret: string;
+export const createMailProtocolClient = (input: {
+  executor: ImapSmtpProtocolExecutor;
   credential: ImapSmtpCredential;
-  fetch?: typeof fetch;
-  timeoutMs?: number;
-}): MailProtocolClient => {
-  const baseUrl = parseBaseUrl(input.baseUrl);
-  if (input.secret.length < 32) {
-    throw new Error('MAIL_PROTOCOL_WORKER_SECRET_TOO_SHORT');
-  }
-  const requestFetch = input.fetch ?? fetch;
-  const timeoutMs = input.timeoutMs ?? 30_000;
+}): MailProtocolClient => ({
+  verify: async () =>
+    await invoke(() => input.executor.verify({ credential: input.credential }), 'retryable'),
 
-  const request = async <T>(
-    path: string,
-    body: Record<string, unknown>,
-    parse: ResponseParser<T>,
-    networkFailure: ProtocolFailureClassification,
-  ): Promise<T> => {
-    let response: Response;
-    try {
-      response = await requestFetch(new URL(path, baseUrl), {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${input.secret}`,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({ credential: input.credential, ...body }),
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-    } catch (error) {
-      throw new MailProtocolWorkerError('MAIL_PROTOCOL_WORKER_UNAVAILABLE', networkFailure, {
-        cause: error,
-      });
-    }
-    const payload = await parseResponseBody(response);
-    if (!response.ok) {
-      const problem = protocolWorkerProblemSchema.safeParse(payload);
-      if (problem.success) {
-        throw new MailProtocolWorkerError(
-          problem.data.error.code,
-          problem.data.error.classification,
-        );
-      }
-      throw new MailProtocolWorkerError(
-        `MAIL_PROTOCOL_WORKER_HTTP_${response.status}`,
-        response.status >= 500 ? networkFailure : 'permanent',
-      );
-    }
-    try {
-      return parse(payload);
-    } catch (error) {
-      throw new MailProtocolWorkerError('MAIL_PROTOCOL_WORKER_INVALID_RESPONSE', networkFailure, {
-        cause: error,
-      });
-    }
-  };
+  establishImapBaseline: async () =>
+    await invoke(
+      () =>
+        input.executor.establishBaseline({
+          credential: input.credential,
+          mailbox: 'INBOX',
+        }),
+      'retryable',
+    ),
 
-  return {
-    verify: async () => await request('/v1/verify', {}, parseProtocolVerifyResponse, 'retryable'),
-    establishImapBaseline: async () =>
-      await request(
-        '/v1/imap/baseline',
-        { mailbox: 'INBOX' },
-        parseImapBaselineResponse,
-        'retryable',
-      ),
-    discoverImap: async (discoverInput) =>
-      await request(
-        '/v1/imap/discover',
-        { mailbox: 'INBOX', ...discoverInput },
-        parseImapDiscoverResponse,
-        'retryable',
-      ),
-    fetchImapRaw: async (rawInput) =>
-      await request(
-        '/v1/imap/raw',
-        { mailbox: 'INBOX', ...rawInput },
-        parseImapRawResponse,
-        'retryable',
-      ),
-    sendSmtp: async (sendInput) =>
-      await request('/v1/smtp/send', sendInput, parseSmtpSendResponse, 'uncertain'),
-  };
-};
+  discoverImap: async (discoverInput) =>
+    await invoke(
+      () =>
+        input.executor.discover({
+          credential: input.credential,
+          mailbox: 'INBOX',
+          ...discoverInput,
+        }),
+      'retryable',
+    ),
+
+  fetchImapRaw: async (rawInput) =>
+    await invoke(
+      () =>
+        input.executor.fetchRaw({
+          credential: input.credential,
+          mailbox: 'INBOX',
+          ...rawInput,
+        }),
+      'retryable',
+    ),
+
+  sendSmtp: async (sendInput) =>
+    await invoke(
+      () =>
+        input.executor.send({
+          credential: input.credential,
+          ...sendInput,
+        }),
+      'uncertain',
+    ),
+});

@@ -87,9 +87,7 @@ const withIntegrationServices = async <T>(
         integrations: repository,
         getNangoStatus: (channelId) => nangoChannels.getStatus(channelId),
         publicBackendUrl: env.VITE_PUBLIC_BACKEND_URL,
-        protocolWorkerAvailable:
-          env.MAIL_PROTOCOL_WORKER_URL !== undefined &&
-          env.MAIL_PROTOCOL_WORKER_SECRET !== undefined,
+        protocolAvailable: defaultMailChannelRegistry.find('imap_smtp') !== undefined,
         requestSubscriptionRefresh: async (provider) => {
           await createPostgresMailSyncRepository(db).markSubscriptionsDue({
             provider,

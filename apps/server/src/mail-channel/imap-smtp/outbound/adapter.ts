@@ -5,7 +5,7 @@ import type {
   OutboundErrorClassification,
   OutboundMailAdapter,
 } from '../../contracts';
-import { MailProtocolWorkerError, type MailProtocolClient } from '../shared/protocol-client';
+import { MailProtocolClientError, type MailProtocolClient } from '../shared/protocol-client';
 
 const validMessageId = (value: string): boolean =>
   value.length > 2 &&
@@ -22,12 +22,12 @@ const requireMessage = (input: FrozenOutboundMessage): void => {
     input.envelope.from.length === 0 ||
     input.envelope.to.length + input.envelope.cc.length + input.envelope.bcc.length === 0
   ) {
-    throw new MailProtocolWorkerError('SMTP_INVALID_REQUEST', 'permanent');
+    throw new MailProtocolClientError('SMTP_INVALID_REQUEST', 'permanent');
   }
 };
 
 const classify = (error: unknown): OutboundErrorClassification => {
-  if (!(error instanceof MailProtocolWorkerError)) {
+  if (!(error instanceof MailProtocolClientError)) {
     return {
       kind: 'uncertain',
       providerCode: null,

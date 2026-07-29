@@ -35,7 +35,7 @@ export type MailChannelConfigServiceDependencies = {
   integrations: IntegrationRepository;
   getNangoStatus(channelId: MailChannelId): Promise<NangoChannelRuntimeStatus>;
   publicBackendUrl: string;
-  protocolWorkerAvailable: boolean;
+  protocolAvailable: boolean;
   requestSubscriptionRefresh(provider: MailChannelId): Promise<void>;
   disableSubscriptions(provider: MailChannelId): Promise<void>;
 };
@@ -169,8 +169,8 @@ export const createMailChannelConfigService = (
         manual:
           channelId === 'imap_smtp'
             ? {
-                configured: dependencies.protocolWorkerAvailable,
-                available: dependencies.protocolWorkerAvailable,
+                configured: dependencies.protocolAvailable,
+                available: dependencies.protocolAvailable,
                 bindingCount: manualBindings,
               }
             : null,
@@ -223,7 +223,7 @@ export const createMailChannelConfigService = (
           ? integration?.status === 'active'
           : candidate.authSource === 'nango'
             ? nangoStatus.state === 'available'
-            : dependencies.protocolWorkerAvailable;
+            : dependencies.protocolAvailable;
       if (!sourceReady) {
         throw new MailChannelConfigError('MAIL_CHANNEL_AUTH_SOURCE_NOT_CONFIGURED');
       }
