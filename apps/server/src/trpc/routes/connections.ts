@@ -1,16 +1,16 @@
 import {
-  bindNangoMailbox,
-  listSafeNangoConnections,
-  NangoBindingError,
-} from '../../modules/mail-accounts/application/bind-nango-mailbox';
-import {
   bindManualMailbox,
   ManualMailboxBindingError,
 } from '../../modules/mail-accounts/application/bind-manual-mailbox';
+import {
+  listSafeNangoConnections,
+  NangoBindingError,
+} from '../../modules/mail-accounts/application/bind-nango-mailbox';
 import { provisionChannelMailboxInDatabase } from '../../modules/mail-accounts/runtime/provision-channel-mailbox';
 import { createPostgresConnectionRepository } from '../../modules/mail-accounts/postgres/connection-repository';
 import { createMailboxLifecycleForDatabase } from '../../modules/mail-accounts/runtime/lifecycle-environment';
 import { resolveGmailConnectMode } from '../../modules/mail-accounts/application/gmail-connection-options';
+import { connectNangoMailbox } from '../../modules/mail-accounts/application/connect-nango-mailbox';
 import { createChannelConfigRepository } from '../../integrations/core/channel-config-repository';
 import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router } from '../trpc';
 import { manualCredentialSnapshotSchema } from '../../modules/mail-accounts/credentials/manual';
@@ -257,60 +257,15 @@ export const connectionsRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const services = ctx.c.var.services!;
-      const db = services.database.db;
       try {
-        if (
-          (await getChannelAuthorizationOptionsForDatabase(db, services, input.channelId)).mode !==
-          'nango'
-        ) {
-          throw new NangoBindingError('MAIL_CHANNEL_UNAVAILABLE');
-        }
-        return await withConfiguredNango(services, async (runtime) => {
-          const integrationId = await runtime.channels.requireIntegrationKey(input.channelId);
-          const connectionRepository = createPostgresConnectionRepository(db);
-          const channels = createIdentityMailChannelRegistry(db, services.environment);
-          const binding = await bindNangoMailbox(
-            {
-              userId: ctx.sessionUser.id,
-              channelId: input.channelId,
-              integrationId,
-              connectionId: input.connectionId,
-            },
-            {
-              client: runtime.client,
-              getChannel: (channelId) => channels.get(channelId),
-              isIntegrationAvailable: async (channelId, candidateIntegrationId) =>
-                channelId === input.channelId && candidateIntegrationId === integrationId,
-              repository: {
-                findMailboxByNormalizedEmail: (userId, channelId, normalizedEmail) =>
-                  connectionRepository.findMailboxByNormalizedEmail(
-                    userId,
-                    channelId,
-                    normalizedEmail,
-                  ),
-                findByNangoReference: (candidateIntegrationId, connectionId) =>
-                  connectionRepository.findByNangoReference(candidateIntegrationId, connectionId),
-                save: (bindingInput) =>
-                  connectionRepository.saveBinding({
-                    userId: ctx.sessionUser.id,
-                    ...bindingInput,
-                  }),
-              },
-              encryptionKey: services.config.credentialEncryptionKey,
-              now: () => new Date(),
-            },
-          );
-          await provisionChannelMailboxInDatabase(db, services, {
+        return await connectNangoMailbox(
+          {
             userId: ctx.sessionUser.id,
-            connectionId: binding.id,
             channelId: input.channelId,
-            identity: {
-              email: binding.identity.email,
-              name: binding.identity.name,
-            },
-          });
-          return { id: binding.id };
-        });
+            connectionId: input.connectionId,
+          },
+          services,
+        );
       } catch (error) {
         mapNangoBindingError(error);
       }

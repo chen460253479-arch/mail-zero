@@ -4,6 +4,7 @@ import { trpcServer } from '@hono/trpc-server';
 import { cors } from 'hono/cors';
 import { Hono } from 'hono';
 
+import { createExternalIntegrationRouter } from '../../modules/external-integration';
 import { finalizeRequestTrace, TraceContext } from '../../lib/trace-context';
 import { integrationOAuthRouter } from '../../routes/integrations';
 import { registerMailBlobRoutes } from '../../modules/mail-api';
@@ -191,6 +192,7 @@ export const createNodeApplication = (services: RuntimeServices) => {
     .post('/api/webhooks/mail/zoho/:endpointToken', (c) =>
       services.webhooks.zohoMail(c.req.raw, c.req.param('endpointToken')),
     )
+    .route('/api/integrations', createExternalIntegrationRouter(services))
     .route('/api', api)
     .get('/health', (c) =>
       coreIsReady(services)

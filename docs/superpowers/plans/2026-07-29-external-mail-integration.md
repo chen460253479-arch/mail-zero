@@ -352,7 +352,7 @@ const externalBindInputSchema = z
   .strict();
 ```
 
-- [ ] **步骤 1：编写失败的共享应用服务测试**
+- [x] **步骤 1：编写失败的共享应用服务测试**
 
 ```ts
 it('通过同一应用服务完成绑定和邮箱创建', async () => {
@@ -377,13 +377,13 @@ it('通过同一应用服务完成绑定和邮箱创建', async () => {
 });
 ```
 
-- [ ] **步骤 2：运行测试并确认共享服务不存在**
+- [x] **步骤 2：运行测试并确认共享服务不存在**
 
 ```bash
 pnpm --dir apps/server exec vitest run tests/unit/modules/mail-accounts/application/connect-nango-mailbox.test.ts
 ```
 
-- [ ] **步骤 3：从 tRPC 路由提取绑定编排**
+- [x] **步骤 3：从 tRPC 路由提取绑定编排**
 
 把渠道模式检查、Nango integration key 解析、Repository 适配、`bindNangoMailbox` 调用和 `provisionChannelMailboxInDatabase` 调用移入 `connectNangoMailbox`。
 
@@ -402,7 +402,7 @@ return await connectNangoMailbox(
 
 保留现有 tRPC 冲突和前置条件错误语义。
 
-- [ ] **步骤 4：编写失败的外部 HTTP 契约测试**
+- [x] **步骤 4：编写失败的外部 HTTP 契约测试**
 
 ```ts
 it('只接收 channelId 和 connectionId', async () => {
@@ -446,13 +446,13 @@ it('不能使用普通浏览器 Session 代替固定 Token', async () => {
 });
 ```
 
-- [ ] **步骤 5：运行 HTTP 测试并确认路由不存在**
+- [x] **步骤 5：运行 HTTP 测试并确认路由不存在**
 
 ```bash
 pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration/http/bind.test.ts
 ```
 
-- [ ] **步骤 6：实现并挂载外部绑定路由**
+- [x] **步骤 6：实现并挂载外部绑定路由**
 
 使用 `INTEGRATION_API_TOKEN` 鉴权，解析内部集成主体，然后调用 `connectNangoMailbox`。
 
@@ -465,7 +465,7 @@ pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration/h
 
 HTTP 路由不得调用 tRPC，也不得复制绑定业务逻辑。
 
-- [ ] **步骤 7：验证任务 2**
+- [x] **步骤 7：验证任务 2**
 
 ```bash
 pnpm --dir apps/server exec vitest run tests/unit/modules/mail-accounts/application/connect-nango-mailbox.test.ts tests/unit/modules/external-integration/http/bind.test.ts tests/architecture/nango-credential-boundary.test.ts
@@ -474,7 +474,7 @@ pnpm --dir apps/server exec tsc --noEmit
 
 预期：全部通过。
 
-- [ ] **步骤 8：提交任务 2**
+- [x] **步骤 8：提交任务 2**
 
 ```bash
 git add apps/server/src/modules/mail-accounts/application/connect-nango-mailbox.ts apps/server/src/modules/external-integration apps/server/src/trpc/routes/connections.ts apps/server/src/runtime/node/application.ts apps/server/tests
