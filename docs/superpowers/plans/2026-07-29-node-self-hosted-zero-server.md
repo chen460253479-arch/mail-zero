@@ -109,7 +109,7 @@ expect(
     VITE_PUBLIC_APP_URL: 'https://mail.example.test',
     VITE_PUBLIC_BACKEND_URL: 'https://api.example.test',
     COOKIE_DOMAIN: 'example.test',
-    CREDENTIAL_ENCRYPTION_KEY: 'b'.repeat(32),
+    CREDENTIAL_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
   }),
 ).toMatchObject({
   nodeEnv: 'production',
@@ -137,10 +137,10 @@ Expected: FAIL because `runtime/node/config.ts` does not exist.
 Use Zod to parse only named environment variables. Apply defaults:
 
 ```ts
-ZERO_SERVER_HOST = '0.0.0.0'
-ZERO_SERVER_PORT = 8787
-MAIL_BLOB_ROOT = '/var/lib/zero/mail-blobs'
-ZERO_SHUTDOWN_GRACE_MS = 30000
+ZERO_SERVER_HOST = '0.0.0.0';
+ZERO_SERVER_PORT = 8787;
+MAIL_BLOB_ROOT = '/var/lib/zero/mail-blobs';
+ZERO_SHUTDOWN_GRACE_MS = 30000;
 ```
 
 Keep optional provider settings optional, but require the database, authentication, public URL, cookie, and credential-encryption values needed by the current Server.
@@ -210,10 +210,10 @@ git commit -m "feat(server): add node runtime foundations"
 export class LocalBlobStore implements BlobStore {
   constructor(rootDirectory: string);
   initialize(): Promise<void>;
-  putTemporary(input: Parameters<BlobStore['putTemporary']>[0]): ReturnType<BlobStore['putTemporary']>;
-  commitTemporary(
-    input: Parameters<BlobStore['commitTemporary']>[0],
-  ): Promise<BlobCommitReceipt>;
+  putTemporary(
+    input: Parameters<BlobStore['putTemporary']>[0],
+  ): ReturnType<BlobStore['putTemporary']>;
+  commitTemporary(input: Parameters<BlobStore['commitTemporary']>[0]): Promise<BlobCommitReceipt>;
   deleteTemporary(input: Parameters<BlobStore['deleteTemporary']>[0]): Promise<void>;
   get(input: Parameters<BlobStore['get']>[0]): Promise<Uint8Array>;
   getRange(input: Parameters<BlobStore['getRange']>[0]): Promise<Uint8Array>;
@@ -722,10 +722,7 @@ export type UserWorkspaceScope = {
   listEmailTemplates(): Promise<EmailTemplate[]>;
   createEmailTemplate(payload: EmailTemplateCreate): Promise<EmailTemplate[]>;
   deleteEmailTemplate(templateId: string): Promise<unknown>;
-  updateEmailTemplate(
-    templateId: string,
-    data: EmailTemplateUpdate,
-  ): Promise<EmailTemplate[]>;
+  updateEmailTemplate(templateId: string, data: EmailTemplateUpdate): Promise<EmailTemplate[]>;
 };
 
 export const createUserWorkspaceService: (db: DB) => {
@@ -818,9 +815,7 @@ export type RuntimeServices = {
 };
 
 export const createNodeApplication: (services: RuntimeServices) => Hono<HonoContext>;
-export const startZeroServer: (
-  source?: NodeJS.ProcessEnv,
-) => Promise<{ close(): Promise<void> }>;
+export const startZeroServer: (source?: NodeJS.ProcessEnv) => Promise<{ close(): Promise<void> }>;
 ```
 
 - [ ] **Step 1: Write failing application boundary tests**
