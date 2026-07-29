@@ -4,7 +4,7 @@ import { resolveChannelZeroOAuthCredential } from '../../modules/mail-accounts/c
 import { createNangoCredentialRepository } from '../../modules/mail-accounts/credentials/nango';
 import { resolveConnectionCredential } from '../../modules/mail-accounts/credentials/resolve';
 import type { MailChannelId, ResolvedCredential } from '../../mail-channel/contracts';
-import { getNangoServiceForEnvironment } from '../../integrations/nango/runtime';
+import type { NangoIntegrationService } from '../../integrations/nango/service';
 import { authorizationBinding, connection } from '../../db/schema';
 import type { ZeroEnv } from '../../env';
 import type { DB } from '../../db';
@@ -15,6 +15,11 @@ export type MailChannelCredentialContext = {
   resolveCredential(forceRefresh: boolean): Promise<ResolvedCredential>;
   invalidateCredential(): Promise<void>;
   markReconnectRequired(): Promise<void>;
+};
+
+export type MailCredentialRuntimeResources = {
+  environment: ZeroEnv;
+  nango: Pick<NangoIntegrationService, 'initialize' | 'getConnection'>;
 };
 
 const credentialRefreshWindowMs = 15 * 60 * 1000;
@@ -42,8 +47,7 @@ const findConnection = async (db: DB, connectionId: string) => {
   };
 };
 
-const createNangoResolver = async (db: DB, runtimeEnv: ZeroEnv) => {
-  const service = getNangoServiceForEnvironment(runtimeEnv);
+const createNangoResolver = async (db: DB, service: MailCredentialRuntimeResources['nango']) => {
   await service.initialize();
   return {
     client: service,
@@ -53,13 +57,14 @@ const createNangoResolver = async (db: DB, runtimeEnv: ZeroEnv) => {
 
 export const createMailChannelCredentialContext = async (
   db: DB,
-  runtimeEnv: ZeroEnv,
+  resources: MailCredentialRuntimeResources,
   connectionId: string,
 ): Promise<MailChannelCredentialContext> => {
+  const runtimeEnv = resources.environment;
   const record = await findConnection(db, connectionId);
   const nango =
     record.authorization.authSource === 'nango'
-      ? await createNangoResolver(db, runtimeEnv)
+      ? await createNangoResolver(db, resources.nango)
       : undefined;
   let cachedCredential: ResolvedCredential | null = null;
   const resolveCredential = async (forceRefresh: boolean): Promise<ResolvedCredential> => {

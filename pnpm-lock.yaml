@@ -368,6 +368,9 @@ importers:
       '@googleapis/people':
         specifier: 3.0.9
         version: 3.0.9
+      '@hono/node-server':
+        specifier: 2.0.12
+        version: 2.0.12(hono@4.8.3)
       '@hono/trpc-server':
         specifier: ^0.3.4
         version: 0.3.4(@trpc/server@11.4.3(typescript@5.8.3))(hono@4.8.3)
@@ -1663,6 +1666,12 @@ packages:
 
   '@hexagon/base64@1.1.28':
     resolution: {integrity: sha512-lhqDEAvWixy3bZ+UOYbPwUbBkwBq5C1LAJ/xPC8Oi+lL54oyakv/npbA0aU2hgCsx/1NUd4IBvV03+aUBWxerw==}
+
+  '@hono/node-server@2.0.12':
+    resolution: {integrity: sha512-eWpQYr67tqJLeaSUl0Q+TquuYfUdTibpOJlUMV2FfUP7+KqCC5TufnwnlXL6mobZBJbGAYRd7ZvEBDCbLInjhg==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      hono: ^4
 
   '@hono/trpc-server@0.3.4':
     resolution: {integrity: sha512-xFOPjUPnII70FgicDzOJy1ufIoBTu8eF578zGiDOrYOrYN8CJe140s9buzuPkX+SwJRYK8LjEBHywqZtxdm8aA==}
@@ -8973,6 +8982,10 @@ snapshots:
       - supports-color
 
   '@hexagon/base64@1.1.28': {}
+
+  '@hono/node-server@2.0.12(hono@4.8.3)':
+    dependencies:
+      hono: 4.8.3
 
   '@hono/trpc-server@0.3.4(@trpc/server@11.4.3(typescript@5.8.3))(hono@4.8.3)':
     dependencies:

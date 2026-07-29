@@ -12,23 +12,20 @@ import { createPostgresConnectionRepository } from '../postgres/connection-repos
 import { stopOutlookWatchForConnection } from '../../../runtime/mail/outlook-watch';
 import { stopGmailWatchForConnection } from '../../../runtime/mail/gmail-inbound';
 import { readGmailOAuthRuntimeConfig } from '../application/connect-gmail-oauth';
+import type { MailInboundRuntimeResources } from '../../../runtime/mail/inbound';
 import { getMailOAuthGateway } from '../../../mail-channel/oauth/providers';
 import { createMailboxLifecycleRuntime } from './lifecycle';
-import type { ZeroEnv } from '../../../env';
+import { parseObjectKey } from '../../mail/blob/blob-key';
 import type { DB } from '../../../db';
-
-const R2_DELETE_BATCH_SIZE = 1_000;
-
-const deleteBlobObjects = async (bucket: R2Bucket, objectKeys: string[]): Promise<void> => {
-  for (let offset = 0; offset < objectKeys.length; offset += R2_DELETE_BATCH_SIZE) {
-    await bucket.delete(objectKeys.slice(offset, offset + R2_DELETE_BATCH_SIZE));
-  }
-};
 
 const safeErrorName = (error: unknown): string =>
   error instanceof Error ? error.name : 'UnknownError';
 
-export const createMailboxLifecycleForDatabase = (db: DB, runtimeEnv: ZeroEnv) => {
+export const createMailboxLifecycleForDatabase = (
+  db: DB,
+  resources: MailInboundRuntimeResources,
+) => {
+  const runtimeEnv = resources.environment;
   const repository = createPostgresConnectionRepository(db);
   const syncRepository = createPostgresMailSyncRepository(db);
 
@@ -37,9 +34,9 @@ export const createMailboxLifecycleForDatabase = (db: DB, runtimeEnv: ZeroEnv) =
     pauseConnectionSyncs: (input) => syncRepository.pauseConnectionSyncs(input),
     stopChannelWatch: async (mailConnection) => {
       if (mailConnection.channelId === 'gmail') {
-        await stopGmailWatchForConnection(db, runtimeEnv, mailConnection.id);
+        await stopGmailWatchForConnection(db, resources, mailConnection.id);
       } else if (mailConnection.channelId === 'outlook') {
-        await stopOutlookWatchForConnection(db, runtimeEnv, mailConnection.id);
+        await stopOutlookWatchForConnection(db, resources, mailConnection.id);
       }
     },
     revokeZeroOAuth: async (mailConnection) => {
@@ -48,10 +45,10 @@ export const createMailboxLifecycleForDatabase = (db: DB, runtimeEnv: ZeroEnv) =
       const credential =
         channelId === 'gmail'
           ? await (
-              await createGmailCredentialContext(db, runtimeEnv, connectionId)
+              await createGmailCredentialContext(db, resources, connectionId)
             ).resolveCredential(false)
           : await (
-              await createMailChannelCredentialContext(db, runtimeEnv, connectionId)
+              await createMailChannelCredentialContext(db, resources, connectionId)
             ).resolveCredential(false);
       if (credential.type !== 'oauth2') {
         throw new Error('Zero OAuth credential is not OAuth2');
@@ -85,7 +82,14 @@ export const createMailboxLifecycleForDatabase = (db: DB, runtimeEnv: ZeroEnv) =
         );
       }
     },
-    deleteBlobObjects: (objectKeys) => deleteBlobObjects(runtimeEnv.THREADS_BUCKET, objectKeys),
+    deleteBlobObjects: async (objectKeys) => {
+      for (const objectKey of objectKeys) {
+        await resources.blobStore.delete({
+          accountId: parseObjectKey(objectKey).accountId,
+          objectKey,
+        });
+      }
+    },
     recordDiagnostic: (code, connectionId, error) => {
       console.warn(code, {
         connectionId,

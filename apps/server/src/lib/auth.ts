@@ -1,19 +1,62 @@
-import { createMailboxLifecycleForDatabase } from '../modules/mail-accounts/runtime/lifecycle-environment';
 import { createAuthMiddleware, jwt, bearer } from 'better-auth/plugins';
-import { getBrowserTimezone, isValidTimezone } from './timezones';
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { getUserWorkspace } from './server-utils';
-import { defaultUserSettings } from './schemas';
 import { APIError } from 'better-auth/api';
-import { connection } from '../db/schema';
-import { resend } from './services';
 import { eq } from 'drizzle-orm';
-import { createDb } from '../db';
-import { env } from '../env';
 
-export const createAuth = () => {
-  return betterAuth({
+import { createMailboxLifecycleForDatabase } from '../modules/mail-accounts/runtime/lifecycle-environment';
+import type { UserWorkspaceService } from '../modules/user-workspace/service';
+import type { MailInboundRuntimeResources } from '../runtime/mail/inbound';
+import { getBrowserTimezone, isValidTimezone } from './timezones';
+import type { RuntimeConfig } from '../runtime/node/config';
+import { defaultUserSettings } from './schemas';
+import { connection } from '../db/schema';
+import type { DB } from '../db';
+
+export type AuthRuntimeDependencies = {
+  db: DB;
+  config: RuntimeConfig;
+  mail: MailInboundRuntimeResources;
+  userWorkspace: UserWorkspaceService;
+  email: {
+    send(input: { from: string; to: string; subject: string; html: string }): Promise<unknown>;
+  };
+};
+
+const createAuthConfig = (dependencies: AuthRuntimeDependencies) =>
+  ({
+    database: drizzleAdapter(dependencies.db, { provider: 'pg' }),
+    advanced: {
+      ipAddress: {
+        disableIpTracking: true,
+      },
+      cookiePrefix:
+        dependencies.config.nodeEnv === 'development' ? 'better-auth-dev' : 'better-auth',
+      crossSubDomainCookies: {
+        enabled: true,
+        domain: dependencies.config.cookieDomain,
+      },
+    },
+    baseURL: dependencies.config.publicBackendUrl,
+    trustedOrigins: dependencies.config.betterAuthTrustedOrigins,
+    session: {
+      cookieCache: {
+        enabled: false,
+      },
+      expiresIn: 60 * 60 * 24 * 30,
+      updateAge: 60 * 60 * 24 * 3,
+    },
+    onAPIError: {
+      onError: (error) => {
+        console.error('API Error', error);
+      },
+      errorURL: `${dependencies.config.publicAppUrl}/login`,
+      throw: true,
+    },
+  }) satisfies BetterAuthOptions;
+
+export const createAuth = (dependencies: AuthRuntimeDependencies) =>
+  betterAuth({
     plugins: [jwt(), bearer()],
     user: {
       additionalFields: {
@@ -28,8 +71,7 @@ export const createAuth = () => {
         enabled: true,
         async sendDeleteAccountVerification(data) {
           const verificationUrl = data.url;
-
-          await resend().emails.send({
+          await dependencies.email.send({
             from: '0.email <no-reply@0.email>',
             to: data.user.email,
             subject: 'Delete your 0.email account',
@@ -42,22 +84,17 @@ export const createAuth = () => {
         },
         beforeDelete: async (user, request) => {
           if (!request) throw new APIError('BAD_REQUEST', { message: 'Request object is missing' });
-          const database = createDb(env.HYPERDRIVE.connectionString);
-          try {
-            const connections = await database.db
-              .select({ id: connection.id })
-              .from(connection)
-              .where(eq(connection.userId, user.id));
-            const lifecycle = createMailboxLifecycleForDatabase(database.db, env);
-            for (const mailbox of connections) {
-              await lifecycle.disconnect({
-                userId: user.id,
-                connectionId: mailbox.id,
-                deleteLocalData: true,
-              });
-            }
-          } finally {
-            await database.conn.end();
+          const connections = await dependencies.db
+            .select({ id: connection.id })
+            .from(connection)
+            .where(eq(connection.userId, user.id));
+          const lifecycle = createMailboxLifecycleForDatabase(dependencies.db, dependencies.mail);
+          for (const mailbox of connections) {
+            await lifecycle.disconnect({
+              userId: user.id,
+              connectionId: mailbox.id,
+              deleteLocalData: true,
+            });
           }
         },
       },
@@ -68,7 +105,7 @@ export const createAuth = () => {
       requireEmailVerification: false,
       minPasswordLength: 12,
       sendResetPassword: async ({ user, url }) => {
-        await resend().emails.send({
+        await dependencies.email.send({
           from: '0.email <onboarding@0.email>',
           to: user.email,
           subject: 'Reset your password',
@@ -85,9 +122,8 @@ export const createAuth = () => {
       sendOnSignUp: false,
       autoSignInAfterVerification: true,
       sendVerificationEmail: async ({ user, token }) => {
-        const verificationUrl = `${env.VITE_PUBLIC_APP_URL}/api/auth/verify-email?token=${token}&callbackURL=/settings/connections`;
-
-        await resend().emails.send({
+        const verificationUrl = `${dependencies.config.publicAppUrl}/api/auth/verify-email?token=${token}&callbackURL=/settings/connections`;
+        await dependencies.email.send({
           from: '0.email <onboarding@0.email>',
           to: user.email,
           subject: 'Verify your 0.email account',
@@ -101,79 +137,25 @@ export const createAuth = () => {
     },
     hooks: {
       after: createAuthMiddleware(async (ctx) => {
-        // all hooks that run on sign-up routes
-        if (ctx.path.startsWith('/sign-up')) {
-          // only true if this request is from a new user
-          const newSession = ctx.context.newSession;
-          if (newSession) {
-            // Check if user already has settings
-            const db = getUserWorkspace(newSession.user.id);
-            const existingSettings = await db.findUserSettings();
-
-            if (!existingSettings) {
-              // get timezone from vercel's header
-              const headerTimezone = ctx.headers?.get('x-vercel-ip-timezone');
-              // validate timezone from header or fallback to browser timezone
-              const timezone =
-                headerTimezone && isValidTimezone(headerTimezone)
-                  ? headerTimezone
-                  : getBrowserTimezone();
-              // write default settings against the user
-              await db.insertUserSettings({
-                ...defaultUserSettings,
-                timezone,
-              });
-            }
-          }
-        }
+        if (!ctx.path.startsWith('/sign-up')) return;
+        const newSession = ctx.context.newSession;
+        if (!newSession) return;
+        const workspace = dependencies.userWorkspace.forUser(newSession.user.id);
+        if (await workspace.findUserSettings()) return;
+        const headerTimezone = ctx.headers?.get('x-vercel-ip-timezone');
+        const timezone =
+          headerTimezone && isValidTimezone(headerTimezone) ? headerTimezone : getBrowserTimezone();
+        await workspace.insertUserSettings({
+          ...defaultUserSettings,
+          timezone,
+        });
       }),
     },
-    ...createAuthConfig(),
+    ...createAuthConfig(dependencies),
   });
-};
 
-const createAuthConfig = () => {
-  const { db } = createDb(env.HYPERDRIVE.connectionString);
-  return {
-    database: drizzleAdapter(db, { provider: 'pg' }),
-    advanced: {
-      ipAddress: {
-        disableIpTracking: true,
-      },
-      cookiePrefix: env.NODE_ENV === 'development' ? 'better-auth-dev' : 'better-auth',
-      crossSubDomainCookies: {
-        enabled: true,
-        domain: env.COOKIE_DOMAIN,
-      },
-    },
-    baseURL: env.VITE_PUBLIC_BACKEND_URL,
-    trustedOrigins: [
-      'https://app.0.email',
-      'https://sapi.0.email',
-      'https://staging.0.email',
-      'https://0.email',
-      'http://localhost:3000',
-    ],
-    session: {
-      cookieCache: {
-        enabled: false,
-      },
-      expiresIn: 60 * 60 * 24 * 30, // 30 days
-      updateAge: 60 * 60 * 24 * 3, // 1 day (every 1 day the session expiration is updated)
-    },
-    onAPIError: {
-      onError: (error) => {
-        console.error('API Error', error);
-      },
-      errorURL: `${env.VITE_PUBLIC_APP_URL}/login`,
-      throw: true,
-    },
-  } satisfies BetterAuthOptions;
-};
-
-export const createSimpleAuth = () => {
-  return betterAuth(createAuthConfig());
-};
+export const createSimpleAuth = (dependencies: AuthRuntimeDependencies) =>
+  betterAuth(createAuthConfig(dependencies));
 
 export type Auth = ReturnType<typeof createAuth>;
 export type SimpleAuth = ReturnType<typeof createSimpleAuth>;

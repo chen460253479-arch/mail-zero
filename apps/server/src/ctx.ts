@@ -1,5 +1,5 @@
+import type { RuntimeServices } from './runtime/node/services';
 import type { Auth } from './lib/auth';
-import type { ZeroEnv } from './env';
 
 export type SessionUser = NonNullable<Awaited<ReturnType<Auth['api']['getSession']>>>['user'];
 
@@ -8,6 +8,7 @@ export type HonoVariables = {
   sessionUser?: SessionUser;
   traceId?: string;
   requestId?: string;
+  services?: RuntimeServices;
 };
 
-export type HonoContext = { Variables: HonoVariables; Bindings: ZeroEnv };
+export type HonoContext = { Variables: HonoVariables };

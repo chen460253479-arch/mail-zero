@@ -1,12 +1,14 @@
+import type {
+  MailChannelCredentialContext,
+  MailCredentialRuntimeResources,
+} from './channel-credential-context';
 import { readGmailOAuthRuntimeConfig } from '../../modules/mail-accounts/application/connect-gmail-oauth';
 import { createGoogleGmailApiExecutor } from '../../mail-channel/gmail/shared/google-api';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import type { GmailApiExecutor } from '../../mail-channel/gmail/shared/api-transport';
 import { createMailChannelCredentialContext } from './channel-credential-context';
-import type { MailChannelCredentialContext } from './channel-credential-context';
 import { createCredentialAwareGmailExecutor } from './gmail-api-executor';
 import type { ResolvedCredential } from '../../mail-channel/contracts';
-import type { ZeroEnv } from '../../env';
 import type { DB } from '../../db';
 
 export type GmailCredentialContext = {
@@ -25,12 +27,13 @@ const getAuthErrorCode = (error: unknown): string => {
 
 export const createGmailCredentialContext = async (
   db: DB,
-  runtimeEnv: ZeroEnv,
+  resources: MailCredentialRuntimeResources,
   connectionId: string,
   channelContext?: MailChannelCredentialContext,
 ): Promise<GmailCredentialContext> => {
+  const runtimeEnv = resources.environment;
   const context =
-    channelContext ?? (await createMailChannelCredentialContext(db, runtimeEnv, connectionId));
+    channelContext ?? (await createMailChannelCredentialContext(db, resources, connectionId));
   if (context.channelId !== 'gmail') {
     throw new Error(`Connection channel ${context.channelId} is not Gmail`);
   }

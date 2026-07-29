@@ -5,12 +5,14 @@ import { connection, inboundSync, mailAccount } from '../../db/schema';
 import type { MailChannelId } from '../../mail-channel/contracts';
 import { stopOutlookWatchForConnection } from './outlook-watch';
 import { stopGmailWatchForConnection } from './gmail-inbound';
-import type { ZeroEnv } from '../../env';
+import type { MailInboundRuntimeResources } from './inbound';
 import type { DB } from '../../db';
 
 const remoteWatchStopper = (
   channelId: MailChannelId,
-): ((db: DB, runtimeEnv: ZeroEnv, connectionId: string) => Promise<void>) | null => {
+):
+  | ((db: DB, resources: MailInboundRuntimeResources, connectionId: string) => Promise<void>)
+  | null => {
   if (channelId === 'gmail') return stopGmailWatchForConnection;
   if (channelId === 'outlook') return stopOutlookWatchForConnection;
   return null;
@@ -18,7 +20,7 @@ const remoteWatchStopper = (
 
 export const disableChannelSubscriptions = async (
   db: DB,
-  runtimeEnv: ZeroEnv,
+  resources: MailInboundRuntimeResources,
   channelId: MailChannelId,
 ): Promise<void> => {
   const rows = await db
@@ -31,7 +33,7 @@ export const disableChannelSubscriptions = async (
   const stopRemoteWatch = remoteWatchStopper(channelId);
   if (stopRemoteWatch !== null) {
     const results = await Promise.allSettled(
-      connectionIds.map((connectionId) => stopRemoteWatch(db, runtimeEnv, connectionId)),
+      connectionIds.map((connectionId) => stopRemoteWatch(db, resources, connectionId)),
     );
     for (const [index, result] of results.entries()) {
       if (result.status === 'rejected') {

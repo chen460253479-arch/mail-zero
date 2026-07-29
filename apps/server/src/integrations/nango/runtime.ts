@@ -9,38 +9,30 @@ import type { ZeroEnv } from '../../env';
 
 export type NangoEnvironment = Pick<ZeroEnv, 'NANGO_BASE_URL' | 'NANGO_SECRET_KEY'> &
   NangoChannelEnvironment;
-type NangoExecutionContext = Pick<ExecutionContext, 'waitUntil'>;
 
-let service: NangoIntegrationService | undefined;
-let channels: NangoChannelIntegrationService | undefined;
+export type NangoRuntime = {
+  service: NangoIntegrationService;
+  channels: NangoChannelIntegrationService;
+  initialize(): Promise<void>;
+};
 
-export const getNangoServiceForEnvironment = (
-  environment: NangoEnvironment,
-): NangoIntegrationService => {
-  service ??= createNangoIntegrationService({
+export const createNangoRuntime = (environment: NangoEnvironment): NangoRuntime => {
+  const service = createNangoIntegrationService({
     baseUrl: environment.NANGO_BASE_URL,
     secretKey: environment.NANGO_SECRET_KEY,
     fetch,
     now: () => new Date(),
   });
-  return service;
-};
-
-export const getNangoChannelServiceForEnvironment = (
-  environment: NangoEnvironment,
-): NangoChannelIntegrationService => {
-  channels ??= createNangoChannelIntegrationService({
+  const channels = createNangoChannelIntegrationService({
     environment,
-    nango: getNangoServiceForEnvironment(environment),
+    nango: service,
     getChannel: (channelId) => defaultMailChannelRegistry.get(channelId),
     now: () => new Date(),
   });
-  return channels;
-};
 
-export const startNangoValidationForEnvironment = (
-  environment: NangoEnvironment,
-  executionContext: NangoExecutionContext,
-): void => {
-  executionContext.waitUntil(getNangoChannelServiceForEnvironment(environment).initialize());
+  return {
+    service,
+    channels,
+    initialize: async () => await channels.initialize(),
+  };
 };

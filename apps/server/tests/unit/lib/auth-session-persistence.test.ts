@@ -15,42 +15,23 @@ vi.mock('better-auth/adapters/drizzle', () => ({
   drizzleAdapter: () => ({ id: 'postgres-adapter' }),
 }));
 
-vi.mock('../../../src/db', () => ({
-  createDb: () => ({ db: {} }),
-}));
-
-vi.mock('../../../src/env', () => ({
-  env: {
-    COOKIE_DOMAIN: 'localhost',
-    HYPERDRIVE: { connectionString: 'postgresql://localhost/zero' },
-    NODE_ENV: 'development',
-    VITE_PUBLIC_APP_URL: 'http://localhost:3000',
-    VITE_PUBLIC_BACKEND_URL: 'http://localhost:8787',
-  },
-}));
-
-vi.mock('../../../src/lib/services', () => ({
-  redis: () => ({
-    del: vi.fn(),
-    get: vi.fn(),
-    set: vi.fn(),
-  }),
-  resend: () => ({ emails: { send: vi.fn() } }),
-}));
-
-vi.mock('../../../src/lib/server-utils', () => ({
-  getUserWorkspace: vi.fn(),
-}));
-
-vi.mock('../../../src/modules/mail-accounts/runtime/lifecycle-environment', () => ({
-  createMailboxLifecycleForDatabase: vi.fn(),
-}));
-
 import { createSimpleAuth } from '../../../src/lib/auth';
 
 describe('authentication session persistence', () => {
   it('keeps PostgreSQL as the source of truth for authenticated users', () => {
-    const options = createSimpleAuth() as unknown as {
+    const options = createSimpleAuth({
+      db: {} as never,
+      config: {
+        nodeEnv: 'development',
+        cookieDomain: 'localhost',
+        publicAppUrl: 'http://localhost:3000',
+        publicBackendUrl: 'http://localhost:8787',
+        betterAuthTrustedOrigins: ['http://localhost:3000'],
+      } as never,
+      mail: {} as never,
+      userWorkspace: {} as never,
+      email: { send: vi.fn() },
+    }) as unknown as {
       secondaryStorage?: unknown;
       session?: {
         cookieCache?: {

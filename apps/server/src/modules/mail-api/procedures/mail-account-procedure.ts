@@ -53,7 +53,7 @@ export const createMailAccountProcedure = (
         runtime = await openRuntime(
           ctx.sessionUser.id,
           input.accountId as MailAccountId,
-          ctx.c.env,
+          ctx.c.var.services!,
         );
       } catch (error) {
         throw toMailApiTrpcError(error);

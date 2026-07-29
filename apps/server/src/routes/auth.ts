@@ -1,11 +1,11 @@
-import { AdminProvisioningConflictError, provisionAdmin } from '../lib/admin-provisioning';
+import { AdminProvisioningConflictError } from '../lib/admin-provisioning';
 import type { HonoContext } from '../ctx';
 import { Hono } from 'hono';
 
 const publicRouter = new Hono<HonoContext>();
 
 publicRouter.post('/bootstrap-admin', async (c) => {
-  const configuredSecret = c.env.ZERO_ADMIN_BOOTSTRAP_SECRET;
+  const configuredSecret = c.var.services?.config.admin.bootstrapSecret;
   const suppliedSecret = c.req.header('x-zero-bootstrap-secret');
 
   if (!configuredSecret || suppliedSecret !== configuredSecret) {
@@ -13,7 +13,7 @@ publicRouter.post('/bootstrap-admin', async (c) => {
   }
 
   try {
-    const result = await provisionAdmin(await c.req.json());
+    const result = await c.var.services!.provisionAdmin(await c.req.json());
     return c.json(result, result.created ? 201 : 200);
   } catch (error) {
     if (error instanceof AdminProvisioningConflictError) {

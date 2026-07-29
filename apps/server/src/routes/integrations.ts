@@ -13,8 +13,10 @@ import { createSystemIntegrationRepository } from '../integrations/core/reposito
 import { createChannelOAuthApplication } from '../runtime/mail/channel-oauth';
 import { createGmailOAuthApplication } from '../runtime/mail/gmail-oauth';
 import { assertAdministrator } from '../integrations/core/permissions';
+import type { RuntimeServices } from '../runtime/node/services';
 import type { HonoContext } from '../ctx';
-import { createDb, type DB } from '../db';
+import type { ZeroEnv } from '../env';
+import type { DB } from '../db';
 
 const integrationOAuthRouter = new Hono<HonoContext>();
 
@@ -37,7 +39,8 @@ const getOAuthInput = (url: string): { state: string; code: string } | null => {
 };
 
 const createService = (c: {
-  env: HonoContext['Bindings'];
+  env: ZeroEnv;
+  runtime: RuntimeServices;
   db: DB;
   repository: ReturnType<typeof createSystemIntegrationRepository>;
 }) =>
@@ -53,7 +56,7 @@ const createService = (c: {
         },
         authorization,
       });
-      await provisionGmailMailboxInDatabase(c.db, c.env, {
+      await provisionGmailMailboxInDatabase(c.db, c.runtime, {
         userId,
         connectionId: result.id,
         identity: {
@@ -91,11 +94,13 @@ integrationOAuthRouter.get('/gmail/connect/start', async (c) => {
   const sessionUser = c.var.sessionUser;
   if (!sessionUser) return c.json({ error: 'UNAUTHORIZED' }, 401);
 
-  const { db, conn } = createDb(c.env.HYPERDRIVE.connectionString);
+  const db = c.var.services!.database.db;
+  const environment = c.var.services!.environment;
   try {
     await assertZeroOAuthSelected(db);
     const result = await createService({
-      env: c.env,
+      env: environment,
+      runtime: c.var.services!,
       db,
       repository: createSystemIntegrationRepository(db),
     }).startMailboxAuthorization(sessionUser.id);
@@ -103,8 +108,6 @@ integrationOAuthRouter.get('/gmail/connect/start', async (c) => {
   } catch (error) {
     const code = error instanceof GmailOAuthError ? error.code : 'GMAIL_OAUTH_AUTHORIZATION_FAILED';
     return c.json({ error: code }, 412);
-  } finally {
-    await conn.end();
   }
 });
 
@@ -112,7 +115,7 @@ integrationOAuthRouter.get('/gmail/connect/callback', async (c) => {
   const failure = () =>
     c.redirect(
       resultRedirect(
-        c.env.VITE_PUBLIC_APP_URL,
+        c.var.services!.config.publicAppUrl,
         '/settings/connections',
         'gmailConnection',
         'error',
@@ -122,17 +125,19 @@ integrationOAuthRouter.get('/gmail/connect/callback', async (c) => {
   const input = getOAuthInput(c.req.url);
   if (!sessionUser || !input) return failure();
 
-  const { db, conn } = createDb(c.env.HYPERDRIVE.connectionString);
+  const db = c.var.services!.database.db;
+  const environment = c.var.services!.environment;
   try {
     await assertZeroOAuthSelected(db);
     await createService({
-      env: c.env,
+      env: environment,
+      runtime: c.var.services!,
       db,
       repository: createSystemIntegrationRepository(db),
     }).completeMailboxAuthorization({ ...input, userId: sessionUser.id });
     return c.redirect(
       resultRedirect(
-        c.env.VITE_PUBLIC_APP_URL,
+        c.var.services!.config.publicAppUrl,
         '/settings/connections',
         'gmailConnection',
         'success',
@@ -140,8 +145,6 @@ integrationOAuthRouter.get('/gmail/connect/callback', async (c) => {
     );
   } catch {
     return failure();
-  } finally {
-    await conn.end();
   }
 });
 
@@ -149,7 +152,7 @@ integrationOAuthRouter.get('/gmail/validation/callback', async (c) => {
   const failure = () =>
     c.redirect(
       resultRedirect(
-        c.env.VITE_PUBLIC_APP_URL,
+        c.var.services!.config.publicAppUrl,
         '/settings/integrations/gmail',
         'gmailValidation',
         'error',
@@ -165,16 +168,17 @@ integrationOAuthRouter.get('/gmail/validation/callback', async (c) => {
     return failure();
   }
 
-  const { db, conn } = createDb(c.env.HYPERDRIVE.connectionString);
+  const db = c.var.services!.database.db;
   try {
     await createService({
-      env: c.env,
+      env: c.var.services!.environment,
+      runtime: c.var.services!,
       db,
       repository: createSystemIntegrationRepository(db),
     }).completeValidation({ ...input, adminId: sessionUser.id });
     return c.redirect(
       resultRedirect(
-        c.env.VITE_PUBLIC_APP_URL,
+        c.var.services!.config.publicAppUrl,
         '/settings/integrations/gmail',
         'gmailValidation',
         'success',
@@ -182,8 +186,6 @@ integrationOAuthRouter.get('/gmail/validation/callback', async (c) => {
     );
   } catch {
     return failure();
-  } finally {
-    await conn.end();
   }
 });
 
@@ -192,12 +194,12 @@ integrationOAuthRouter.get('/:channelId/connect/start', async (c) => {
   const sessionUser = c.var.sessionUser;
   if (!channelId) return c.json({ error: 'MAIL_CHANNEL_UNAVAILABLE' }, 404);
   if (!sessionUser) return c.json({ error: 'UNAUTHORIZED' }, 401);
-  const { db, conn } = createDb(c.env.HYPERDRIVE.connectionString);
+  const db = c.var.services!.database.db;
   try {
     await assertChannelZeroOAuthSelected(db, channelId);
     const result = await createChannelOAuthApplication(
       db,
-      c.env,
+      c.var.services!,
       channelId,
     ).startMailboxAuthorization(sessionUser.id);
     return c.redirect(result.authorizationUrl);
@@ -205,8 +207,6 @@ integrationOAuthRouter.get('/:channelId/connect/start', async (c) => {
     const code =
       error instanceof ChannelOAuthError ? error.code : 'CHANNEL_OAUTH_AUTHORIZATION_FAILED';
     return c.json({ error: code }, 412);
-  } finally {
-    await conn.end();
   }
 });
 
@@ -216,7 +216,7 @@ integrationOAuthRouter.get('/:channelId/connect/callback', async (c) => {
   const failure = () =>
     c.redirect(
       resultRedirect(
-        c.env.VITE_PUBLIC_APP_URL,
+        c.var.services!.config.publicAppUrl,
         '/settings/connections',
         'channelConnection',
         'error',
@@ -225,16 +225,20 @@ integrationOAuthRouter.get('/:channelId/connect/callback', async (c) => {
   const sessionUser = c.var.sessionUser;
   const input = getOAuthInput(c.req.url);
   if (!sessionUser || !input) return failure();
-  const { db, conn } = createDb(c.env.HYPERDRIVE.connectionString);
+  const db = c.var.services!.database.db;
   try {
     await assertChannelZeroOAuthSelected(db, channelId);
-    await createChannelOAuthApplication(db, c.env, channelId).completeMailboxAuthorization({
+    await createChannelOAuthApplication(
+      db,
+      c.var.services!,
+      channelId,
+    ).completeMailboxAuthorization({
       ...input,
       userId: sessionUser.id,
     });
     return c.redirect(
       resultRedirect(
-        c.env.VITE_PUBLIC_APP_URL,
+        c.var.services!.config.publicAppUrl,
         '/settings/connections',
         'channelConnection',
         'success',
@@ -242,8 +246,6 @@ integrationOAuthRouter.get('/:channelId/connect/callback', async (c) => {
     );
   } catch {
     return failure();
-  } finally {
-    await conn.end();
   }
 });
 
@@ -254,7 +256,7 @@ integrationOAuthRouter.get('/:channelId/validation/callback', async (c) => {
   const failure = () =>
     c.redirect(
       resultRedirect(
-        c.env.VITE_PUBLIC_APP_URL,
+        c.var.services!.config.publicAppUrl,
         `/settings/integrations/${integrationPath}`,
         'channelValidation',
         'error',
@@ -268,15 +270,15 @@ integrationOAuthRouter.get('/:channelId/validation/callback', async (c) => {
   } catch {
     return failure();
   }
-  const { db, conn } = createDb(c.env.HYPERDRIVE.connectionString);
+  const db = c.var.services!.database.db;
   try {
-    await createChannelOAuthApplication(db, c.env, channelId).completeValidation({
+    await createChannelOAuthApplication(db, c.var.services!, channelId).completeValidation({
       ...input,
       adminId: sessionUser.id,
     });
     return c.redirect(
       resultRedirect(
-        c.env.VITE_PUBLIC_APP_URL,
+        c.var.services!.config.publicAppUrl,
         `/settings/integrations/${integrationPath}`,
         'channelValidation',
         'success',
@@ -284,8 +286,6 @@ integrationOAuthRouter.get('/:channelId/validation/callback', async (c) => {
     );
   } catch {
     return failure();
-  } finally {
-    await conn.end();
   }
 });
 

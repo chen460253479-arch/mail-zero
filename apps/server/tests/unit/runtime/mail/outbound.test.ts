@@ -9,7 +9,7 @@ const serverRoot = resolve(testRoot, '../../../..');
 const runtimeRoot = resolve(serverRoot, 'src/runtime/mail');
 const readRuntime = (name: string): string => readFileSync(resolve(runtimeRoot, name), 'utf8');
 
-describe('mail outbound Worker runtime', () => {
+describe('mail outbound runtime', () => {
   it('registers every provider on the shared credential and outbound runtime', () => {
     const credentialContext = readRuntime('gmail-credential-context.ts');
     const channelCredentialContext = readRuntime('channel-credential-context.ts');
@@ -36,8 +36,11 @@ describe('mail outbound Worker runtime', () => {
     }
   });
 
-  it('closes each command and scheduled database connection in finally', () => {
+  it('uses the process-level database and runtime resources for commands and scans', () => {
     const outbound = readRuntime('outbound.ts');
-    expect(outbound.match(/finally \{\s*await conn\.end\(\);/gu)).toHaveLength(2);
+    expect(outbound).toContain('runMailOutboundCommand = async (\n  db: DB,');
+    expect(outbound).toContain('enqueueDueMailOutboundWork = async (\n  db: DB,');
+    expect(outbound).not.toContain('createDb(');
+    expect(outbound).not.toContain('conn.end(');
   });
 });

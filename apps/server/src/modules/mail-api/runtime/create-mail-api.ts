@@ -11,12 +11,12 @@ import {
 import { createPostgresMailSnoozeRepository } from '../../mail-snooze/postgres/repository';
 import { createMailOutboundRuntimeForEnvironment } from '../../../runtime/mail/outbound';
 import { createPostgresMailSnoozeCommands } from '../../mail-snooze/postgres/commands';
+import type { RuntimeServices } from '../../../runtime/node/services';
 import type { MailOutboundRuntime } from '../../mail-outbound';
 import { MailApiError } from '../errors/mail-api-error';
-import { createDb, type DB } from '../../../db';
-import type { ZeroEnv } from '../../../env';
+import type { DB } from '../../../db';
 
-export type MailApiEnvironment = ZeroEnv;
+export type MailApiEnvironment = RuntimeServices;
 
 export type MailApiRuntime = {
   core: MailCore;
@@ -34,18 +34,28 @@ export type OwnedMailApiRuntime = OpenMailApiRuntime & {
   account: MailAccountRecord;
 };
 
-export function createMailApiRuntime(db: DB, runtimeEnv: MailApiEnvironment): MailApiRuntime {
-  const core = createMailCoreForEnvironment(db, runtimeEnv);
+export function createMailApiRuntime(services: MailApiEnvironment): MailApiRuntime {
+  const { db } = services.database;
+  const coreResources = {
+    blobStore: services.blobStore,
+    cursorSigningKey: services.config.betterAuthSecret,
+  };
+  const core = createMailCoreForEnvironment(db, coreResources);
   const clock = { now: () => new Date() };
   return {
     db,
-    cursorSigningKey: runtimeEnv.BETTER_AUTH_SECRET,
+    cursorSigningKey: services.config.betterAuthSecret,
     core,
-    outbound: createMailOutboundRuntimeForEnvironment(db, runtimeEnv),
+    outbound: createMailOutboundRuntimeForEnvironment(db, {
+      environment: services.environment,
+      nango: services.nango,
+      blobStore: services.blobStore,
+      taskQueue: services.taskQueue,
+    }),
     snooze: createMailSnoozeRuntime({
       commands: createPostgresMailSnoozeCommands({
         db,
-        mailCoreDependencies: createMailCoreDependenciesForEnvironment(db, runtimeEnv),
+        mailCoreDependencies: createMailCoreDependenciesForEnvironment(db, coreResources),
         clock,
       }),
       repository: createPostgresMailSnoozeRepository(db),
@@ -56,23 +66,20 @@ export function createMailApiRuntime(db: DB, runtimeEnv: MailApiEnvironment): Ma
 }
 
 export async function openMailApiRuntime(
-  runtimeEnv: MailApiEnvironment,
+  services: MailApiEnvironment,
 ): Promise<OpenMailApiRuntime> {
-  const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
   return {
-    ...createMailApiRuntime(db, runtimeEnv),
-    close: async () => {
-      await conn.end();
-    },
+    ...createMailApiRuntime(services),
+    close: async () => undefined,
   };
 }
 
 export async function openOwnedMailApiRuntime(
   userId: string,
   accountId: MailAccountId,
-  runtimeEnv: MailApiEnvironment,
+  services: MailApiEnvironment,
 ): Promise<OwnedMailApiRuntime> {
-  const runtime = await openMailApiRuntime(runtimeEnv);
+  const runtime = await openMailApiRuntime(services);
   try {
     const account = await runtime.core.getAccount({ accountId });
     if (account.userId !== userId) {

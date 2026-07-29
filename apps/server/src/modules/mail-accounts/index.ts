@@ -9,7 +9,6 @@ export * from './credentials/nango';
 export * from './credentials/resolve';
 export * from './credentials/retry';
 export * from './credentials/zero-oauth';
-export * from './runtime/nango';
 export * from './runtime/lifecycle';
 export * from './runtime/lifecycle-environment';
 export * from './runtime/provision-gmail-mailbox';

@@ -30,7 +30,7 @@ export async function authorizeMailAccount(c: Context<HonoContext>, accountId: s
   }
   try {
     return {
-      runtime: await openOwnedMailApiRuntime(user.id, accountId as never, c.env),
+      runtime: await openOwnedMailApiRuntime(user.id, accountId as never, c.var.services!),
     } as const;
   } catch (error) {
     return { response: mailHttpErrorResponse(c, error) } as const;

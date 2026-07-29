@@ -1,15 +1,10 @@
 import { getContext } from 'hono/context-storage';
 
-import {
-  createUserWorkspaceService,
-  type UserWorkspaceService,
-} from '../modules/user-workspace/service';
 import { createPostgresConnectionRepository } from '../modules/mail-accounts/postgres/connection-repository';
+import type { UserWorkspaceService } from '../modules/user-workspace/service';
 import type { HonoContext } from '../ctx';
 import { user } from '../db/schema';
 import { eq } from 'drizzle-orm';
-import { createDb } from '../db';
-import { env } from '../env';
 
 let workspaceService: UserWorkspaceService | undefined;
 
@@ -19,38 +14,33 @@ export const configureUserWorkspaceService = (service: UserWorkspaceService) => 
 
 const getUserWorkspaceService = () => {
   if (workspaceService) return workspaceService;
-  const database = createDb(env.HYPERDRIVE.connectionString);
-  workspaceService = createUserWorkspaceService({ db: database.db });
-  return workspaceService;
+  throw new Error('User workspace service is not configured');
 };
 
 export const getUserWorkspace = (userId: string) => getUserWorkspaceService().forUser(userId);
 
 export const getActiveConnection = async () => {
   const c = getContext<HonoContext>();
-  const { sessionUser, auth } = c.var;
+  const { sessionUser, auth, services } = c.var;
   if (!sessionUser) throw new Error('Session Not Found');
+  if (!services) throw new Error('Runtime services are not configured');
 
-  const database = createDb(env.HYPERDRIVE.connectionString);
-  try {
-    const repository = createPostgresConnectionRepository(database.db);
-    const userData = await database.db.query.user.findFirst({
-      where: eq(user.id, sessionUser.id),
-    });
+  const db = services.database.db;
+  const repository = createPostgresConnectionRepository(db);
+  const userData = await db.query.user.findFirst({
+    where: eq(user.id, sessionUser.id),
+  });
 
-    if (userData?.defaultConnectionId) {
-      const activeConnection = await repository.findOwnedConnection(
-        sessionUser.id,
-        userData.defaultConnectionId,
-      );
-      if (activeConnection) return activeConnection;
-    }
-
-    const firstConnection = await repository.findFirstOwnedConnection(sessionUser.id);
-    if (firstConnection) return firstConnection;
-  } finally {
-    await database.conn.end();
+  if (userData?.defaultConnectionId) {
+    const activeConnection = await repository.findOwnedConnection(
+      sessionUser.id,
+      userData.defaultConnectionId,
+    );
+    if (activeConnection) return activeConnection;
   }
+
+  const firstConnection = await repository.findFirstOwnedConnection(sessionUser.id);
+  if (firstConnection) return firstConnection;
 
   try {
     if (auth) {

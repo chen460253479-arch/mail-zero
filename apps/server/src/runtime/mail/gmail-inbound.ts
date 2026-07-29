@@ -1,17 +1,19 @@
 import {
+  activateChannelInboundForAccount,
+  activateChannelInboundForConnection,
+  type MailInboundRuntimeResources,
+} from './inbound';
+import {
   defaultGmailChannelConfig,
   parseGmailChannelConfig,
   type GmailChannelConfig,
 } from '../../mail-channel/gmail/config';
 import { createPostgresMailSyncRepository } from '../../modules/mail-sync/postgres/sync-repository';
 import { createChannelConfigRepository } from '../../integrations/core/channel-config-repository';
-import { activateChannelInboundForAccount, activateChannelInboundForConnection } from './inbound';
-import { createMailTaskQueuePortForDatabase, type MailTaskQueuePort } from './task-queue';
 import { handleGmailWebhookRequest } from '../../mail-channel/gmail/inbound/webhook';
 import { createGmailCredentialContext } from './gmail-credential-context';
 import { createGmailPlugin } from '../../mail-channel/gmail/plugin';
-import { createDb, type DB } from '../../db';
-import type { ZeroEnv } from '../../env';
+import type { DB } from '../../db';
 
 const readGmailChannelConfig = async (db: DB): Promise<GmailChannelConfig> => {
   const record = await createChannelConfigRepository(db).get('gmail');
@@ -26,8 +28,12 @@ const readGmailChannelConfig = async (db: DB): Promise<GmailChannelConfig> => {
   });
 };
 
-const createAdapter = async (db: DB, runtimeEnv: ZeroEnv, connectionId: string) => {
-  const context = await createGmailCredentialContext(db, runtimeEnv, connectionId);
+const createAdapter = async (
+  db: DB,
+  resources: MailInboundRuntimeResources,
+  connectionId: string,
+) => {
+  const context = await createGmailCredentialContext(db, resources, connectionId);
   return await createGmailPlugin({
     createExecutor: async () => context.executor,
     resolveIdentity: async () => {
@@ -41,29 +47,30 @@ const createAdapter = async (db: DB, runtimeEnv: ZeroEnv, connectionId: string) 
 
 export const activateGmailInboundForAccount = async (
   db: DB,
-  runtimeEnv: ZeroEnv,
+  resources: MailInboundRuntimeResources,
   input: { connectionId: string; accountId: string },
 ): Promise<void> =>
-  await activateChannelInboundForAccount(db, runtimeEnv, {
+  await activateChannelInboundForAccount(db, resources, {
     ...input,
     channelId: 'gmail',
   });
 
 export const activateGmailInboundForConnection = async (
-  runtimeEnv: ZeroEnv,
+  db: DB,
+  resources: MailInboundRuntimeResources,
   input: { connectionId: string },
 ): Promise<void> =>
-  await activateChannelInboundForConnection(runtimeEnv, {
+  await activateChannelInboundForConnection(db, resources, {
     ...input,
     expectedChannelId: 'gmail',
   });
 
 export const stopGmailWatchForConnection = async (
   db: DB,
-  runtimeEnv: ZeroEnv,
+  resources: MailInboundRuntimeResources,
   connectionId: string,
 ): Promise<void> => {
-  const adapter = await createAdapter(db, runtimeEnv, connectionId);
+  const adapter = await createAdapter(db, resources, connectionId);
   if (!adapter.unsubscribe) {
     throw new Error('Gmail inbound adapter does not support Watch cancellation');
   }
@@ -71,20 +78,14 @@ export const stopGmailWatchForConnection = async (
 };
 
 export const handleGmailWebhookForEnvironment = async (
-  runtimeEnv: ZeroEnv,
+  db: DB,
+  resources: MailInboundRuntimeResources,
   request: Request,
-  injectedTaskQueue?: MailTaskQueuePort,
 ): Promise<Response> => {
-  const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
-  try {
-    const repository = createPostgresMailSyncRepository(db);
-    const taskQueue = injectedTaskQueue ?? createMailTaskQueuePortForDatabase(db);
-    return await handleGmailWebhookRequest(request, {
-      getChannelConfig: () => readGmailChannelConfig(db),
-      recordSignal: (signal) => repository.recordSignal(signal),
-      enqueueDiscover: (syncId) => taskQueue.enqueueIngress({ type: 'discover', syncId }),
-    });
-  } finally {
-    await conn.end();
-  }
+  const repository = createPostgresMailSyncRepository(db);
+  return await handleGmailWebhookRequest(request, {
+    getChannelConfig: () => readGmailChannelConfig(db),
+    recordSignal: (signal) => repository.recordSignal(signal),
+    enqueueDiscover: (syncId) => resources.taskQueue.enqueueIngress({ type: 'discover', syncId }),
+  });
 };

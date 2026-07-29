@@ -1,15 +1,19 @@
-import { type Id } from '@zero/mail-core';
+import { type BlobStore, type Id } from '@zero/mail-core';
 import { ulid } from 'ulid';
 
-import { createMailCoreDependencies, createMailCoreRuntime, R2BlobStore } from '../../modules/mail';
+import { createMailCoreDependencies, createMailCoreRuntime } from '../../modules/mail';
 import { preprocessEmailHtml } from '../../lib/email-processor';
-import type { ZeroEnv } from '../../env';
 import type { DB } from '../../db';
 
-export const createMailCoreForEnvironment = (db: DB, runtimeEnv: ZeroEnv) =>
+export type MailCoreRuntimeResources = {
+  blobStore: BlobStore;
+  cursorSigningKey: string;
+};
+
+export const createMailCoreForEnvironment = (db: DB, resources: MailCoreRuntimeResources) =>
   createMailCoreRuntime({
     db,
-    blobStore: new R2BlobStore(runtimeEnv.THREADS_BUCKET),
+    blobStore: resources.blobStore,
     blobReadAuditSink: { record: async () => undefined },
     clock: { now: () => new Date() },
     idFactory: {
@@ -18,13 +22,16 @@ export const createMailCoreForEnvironment = (db: DB, runtimeEnv: ZeroEnv) =>
       },
     },
     sanitizeHtml: preprocessEmailHtml,
-    cursorSigningKey: runtimeEnv.BETTER_AUTH_SECRET,
+    cursorSigningKey: resources.cursorSigningKey,
   });
 
-export const createMailCoreDependenciesForEnvironment = (db: DB, runtimeEnv: ZeroEnv) =>
+export const createMailCoreDependenciesForEnvironment = (
+  db: DB,
+  resources: MailCoreRuntimeResources,
+) =>
   createMailCoreDependencies({
     db,
-    blobStore: new R2BlobStore(runtimeEnv.THREADS_BUCKET),
+    blobStore: resources.blobStore,
     blobReadAuditSink: { record: async () => undefined },
     clock: { now: () => new Date() },
     idFactory: {
@@ -33,5 +40,5 @@ export const createMailCoreDependenciesForEnvironment = (db: DB, runtimeEnv: Zer
       },
     },
     sanitizeHtml: preprocessEmailHtml,
-    cursorSigningKey: runtimeEnv.BETTER_AUTH_SECRET,
+    cursorSigningKey: resources.cursorSigningKey,
   });

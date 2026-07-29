@@ -1,4 +1,4 @@
-import type { Id, MailAccountId, MailboxId } from '@zero/mail-core';
+import type { BlobStore, Id, MailAccountId, MailboxId } from '@zero/mail-core';
 import { and, eq, isNull } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
@@ -23,17 +23,16 @@ import {
 import { createPostgresMailSyncRepository } from '../../modules/mail-sync/postgres/sync-repository';
 import { bootstrapLocalMailAccount } from '../../modules/mail-sync/application/bootstrap-account';
 import { createChannelConfigRepository } from '../../integrations/core/channel-config-repository';
-import { createMailTaskQueuePortForDatabase, type MailTaskQueuePort } from './task-queue';
 import { PostgresMailUnitOfWork } from '../../modules/mail/postgres/postgres-unit-of-work';
 import { encryptCredential } from '../../infrastructure/security/credential-encryption';
 import type { MailIngressCommand } from '../../modules/mail-sync/application/commands';
 import { activateInboundSync } from '../../modules/mail-sync/application/activate';
+import type { MailCredentialRuntimeResources } from './channel-credential-context';
 import { createMailChannelCredentialContext } from './channel-credential-context';
 import { connection, inboundSync, mailAccount, mailbox } from '../../db/schema';
 import { createGmailCredentialContext } from './gmail-credential-context';
 import { createMailChannelRegistry } from '../../mail-channel/registry';
 import { createImapSmtpPluginForEnvironment } from './protocol-channel';
-import { createMailCoreRuntime, R2BlobStore } from '../../modules/mail';
 import { createChannelInboundAdapterFactory } from './channel-inbound';
 import { createGmailPlugin } from '../../mail-channel/gmail/plugin';
 import { createZohoMailPlugin } from '../../mail-channel/zoho-mail';
@@ -41,8 +40,10 @@ import { createZohoSubscriptionTarget } from './zoho-webhook-setup';
 import type { MailChannelId } from '../../mail-channel/contracts';
 import { createOutlookPlugin } from '../../mail-channel/outlook';
 import { preprocessEmailHtml } from '../../lib/email-processor';
-import { createDb, type DB } from '../../db';
+import { createMailCoreRuntime } from '../../modules/mail';
+import type { MailTaskQueuePort } from './task-queue';
 import type { ZeroEnv } from '../../env';
+import type { DB } from '../../db';
 
 const INBOX_SCOPE: IngressScope = {
   version: 1,
@@ -58,6 +59,11 @@ type ChannelSyncSettings = {
   scheduledSyncEnabled: boolean;
   syncIntervalMinutes: number;
   providerConfig: Record<string, unknown>;
+};
+
+export type MailInboundRuntimeResources = MailCredentialRuntimeResources & {
+  blobStore: BlobStore;
+  taskQueue: MailTaskQueuePort;
 };
 
 const readChannelSyncSettings = async (
@@ -92,10 +98,10 @@ const readChannelSyncSettings = async (
   };
 };
 
-const createMailCore = (db: DB, runtimeEnv: ZeroEnv) =>
+const createMailCore = (db: DB, resources: MailInboundRuntimeResources) =>
   createMailCoreRuntime({
     db,
-    blobStore: new R2BlobStore(runtimeEnv.THREADS_BUCKET),
+    blobStore: resources.blobStore,
     blobReadAuditSink: { record: async () => undefined },
     clock: { now: () => new Date() },
     idFactory: {
@@ -104,7 +110,7 @@ const createMailCore = (db: DB, runtimeEnv: ZeroEnv) =>
       },
     },
     sanitizeHtml: preprocessEmailHtml,
-    cursorSigningKey: runtimeEnv.BETTER_AUTH_SECRET,
+    cursorSigningKey: resources.environment.BETTER_AUTH_SECRET,
   });
 
 const resolveConnectionId = async (db: DB, accountId: string): Promise<string> => {
@@ -213,12 +219,13 @@ const resolveSubscriptionTarget = async (
   return null;
 };
 
-const createInboundAdapterRuntime = (db: DB, runtimeEnv: ZeroEnv) => {
+const createInboundAdapterRuntime = (db: DB, resources: MailInboundRuntimeResources) => {
+  const runtimeEnv = resources.environment;
   const contexts = new Map<string, ReturnType<typeof createMailChannelCredentialContext>>();
   const getContext = (connectionId: string) => {
     const existing = contexts.get(connectionId);
     if (existing !== undefined) return existing;
-    const created = createMailChannelCredentialContext(db, runtimeEnv, connectionId);
+    const created = createMailChannelCredentialContext(db, resources, connectionId);
     contexts.set(connectionId, created);
     return created;
   };
@@ -227,7 +234,7 @@ const createInboundAdapterRuntime = (db: DB, runtimeEnv: ZeroEnv) => {
     const existing = gmailContexts.get(connectionId);
     if (existing !== undefined) return existing;
     const created = getContext(connectionId).then((context) =>
-      createGmailCredentialContext(db, runtimeEnv, connectionId, context),
+      createGmailCredentialContext(db, resources, connectionId, context),
     );
     gmailContexts.set(connectionId, created);
     return created;
@@ -270,14 +277,15 @@ const createInboundAdapterRuntime = (db: DB, runtimeEnv: ZeroEnv) => {
 
 export const activateChannelInboundForAccount = async (
   db: DB,
-  runtimeEnv: ZeroEnv,
+  resources: MailInboundRuntimeResources,
   input: {
     connectionId: string;
     accountId: string;
     channelId: MailChannelId;
   },
 ): Promise<void> => {
-  const adapterRuntime = createInboundAdapterRuntime(db, runtimeEnv);
+  const runtimeEnv = resources.environment;
+  const adapterRuntime = createInboundAdapterRuntime(db, resources);
   adapterRuntime.registry.getInbound(input.channelId);
   await activateInboundSync(
     {
@@ -302,53 +310,47 @@ export const activateChannelInboundForAccount = async (
 };
 
 export const activateChannelInboundForConnection = async (
-  runtimeEnv: ZeroEnv,
+  db: DB,
+  resources: MailInboundRuntimeResources,
   input: { connectionId: string; expectedChannelId?: MailChannelId },
 ): Promise<void> => {
-  const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
-  try {
-    const connectionRecord = await db.query.connection.findFirst({
-      where: eq(connection.id, input.connectionId),
-    });
-    if (connectionRecord === undefined) {
-      throw new Error('Mail connection was not found');
-    }
-    if (
-      input.expectedChannelId !== undefined &&
-      connectionRecord.channelId !== input.expectedChannelId
-    ) {
-      throw new Error(`Mail connection is not ${input.expectedChannelId}`);
-    }
-    const unitOfWork = new PostgresMailUnitOfWork(db);
-    const mailCore = createMailCore(db, runtimeEnv);
-    const account = await bootstrapLocalMailAccount(
-      {
-        userId: connectionRecord.userId,
-        connectionId: connectionRecord.id,
-      },
-      {
-        findByConnectionId: (connectionId) =>
-          unitOfWork.run((tx) => tx.accounts.findByConnectionId(connectionId)),
-        createAccount: (createInput) => mailCore.createAccount(createInput),
-      },
-    );
-    await activateChannelInboundForAccount(db, runtimeEnv, {
-      accountId: account.id,
-      connectionId: connectionRecord.id,
-      channelId: connectionRecord.channelId,
-    });
-  } finally {
-    await conn.end();
+  const connectionRecord = await db.query.connection.findFirst({
+    where: eq(connection.id, input.connectionId),
+  });
+  if (connectionRecord === undefined) {
+    throw new Error('Mail connection was not found');
   }
+  if (
+    input.expectedChannelId !== undefined &&
+    connectionRecord.channelId !== input.expectedChannelId
+  ) {
+    throw new Error(`Mail connection is not ${input.expectedChannelId}`);
+  }
+  const unitOfWork = new PostgresMailUnitOfWork(db);
+  const mailCore = createMailCore(db, resources);
+  const account = await bootstrapLocalMailAccount(
+    {
+      userId: connectionRecord.userId,
+      connectionId: connectionRecord.id,
+    },
+    {
+      findByConnectionId: (connectionId) =>
+        unitOfWork.run((tx) => tx.accounts.findByConnectionId(connectionId)),
+      createAccount: (createInput) => mailCore.createAccount(createInput),
+    },
+  );
+  await activateChannelInboundForAccount(db, resources, {
+    accountId: account.id,
+    connectionId: connectionRecord.id,
+    channelId: connectionRecord.channelId,
+  });
 };
 
-const createRuntime = (
-  db: DB,
-  runtimeEnv: ZeroEnv,
-  taskQueue: MailTaskQueuePort,
-): MailIngressRuntime => {
+const createRuntime = (db: DB, resources: MailInboundRuntimeResources): MailIngressRuntime => {
+  const runtimeEnv = resources.environment;
+  const taskQueue = resources.taskQueue;
   const repository = createPostgresMailSyncRepository(db);
-  const adapterRuntime = createInboundAdapterRuntime(db, runtimeEnv);
+  const adapterRuntime = createInboundAdapterRuntime(db, resources);
   const enqueue = (command: MailIngressCommand) => taskQueue.enqueueIngress(command);
   const getAdapterFactory = (provider: string) => {
     adapterRuntime.registry.getInbound(provider);
@@ -375,7 +377,7 @@ const createRuntime = (
       const settings = await readChannelSyncSettings(db, context.provider);
       return settings.syncIntervalMinutes * 60_000;
     },
-    mailCore: createMailCore(db, runtimeEnv),
+    mailCore: createMailCore(db, resources),
     onAuthenticationError: async ({ syncId, errorCode, errorMessage }) => {
       await db
         .update(inboundSync)
@@ -394,46 +396,32 @@ const createRuntime = (
 };
 
 export const runMailIngressCommand = async (
-  runtimeEnv: ZeroEnv,
+  db: DB,
+  resources: MailInboundRuntimeResources,
   command: MailIngressCommand,
-  injectedTaskQueue?: MailTaskQueuePort,
 ): Promise<void> => {
-  const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
-  try {
-    await processMailIngressCommand(
-      command,
-      createRuntime(db, runtimeEnv, injectedTaskQueue ?? createMailTaskQueuePortForDatabase(db)),
-    );
-  } finally {
-    await conn.end();
-  }
+  await processMailIngressCommand(command, createRuntime(db, resources));
 };
 
 export const enqueueDueMailIngressWork = async (
-  runtimeEnv: ZeroEnv,
-  injectedTaskQueue?: MailTaskQueuePort,
+  db: DB,
+  resources: MailInboundRuntimeResources,
 ): Promise<{ reconciliations: number; renewals: number; imports: number }> => {
-  const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
-  try {
-    const now = new Date();
-    const taskQueue = injectedTaskQueue ?? createMailTaskQueuePortForDatabase(db);
-    return await dispatchDueMailSyncWork(
-      {
-        owner: crypto.randomUUID(),
-        limit: 100,
-        claimLeaseForMs: 30_000,
-        confirmedLeaseForMs: 120_000,
-        retryAfterMs: 5_000,
-        reconcileBefore: now,
-        renewalBefore: new Date(now.getTime() + 24 * 60 * 60_000),
-        importBefore: now,
-      },
-      {
-        repository: createPostgresMailSyncRepository(db),
-        enqueue: (command) => taskQueue.enqueueIngress(command),
-      },
-    );
-  } finally {
-    await conn.end();
-  }
+  const now = new Date();
+  return await dispatchDueMailSyncWork(
+    {
+      owner: crypto.randomUUID(),
+      limit: 100,
+      claimLeaseForMs: 30_000,
+      confirmedLeaseForMs: 120_000,
+      retryAfterMs: 5_000,
+      reconcileBefore: now,
+      renewalBefore: new Date(now.getTime() + 24 * 60 * 60_000),
+      importBefore: now,
+    },
+    {
+      repository: createPostgresMailSyncRepository(db),
+      enqueue: (command) => resources.taskQueue.enqueueIngress(command),
+    },
+  );
 };

@@ -23,7 +23,7 @@ export type OpenMailSessionRuntime = (
 export const createAccountRouter = (openRuntime: OpenMailSessionRuntime = openMailApiRuntime) =>
   router({
     list: mailSessionProcedure.output(accountListResultSchema).query(async ({ ctx }) => {
-      const runtime = await openRuntime(ctx.c.env);
+      const runtime = await openRuntime(ctx.c.var.services!);
       try {
         try {
           return await createAccountService(runtime.core).list({ userId: ctx.sessionUser.id });

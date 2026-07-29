@@ -1,10 +1,10 @@
+import type { MailInboundRuntimeResources } from '../../../runtime/mail/inbound';
 import { provisionChannelMailboxInDatabase } from './provision-channel-mailbox';
-import type { ZeroEnv } from '../../../env';
 import type { DB } from '../../../db';
 
 export const provisionGmailMailboxInDatabase = async (
   db: DB,
-  runtimeEnv: ZeroEnv,
+  resources: MailInboundRuntimeResources,
   input: {
     userId: string;
     connectionId: string;
@@ -14,7 +14,7 @@ export const provisionGmailMailboxInDatabase = async (
     };
   },
 ): Promise<{ accountId: string; identityId: string }> => {
-  return await provisionChannelMailboxInDatabase(db, runtimeEnv, {
+  return await provisionChannelMailboxInDatabase(db, resources, {
     ...input,
     channelId: 'gmail',
   });

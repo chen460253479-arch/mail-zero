@@ -14,38 +14,34 @@ import { resolveGmailConnectMode } from '../../modules/mail-accounts/application
 import { createChannelConfigRepository } from '../../integrations/core/channel-config-repository';
 import { createRateLimiterMiddleware, privateProcedure, publicProcedure, router } from '../trpc';
 import { manualCredentialSnapshotSchema } from '../../modules/mail-accounts/credentials/manual';
-import { withNangoRuntime, type NangoRuntime } from '../../modules/mail-accounts/runtime/nango';
 import { resolveFetchedNangoCredential } from '../../modules/mail-accounts/credentials/nango';
 import { createIdentityMailChannelRegistry } from '../../runtime/mail/channel-registry';
-import { getNangoChannelServiceForEnvironment } from '../../integrations/nango/runtime';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import { mailChannelIds, type MailChannelId } from '../../mail-channel/contracts';
 import { createZohoWebhookSetup } from '../../runtime/mail/zoho-webhook-setup';
 import { mailAccount } from '../../modules/mail/postgres/schema/accounts';
 import { defaultMailChannelRegistry } from '../../mail-channel/registry';
 import { NangoIntegrationError } from '../../integrations/nango/errors';
+import type { RuntimeServices } from '../../runtime/node/services';
 import { user as userTable } from '../../db/schema';
 import { Ratelimit } from '@upstash/ratelimit';
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
-import { createDb } from '../../db';
 import type { DB } from '../../db';
-import { env } from '../../env';
 import { z } from 'zod';
 
-const nangoRuntimeConfig = () => ({
-  databaseUrl: env.HYPERDRIVE.connectionString,
-  NANGO_BASE_URL: env.NANGO_BASE_URL,
-  NANGO_SECRET_KEY: env.NANGO_SECRET_KEY,
-  NANGO_GMAIL_INTEGRATION_KEY: env.NANGO_GMAIL_INTEGRATION_KEY,
-  NANGO_OUTLOOK_INTEGRATION_KEY: env.NANGO_OUTLOOK_INTEGRATION_KEY,
-  NANGO_ZOHO_MAIL_INTEGRATION_KEY: env.NANGO_ZOHO_MAIL_INTEGRATION_KEY,
-  NANGO_IMAP_SMTP_INTEGRATION_KEY: env.NANGO_IMAP_SMTP_INTEGRATION_KEY,
-});
-
-const withConfiguredNango = async <T>(run: (runtime: NangoRuntime) => Promise<T>): Promise<T> => {
+const withConfiguredNango = async <T>(
+  services: RuntimeServices,
+  run: (runtime: {
+    client: RuntimeServices['nango'];
+    channels: RuntimeServices['nangoChannels'];
+  }) => Promise<T>,
+): Promise<T> => {
   try {
-    return await withNangoRuntime(nangoRuntimeConfig(), run);
+    return await run({
+      client: services.nango,
+      channels: services.nangoChannels,
+    });
   } catch (error) {
     if (
       error instanceof NangoIntegrationError &&
@@ -60,13 +56,13 @@ const withConfiguredNango = async <T>(run: (runtime: NangoRuntime) => Promise<T>
   }
 };
 
-const getGmailAuthorizationOptionsForDatabase = async (db: DB) => {
+const getGmailAuthorizationOptionsForDatabase = async (db: DB, services: RuntimeServices) => {
   const repository = createSystemIntegrationRepository(db);
   const channelRepository = createChannelConfigRepository(db);
   const [zeroOAuth, channelConfig, nangoStatus] = await Promise.all([
     repository.get('gmail_zero_oauth'),
     channelRepository.get('gmail'),
-    getNangoChannelServiceForEnvironment(env).getStatus('gmail'),
+    services.nangoChannels.getStatus('gmail'),
   ]);
   const availability = {
     zeroOAuthAvailable: zeroOAuth?.status === 'active',
@@ -89,7 +85,11 @@ const integrationKeyByChannel = {
   zoho_mail: 'zoho_mail_zero_oauth',
 } as const;
 
-const getChannelAuthorizationOptionsForDatabase = async (db: DB, channelId: MailChannelId) => {
+const getChannelAuthorizationOptionsForDatabase = async (
+  db: DB,
+  services: RuntimeServices,
+  channelId: MailChannelId,
+) => {
   const repository = createSystemIntegrationRepository(db);
   const channelRepository = createChannelConfigRepository(db);
   const [zeroOAuth, channelConfig, nangoStatus] = await Promise.all([
@@ -97,7 +97,7 @@ const getChannelAuthorizationOptionsForDatabase = async (db: DB, channelId: Mail
       ? Promise.resolve(null)
       : repository.get(integrationKeyByChannel[channelId]),
     channelRepository.get(channelId),
-    getNangoChannelServiceForEnvironment(env).getStatus(channelId),
+    services.nangoChannels.getStatus(channelId),
   ]);
   const availability = {
     zeroOAuthAvailable: zeroOAuth?.status === 'active',
@@ -127,23 +127,13 @@ const getChannelAuthorizationOptionsForDatabase = async (db: DB, channelId: Mail
   };
 };
 
-const getChannelAuthorizationOptions = async (channelId: MailChannelId) => {
-  const { db, conn } = createDb(env.HYPERDRIVE.connectionString);
-  try {
-    return await getChannelAuthorizationOptionsForDatabase(db, channelId);
-  } finally {
-    await conn.end();
-  }
-};
+const getChannelAuthorizationOptions = async (
+  services: RuntimeServices,
+  channelId: MailChannelId,
+) => await getChannelAuthorizationOptionsForDatabase(services.database.db, services, channelId);
 
-const getGmailAuthorizationOptions = async () => {
-  const { db, conn } = createDb(env.HYPERDRIVE.connectionString);
-  try {
-    return await getGmailAuthorizationOptionsForDatabase(db);
-  } finally {
-    await conn.end();
-  }
-};
+const getGmailAuthorizationOptions = async (services: RuntimeServices) =>
+  await getGmailAuthorizationOptionsForDatabase(services.database.db, services);
 
 const mapNangoBindingError = (error: unknown): never => {
   if (error instanceof NangoBindingError) {
@@ -164,46 +154,44 @@ const mapNangoBindingError = (error: unknown): never => {
 
 const mailChannelIdSchema = z.enum(mailChannelIds);
 
-const listChannelNangoConnections = async (channelId: MailChannelId) => {
-  if ((await getChannelAuthorizationOptions(channelId)).mode !== 'nango') {
+const listChannelNangoConnections = async (services: RuntimeServices, channelId: MailChannelId) => {
+  if ((await getChannelAuthorizationOptions(services, channelId)).mode !== 'nango') {
     throw new TRPCError({
       code: 'PRECONDITION_FAILED',
       message: 'MAIL_CHANNEL_UNAVAILABLE',
     });
   }
-  return await withConfiguredNango(async (runtime) => {
+  return await withConfiguredNango(services, async (runtime) => {
     const integrationKey = await runtime.channels.requireIntegrationKey(channelId);
-    const database = createDb(env.HYPERDRIVE.connectionString);
-    try {
-      const channel = createIdentityMailChannelRegistry(database.db, env).get(channelId);
-      const connections = await listSafeNangoConnections(
-        integrationKey,
-        runtime.client,
-        async (connectionId) => {
-          const connection = await runtime.client.getConnection(connectionId, integrationKey);
-          const resolved = resolveFetchedNangoCredential(
-            connection.credentials,
-            connection.connection_config,
-          );
-          if (!channel.credentialTypes.has(resolved.credential.type)) {
-            throw new Error('Unsupported Nango credential');
-          }
-          const identity = await channel.resolveIdentity({
-            connectionId,
-            credential: resolved.credential,
-          });
-          return { email: identity.email, displayName: identity.name };
-        },
-      );
-      return connections.map(({ connectionId, email, displayName, authorizationStatus }) => ({
-        connectionId,
-        email,
-        displayName,
-        authorizationStatus,
-      }));
-    } finally {
-      await database.conn.end();
-    }
+    const channel = createIdentityMailChannelRegistry(
+      services.database.db,
+      services.environment,
+    ).get(channelId);
+    const connections = await listSafeNangoConnections(
+      integrationKey,
+      runtime.client,
+      async (connectionId) => {
+        const connection = await runtime.client.getConnection(connectionId, integrationKey);
+        const resolved = resolveFetchedNangoCredential(
+          connection.credentials,
+          connection.connection_config,
+        );
+        if (!channel.credentialTypes.has(resolved.credential.type)) {
+          throw new Error('Unsupported Nango credential');
+        }
+        const identity = await channel.resolveIdentity({
+          connectionId,
+          credential: resolved.credential,
+        });
+        return { email: identity.email, displayName: identity.name };
+      },
+    );
+    return connections.map(({ connectionId, email, displayName, authorizationStatus }) => ({
+      connectionId,
+      email,
+      displayName,
+      authorizationStatus,
+    }));
   });
 };
 
@@ -217,46 +205,49 @@ export const connectionsRouter = router({
     )
     .query(async ({ ctx }) => {
       const { sessionUser } = ctx;
-      const database = createDb(env.HYPERDRIVE.connectionString);
-      try {
-        const records = await createPostgresConnectionRepository(
-          database.db,
-        ).listConnectionsWithAuthorization(sessionUser.id);
+      const records = await createPostgresConnectionRepository(
+        ctx.c.var.services!.database.db,
+      ).listConnectionsWithAuthorization(sessionUser.id);
 
-        const disconnectedIds = records
-          .filter(({ connection }) => connection.status === 'disconnected')
-          .map(({ connection }) => connection.id);
+      const disconnectedIds = records
+        .filter(({ connection }) => connection.status === 'disconnected')
+        .map(({ connection }) => connection.id);
 
-        return {
-          connections: records.map(({ connection, authorization }) => ({
-            id: connection.id,
-            email: connection.email,
-            name: connection.name,
-            picture: connection.picture,
-            createdAt: connection.createdAt,
-            channelId: connection.channelId,
-            status: connection.status,
-            authSource: authorization?.authSource ?? null,
-            capabilities: Array.from(
-              defaultMailChannelRegistry.find(connection.channelId)?.capabilities ?? [],
-            ),
-          })),
-          disconnectedIds,
-        };
-      } finally {
-        await database.conn.end();
-      }
+      return {
+        connections: records.map(({ connection, authorization }) => ({
+          id: connection.id,
+          email: connection.email,
+          name: connection.name,
+          picture: connection.picture,
+          createdAt: connection.createdAt,
+          channelId: connection.channelId,
+          status: connection.status,
+          authSource: authorization?.authSource ?? null,
+          capabilities: Array.from(
+            defaultMailChannelRegistry.find(connection.channelId)?.capabilities ?? [],
+          ),
+        })),
+        disconnectedIds,
+      };
     }),
-  getGmailAuthorizationOptions: privateProcedure.query(getGmailAuthorizationOptions),
+  getGmailAuthorizationOptions: privateProcedure.query(
+    async ({ ctx }) => await getGmailAuthorizationOptions(ctx.c.var.services!),
+  ),
   getChannelAuthorizationOptions: privateProcedure
     .input(z.object({ channelId: mailChannelIdSchema }))
-    .query(async ({ input }) => await getChannelAuthorizationOptions(input.channelId)),
+    .query(
+      async ({ input, ctx }) =>
+        await getChannelAuthorizationOptions(ctx.c.var.services!, input.channelId),
+    ),
   listNangoGmailConnections: privateProcedure.query(
-    async () => await listChannelNangoConnections('gmail'),
+    async ({ ctx }) => await listChannelNangoConnections(ctx.c.var.services!, 'gmail'),
   ),
   listNangoConnections: privateProcedure
     .input(z.object({ channelId: mailChannelIdSchema }))
-    .query(async ({ input }) => await listChannelNangoConnections(input.channelId)),
+    .query(
+      async ({ input, ctx }) =>
+        await listChannelNangoConnections(ctx.c.var.services!, input.channelId),
+    ),
   bindNango: privateProcedure
     .input(
       z.object({
@@ -265,18 +256,19 @@ export const connectionsRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const database = createDb(env.HYPERDRIVE.connectionString);
+      const services = ctx.c.var.services!;
+      const db = services.database.db;
       try {
         if (
-          (await getChannelAuthorizationOptionsForDatabase(database.db, input.channelId)).mode !==
+          (await getChannelAuthorizationOptionsForDatabase(db, services, input.channelId)).mode !==
           'nango'
         ) {
           throw new NangoBindingError('MAIL_CHANNEL_UNAVAILABLE');
         }
-        return await withConfiguredNango(async (runtime) => {
+        return await withConfiguredNango(services, async (runtime) => {
           const integrationId = await runtime.channels.requireIntegrationKey(input.channelId);
-          const connectionRepository = createPostgresConnectionRepository(database.db);
-          const channels = createIdentityMailChannelRegistry(database.db, env);
+          const connectionRepository = createPostgresConnectionRepository(db);
+          const channels = createIdentityMailChannelRegistry(db, services.environment);
           const binding = await bindNangoMailbox(
             {
               userId: ctx.sessionUser.id,
@@ -304,11 +296,11 @@ export const connectionsRouter = router({
                     ...bindingInput,
                   }),
               },
-              encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
+              encryptionKey: services.config.credentialEncryptionKey,
               now: () => new Date(),
             },
           );
-          await provisionChannelMailboxInDatabase(database.db, env, {
+          await provisionChannelMailboxInDatabase(db, services, {
             userId: ctx.sessionUser.id,
             connectionId: binding.id,
             channelId: input.channelId,
@@ -321,29 +313,28 @@ export const connectionsRouter = router({
         });
       } catch (error) {
         mapNangoBindingError(error);
-      } finally {
-        await database.conn.end();
       }
     }),
   bindManualImapSmtp: privateProcedure
     .input(manualCredentialSnapshotSchema.omit({ type: true }))
     .mutation(async ({ input, ctx }) => {
-      const database = createDb(env.HYPERDRIVE.connectionString);
+      const services = ctx.c.var.services!;
+      const db = services.database.db;
       try {
         if (
-          (await getChannelAuthorizationOptionsForDatabase(database.db, 'imap_smtp')).mode !==
+          (await getChannelAuthorizationOptionsForDatabase(db, services, 'imap_smtp')).mode !==
           'manual'
         ) {
           throw new ManualMailboxBindingError('MAIL_CHANNEL_UNAVAILABLE');
         }
-        const repository = createPostgresConnectionRepository(database.db);
+        const repository = createPostgresConnectionRepository(db);
         const binding = await bindManualMailbox(
           {
             userId: ctx.sessionUser.id,
             credential: { type: 'imap_smtp', ...input },
           },
           {
-            channel: createIdentityMailChannelRegistry(database.db, env).get('imap_smtp'),
+            channel: createIdentityMailChannelRegistry(db, services.environment).get('imap_smtp'),
             repository: {
               findMailboxByNormalizedEmail: (userId, channelId, normalizedEmail) =>
                 repository.findMailboxByNormalizedEmail(userId, channelId, normalizedEmail),
@@ -353,11 +344,11 @@ export const connectionsRouter = router({
                   ...bindingInput,
                 }),
             },
-            encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
+            encryptionKey: services.config.credentialEncryptionKey,
             now: () => new Date(),
           },
         );
-        await provisionChannelMailboxInDatabase(database.db, env, {
+        await provisionChannelMailboxInDatabase(db, services, {
           userId: ctx.sessionUser.id,
           connectionId: binding.id,
           channelId: 'imap_smtp',
@@ -366,57 +357,50 @@ export const connectionsRouter = router({
         return { id: binding.id };
       } catch (error) {
         mapNangoBindingError(error);
-      } finally {
-        await database.conn.end();
       }
     }),
   getZohoWebhookSetup: privateProcedure
     .input(z.object({ connectionId: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
-      const database = createDb(env.HYPERDRIVE.connectionString);
-      try {
-        const connectionRecord = await createPostgresConnectionRepository(
-          database.db,
-        ).findOwnedConnection(ctx.sessionUser.id, input.connectionId);
-        if (!connectionRecord || connectionRecord.channelId !== 'zoho_mail') {
-          throw new TRPCError({ code: 'NOT_FOUND' });
-        }
-        const account = await database.db.query.mailAccount.findFirst({
-          where: eq(mailAccount.connectionId, connectionRecord.id),
-          columns: { id: true },
-        });
-        if (!account) throw new TRPCError({ code: 'PRECONDITION_FAILED' });
-        const channelConfig = await createChannelConfigRepository(database.db).get('zoho_mail');
-        if (!channelConfig?.inboxWatchEnabled) {
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message: 'ZOHO_MAIL_WEBHOOK_DISABLED',
-          });
-        }
-        const setup = await createZohoWebhookSetup(env, account.id);
-        return { webhookUrl: setup.webhookUrl };
-      } finally {
-        await database.conn.end();
+      const services = ctx.c.var.services!;
+      const db = services.database.db;
+      const connectionRecord = await createPostgresConnectionRepository(db).findOwnedConnection(
+        ctx.sessionUser.id,
+        input.connectionId,
+      );
+      if (!connectionRecord || connectionRecord.channelId !== 'zoho_mail') {
+        throw new TRPCError({ code: 'NOT_FOUND' });
       }
+      const account = await db.query.mailAccount.findFirst({
+        where: eq(mailAccount.connectionId, connectionRecord.id),
+        columns: { id: true },
+      });
+      if (!account) throw new TRPCError({ code: 'PRECONDITION_FAILED' });
+      const channelConfig = await createChannelConfigRepository(db).get('zoho_mail');
+      if (!channelConfig?.inboxWatchEnabled) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'ZOHO_MAIL_WEBHOOK_DISABLED',
+        });
+      }
+      const setup = await createZohoWebhookSetup(services.environment, account.id);
+      return { webhookUrl: setup.webhookUrl };
     }),
   setDefault: privateProcedure
     .input(z.object({ connectionId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const { connectionId } = input;
       const user = ctx.sessionUser;
-      const database = createDb(env.HYPERDRIVE.connectionString);
-      try {
-        const foundConnection = await createPostgresConnectionRepository(
-          database.db,
-        ).findOwnedConnection(user.id, connectionId);
-        if (!foundConnection) throw new TRPCError({ code: 'NOT_FOUND' });
-        await database.db
-          .update(userTable)
-          .set({ defaultConnectionId: connectionId, updatedAt: new Date() })
-          .where(eq(userTable.id, user.id));
-      } finally {
-        await database.conn.end();
-      }
+      const db = ctx.c.var.services!.database.db;
+      const foundConnection = await createPostgresConnectionRepository(db).findOwnedConnection(
+        user.id,
+        connectionId,
+      );
+      if (!foundConnection) throw new TRPCError({ code: 'NOT_FOUND' });
+      await db
+        .update(userTable)
+        .set({ defaultConnectionId: connectionId, updatedAt: new Date() })
+        .where(eq(userTable.id, user.id));
     }),
   disconnect: privateProcedure
     .input(
@@ -426,75 +410,69 @@ export const connectionsRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const database = createDb(env.HYPERDRIVE.connectionString);
-      try {
-        const result = await createMailboxLifecycleForDatabase(database.db, env).disconnect({
-          ...input,
-          userId: ctx.sessionUser.id,
-        });
-        await database.db
-          .update(userTable)
-          .set({ defaultConnectionId: null, updatedAt: new Date() })
-          .where(
-            and(
-              eq(userTable.id, ctx.sessionUser.id),
-              eq(userTable.defaultConnectionId, input.connectionId),
-            ),
-          );
-        return result;
-      } finally {
-        await database.conn.end();
-      }
+      const services = ctx.c.var.services!;
+      const result = await createMailboxLifecycleForDatabase(
+        services.database.db,
+        services,
+      ).disconnect({
+        ...input,
+        userId: ctx.sessionUser.id,
+      });
+      await services.database.db
+        .update(userTable)
+        .set({ defaultConnectionId: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(userTable.id, ctx.sessionUser.id),
+            eq(userTable.defaultConnectionId, input.connectionId),
+          ),
+        );
+      return result;
     }),
   deleteRetainedData: privateProcedure
     .input(z.object({ connectionId: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
-      const database = createDb(env.HYPERDRIVE.connectionString);
-      try {
-        return await createMailboxLifecycleForDatabase(database.db, env).deleteRetainedData({
-          ...input,
-          userId: ctx.sessionUser.id,
-        });
-      } finally {
-        await database.conn.end();
-      }
+      const services = ctx.c.var.services!;
+      return await createMailboxLifecycleForDatabase(
+        services.database.db,
+        services,
+      ).deleteRetainedData({
+        ...input,
+        userId: ctx.sessionUser.id,
+      });
     }),
   getDefault: publicProcedure.query(async ({ ctx }) => {
     if (!ctx.sessionUser) return null;
-    const database = createDb(env.HYPERDRIVE.connectionString);
-    try {
-      const repository = createPostgresConnectionRepository(database.db);
-      const foundUser = await database.db.query.user.findFirst({
-        where: eq(userTable.id, ctx.sessionUser.id),
-      });
-      const selectedConnection = foundUser?.defaultConnectionId
-        ? ((await repository.findOwnedConnection(
-            ctx.sessionUser.id,
-            foundUser.defaultConnectionId,
-          )) ?? (await repository.findFirstOwnedConnection(ctx.sessionUser.id)))
-        : await repository.findFirstOwnedConnection(ctx.sessionUser.id);
-      if (!selectedConnection) return null;
-      const record = await repository.findConnectionWithAuthorization(
-        ctx.sessionUser.id,
-        selectedConnection.id,
-      );
-      if (!record) return null;
-      const { connection, authorization } = record;
-      return {
-        id: connection.id,
-        email: connection.email,
-        name: connection.name,
-        picture: connection.picture,
-        createdAt: connection.createdAt,
-        channelId: connection.channelId,
-        status: connection.status,
-        authSource: authorization?.authSource ?? null,
-        capabilities: Array.from(
-          defaultMailChannelRegistry.find(connection.channelId)?.capabilities ?? [],
-        ),
-      };
-    } finally {
-      await database.conn.end();
-    }
+    const db = ctx.c.var.services!.database.db;
+    const repository = createPostgresConnectionRepository(db);
+    const foundUser = await db.query.user.findFirst({
+      where: eq(userTable.id, ctx.sessionUser.id),
+    });
+    const selectedConnection = foundUser?.defaultConnectionId
+      ? ((await repository.findOwnedConnection(
+          ctx.sessionUser.id,
+          foundUser.defaultConnectionId,
+        )) ?? (await repository.findFirstOwnedConnection(ctx.sessionUser.id)))
+      : await repository.findFirstOwnedConnection(ctx.sessionUser.id);
+    if (!selectedConnection) return null;
+    const record = await repository.findConnectionWithAuthorization(
+      ctx.sessionUser.id,
+      selectedConnection.id,
+    );
+    if (!record) return null;
+    const { connection, authorization } = record;
+    return {
+      id: connection.id,
+      email: connection.email,
+      name: connection.name,
+      picture: connection.picture,
+      createdAt: connection.createdAt,
+      channelId: connection.channelId,
+      status: connection.status,
+      authSource: authorization?.authSource ?? null,
+      capabilities: Array.from(
+        defaultMailChannelRegistry.find(connection.channelId)?.capabilities ?? [],
+      ),
+    };
   }),
 });

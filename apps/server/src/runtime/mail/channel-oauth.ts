@@ -9,7 +9,7 @@ import { createPostgresConnectionRepository } from '../../modules/mail-accounts/
 import { normalizeMailboxEmail } from '../../modules/mail-accounts/application/mailbox-identity';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import { getMailOAuthGateway } from '../../mail-channel/oauth/providers';
-import type { ZeroEnv } from '../../env';
+import type { MailInboundRuntimeResources } from './inbound';
 import type { DB } from '../../db';
 
 const specs = {
@@ -27,9 +27,10 @@ const specs = {
 
 export const createChannelOAuthApplication = (
   db: DB,
-  runtimeEnv: ZeroEnv,
+  resources: MailInboundRuntimeResources,
   channelId: ZeroOAuthChannelId,
 ) => {
+  const runtimeEnv = resources.environment;
   const repository = createSystemIntegrationRepository(db);
   return new ChannelOAuthService({
     spec: specs[channelId],
@@ -45,7 +46,7 @@ export const createChannelOAuthApplication = (
           },
           authorization,
         });
-        await provisionChannelMailboxInDatabase(db, runtimeEnv, {
+        await provisionChannelMailboxInDatabase(db, resources, {
           userId,
           connectionId: result.id,
           channelId,

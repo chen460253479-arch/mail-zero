@@ -39,5 +39,6 @@ export const serverTrpc = () => {
     c,
     sessionUser: c.var.sessionUser,
     auth: c.var.auth,
+    services: c.var.services,
   });
 };
