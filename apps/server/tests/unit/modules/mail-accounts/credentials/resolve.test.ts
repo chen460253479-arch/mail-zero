@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { encryptCredential } from '../../../../../src/infrastructure/security/credential-encryption';
-import { resolveConnectionCredential, type ConnectionCredentialRecord } from '../../../../../src/modules/mail-accounts/credentials/resolve';
+import {
+  resolveConnectionCredential,
+  type ConnectionCredentialRecord,
+} from '../../../../../src/modules/mail-accounts/credentials/resolve';
 import { createZeroOAuthSnapshot } from '../../../../../src/modules/mail-accounts/credentials/zero-oauth';
+import { encryptCredential } from '../../../../../src/infrastructure/security/credential-encryption';
 
 const encryptionKey = Buffer.alloc(32, 9).toString('base64');
 
@@ -61,7 +64,7 @@ describe('connection credential resolution', () => {
     );
   });
 
-  it('rejects an auth source that has no registered resolver', async () => {
+  it('rejects a malformed manual credential snapshot', async () => {
     const record = createRecord({
       authorization: {
         authSource: 'manual',
@@ -70,8 +73,52 @@ describe('connection credential resolution', () => {
       },
     });
 
-    await expect(resolveConnectionCredential(record, encryptionKey)).rejects.toThrow(
-      'Unsupported authorization source: manual',
+    await expect(resolveConnectionCredential(record, encryptionKey)).rejects.toThrow();
+  });
+
+  it('resolves a manually managed IMAP/SMTP credential through the encrypted snapshot', async () => {
+    const encryptedCredentialSnapshot = await encryptCredential(
+      {
+        type: 'imap_smtp',
+        email: 'owner@example.com',
+        username: 'owner@example.com',
+        password: 'secret',
+        imap: {
+          host: 'imap.example.com',
+          port: 993,
+          secure: true,
+        },
+        smtp: {
+          host: 'smtp.example.com',
+          port: 465,
+          secure: true,
+        },
+      },
+      encryptionKey,
     );
+    const record = createRecord({
+      authorization: {
+        authSource: 'manual',
+        encryptedCredentialSnapshot,
+        accessTokenExpiresAt: null,
+      },
+    });
+
+    await expect(resolveConnectionCredential(record, encryptionKey)).resolves.toEqual({
+      type: 'imap_smtp',
+      email: 'owner@example.com',
+      username: 'owner@example.com',
+      password: 'secret',
+      imap: {
+        host: 'imap.example.com',
+        port: 993,
+        secure: true,
+      },
+      smtp: {
+        host: 'smtp.example.com',
+        port: 465,
+        secure: true,
+      },
+    });
   });
 });

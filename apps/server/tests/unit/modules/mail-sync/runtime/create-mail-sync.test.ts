@@ -84,7 +84,10 @@ describe('mail ingress queue command processor', () => {
       enqueue: async () => undefined,
       newLeaseOwner: () => 'worker-1',
       clock: { now: () => new Date('2026-07-28T08:00:00.000Z') },
-      reconcileAfterMs: 30 * 60_000,
+      resolveReconcileAfterMs: async (syncId) => {
+        expect(syncId).toBe('sync-1');
+        return 30 * 60_000;
+      },
     });
 
     await runtime.discover({ type: 'reconcile', syncId: 'sync-1' });

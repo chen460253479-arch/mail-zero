@@ -34,6 +34,7 @@ export type GmailChannelConfigServiceDependencies = {
   getNangoStatus(): NangoRuntimeStatus;
   publicBackendUrl: string;
   requestSubscriptionRefresh(provider: 'gmail'): Promise<void>;
+  disableSubscriptions(provider: 'gmail'): Promise<void>;
 };
 
 export type SaveGmailChannelConfigInput = {
@@ -201,6 +202,8 @@ export const createGmailChannelConfigService = (
       await dependencies.channels.save(persistenceInput);
       if (candidate.inboxWatchEnabled) {
         await dependencies.requestSubscriptionRefresh('gmail');
+      } else {
+        await dependencies.disableSubscriptions('gmail');
       }
       return readSafeConfig();
     },

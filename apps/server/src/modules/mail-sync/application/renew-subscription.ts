@@ -11,6 +11,11 @@ type RenewalSyncRecord = {
   provider: string;
   scope: IngressScope;
   checkpoint: VersionedProviderState | null;
+  subscriptionExternalId: string | null;
+  subscriptionEndpointTokenHash: string | null;
+  encryptedSubscriptionSecret: string | null;
+  subscriptionEstablishedAt: Date | null;
+  subscriptionExpiresAt: Date | null;
 };
 
 type RenewalRepository = {
@@ -23,6 +28,10 @@ type RenewalRepository = {
     syncId: string;
     owner: string;
     subscriptionExpiresAt: Date | null;
+    subscriptionExternalId?: string | null;
+    subscriptionEndpointTokenHash?: string | null;
+    encryptedSubscriptionSecret?: string | null;
+    subscriptionEstablishedAt?: Date | null;
     subscriptionWarning: { code: string; message: string } | null;
   }): Promise<void>;
   pauseSync(input: {
@@ -90,6 +99,13 @@ export const renewInboundSubscription = async (
         scope: sync.scope,
         checkpoint: sync.checkpoint,
         target: input.subscriptionTarget,
+        currentSubscription: {
+          externalId: sync.subscriptionExternalId,
+          endpointTokenHash: sync.subscriptionEndpointTokenHash,
+          encryptedSecret: sync.encryptedSubscriptionSecret,
+          establishedAt: sync.subscriptionEstablishedAt,
+          expiresAt: sync.subscriptionExpiresAt,
+        },
       });
     } catch (error) {
       const classification =
@@ -121,6 +137,10 @@ export const renewInboundSubscription = async (
       syncId: sync.id,
       owner: input.owner,
       subscriptionExpiresAt: subscription.expiresAt,
+      subscriptionExternalId: subscription.externalId ?? null,
+      subscriptionEndpointTokenHash: subscription.endpointTokenHash ?? null,
+      encryptedSubscriptionSecret: subscription.encryptedSecret ?? null,
+      subscriptionEstablishedAt: subscription.establishedAt ?? null,
       subscriptionWarning: null,
     });
     return { status: 'renewed' };

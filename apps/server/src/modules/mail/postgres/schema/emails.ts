@@ -337,11 +337,7 @@ export const emailPart = createMailTable(
       columns: [t.blobId, t.mailAccountId],
       foreignColumns: [blob.id, blob.mailAccountId],
     }).onDelete('restrict'),
-    index('email_part_parent_email_account_idx').on(
-      t.parentPartId,
-      t.emailId,
-      t.mailAccountId,
-    ),
+    index('email_part_parent_email_account_idx').on(t.parentPartId, t.emailId, t.mailAccountId),
     index('email_part_blob_account_idx').on(t.blobId, t.mailAccountId),
   ],
 );
@@ -370,6 +366,10 @@ export const remoteEmail = createIntegrationTable(
       t.mailAccountId,
       t.provider,
       t.remoteEmailId,
+    ),
+    check(
+      'remote_email_provider_chk',
+      sql`${t.provider} IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')`,
     ),
     index('remote_email_email_account_idx').on(t.emailId, t.mailAccountId),
   ],

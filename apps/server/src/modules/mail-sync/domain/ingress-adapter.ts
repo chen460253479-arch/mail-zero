@@ -7,6 +7,14 @@ import {
 import type { DiscoverPage, RawIngressMessage } from './ingress-event';
 import type { MailSyncErrorClassification } from './errors';
 
+export type InboundSubscriptionState = {
+  expiresAt: Date | null;
+  externalId?: string | null;
+  endpointTokenHash?: string | null;
+  encryptedSecret?: string | null;
+  establishedAt?: Date | null;
+};
+
 export interface InboundMailAdapter {
   readonly provider: string;
   establishCheckpoint(scope: IngressScope): Promise<VersionedProviderState>;
@@ -23,7 +31,8 @@ export interface InboundMailAdapter {
     scope: IngressScope;
     checkpoint: VersionedProviderState;
     target: VersionedProviderState;
-  }): Promise<{ expiresAt: Date | null }>;
+    currentSubscription?: InboundSubscriptionState;
+  }): Promise<InboundSubscriptionState>;
   unsubscribe?(): Promise<void>;
   classifyError(error: unknown): MailSyncErrorClassification;
 }

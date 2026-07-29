@@ -15,6 +15,8 @@ export type ZeroEnv = {
   CREDENTIAL_ENCRYPTION_KEY: string;
   NANGO_BASE_URL?: string;
   NANGO_SECRET_KEY?: string;
+  MAIL_PROTOCOL_WORKER_URL?: string;
+  MAIL_PROTOCOL_WORKER_SECRET?: string;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
   RESEND_API_KEY: string;

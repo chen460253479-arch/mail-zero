@@ -10,18 +10,23 @@ const runtimeRoot = resolve(serverRoot, 'src/runtime/mail');
 const readRuntime = (name: string): string => readFileSync(resolve(runtimeRoot, name), 'utf8');
 
 describe('mail outbound Worker runtime', () => {
-  it('shares one Gmail credential context between Zero OAuth, Nango, inbound, and outbound', () => {
+  it('registers every provider on the shared credential and outbound runtime', () => {
     const credentialContext = readRuntime('gmail-credential-context.ts');
+    const channelCredentialContext = readRuntime('channel-credential-context.ts');
     const inbound = readRuntime('gmail-inbound.ts');
     const outbound = readRuntime('outbound.ts');
 
-    expect(credentialContext).toContain("authSource === 'zero_oauth'");
-    expect(credentialContext).toContain("authSource === 'nango'");
+    expect(channelCredentialContext).toContain("authSource === 'nango'");
+    expect(credentialContext).toContain('createMailChannelCredentialContext');
     expect(credentialContext.match(/createCredentialAwareGmailExecutor/gu)).toHaveLength(2);
     expect(inbound).toContain("from './gmail-credential-context'");
     expect(outbound).toContain("from './gmail-credential-context'");
+    expect(outbound).toContain("from './channel-credential-context'");
     expect(outbound).toContain('createMailChannelRegistry');
     expect(outbound).toContain('createGmailPlugin');
+    expect(outbound).toContain('createOutlookPlugin');
+    expect(outbound).toContain('createZohoMailPlugin');
+    expect(outbound).toContain('createImapSmtpPluginForEnvironment');
   });
 
   it('does not depend on the retired driver, pipeline, KV, or legacy send queue', () => {

@@ -50,6 +50,7 @@ describe('Gmail channel configuration service', () => {
   let gmailMapping: { externalIntegrationId: string } | null;
   let bindingCounts: { nango: number; zero_oauth: number };
   let subscriptionRefreshes: string[];
+  let subscriptionDisables: string[];
   let nangoStatus: NangoRuntimeStatus;
   let dependencies: GmailChannelConfigServiceDependencies;
 
@@ -59,6 +60,7 @@ describe('Gmail channel configuration service', () => {
     gmailMapping = null;
     bindingCounts = { nango: 0, zero_oauth: 0 };
     subscriptionRefreshes = [];
+    subscriptionDisables = [];
     nangoStatus = {
       state: 'unconfigured',
       checkedAt: null,
@@ -78,6 +80,9 @@ describe('Gmail channel configuration service', () => {
       getNangoStatus: () => nangoStatus,
       requestSubscriptionRefresh: async (provider) => {
         subscriptionRefreshes.push(provider);
+      },
+      disableSubscriptions: async (provider) => {
+        subscriptionDisables.push(provider);
       },
     };
   });
@@ -315,7 +320,7 @@ describe('Gmail channel configuration service', () => {
     expect(subscriptionRefreshes).toEqual(['gmail']);
   });
 
-  it('does not request a subscription refresh while Watch is disabled', async () => {
+  it('clears existing subscription routing while Watch is disabled', async () => {
     integrations.set('gmail_zero_oauth', activeIntegration());
 
     await createGmailChannelConfigService(dependencies).save({
@@ -328,5 +333,6 @@ describe('Gmail channel configuration service', () => {
     });
 
     expect(subscriptionRefreshes).toEqual([]);
+    expect(subscriptionDisables).toEqual(['gmail']);
   });
 });

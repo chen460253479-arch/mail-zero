@@ -1,9 +1,4 @@
 import {
-  enqueueDueMailIngressWork,
-  handleGmailWebhookForEnvironment,
-  runMailIngressCommand,
-} from './runtime/mail/gmail-inbound';
-import {
   account,
   note,
   session,
@@ -13,9 +8,13 @@ import {
   emailTemplate,
 } from './db/schema';
 import { enqueueDueMailOutboundWork, runMailOutboundCommand } from './runtime/mail/outbound';
+import { enqueueDueMailIngressWork, runMailIngressCommand } from './runtime/mail/inbound';
 import { MailOutboundError, parseMailOutboundCommand } from './modules/mail-outbound';
+import { handleOutlookWebhookForEnvironment } from './runtime/mail/outlook-inbound';
 import { parseMailIngressCommand } from './modules/mail-sync/application/commands';
 import { startNangoValidationForEnvironment } from './integrations/nango/runtime';
+import { handleZohoMailWebhookForEnvironment } from './runtime/mail/zoho-inbound';
+import { handleGmailWebhookForEnvironment } from './runtime/mail/gmail-inbound';
 import { WorkerEntrypoint, DurableObject, RpcTarget } from 'cloudflare:workers';
 import { wakeDueMailSnoozes } from './modules/mail-snooze/runtime/environment';
 import { registerMailBlobRoutes } from './modules/mail-api';
@@ -601,7 +600,11 @@ const app = new Hono<HonoContext>()
   .route('/api', api)
   .get('/health', (c) => c.json({ message: 'Zero Server is Up!' }))
   .get('/', (c) => c.redirect(`${env.VITE_PUBLIC_APP_URL}`))
-  .post('/api/mail/channels/gmail/push', (c) => handleGmailWebhookForEnvironment(c.env, c.req.raw));
+  .post('/api/mail/channels/gmail/push', (c) => handleGmailWebhookForEnvironment(c.env, c.req.raw))
+  .post('/api/webhooks/mail/outlook', (c) => handleOutlookWebhookForEnvironment(c.env, c.req.raw))
+  .post('/api/webhooks/mail/zoho/:endpointToken', (c) =>
+    handleZohoMailWebhookForEnvironment(c.env, c.req.raw, c.req.param('endpointToken')),
+  );
 const handler = {
   async fetch(request: Request, env: ZeroEnv, ctx: ExecutionContext): Promise<Response> {
     return app.fetch(request, env, ctx);

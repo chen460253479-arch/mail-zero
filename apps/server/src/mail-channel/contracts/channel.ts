@@ -6,6 +6,12 @@ import type { OutboundMailAdapter } from './outbound';
 export const mailChannelIds = ['gmail', 'outlook', 'zoho_mail', 'imap_smtp'] as const;
 export type MailChannelId = (typeof mailChannelIds)[number];
 
+export const mailSyncModes = ['scheduled', 'webhook'] as const;
+export type MailSyncMode = (typeof mailSyncModes)[number];
+
+export const mailWebhookKinds = ['gmail_pubsub', 'microsoft_graph', 'zoho_mail'] as const;
+export type MailWebhookKind = (typeof mailWebhookKinds)[number];
+
 export const mailCapabilities = [
   'read_messages',
   'send_messages',
@@ -30,6 +36,8 @@ export type MailChannelDescriptor = {
   readonly credentialTypes: ReadonlySet<MailCredentialType>;
   readonly capabilities: ReadonlySet<MailCapability>;
   readonly nangoProviders?: readonly string[];
+  readonly syncModes?: ReadonlySet<MailSyncMode>;
+  readonly webhookKind?: MailWebhookKind;
 };
 
 export type MailChannelInboundCapability = {

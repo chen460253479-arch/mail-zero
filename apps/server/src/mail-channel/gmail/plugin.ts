@@ -32,6 +32,8 @@ export const createGmailPlugin = (
   credentialTypes: new Set(['oauth2']),
   capabilities: new Set(['read_messages', 'send_messages', 'push_sync']),
   nangoProviders: gmailNangoProviders,
+  syncModes: new Set(['scheduled', 'webhook']),
+  webhookKind: 'gmail_pubsub',
   resolveIdentity: async (input) => await dependencies.resolveIdentity(input),
   inbound: {
     createAdapter: async (input) => {

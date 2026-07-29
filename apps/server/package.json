@@ -12,6 +12,7 @@
     "db:push": "tsx src/db/push-development-database.ts",
     "db:push:drizzle": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
+    "protocol-worker": "tsx src/protocol-worker/server.ts",
     "test:mail-core": "vitest run tests/unit/mail-core tests/integration/mail-core",
     "test:cron": "curl 'http://localhost:8787/cdn-cgi/handler/scheduled'"
   },
@@ -43,6 +44,8 @@
     "he": "^1.2.0",
     "hono": "^4.7.8",
     "jose": "6.0.11",
+    "imapflow": "1.5.0",
+    "nodemailer": "9.0.3",
     "postgres": "3.4.5",
     "react": "catalog:",
     "resend": "^4.5.1",

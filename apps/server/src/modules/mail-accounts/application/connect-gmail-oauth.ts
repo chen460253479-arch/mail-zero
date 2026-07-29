@@ -225,6 +225,7 @@ export class GmailOAuthService {
   ): Promise<'pending' | 'complete' | 'expired'> {
     const session = await this.dependencies.repository.getOAuthSession({
       id: sessionId,
+      integrationKey: 'gmail_zero_oauth',
       createdBy: adminId,
       purpose: 'validate_config',
     });
@@ -319,6 +320,7 @@ export class GmailOAuthService {
   ) {
     return await this.dependencies.repository.consumeOAuthSession({
       stateHash: await hashState(state),
+      integrationKey: 'gmail_zero_oauth',
       createdBy,
       purpose,
       now: this.dependencies.now(),

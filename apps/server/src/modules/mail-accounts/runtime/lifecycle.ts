@@ -36,8 +36,8 @@ export type MailboxLifecycleRuntimeDependencies = {
     errorCode: string;
     errorMessage: string;
   }): Promise<number>;
-  stopGmailWatch(connectionId: string): Promise<void>;
-  revokeZeroOAuth(connectionId: string): Promise<void>;
+  stopChannelWatch(connection: LifecycleConnection): Promise<void>;
+  revokeZeroOAuth(connection: LifecycleConnection): Promise<void>;
   deleteBlobObjects(objectKeys: string[]): Promise<void>;
   recordDiagnostic(code: string, connectionId: string, error: unknown): void;
   now(): Date;
@@ -72,13 +72,13 @@ export const createMailboxLifecycleRuntime = (runtime: MailboxLifecycleRuntimeDe
         userId,
         connection.id,
       );
-      if (connection.channelId !== 'gmail' || record?.authorization === null || record === null) {
+      if (record?.authorization === null || record === null) {
         return;
       }
       try {
-        await runtime.stopGmailWatch(connection.id);
+        await runtime.stopChannelWatch(connection);
       } catch (error) {
-        runtime.recordDiagnostic('GMAIL_WATCH_STOP_FAILED', connection.id, error);
+        runtime.recordDiagnostic('MAIL_CHANNEL_WATCH_STOP_FAILED', connection.id, error);
       }
     },
     revokeAuthorization: async (connection) => {
@@ -90,7 +90,7 @@ export const createMailboxLifecycleRuntime = (runtime: MailboxLifecycleRuntimeDe
         return;
       }
       try {
-        await runtime.revokeZeroOAuth(connection.id);
+        await runtime.revokeZeroOAuth(connection);
       } catch (error) {
         runtime.recordDiagnostic('ZERO_OAUTH_REVOKE_FAILED', connection.id, error);
       }

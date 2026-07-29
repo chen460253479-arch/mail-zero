@@ -43,7 +43,7 @@ export const createMailIngressRuntime = (dependencies: {
   enqueue(command: MailIngressCommand): Promise<void>;
   newLeaseOwner(): string;
   clock: { now(): Date };
-  reconcileAfterMs?: number;
+  resolveReconcileAfterMs(syncId: string): Promise<number>;
 }): MailIngressRuntime => ({
   importBatchSize: 25,
   enqueue: dependencies.enqueue,
@@ -52,13 +52,13 @@ export const createMailIngressRuntime = (dependencies: {
       recordSignal: (input) => dependencies.repository.recordSignal(input),
       enqueue: dependencies.enqueue,
     }),
-  discover: (command) =>
-    discoverIncremental(
+  discover: async (command) =>
+    await discoverIncremental(
       {
         syncId: command.syncId,
         owner: dependencies.newLeaseOwner(),
         leaseForMs: 120_000,
-        reconcileAfterMs: dependencies.reconcileAfterMs,
+        reconcileAfterMs: await dependencies.resolveReconcileAfterMs(command.syncId),
       },
       dependencies,
     ),

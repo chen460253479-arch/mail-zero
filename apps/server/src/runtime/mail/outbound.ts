@@ -7,10 +7,18 @@ import {
   type MailOutboundRuntime,
   PostgresMailOutboundUnitOfWork,
 } from '../../modules/mail-outbound';
+import {
+  createCredentialAwareOutlookClient,
+  createCredentialAwareZohoMailClient,
+} from './channel-api-clients';
 import { PostgresSearchStore } from '../../modules/mail/search/postgres-search-store';
+import { createMailChannelCredentialContext } from './channel-credential-context';
 import { createGmailCredentialContext } from './gmail-credential-context';
 import { createMailChannelRegistry } from '../../mail-channel/registry';
+import { createImapSmtpPluginForEnvironment } from './protocol-channel';
 import { createGmailPlugin } from '../../mail-channel/gmail/plugin';
+import { createZohoMailPlugin } from '../../mail-channel/zoho-mail';
+import { createOutlookPlugin } from '../../mail-channel/outlook';
 import { preprocessEmailHtml } from '../../lib/email-processor';
 import { R2BlobStore } from '../../modules/mail';
 import { createDb, type DB } from '../../db';
@@ -43,12 +51,22 @@ export const createMailOutboundRuntimeForEnvironment = (
     sanitizeHtml: preprocessEmailHtml,
     cursorSigningKey: runtimeEnv.BETTER_AUTH_SECRET,
   };
-  const contexts = new Map<string, ReturnType<typeof createGmailCredentialContext>>();
+  const contexts = new Map<string, ReturnType<typeof createMailChannelCredentialContext>>();
   const getContext = (connectionId: string) => {
     const existing = contexts.get(connectionId);
     if (existing !== undefined) return existing;
-    const created = createGmailCredentialContext(db, runtimeEnv, connectionId);
+    const created = createMailChannelCredentialContext(db, runtimeEnv, connectionId);
     contexts.set(connectionId, created);
+    return created;
+  };
+  const gmailContexts = new Map<string, ReturnType<typeof createGmailCredentialContext>>();
+  const getGmailContext = (connectionId: string) => {
+    const existing = gmailContexts.get(connectionId);
+    if (existing !== undefined) return existing;
+    const created = getContext(connectionId).then((context) =>
+      createGmailCredentialContext(db, runtimeEnv, connectionId, context),
+    );
+    gmailContexts.set(connectionId, created);
     return created;
   };
   const registry = createMailChannelRegistry([
@@ -57,13 +75,30 @@ export const createMailOutboundRuntimeForEnvironment = (
         if (connectionId === undefined) {
           throw new Error('Gmail outbound requires a connection ID');
         }
-        return (await getContext(connectionId)).executor;
+        return (await getGmailContext(connectionId)).executor;
       },
       resolveIdentity: async () => {
         throw new Error('Identity resolution is not available in the outbound runtime');
       },
       clock,
     }),
+    createOutlookPlugin({
+      createClient: async ({ connectionId }) => {
+        if (connectionId === undefined) {
+          throw new Error('Outlook outbound requires a connection ID');
+        }
+        return createCredentialAwareOutlookClient(await getContext(connectionId));
+      },
+    }),
+    createZohoMailPlugin({
+      createClient: async ({ connectionId }) => {
+        if (connectionId === undefined) {
+          throw new Error('Zoho Mail outbound requires a connection ID');
+        }
+        return await createCredentialAwareZohoMailClient(db, await getContext(connectionId));
+      },
+    }),
+    createImapSmtpPluginForEnvironment(runtimeEnv),
   ]);
 
   return createMailOutboundRuntime({

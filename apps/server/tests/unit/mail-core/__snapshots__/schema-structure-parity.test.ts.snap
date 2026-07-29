@@ -481,6 +481,7 @@ exports[`database structural parity > preserves every field, constraint, index, 
   },
   "channelConfig": {
     "checks": [
+      ""<table>"."channel_id" IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')",
       ""<table>"."auth_source" IN ('zero_oauth', 'nango', 'manual')",
       ""<table>"."sync_interval_minutes" BETWEEN 1 AND 1440",
     ],
@@ -595,6 +596,7 @@ exports[`database structural parity > preserves every field, constraint, index, 
   },
   "channelIntegrationMapping": {
     "checks": [
+      ""<table>"."channel_id" IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')",
       ""<table>"."auth_source" = 'nango'",
     ],
     "columns": [
@@ -666,6 +668,7 @@ exports[`database structural parity > preserves every field, constraint, index, 
   "connection": {
     "checks": [
       ""<table>"."status" IN ('connected', 'disconnecting', 'disconnected', 'reconnect_required', 'deleting')",
+      ""<table>"."channel_id" IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')",
       ""<table>"."provider_key" ~ '^[a-z][a-z0-9]*([._-][a-z0-9]+)*$'",
     ],
     "columns": [
@@ -2505,7 +2508,7 @@ exports[`database structural parity > preserves every field, constraint, index, 
   },
   "integrationOAuthSession": {
     "checks": [
-      ""<table>"."integration_key" = 'gmail_zero_oauth'",
+      ""<table>"."integration_key" IN ('gmail_zero_oauth', 'outlook_zero_oauth', 'zoho_mail_zero_oauth')",
       ""<table>"."purpose" IN ('validate_config', 'connect_mailbox')",
     ],
     "columns": [
@@ -3794,7 +3797,9 @@ exports[`database structural parity > preserves every field, constraint, index, 
     ],
   },
   "remoteEmail": {
-    "checks": [],
+    "checks": [
+      ""<table>"."provider" IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')",
+    ],
     "columns": [
       {
         "defaultValue": undefined,
@@ -4379,7 +4384,7 @@ exports[`database structural parity > preserves every field, constraint, index, 
   },
   "systemIntegrationConfig": {
     "checks": [
-      ""<table>"."integration_key" IN ('nango', 'gmail_zero_oauth')",
+      ""<table>"."integration_key" IN ('gmail_zero_oauth', 'outlook_zero_oauth', 'zoho_mail_zero_oauth')",
       ""<table>"."status" IN ('active', 'error')",
     ],
     "columns": [

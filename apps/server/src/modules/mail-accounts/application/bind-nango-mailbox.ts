@@ -38,7 +38,7 @@ export type SaveNangoBindingInput = {
   };
   authorization: {
     authSource: 'nango';
-    credentialType: 'oauth2' | 'basic';
+    credentialType: 'oauth2' | 'basic' | 'custom';
     encryptedCredentialSnapshot: string;
     accessTokenExpiresAt: Date | null;
     credentialFetchedAt: Date;
@@ -118,11 +118,11 @@ export const bindNangoMailbox = async (
 
   let resolved;
   try {
-    resolved = resolveFetchedNangoCredential(connection.credentials);
+    resolved = resolveFetchedNangoCredential(connection.credentials, connection.connection_config);
   } catch {
     throw new NangoBindingError('NANGO_CONNECTION_INVALID');
   }
-  if (resolved.credential.type !== 'oauth2') {
+  if (!channel.credentialTypes.has(resolved.credential.type)) {
     throw new NangoBindingError('MAIL_CHANNEL_UNAVAILABLE');
   }
 
@@ -171,7 +171,12 @@ export const bindNangoMailbox = async (
       },
       authorization: {
         authSource: 'nango',
-        credentialType: 'oauth2',
+        credentialType:
+          resolved.credential.type === 'oauth2'
+            ? 'oauth2'
+            : resolved.credential.type === 'basic'
+              ? 'basic'
+              : 'custom',
         encryptedCredentialSnapshot: await encryptCredential(
           createNangoCredentialSnapshot(resolved.credential),
           dependencies.encryptionKey,

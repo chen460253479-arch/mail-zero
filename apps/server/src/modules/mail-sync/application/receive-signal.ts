@@ -24,3 +24,23 @@ export const receiveInboundSignal = async (
   await Promise.all(syncIds.map((syncId) => dependencies.enqueue({ type: 'discover', syncId })));
   return { matched: syncIds.length };
 };
+
+export const receiveSubscriptionSignal = async (
+  input: {
+    provider: string;
+    subscriptionExternalId: string;
+    cursorHint?: string;
+  },
+  dependencies: {
+    recordSubscriptionSignal(input: {
+      provider: string;
+      subscriptionExternalId: string;
+      cursorHint?: string;
+    }): Promise<string[]>;
+    enqueue(command: MailIngressCommand): Promise<void>;
+  },
+): Promise<{ matched: number }> => {
+  const syncIds = await dependencies.recordSubscriptionSignal(input);
+  await Promise.all(syncIds.map((syncId) => dependencies.enqueue({ type: 'discover', syncId })));
+  return { matched: syncIds.length };
+};

@@ -49,6 +49,7 @@ export const nangoCredentialSchema = z.discriminatedUnion('type', [
 
 export const nangoConnectionSchema = nangoConnectionSummarySchema.extend({
   credentials: nangoCredentialSchema,
+  connection_config: metadataSchema.default({}),
 });
 
 export type NangoIntegration = z.infer<typeof nangoIntegrationSchema>;

@@ -5,11 +5,11 @@ import { resolve } from 'node:path';
 const root = resolve(process.cwd(), '../..');
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 
-const providerEnvironmentPattern =
-  /\b(NANGO_BASE_URL|NANGO_SECRET_KEY|GOOGLE_CLIENT_ID|GOOGLE_CLIENT_SECRET|MICROSOFT_CLIENT_ID|MICROSOFT_CLIENT_SECRET)\b/;
+const providerOAuthEnvironmentPattern =
+  /\b(GOOGLE_CLIENT_ID|GOOGLE_CLIENT_SECRET|MICROSOFT_CLIENT_ID|MICROSOFT_CLIENT_SECRET|ZOHO_CLIENT_ID|ZOHO_CLIENT_SECRET)\b/;
 
 describe('mail provider configuration boundaries', () => {
-  it('contains no mailbox provider configuration environment variables', () => {
+  it('keeps provider OAuth clients out of environment variables while Nango stays server-managed', () => {
     const runtimeAndExampleFiles = [
       '.env.example',
       'apps/server/src/env.ts',
@@ -18,8 +18,12 @@ describe('mail provider configuration boundaries', () => {
     ];
 
     for (const file of runtimeAndExampleFiles) {
-      expect(read(file), file).not.toMatch(providerEnvironmentPattern);
+      expect(read(file), file).not.toMatch(providerOAuthEnvironmentPattern);
     }
+    expect(read('.env.example')).toContain('NANGO_BASE_URL=');
+    expect(read('.env.example')).toContain('NANGO_SECRET_KEY=');
+    expect(read('apps/server/src/env.ts')).toContain('NANGO_BASE_URL?: string');
+    expect(read('apps/server/src/env.ts')).toContain('NANGO_SECRET_KEY?: string');
   });
 
   it('does not register or invoke Google or Microsoft social login', () => {

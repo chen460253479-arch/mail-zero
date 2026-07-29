@@ -152,6 +152,10 @@ export const connection = createIntegrationTable(
       sql`${t.status} IN ('connected', 'disconnecting', 'disconnected', 'reconnect_required', 'deleting')`,
     ),
     check(
+      'connection_channel_id_chk',
+      sql`${t.channelId} IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')`,
+    ),
+    check(
       'connection_provider_key_chk',
       sql`${t.providerKey} ~ '^[a-z][a-z0-9]*([._-][a-z0-9]+)*$'`,
     ),
@@ -223,7 +227,10 @@ export const systemIntegrationConfig = createIntegrationTable(
   'system_config',
   {
     id: text('id').primaryKey(),
-    integrationKey: text('integration_key').$type<'gmail_zero_oauth'>().notNull().unique(),
+    integrationKey: text('integration_key')
+      .$type<'gmail_zero_oauth' | 'outlook_zero_oauth' | 'zoho_mail_zero_oauth'>()
+      .notNull()
+      .unique(),
     publicConfig: jsonb('public_config').notNull(),
     encryptedSecret: text('encrypted_secret').notNull(),
     status: text('status').$type<'active' | 'error'>().notNull(),
@@ -235,7 +242,10 @@ export const systemIntegrationConfig = createIntegrationTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
   (t) => [
-    check('system_integration_key_chk', sql`${t.integrationKey} IN ('gmail_zero_oauth')`),
+    check(
+      'system_integration_key_chk',
+      sql`${t.integrationKey} IN ('gmail_zero_oauth', 'outlook_zero_oauth', 'zoho_mail_zero_oauth')`,
+    ),
     check('system_integration_status_chk', sql`${t.status} IN ('active', 'error')`),
   ],
 );
@@ -258,6 +268,10 @@ export const channelConfig = createIntegrationTable(
   },
   (t) => [
     check(
+      'channel_config_channel_id_chk',
+      sql`${t.channelId} IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')`,
+    ),
+    check(
       'channel_config_auth_source_chk',
       sql`${t.authSource} IN ('zero_oauth', 'nango', 'manual')`,
     ),
@@ -277,6 +291,10 @@ export const channelIntegrationMapping = createIntegrationTable(
   },
   (t) => [
     unique('channel_mapping_channel_auth_uidx').on(t.channelId, t.authSource),
+    check(
+      'channel_mapping_channel_id_chk',
+      sql`${t.channelId} IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')`,
+    ),
     check('channel_mapping_auth_source_chk', sql`${t.authSource} = 'nango'`),
   ],
 );
@@ -285,7 +303,9 @@ export const integrationOAuthSession = createIntegrationTable(
   'oauth_session',
   {
     id: text('id').primaryKey(),
-    integrationKey: text('integration_key').$type<'gmail_zero_oauth'>().notNull(),
+    integrationKey: text('integration_key')
+      .$type<'gmail_zero_oauth' | 'outlook_zero_oauth' | 'zoho_mail_zero_oauth'>()
+      .notNull(),
     purpose: text('purpose').$type<'validate_config' | 'connect_mailbox'>().notNull(),
     encryptedPayload: text('encrypted_payload').notNull(),
     stateHash: text('state_hash').notNull().unique(),
@@ -299,7 +319,10 @@ export const integrationOAuthSession = createIntegrationTable(
   (t) => [
     index('integration_oauth_session_expires_at_idx').on(t.expiresAt),
     index('integration_oauth_session_created_by_idx').on(t.createdBy),
-    check('oauth_session_integration_key_chk', sql`${t.integrationKey} = 'gmail_zero_oauth'`),
+    check(
+      'oauth_session_integration_key_chk',
+      sql`${t.integrationKey} IN ('gmail_zero_oauth', 'outlook_zero_oauth', 'zoho_mail_zero_oauth')`,
+    ),
     check('oauth_session_purpose_chk', sql`${t.purpose} IN ('validate_config', 'connect_mailbox')`),
   ],
 );

@@ -24,8 +24,8 @@ import {
 } from '../domain/sync-state';
 import { inboundSync, inboundSyncAttempt, inboundSyncItem } from './schema';
 import { mailAccount } from '../../mail/postgres/schema/accounts';
+import { channelConfig, connection } from '../../../db/schema';
 import { MailSyncError } from '../domain/errors';
-import { connection } from '../../../db/schema';
 import type { DB } from '../../../db';
 
 type RepositoryOptions = {
@@ -122,6 +122,10 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
         .set({
           status: 'activating',
           checkpoint: null,
+          subscriptionExternalId: null,
+          subscriptionEndpointTokenHash: null,
+          encryptedSubscriptionSecret: null,
+          subscriptionEstablishedAt: null,
           subscriptionExpiresAt: null,
           completedGeneration: inboundSync.requestedGeneration,
           pendingCursorHint: null,
@@ -177,6 +181,10 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
         .update(inboundSync)
         .set({
           status: 'active',
+          subscriptionExternalId: input.subscriptionExternalId ?? null,
+          subscriptionEndpointTokenHash: input.subscriptionEndpointTokenHash ?? null,
+          encryptedSubscriptionSecret: input.encryptedSubscriptionSecret ?? null,
+          subscriptionEstablishedAt: input.subscriptionEstablishedAt ?? null,
           subscriptionExpiresAt: input.subscriptionExpiresAt,
           lastErrorCode: input.subscriptionWarning?.code ?? null,
           lastErrorMessage: input.subscriptionWarning?.message ?? null,
@@ -713,6 +721,55 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
       });
     },
 
+    recordSubscriptionSignal: async (input: {
+      provider: string;
+      subscriptionExternalId: string;
+      cursorHint?: string;
+    }): Promise<string[]> => {
+      const rows = await db
+        .update(inboundSync)
+        .set({
+          requestedGeneration: sql`${inboundSync.requestedGeneration} + 1`,
+          pendingCursorHint:
+            input.cursorHint === undefined ? inboundSync.pendingCursorHint : input.cursorHint,
+          lastSignalAt: sql`now()`,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(inboundSync.status, 'active'),
+            eq(inboundSync.provider, input.provider),
+            eq(inboundSync.subscriptionExternalId, input.subscriptionExternalId),
+            exists(connectedAccount),
+          ),
+        )
+        .returning({ id: inboundSync.id });
+      return rows.map(({ id }) => id);
+    },
+
+    recordEndpointSignal: async (input: {
+      provider: string;
+      endpointTokenHash: string;
+    }): Promise<string[]> => {
+      const rows = await db
+        .update(inboundSync)
+        .set({
+          requestedGeneration: sql`${inboundSync.requestedGeneration} + 1`,
+          lastSignalAt: sql`now()`,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(inboundSync.status, 'active'),
+            eq(inboundSync.provider, input.provider),
+            eq(inboundSync.subscriptionEndpointTokenHash, input.endpointTokenHash),
+            exists(connectedAccount),
+          ),
+        )
+        .returning({ id: inboundSync.id });
+      return rows.map(({ id }) => id);
+    },
+
     claimDueDispatches: async (
       input: ClaimDueDispatchesInput,
     ): Promise<ClaimedMailSyncDispatch[]> => {
@@ -741,11 +798,22 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
               ),
             ),
           );
+        const scheduledSyncEnabled = sql<boolean>`COALESCE((
+          SELECT ${channelConfig.scheduledSyncEnabled}
+          FROM ${channelConfig}
+          WHERE ${channelConfig.channelId} = ${inboundSync.provider}
+        ), true)`;
+        const inboxWatchEnabled = sql<boolean>`COALESCE((
+          SELECT ${channelConfig.inboxWatchEnabled}
+          FROM ${channelConfig}
+          WHERE ${channelConfig.channelId} = ${inboundSync.provider}
+        ), true)`;
         const discoverDue = or(
           gt(inboundSync.requestedGeneration, inboundSync.completedGeneration),
-          lte(inboundSync.nextReconcileAt, input.reconcileBefore),
+          and(scheduledSyncEnabled, lte(inboundSync.nextReconcileAt, input.reconcileBefore)),
         )!;
         const renewalDue = and(
+          inboxWatchEnabled,
           isNotNull(inboundSync.subscriptionExpiresAt),
           lte(inboundSync.subscriptionExpiresAt, input.renewalBefore),
         )!;
@@ -862,16 +930,46 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
         .where(and(eq(inboundSync.provider, input.provider), eq(inboundSync.status, 'active')));
     },
 
+    disableSubscriptions: async (input: { provider: string }): Promise<void> => {
+      await db
+        .update(inboundSync)
+        .set({
+          subscriptionExternalId: null,
+          subscriptionEndpointTokenHash: null,
+          encryptedSubscriptionSecret: null,
+          subscriptionEstablishedAt: null,
+          subscriptionExpiresAt: null,
+          updatedAt: sql`now()`,
+        })
+        .where(and(eq(inboundSync.provider, input.provider), eq(inboundSync.status, 'active')));
+    },
+
     updateSubscription: async (input: {
       syncId: string;
       owner: string;
       subscriptionExpiresAt: Date | null;
+      subscriptionExternalId?: string | null;
+      subscriptionEndpointTokenHash?: string | null;
+      encryptedSubscriptionSecret?: string | null;
+      subscriptionEstablishedAt?: Date | null;
       subscriptionWarning: { code: string; message: string } | null;
     }): Promise<void> => {
       const rows = await db
         .update(inboundSync)
         .set({
           subscriptionExpiresAt: input.subscriptionExpiresAt,
+          ...(input.subscriptionExternalId === undefined
+            ? {}
+            : { subscriptionExternalId: input.subscriptionExternalId }),
+          ...(input.subscriptionEndpointTokenHash === undefined
+            ? {}
+            : { subscriptionEndpointTokenHash: input.subscriptionEndpointTokenHash }),
+          ...(input.encryptedSubscriptionSecret === undefined
+            ? {}
+            : { encryptedSubscriptionSecret: input.encryptedSubscriptionSecret }),
+          ...(input.subscriptionEstablishedAt === undefined
+            ? {}
+            : { subscriptionEstablishedAt: input.subscriptionEstablishedAt }),
           lastErrorCode: input.subscriptionWarning?.code ?? null,
           lastErrorMessage: input.subscriptionWarning?.message ?? null,
           updatedAt: sql`now()`,

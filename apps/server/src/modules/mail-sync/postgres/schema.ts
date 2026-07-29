@@ -30,6 +30,10 @@ export const inboundSync = createIntegrationTable(
     scope: jsonb('scope').$type<IngressScope>().notNull(),
     checkpoint: jsonb('checkpoint').$type<VersionedProviderState>(),
     status: text('status').$type<InboundSyncStatus>().notNull().default('activating'),
+    subscriptionExternalId: text('subscription_external_id'),
+    subscriptionEndpointTokenHash: text('subscription_endpoint_token_hash'),
+    encryptedSubscriptionSecret: text('encrypted_subscription_secret'),
+    subscriptionEstablishedAt: timestamp('subscription_established_at', { withTimezone: true }),
     subscriptionExpiresAt: timestamp('subscription_expires_at', { withTimezone: true }),
     lastSignalAt: timestamp('last_signal_at', { withTimezone: true }),
     lastDiscoveredAt: timestamp('last_discovered_at', { withTimezone: true }),
@@ -37,9 +41,7 @@ export const inboundSync = createIntegrationTable(
     requestedGeneration: integer('requested_generation').notNull().default(0),
     completedGeneration: integer('completed_generation').notNull().default(0),
     pendingCursorHint: text('pending_cursor_hint'),
-    nextReconcileAt: timestamp('next_reconcile_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    nextReconcileAt: timestamp('next_reconcile_at', { withTimezone: true }).notNull().defaultNow(),
     lastErrorCode: text('last_error_code'),
     lastErrorMessage: text('last_error_message'),
     leaseOwner: text('lease_owner'),
@@ -56,9 +58,17 @@ export const inboundSync = createIntegrationTable(
       foreignColumns: [mailAccount.id],
     }).onDelete('cascade'),
     uniqueIndex('inbound_sync_account_provider_scope_uidx').on(t.accountId, t.provider, t.scopeKey),
+    index('inbound_sync_subscription_external_idx').on(t.subscriptionExternalId),
+    uniqueIndex('inbound_sync_subscription_endpoint_token_uidx').on(
+      t.subscriptionEndpointTokenHash,
+    ),
     check(
       'inbound_sync_status_chk',
       sql`${t.status} IN ('activating', 'active', 'paused', 'auth_error')`,
+    ),
+    check(
+      'inbound_sync_provider_chk',
+      sql`${t.provider} IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')`,
     ),
     check(
       'inbound_sync_scope_version_chk',

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { insertMailSyncAccountFixture, withMailSyncTestDatabase } from '../../helpers/mail-sync/database';
+import {
+  insertMailSyncAccountFixture,
+  withMailSyncTestDatabase,
+} from '../../helpers/mail-sync/database';
 
 describe('mail sync database schema', () => {
   it('creates the durable inbound synchronization tables and work indexes', async () => {
@@ -34,6 +37,10 @@ describe('mail sync database schema', () => {
           'next_reconcile_at',
           'dispatch_lease_owner',
           'dispatch_lease_expires_at',
+          'subscription_external_id',
+          'subscription_endpoint_token_hash',
+          'encrypted_subscription_secret',
+          'subscription_established_at',
         ]),
       );
 
@@ -50,6 +57,8 @@ describe('mail sync database schema', () => {
           'inbound_sync_lease_idx',
           'inbound_sync_due_dispatch_idx',
           'inbound_sync_dispatch_lease_idx',
+          'inbound_sync_subscription_external_idx',
+          'inbound_sync_subscription_endpoint_token_uidx',
           'inbound_sync_item_pending_idx',
           'inbound_sync_item_due_pending_idx',
           'inbound_sync_item_lease_idx',
@@ -123,6 +132,22 @@ describe('mail sync database schema', () => {
           )
         `,
       ).rejects.toThrow(/inbound_sync_scope_version_chk/u);
+
+      await expect(
+        sql`
+          INSERT INTO integration.inbound_sync (
+            id, account_id, provider, scope_key, scope, checkpoint, status
+          ) VALUES (
+            'sync-invalid-provider',
+            'account-1',
+            'gamil',
+            'other',
+            '{"version":1,"mailboxRoles":["inbox"],"initialSync":"none"}'::jsonb,
+            '{"version":1,"historyId":"100"}'::jsonb,
+            'active'
+          )
+        `,
+      ).rejects.toThrow(/inbound_sync_provider_chk/u);
 
       await expect(
         sql`

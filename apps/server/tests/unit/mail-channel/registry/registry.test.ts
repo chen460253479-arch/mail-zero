@@ -5,6 +5,11 @@ import {
   MailChannelCapabilityError,
   UnsupportedMailChannelError,
 } from '../../../../src/mail-channel/registry/registry';
+import {
+  mailChannelIds,
+  mailSyncModes,
+  mailWebhookKinds,
+} from '../../../../src/mail-channel/contracts';
 import type { MailChannelPlugin } from '../../../../src/mail-channel/contracts';
 
 const outbound = {
@@ -72,6 +77,12 @@ const outlook = {
 } satisfies MailChannelPlugin;
 
 describe('mail channel registry', () => {
+  it('exposes the complete provider-neutral channel and synchronization vocabulary', () => {
+    expect(mailChannelIds).toEqual(['gmail', 'outlook', 'zoho_mail', 'imap_smtp']);
+    expect(mailSyncModes).toEqual(['scheduled', 'webhook']);
+    expect(mailWebhookKinds).toEqual(['gmail_pubsub', 'microsoft_graph', 'zoho_mail']);
+  });
+
   it('lists and resolves a registered plugin by canonical channel id', () => {
     const registry = createMailChannelRegistry([gmail]);
 

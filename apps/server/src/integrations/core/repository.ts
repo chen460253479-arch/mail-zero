@@ -49,7 +49,7 @@ export type SaveActiveIntegrationInput<K extends IntegrationKey = IntegrationKey
 };
 
 export type CreateOAuthSessionInput = {
-  integrationKey: 'gmail_zero_oauth';
+  integrationKey: IntegrationKey;
   purpose: IntegrationOAuthPurpose;
   encryptedPayload: string;
   stateHash: string;
@@ -68,17 +68,22 @@ export interface SystemIntegrationRepository {
   ): Promise<typeof channelIntegrationMapping.$inferSelect | null>;
   setMapping(channelId: MailChannelId, authSource: 'nango', integrationId: string): Promise<void>;
   deleteMapping(channelId: MailChannelId, authSource: 'nango'): Promise<void>;
-  countBindings(channelId: MailChannelId, authSource?: 'zero_oauth' | 'nango'): Promise<number>;
+  countBindings(
+    channelId: MailChannelId,
+    authSource?: 'zero_oauth' | 'nango' | 'manual',
+  ): Promise<number>;
   countNangoBindings(providerConfigKey?: string): Promise<number>;
   countZeroOAuthBindings(channelId: MailChannelId): Promise<number>;
   createOAuthSession(input: CreateOAuthSessionInput): Promise<string>;
   getOAuthSession(input: {
     id: string;
+    integrationKey: IntegrationKey;
     createdBy: string;
     purpose: IntegrationOAuthPurpose;
   }): Promise<OAuthSessionRecord | null>;
   consumeOAuthSession(input: {
     stateHash: string;
+    integrationKey: IntegrationKey;
     createdBy: string;
     purpose: IntegrationOAuthPurpose;
     now: Date;
@@ -199,22 +204,24 @@ export const createSystemIntegrationRepository = (db: DB): SystemIntegrationRepo
     return id;
   },
 
-  getOAuthSession: async ({ id, createdBy, purpose }) =>
+  getOAuthSession: async ({ id, integrationKey, createdBy, purpose }) =>
     (await db.query.integrationOAuthSession.findFirst({
       where: and(
         eq(integrationOAuthSession.id, id),
+        eq(integrationOAuthSession.integrationKey, integrationKey),
         eq(integrationOAuthSession.createdBy, createdBy),
         eq(integrationOAuthSession.purpose, purpose),
       ),
     })) ?? null,
 
-  consumeOAuthSession: async ({ stateHash, createdBy, purpose, now }) => {
+  consumeOAuthSession: async ({ stateHash, integrationKey, createdBy, purpose, now }) => {
     const [record] = await db
       .update(integrationOAuthSession)
       .set({ consumedAt: now })
       .where(
         and(
           eq(integrationOAuthSession.stateHash, stateHash),
+          eq(integrationOAuthSession.integrationKey, integrationKey),
           eq(integrationOAuthSession.createdBy, createdBy),
           eq(integrationOAuthSession.purpose, purpose),
           isNull(integrationOAuthSession.consumedAt),

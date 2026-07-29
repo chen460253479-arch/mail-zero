@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   createNangoCredentialSnapshot,
+  resolveFetchedNangoCredential,
   resolveNangoCredential,
   type NangoAuthorizationRecord,
   type NangoCredentialRepository,
@@ -57,6 +58,35 @@ const oauthConnection = (accessToken = 'fresh-access-token') => ({
 });
 
 describe('Nango credential resolution', () => {
+  it('maps Nango generic-email BASIC credentials to one IMAP/SMTP credential', () => {
+    expect(
+      resolveFetchedNangoCredential(
+        {
+          type: 'BASIC',
+          username: 'owner@example.test',
+          password: 'app-password',
+          raw: {},
+        },
+        {
+          imapHost: 'imap.example.test',
+          imapPort: '993',
+          smtpHost: 'smtp.example.test',
+          smtpPort: '465',
+        },
+      ),
+    ).toEqual({
+      credential: {
+        type: 'imap_smtp',
+        email: 'owner@example.test',
+        username: 'owner@example.test',
+        password: 'app-password',
+        imap: { host: 'imap.example.test', port: 993, secure: true },
+        smtp: { host: 'smtp.example.test', port: 465, secure: true },
+      },
+      expiresAt: null,
+    });
+  });
+
   it('uses an encrypted OAuth access token outside the 15-minute safety window', async () => {
     const encryptedCredentialSnapshot = await encryptCredential(
       createNangoCredentialSnapshot({

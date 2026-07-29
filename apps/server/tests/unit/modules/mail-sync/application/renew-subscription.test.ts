@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { renewInboundSubscription } from '../../../../../src/modules/mail-sync/application/renew-subscription';
 import type {
   InboundMailAdapter,
   IngressScope,
 } from '../../../../../src/modules/mail-sync/domain/ingress-adapter';
+import { renewInboundSubscription } from '../../../../../src/modules/mail-sync/application/renew-subscription';
 import { MailSyncError } from '../../../../../src/modules/mail-sync/domain/errors';
 
 const createAdapter = (
@@ -41,18 +41,36 @@ const activeSync = (
   provider: 'gmail',
   scope,
   checkpoint,
+  subscriptionExternalId: 'existing-subscription',
+  subscriptionEndpointTokenHash: 'existing-endpoint-token',
+  encryptedSubscriptionSecret: 'existing-secret',
+  subscriptionEstablishedAt: new Date('2026-07-27T12:00:00.000Z'),
+  subscriptionExpiresAt: new Date('2026-07-29T12:00:00.000Z'),
 });
 
 describe('inbound subscription renewal', () => {
   it('renews from the persisted checkpoint without replacing it', async () => {
     const updates: unknown[] = [];
-    const adapter = createAdapter(async ({ checkpoint, target }) => {
+    const adapter = createAdapter(async ({ checkpoint, target, currentSubscription }) => {
       expect(checkpoint).toEqual({ version: 1, historyId: '250' });
       expect(target).toEqual({
         version: 1,
         topicName: 'projects/zero/topics/connection-1',
       });
-      return { expiresAt: new Date('2026-08-10T00:00:00.000Z') };
+      expect(currentSubscription).toEqual({
+        externalId: 'existing-subscription',
+        endpointTokenHash: 'existing-endpoint-token',
+        encryptedSecret: 'existing-secret',
+        establishedAt: new Date('2026-07-27T12:00:00.000Z'),
+        expiresAt: new Date('2026-07-29T12:00:00.000Z'),
+      });
+      return {
+        expiresAt: new Date('2026-08-10T00:00:00.000Z'),
+        externalId: 'subscription-1',
+        endpointTokenHash: null,
+        encryptedSecret: 'encrypted-client-state',
+        establishedAt: new Date('2026-07-28T12:00:00.000Z'),
+      };
     });
 
     const result = await renewInboundSubscription(
@@ -86,6 +104,10 @@ describe('inbound subscription renewal', () => {
         syncId: 'sync-1',
         owner: 'renew-worker',
         subscriptionExpiresAt: new Date('2026-08-10T00:00:00.000Z'),
+        subscriptionExternalId: 'subscription-1',
+        subscriptionEndpointTokenHash: null,
+        encryptedSubscriptionSecret: 'encrypted-client-state',
+        subscriptionEstablishedAt: new Date('2026-07-28T12:00:00.000Z'),
         subscriptionWarning: null,
       },
     ]);

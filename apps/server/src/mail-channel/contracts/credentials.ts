@@ -15,5 +15,20 @@ export type BasicCredential = {
   secure: boolean;
 };
 
-export type ResolvedCredential = OAuth2Credential | BasicCredential;
+export type MailProtocolEndpoint = {
+  host: string;
+  port: number;
+  secure: boolean;
+};
+
+export type ImapSmtpCredential = {
+  type: 'imap_smtp';
+  email: string;
+  username: string;
+  password: string;
+  imap: MailProtocolEndpoint;
+  smtp: MailProtocolEndpoint;
+};
+
+export type ResolvedCredential = OAuth2Credential | BasicCredential | ImapSmtpCredential;
 export type MailCredentialType = ResolvedCredential['type'] | 'custom';

@@ -41,6 +41,9 @@ export default [
         route('/integrations', '(routes)/settings/integrations/layout.tsx', [
           index('(routes)/settings/integrations/page.tsx'),
           route('gmail', '(routes)/settings/integrations/gmail/page.tsx'),
+          route('outlook', '(routes)/settings/integrations/outlook/page.tsx'),
+          route('zoho_mail', '(routes)/settings/integrations/zoho-mail/page.tsx'),
+          route('imap_smtp', '(routes)/settings/integrations/imap-smtp/page.tsx'),
         ]),
         route('/labels', '(routes)/settings/labels/page.tsx'),
         route('/categories', '(routes)/settings/categories/page.tsx'),

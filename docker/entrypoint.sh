@@ -69,8 +69,13 @@ case "${1:-}" in
       --env "${ZERO_WRANGLER_ENV:-local}" \
       --env-file /app/.env \
       --var "DATABASE_URL:${DATABASE_URL}" \
+      --var "MAIL_PROTOCOL_WORKER_URL:${MAIL_PROTOCOL_WORKER_URL}" \
+      --var "MAIL_PROTOCOL_WORKER_SECRET:${MAIL_PROTOCOL_WORKER_SECRET}" \
       --var "REDIS_URL:${REDIS_URL}" \
       --var "REDIS_TOKEN:${REDIS_TOKEN}"
+    ;;
+  protocol-worker)
+    exec pnpm --dir apps/server protocol-worker
     ;;
   *)
     echo "Unknown Zero development service: ${1:-<empty>}" >&2

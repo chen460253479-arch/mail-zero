@@ -6,16 +6,22 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '../ui/dialog';
-import { GmailConnectDialog } from './gmail-connect-dialog';
+import {
+  resolveChannelConnectAction,
+  type ConnectableMailChannelId,
+} from '@/modules/mail-connections/connect-mode';
+import { ImapSmtpConnectDialog } from './imap-smtp-connect-dialog';
+import { NangoConnectDialog } from './nango-connect-dialog';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTRPC } from '@/providers/query-provider';
-import { useQuery } from '@tanstack/react-query';
 import { emailProviders } from '@/lib/constants';
-import { Plus, UserPlus } from 'lucide-react';
+import { Loader2, UserPlus } from 'lucide-react';
 import { m } from '@/paraglide/messages';
 import { motion } from 'motion/react';
 import { Button } from '../ui/button';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 export const AddConnectionDialog = ({
   children,
@@ -29,28 +35,52 @@ export const AddConnectionDialog = ({
   onOpenChange?: (open: boolean) => void;
 }) => {
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [gmailOpen, setGmailOpen] = useState(false);
-  const options = useQuery(
-    trpc.connections.getGmailAuthorizationOptions.queryOptions(undefined, { enabled: open }),
-  );
+  const [pendingChannelId, setPendingChannelId] = useState<ConnectableMailChannelId | null>(null);
+  const [nangoChannelId, setNangoChannelId] = useState<ConnectableMailChannelId | null>(null);
+  const [manualOpen, setManualOpen] = useState(false);
 
   const setDialogOpen = (nextOpen: boolean) => {
     setOpen(nextOpen);
     onOpenChange?.(nextOpen);
   };
 
-  const connectGmail = () => {
-    if (!options.data) return;
-    if (options.data.mode === 'zero_oauth') {
-      const baseUrl = import.meta.env.VITE_PUBLIC_BACKEND_URL.replace(/\/+$/, '');
-      window.location.assign(`${baseUrl}/api/integrations/gmail/connect/start`);
-      return;
+  const connectChannel = async (channelId: ConnectableMailChannelId) => {
+    setPendingChannelId(channelId);
+    try {
+      const options = await queryClient.fetchQuery(
+        trpc.connections.getChannelAuthorizationOptions.queryOptions({ channelId }),
+      );
+      const action = resolveChannelConnectAction(channelId, options.mode);
+      if (action.type === 'redirect') {
+        const baseUrl = import.meta.env.VITE_PUBLIC_BACKEND_URL.replace(/\/+$/, '');
+        window.location.assign(`${baseUrl}${action.path}`);
+        return;
+      }
+      if (action.type === 'nango') {
+        setDialogOpen(false);
+        setNangoChannelId(action.channelId);
+        return;
+      }
+      if (action.type === 'manual') {
+        setDialogOpen(false);
+        setManualOpen(true);
+        return;
+      }
+      toast.error(
+        `${emailProviders.find((provider) => provider.channelId === channelId)?.name} is not configured`,
+      );
+    } catch {
+      toast.error('Unable to load mail channel configuration');
+    } finally {
+      setPendingChannelId(null);
     }
-    if (options.data.mode === 'nango') {
-      setDialogOpen(false);
-      setGmailOpen(true);
-    }
+  };
+
+  const completeConnection = () => {
+    setDialogOpen(false);
+    onConnected?.();
   };
 
   return (
@@ -83,9 +113,10 @@ export const AddConnectionDialog = ({
           >
             {emailProviders.map((provider, index) => {
               const Icon = provider.icon;
+              const pending = pendingChannelId === provider.channelId;
               return (
                 <motion.div
-                  key={provider.name}
+                  key={provider.channelId}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1, duration: 0.3 }}
@@ -95,48 +126,34 @@ export const AddConnectionDialog = ({
                   <Button
                     variant="outline"
                     className="relative h-24 w-full flex-col items-center justify-center gap-2"
-                    disabled={options.isLoading || options.data?.mode === 'unavailable'}
-                    onClick={connectGmail}
+                    disabled={pendingChannelId !== null}
+                    onClick={() => connectChannel(provider.channelId)}
                   >
-                    <Icon className="size-6!" />
+                    {pending ? (
+                      <Loader2 className="size-6 animate-spin" />
+                    ) : (
+                      <Icon className="size-6!" />
+                    )}
                     <span className="text-xs">{provider.name}</span>
                   </Button>
                 </motion.div>
               );
             })}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                delay: emailProviders.length * 0.1,
-                duration: 0.3,
-              }}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-            >
-              <Button
-                variant="outline"
-                className="h-24 w-full flex-col items-center justify-center gap-2 border-dashed"
-              >
-                <Plus className="h-12 w-12" />
-                <span className="text-xs">{m['pages.settings.connections.moreComingSoon']()}</span>
-              </Button>
-            </motion.div>
           </motion.div>
-          {options.data?.mode === 'unavailable' ? (
-            <p className="text-muted-foreground mt-3 text-sm">
-              Gmail authorization has not been configured by an administrator.
-            </p>
-          ) : null}
         </DialogContent>
       </Dialog>
-      <GmailConnectDialog
-        open={gmailOpen}
-        onOpenChange={setGmailOpen}
-        onConnected={() => {
-          setDialogOpen(false);
-          onConnected?.();
+      <NangoConnectDialog
+        channelId={nangoChannelId}
+        open={nangoChannelId !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setNangoChannelId(null);
         }}
+        onConnected={completeConnection}
+      />
+      <ImapSmtpConnectDialog
+        open={manualOpen}
+        onOpenChange={setManualOpen}
+        onConnected={completeConnection}
       />
     </>
   );

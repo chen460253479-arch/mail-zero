@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { receiveInboundSignal } from '../../../../../src/modules/mail-sync/application/receive-signal';
+import {
+  receiveInboundSignal,
+  receiveSubscriptionSignal,
+} from '../../../../../src/modules/mail-sync/application/receive-signal';
 
 describe('inbound provider signal', () => {
   it('records the signal and enqueues provider-neutral discovery commands', async () => {
@@ -61,5 +64,30 @@ describe('inbound provider signal', () => {
     ]);
     expect(commands).toEqual([{ type: 'discover', syncId: 'sync-1' }]);
     expect(result).toEqual({ matched: 1 });
+  });
+
+  it('maps a verified provider subscription directly to the coalesced discovery request', async () => {
+    const commands: unknown[] = [];
+    const result = await receiveSubscriptionSignal(
+      {
+        provider: 'outlook',
+        subscriptionExternalId: 'subscription-1',
+      },
+      {
+        recordSubscriptionSignal: async (input) => {
+          expect(input).toEqual({
+            provider: 'outlook',
+            subscriptionExternalId: 'subscription-1',
+          });
+          return ['sync-1'];
+        },
+        enqueue: async (command) => {
+          commands.push(command);
+        },
+      },
+    );
+
+    expect(result).toEqual({ matched: 1 });
+    expect(commands).toEqual([{ type: 'discover', syncId: 'sync-1' }]);
   });
 });

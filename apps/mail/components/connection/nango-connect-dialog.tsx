@@ -10,43 +10,58 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import type { ConnectableMailChannelId } from '@/modules/mail-connections/connect-mode';
 import { useTRPC } from '@/providers/query-provider';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
-type GmailConnectDialogProps = {
+const channelLabels: Record<ConnectableMailChannelId, string> = {
+  gmail: 'Gmail',
+  outlook: 'Outlook',
+  zoho_mail: 'Zoho Mail',
+  imap_smtp: 'IMAP/SMTP',
+};
+
+export function NangoConnectDialog({
+  channelId,
+  open,
+  onOpenChange,
+  onConnected,
+}: {
+  channelId: ConnectableMailChannelId | null;
   open: boolean;
   onOpenChange(open: boolean): void;
   onConnected(): void;
-};
-
-export function GmailConnectDialog({ open, onOpenChange, onConnected }: GmailConnectDialogProps) {
+}) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
-  const connections = useQuery(
-    trpc.connections.listNangoGmailConnections.queryOptions(undefined, {
-      enabled: open,
+  const connections = useQuery({
+    ...trpc.connections.listNangoConnections.queryOptions({
+      channelId: channelId ?? 'gmail',
     }),
-  );
+    enabled: open && channelId !== null,
+  });
   const bind = useMutation(trpc.connections.bindNango.mutationOptions());
 
   const save = async () => {
-    if (!selectedConnectionId) return;
+    if (!channelId || !selectedConnectionId) return;
     try {
-      await bind.mutateAsync({ connectionId: selectedConnectionId });
+      await bind.mutateAsync({ channelId, connectionId: selectedConnectionId });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: trpc.connections.list.queryKey() }),
         queryClient.invalidateQueries({ queryKey: trpc.connections.getDefault.queryKey() }),
       ]);
-      toast.success('Gmail mailbox connected');
+      toast.success(`${channelLabels[channelId]} mailbox connected`);
       setSelectedConnectionId(null);
       onOpenChange(false);
       onConnected();
     } catch (error) {
       const duplicate =
-        error instanceof Error && error.message.includes('MAILBOX_ALREADY_CONNECTED');
+        error instanceof Error &&
+        (error.message.includes('MAILBOX_ALREADY_CONNECTED') ||
+          error.message.includes('NANGO_CONNECTION_ALREADY_BOUND'));
       toast.error(duplicate ? 'This mailbox is already connected' : 'Unable to connect mailbox');
     }
   };
@@ -61,8 +76,8 @@ export function GmailConnectDialog({ open, onOpenChange, onConnected }: GmailCon
     >
       <DialogContent showOverlay>
         <DialogHeader>
-          <DialogTitle>Connect Gmail</DialogTitle>
-          <DialogDescription>Select an existing Gmail authorization.</DialogDescription>
+          <DialogTitle>Connect {channelId ? channelLabels[channelId] : 'mailbox'}</DialogTitle>
+          <DialogDescription>Select an existing authorization stored by Nango.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
@@ -106,7 +121,7 @@ export function GmailConnectDialog({ open, onOpenChange, onConnected }: GmailCon
             </div>
           ) : (
             <p className="text-muted-foreground py-8 text-center text-sm">
-              No authorized Gmail mailboxes are available.
+              No authorized mailboxes are available for this channel.
             </p>
           )}
 

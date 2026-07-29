@@ -27,6 +27,22 @@ const nangoSnapshotSchema = z.discriminatedUnion('type', [
     port: z.number().int().positive(),
     secure: z.boolean(),
   }),
+  z.object({
+    type: z.literal('imap_smtp'),
+    email: z.string().email(),
+    username: z.string().min(1),
+    password: z.string().min(1),
+    imap: z.object({
+      host: z.string().min(1),
+      port: z.number().int().positive(),
+      secure: z.boolean(),
+    }),
+    smtp: z.object({
+      host: z.string().min(1),
+      port: z.number().int().positive(),
+      secure: z.boolean(),
+    }),
+  }),
 ]);
 
 type NangoCredentialSnapshot = z.infer<typeof nangoSnapshotSchema>;
@@ -120,7 +136,10 @@ const canUseCached = (
   expiresAt: Date | null,
   now: Date,
 ): credential is ResolvedCredential =>
-  credential !== null && (credential.type === 'basic' || !shouldRefresh(expiresAt, now));
+  credential !== null &&
+  (credential.type === 'basic' ||
+    credential.type === 'imap_smtp' ||
+    !shouldRefresh(expiresAt, now));
 
 const parseExpiresAt = (value: string | number | null | undefined): Date | null => {
   if (value === null || value === undefined) return null;
@@ -132,7 +151,34 @@ const parseExpiresAt = (value: string | number | null | undefined): Date | null 
 
 const resolveBasicCredential = (
   credential: Extract<NangoCredential, { type: 'BASIC' }>,
+  connectionConfig: Record<string, unknown>,
 ): ResolvedCredential => {
+  const genericEmail = z
+    .object({
+      imapHost: z.string().min(1),
+      imapPort: z.coerce.number().int().min(1).max(65_535),
+      smtpHost: z.string().min(1),
+      smtpPort: z.coerce.number().int().min(1).max(65_535),
+    })
+    .safeParse(connectionConfig);
+  if (genericEmail.success) {
+    return {
+      type: 'imap_smtp',
+      email: z.string().email().parse(credential.username),
+      username: credential.username,
+      password: credential.password,
+      imap: {
+        host: genericEmail.data.imapHost,
+        port: genericEmail.data.imapPort,
+        secure: true,
+      },
+      smtp: {
+        host: genericEmail.data.smtpHost,
+        port: genericEmail.data.smtpPort,
+        secure: true,
+      },
+    };
+  }
   const connection = z
     .object({
       host: z.string().min(1),
@@ -150,6 +196,7 @@ const resolveBasicCredential = (
 
 export const resolveFetchedNangoCredential = (
   credential: NangoCredential,
+  connectionConfig: Record<string, unknown> = {},
 ): { credential: ResolvedCredential; expiresAt: Date | null } => {
   if (credential.type === 'OAUTH2') {
     return {
@@ -163,7 +210,10 @@ export const resolveFetchedNangoCredential = (
     };
   }
   if (credential.type === 'BASIC') {
-    return { credential: resolveBasicCredential(credential), expiresAt: null };
+    return {
+      credential: resolveBasicCredential(credential, connectionConfig),
+      expiresAt: null,
+    };
   }
   throw new Error(`Unsupported Nango credential type: ${credential.type}`);
 };
@@ -199,7 +249,10 @@ export const resolveNangoCredential = async (
         authorization.nangoConnectionId,
         authorization.nangoProviderConfigKey,
       );
-      const resolved = resolveFetchedNangoCredential(connection.credentials);
+      const resolved = resolveFetchedNangoCredential(
+        connection.credentials,
+        connection.connection_config,
+      );
       return {
         encryptedCredentialSnapshot: await encryptCredential(
           createNangoCredentialSnapshot(resolved.credential),

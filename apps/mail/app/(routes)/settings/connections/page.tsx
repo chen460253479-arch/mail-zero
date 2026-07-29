@@ -2,6 +2,7 @@ import {
   DeleteRetainedDataDialog,
   DisconnectDialog,
 } from '@/components/connection/disconnect-dialog';
+import { ZohoWebhookSetupDialog } from '@/components/connection/zoho-webhook-setup-dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { SettingsCard } from '@/components/settings/settings-card';
 import { AddConnectionDialog } from '@/components/connection/add';
@@ -123,6 +124,9 @@ export default function ConnectionsPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
+                      {connection.channelId === 'zoho_mail' && connection.status === 'connected' ? (
+                        <ZohoWebhookSetupDialog connectionId={connection.id} />
+                      ) : null}
                       {connection.status === 'reconnect_required' ? (
                         <>
                           <Badge variant="destructive">

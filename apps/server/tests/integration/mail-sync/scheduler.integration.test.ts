@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { createPostgresMailSyncRepository } from '../../../src/modules/mail-sync/postgres/sync-repository';
 import {
   insertMailSyncAccountFixture,
   withMailSyncTestDatabase,
 } from '../../helpers/mail-sync/database';
+import { createPostgresMailSyncRepository } from '../../../src/modules/mail-sync/postgres/sync-repository';
 import type { IngressScope } from '../../../src/modules/mail-sync';
 
 const scope: IngressScope = {
@@ -14,6 +14,65 @@ const scope: IngressScope = {
 };
 
 describe('mail sync scheduler claims', () => {
+  it('honors the channel scheduled-sync switch without suppressing webhook generations', async () => {
+    await withMailSyncTestDatabase(async ({ db, sql }) => {
+      await insertMailSyncAccountFixture(sql);
+      await sql`
+        INSERT INTO integration.channel_config (
+          id, channel_id, auth_source, inbox_watch_enabled, scheduled_sync_enabled,
+          sync_interval_minutes, provider_config, updated_by, created_at, updated_at
+        ) VALUES (
+          'gmail-config', 'gmail', 'zero_oauth', false, false,
+          10, '{}'::jsonb, 'user-1', now(), now()
+        )
+      `;
+      const repository = createPostgresMailSyncRepository(db);
+      const sync = await repository.createActivatingSync({
+        accountId: 'account-1',
+        provider: 'gmail',
+        scopeKey: 'inbox',
+        scope,
+      });
+      await repository.storeActivationCheckpoint({
+        syncId: sync.id,
+        checkpoint: { version: 1, historyId: '100' },
+      });
+      await repository.activate({ syncId: sync.id, subscriptionExpiresAt: null });
+      await sql`
+        UPDATE integration.inbound_sync
+        SET next_reconcile_at = now() - interval '1 minute'
+        WHERE id = ${sync.id}
+      `;
+
+      const claim = () =>
+        repository.claimDueDispatches({
+          owner: crypto.randomUUID(),
+          limit: 10,
+          leaseForMs: 60_000,
+          reconcileBefore: new Date('2030-01-01T00:00:00.000Z'),
+          renewalBefore: new Date('2030-01-01T00:00:00.000Z'),
+          importBefore: new Date('2030-01-01T00:00:00.000Z'),
+        });
+
+      await expect(claim()).resolves.toEqual([]);
+      await expect(
+        repository.recordSignal({
+          provider: 'gmail',
+          externalAccount: 'user@example.com',
+          cursorHint: '200',
+        }),
+      ).resolves.toEqual([sync.id]);
+      await expect(claim()).resolves.toEqual([
+        {
+          syncId: sync.id,
+          discover: true,
+          renew: false,
+          importPending: false,
+        },
+      ]);
+    });
+  });
+
   it('makes active subscriptions due when a provider Watch policy is enabled', async () => {
     await withMailSyncTestDatabase(async ({ db, sql }) => {
       await insertMailSyncAccountFixture(sql);

@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-export const integrationKeys = ['gmail_zero_oauth'] as const;
+export const integrationKeys = [
+  'gmail_zero_oauth',
+  'outlook_zero_oauth',
+  'zoho_mail_zero_oauth',
+] as const;
 export type IntegrationKey = (typeof integrationKeys)[number];
 
 const gmailZeroOAuthPublicConfigSchema = z.object({
@@ -9,10 +13,14 @@ const gmailZeroOAuthPublicConfigSchema = z.object({
 
 export const integrationPublicSchemas = {
   gmail_zero_oauth: gmailZeroOAuthPublicConfigSchema,
+  outlook_zero_oauth: gmailZeroOAuthPublicConfigSchema,
+  zoho_mail_zero_oauth: gmailZeroOAuthPublicConfigSchema,
 } satisfies Record<IntegrationKey, z.ZodTypeAny>;
 
 export type IntegrationPublicConfigMap = {
   gmail_zero_oauth: z.infer<typeof gmailZeroOAuthPublicConfigSchema>;
+  outlook_zero_oauth: z.infer<typeof gmailZeroOAuthPublicConfigSchema>;
+  zoho_mail_zero_oauth: z.infer<typeof gmailZeroOAuthPublicConfigSchema>;
 };
 
 export const parsePublicConfig = <K extends IntegrationKey>(

@@ -1,4 +1,6 @@
-import { GmailColor } from '../components/icons/icons';
+import { Mail, Server } from 'lucide-react';
+
+import { GmailColor, OutlookColor } from '../components/icons/icons';
 
 export const I18N_LOCALE_COOKIE_NAME = 'i18n:locale';
 export const SIDEBAR_COOKIE_NAME = 'sidebar:state';
@@ -16,6 +18,21 @@ export const emailProviders = [
     name: 'Gmail',
     icon: GmailColor,
     channelId: 'gmail',
+  },
+  {
+    name: 'Outlook',
+    icon: OutlookColor,
+    channelId: 'outlook',
+  },
+  {
+    name: 'Zoho Mail',
+    icon: Mail,
+    channelId: 'zoho_mail',
+  },
+  {
+    name: 'IMAP/SMTP',
+    icon: Server,
+    channelId: 'imap_smtp',
   },
 ] as const;
 

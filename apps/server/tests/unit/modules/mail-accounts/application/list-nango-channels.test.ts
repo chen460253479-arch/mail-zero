@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { listAvailableNangoChannels } from '../../../../../src/modules/mail-accounts/application/list-nango-channels';
 import type { NangoIntegration } from '../../../../../src/integrations/nango/schemas';
 import { defaultMailChannelRegistry } from '../../../../../src/mail-channel/registry';
-import { listAvailableNangoChannels } from '../../../../../src/modules/mail-accounts/application/list-nango-channels';
 
 const integration = (
   unique_key: string,
@@ -30,13 +30,19 @@ describe('Nango mail channel catalog', () => {
     ]);
   });
 
-  it('does not show Zoho when no Zoho channel plugin is registered', () => {
+  it('shows Zoho when its provider plugin is registered', () => {
     const result = listAvailableNangoChannels(
       [integration('zoho-primary', 'Zoho Mail', 'zoho-mail')],
       defaultMailChannelRegistry.list(),
     );
 
-    expect(result).toEqual([]);
+    expect(result).toEqual([
+      {
+        channelId: 'zoho_mail',
+        displayName: 'Zoho Mail',
+        integrations: [{ integrationId: 'zoho-primary', displayName: 'Zoho Mail' }],
+      },
+    ]);
   });
 
   it('does not expose non-mail Nango integrations', () => {

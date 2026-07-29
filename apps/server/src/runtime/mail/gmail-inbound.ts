@@ -1,13 +1,3 @@
-import type { Id, MailAccountId, MailboxId } from '@zero/mail-core';
-import { and, eq, isNull } from 'drizzle-orm';
-import { ulid } from 'ulid';
-
-import {
-  createMailIngressRuntime,
-  dispatchDueMailSyncWork,
-  processMailIngressCommand,
-  type MailIngressRuntime,
-} from '../../modules/mail-sync/runtime/create-mail-sync';
 import {
   defaultGmailChannelConfig,
   parseGmailChannelConfig,
@@ -18,27 +8,12 @@ import {
   handleGmailWebhookRequest,
 } from '../../mail-channel/gmail/inbound/webhook';
 import { createPostgresMailSyncRepository } from '../../modules/mail-sync/postgres/sync-repository';
-import { resolveGmailInboundTriggerPolicy } from '../../mail-channel/gmail/inbound/trigger-policy';
-import { bootstrapLocalMailAccount } from '../../modules/mail-sync/application/bootstrap-account';
 import { createChannelConfigRepository } from '../../integrations/core/channel-config-repository';
-import { PostgresMailUnitOfWork } from '../../modules/mail/postgres/postgres-unit-of-work';
-import type { MailIngressCommand } from '../../modules/mail-sync/application/commands';
-import type { IngressScope } from '../../modules/mail-sync/domain/ingress-adapter';
-import { activateInboundSync } from '../../modules/mail-sync/application/activate';
-import { connection, inboundSync, mailAccount, mailbox } from '../../db/schema';
+import { activateChannelInboundForAccount, activateChannelInboundForConnection } from './inbound';
 import { createGmailCredentialContext } from './gmail-credential-context';
-import { defaultMailChannelRegistry } from '../../mail-channel/registry';
-import { createMailCoreRuntime, R2BlobStore } from '../../modules/mail';
 import { createGmailPlugin } from '../../mail-channel/gmail/plugin';
-import { preprocessEmailHtml } from '../../lib/email-processor';
 import { createDb, type DB } from '../../db';
 import type { ZeroEnv } from '../../env';
-
-const INBOX_SCOPE: IngressScope = {
-  version: 1,
-  mailboxRoles: ['inbox'],
-  initialSync: 'none',
-};
 
 const readGmailChannelConfig = async (db: DB): Promise<GmailChannelConfig> => {
   const record = await createChannelConfigRepository(db).get('gmail');
@@ -53,204 +28,48 @@ const readGmailChannelConfig = async (db: DB): Promise<GmailChannelConfig> => {
   });
 };
 
-const createAdapterFactory = (db: DB, runtimeEnv: ZeroEnv) => ({
-  create: async (connectionId: string) => {
-    const context = await createGmailCredentialContext(db, runtimeEnv, connectionId);
-    return await createGmailPlugin({
-      createExecutor: async () => context.executor,
-      resolveIdentity: async () => {
-        throw new Error('Identity resolution is not available in the inbound runtime');
-      },
-    }).inbound!.createAdapter({
-      connectionId,
-      credential: await context.resolveCredential(false),
-    });
-  },
-});
-
-const createMailCore = (db: DB, runtimeEnv: ZeroEnv) =>
-  createMailCoreRuntime({
-    db,
-    blobStore: new R2BlobStore(runtimeEnv.THREADS_BUCKET),
-    blobReadAuditSink: { record: async () => undefined },
-    clock: { now: () => new Date() },
-    idFactory: {
-      next<Kind extends string>() {
-        return ulid() as Id<Kind>;
-      },
+const createAdapter = async (db: DB, runtimeEnv: ZeroEnv, connectionId: string) => {
+  const context = await createGmailCredentialContext(db, runtimeEnv, connectionId);
+  return await createGmailPlugin({
+    createExecutor: async () => context.executor,
+    resolveIdentity: async () => {
+      throw new Error('Identity resolution is not available in the inbound runtime');
     },
-    sanitizeHtml: preprocessEmailHtml,
-    cursorSigningKey: runtimeEnv.BETTER_AUTH_SECRET,
+  }).inbound!.createAdapter({
+    connectionId,
+    credential: await context.resolveCredential(false),
   });
-
-const resolveConnectionId = async (db: DB, accountId: string): Promise<string> => {
-  const rows = await db
-    .select({ connectionId: mailAccount.connectionId })
-    .from(mailAccount)
-    .where(eq(mailAccount.id, accountId))
-    .limit(1);
-  const connectionId = rows[0]?.connectionId;
-  if (connectionId === undefined) {
-    throw new Error('Local mail account was not found');
-  }
-  return connectionId;
-};
-
-const resolveImportContext = async (db: DB, syncId: string) => {
-  const rows = await db
-    .select({
-      accountId: inboundSync.accountId,
-      connectionId: mailAccount.connectionId,
-      provider: inboundSync.provider,
-      scope: inboundSync.scope,
-      inboxMailboxId: mailbox.id,
-    })
-    .from(inboundSync)
-    .innerJoin(mailAccount, eq(mailAccount.id, inboundSync.accountId))
-    .innerJoin(
-      mailbox,
-      and(
-        eq(mailbox.mailAccountId, inboundSync.accountId),
-        eq(mailbox.role, 'inbox'),
-        isNull(mailbox.deletedAt),
-      ),
-    )
-    .where(eq(inboundSync.id, syncId))
-    .limit(1);
-  const context = rows[0];
-  if (context === undefined) {
-    throw new Error('Mail sync import context was not found');
-  }
-  return {
-    ...context,
-    accountId: context.accountId as MailAccountId,
-    inboxMailboxId: context.inboxMailboxId as MailboxId,
-  };
 };
 
 export const activateGmailInboundForAccount = async (
   db: DB,
   runtimeEnv: ZeroEnv,
   input: { connectionId: string; accountId: string },
-): Promise<void> => {
-  const triggerPolicy = resolveGmailInboundTriggerPolicy(
-    await readGmailChannelConfig(db),
-    new Date(),
-  );
-  await activateInboundSync(
-    {
-      accountId: input.accountId,
-      connectionId: input.connectionId,
-      provider: 'gmail',
-      scopeKey: 'inbox',
-      scope: INBOX_SCOPE,
-      subscriptionTarget: triggerPolicy.subscriptionTarget,
-    },
-    {
-      adapterFactory: createAdapterFactory(db, runtimeEnv),
-      repository: createPostgresMailSyncRepository(db),
-    },
-  );
-};
+): Promise<void> =>
+  await activateChannelInboundForAccount(db, runtimeEnv, {
+    ...input,
+    channelId: 'gmail',
+  });
 
 export const activateGmailInboundForConnection = async (
   runtimeEnv: ZeroEnv,
   input: { connectionId: string },
-): Promise<void> => {
-  const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
-  try {
-    const connectionRecord = await db.query.connection.findFirst({
-      where: eq(connection.id, input.connectionId),
-    });
-    if (connectionRecord === undefined) {
-      throw new Error('Gmail connection was not found');
-    }
-    const unitOfWork = new PostgresMailUnitOfWork(db);
-    const mailCore = createMailCore(db, runtimeEnv);
-    const account = await bootstrapLocalMailAccount(
-      {
-        userId: connectionRecord.userId,
-        connectionId: connectionRecord.id,
-      },
-      {
-        findByConnectionId: (connectionId) =>
-          unitOfWork.run((tx) => tx.accounts.findByConnectionId(connectionId)),
-        createAccount: (createInput) => mailCore.createAccount(createInput),
-      },
-    );
-    await activateGmailInboundForAccount(db, runtimeEnv, {
-      accountId: account.id,
-      connectionId: connectionRecord.id,
-    });
-  } finally {
-    await conn.end();
-  }
-};
+): Promise<void> =>
+  await activateChannelInboundForConnection(runtimeEnv, {
+    ...input,
+    expectedChannelId: 'gmail',
+  });
 
 export const stopGmailWatchForConnection = async (
   db: DB,
   runtimeEnv: ZeroEnv,
   connectionId: string,
 ): Promise<void> => {
-  const adapter = await createAdapterFactory(db, runtimeEnv).create(connectionId);
+  const adapter = await createAdapter(db, runtimeEnv, connectionId);
   if (!adapter.unsubscribe) {
     throw new Error('Gmail inbound adapter does not support Watch cancellation');
   }
   await adapter.unsubscribe();
-};
-
-const createRuntime = async (db: DB, runtimeEnv: ZeroEnv): Promise<MailIngressRuntime> => {
-  const repository = createPostgresMailSyncRepository(db);
-  const adapterFactory = createAdapterFactory(db, runtimeEnv);
-  const adapterFactories = new Map([['gmail', adapterFactory]]);
-  const mailCore = createMailCore(db, runtimeEnv);
-  const enqueue = (command: MailIngressCommand) => runtimeEnv.MAIL_INGRESS_QUEUE.send(command);
-  const triggerPolicy = resolveGmailInboundTriggerPolicy(
-    await readGmailChannelConfig(db),
-    new Date(),
-  );
-  const getAdapterFactory = (provider: string) => {
-    defaultMailChannelRegistry.getInbound(provider);
-    const factory = adapterFactories.get(provider);
-    if (!factory) throw new Error(`Inbound provider runtime is not configured: ${provider}`);
-    return factory;
-  };
-
-  return createMailIngressRuntime({
-    repository,
-    getAdapterFactory,
-    resolveConnectionId: (accountId) => resolveConnectionId(db, accountId),
-    resolveImportContext: (syncId) => resolveImportContext(db, syncId),
-    resolveSubscriptionTarget: async () => triggerPolicy.subscriptionTarget,
-    mailCore,
-    onAuthenticationError: async ({ syncId, errorCode, errorMessage }) => {
-      await db
-        .update(inboundSync)
-        .set({
-          status: 'auth_error',
-          lastErrorCode: errorCode,
-          lastErrorMessage: errorMessage,
-          updatedAt: new Date(),
-        })
-        .where(eq(inboundSync.id, syncId));
-    },
-    enqueue,
-    newLeaseOwner: () => crypto.randomUUID(),
-    clock: { now: () => new Date() },
-    reconcileAfterMs: triggerPolicy.reconcileAfterMs,
-  });
-};
-
-export const runMailIngressCommand = async (
-  runtimeEnv: ZeroEnv,
-  command: MailIngressCommand,
-): Promise<void> => {
-  const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
-  try {
-    await processMailIngressCommand(command, await createRuntime(db, runtimeEnv));
-  } finally {
-    await conn.end();
-  }
 };
 
 export const handleGmailWebhookForEnvironment = async (
@@ -266,35 +85,6 @@ export const handleGmailWebhookForEnvironment = async (
       recordSignal: (signal) => repository.recordSignal(signal),
       enqueueDiscover: (syncId) => runtimeEnv.MAIL_INGRESS_QUEUE.send({ type: 'discover', syncId }),
     });
-  } finally {
-    await conn.end();
-  }
-};
-
-export const enqueueDueMailIngressWork = async (
-  runtimeEnv: ZeroEnv,
-): Promise<{ reconciliations: number; renewals: number; imports: number }> => {
-  const { db, conn } = createDb(runtimeEnv.HYPERDRIVE.connectionString);
-  try {
-    const repository = createPostgresMailSyncRepository(db);
-    const now = new Date();
-    const triggerPolicy = resolveGmailInboundTriggerPolicy(await readGmailChannelConfig(db), now);
-    return await dispatchDueMailSyncWork(
-      {
-        owner: crypto.randomUUID(),
-        limit: 100,
-        claimLeaseForMs: 30_000,
-        confirmedLeaseForMs: 120_000,
-        retryAfterMs: 5_000,
-        reconcileBefore: triggerPolicy.reconcileBefore,
-        renewalBefore: triggerPolicy.renewalBefore,
-        importBefore: now,
-      },
-      {
-        repository,
-        enqueue: (command) => runtimeEnv.MAIL_INGRESS_QUEUE.send(command),
-      },
-    );
   } finally {
     await conn.end();
   }

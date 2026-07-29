@@ -38,8 +38,8 @@ const createHarness = (authSource: 'zero_oauth' | 'nango' = 'zero_oauth') => {
       calls.push('pauseConnectionSyncs');
       return 1;
     }),
-    stopGmailWatch: vi.fn(async () => {
-      calls.push('stopGmailWatch');
+    stopChannelWatch: vi.fn(async () => {
+      calls.push('stopChannelWatch');
     }),
     revokeZeroOAuth: vi.fn(async () => {
       calls.push('revokeZeroOAuth');
@@ -73,7 +73,7 @@ describe('mailbox lifecycle runtime', () => {
     expect(calls).toEqual([
       'markDisconnecting',
       'pauseConnectionSyncs',
-      'stopGmailWatch',
+      'stopChannelWatch',
       'revokeZeroOAuth',
       'removeAuthorizationBinding',
       'markDisconnected',
@@ -95,7 +95,7 @@ describe('mailbox lifecycle runtime', () => {
 
   it('continues local disconnect after Gmail Watch stop fails but records a safe diagnostic', async () => {
     const { runtime, dependencies, repository } = createHarness();
-    dependencies.stopGmailWatch.mockRejectedValueOnce(new Error('provider unavailable'));
+    dependencies.stopChannelWatch.mockRejectedValueOnce(new Error('provider unavailable'));
 
     await expect(
       runtime.disconnect({
@@ -106,7 +106,7 @@ describe('mailbox lifecycle runtime', () => {
     ).resolves.toEqual({ status: 'disconnected' });
 
     expect(dependencies.recordDiagnostic).toHaveBeenCalledWith(
-      'GMAIL_WATCH_STOP_FAILED',
+      'MAIL_CHANNEL_WATCH_STOP_FAILED',
       'connection-1',
       expect.any(Error),
     );
@@ -125,7 +125,7 @@ describe('mailbox lifecycle runtime', () => {
       }),
     ).rejects.toThrow('database unavailable');
     expect(repository.markDisconnecting).toHaveBeenCalledWith('user-1', 'connection-1');
-    expect(dependencies.stopGmailWatch).not.toHaveBeenCalled();
+    expect(dependencies.stopChannelWatch).not.toHaveBeenCalled();
     expect(repository.removeAuthorizationBinding).not.toHaveBeenCalled();
   });
 

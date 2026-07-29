@@ -269,7 +269,13 @@ describe('inbound synchronization activation', () => {
           version: 1,
           topicName: 'projects/zero/topics/connection-1',
         });
-        return { expiresAt: new Date('2026-08-01T00:00:00.000Z') };
+        return {
+          expiresAt: new Date('2026-08-01T00:00:00.000Z'),
+          externalId: 'subscription-1',
+          endpointTokenHash: null,
+          encryptedSecret: 'encrypted-client-state',
+          establishedAt: new Date('2026-07-28T12:00:00.000Z'),
+        };
       },
       classifyError: () => 'permanent',
     };
@@ -312,8 +318,14 @@ describe('inbound synchronization activation', () => {
               checkpoint,
             };
           },
-          activate: async ({ subscriptionExpiresAt }) => {
+          activate: async ({
+            subscriptionExpiresAt,
+            subscriptionExternalId,
+            encryptedSubscriptionSecret,
+          }) => {
             calls.push('activate');
+            expect(subscriptionExternalId).toBe('subscription-1');
+            expect(encryptedSubscriptionSecret).toBe('encrypted-client-state');
             return {
               id: 'sync-1',
               status: 'active',

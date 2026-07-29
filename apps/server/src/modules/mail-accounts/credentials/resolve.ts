@@ -5,6 +5,7 @@ import {
 } from './nango';
 import { decryptCredential } from '../../../infrastructure/security/credential-encryption';
 import type { ResolvedCredential } from '../../../mail-channel/contracts';
+import { readManualCredentialSnapshot } from './manual';
 import { readZeroOAuthSnapshot } from './zero-oauth';
 
 type AuthSource = 'zero_oauth' | 'nango' | 'manual';
@@ -67,9 +68,19 @@ const resolveRegisteredNangoCredential: CredentialResolver = async (
   );
 };
 
+const resolveManualCredential: CredentialResolver = async (authorization, encryptionKey) => {
+  if (!authorization.encryptedCredentialSnapshot) {
+    throw new Error('Encrypted mailbox credential is missing');
+  }
+  return readManualCredentialSnapshot(
+    await decryptCredential(authorization.encryptedCredentialSnapshot, encryptionKey),
+  );
+};
+
 const resolvers = {
   zero_oauth: resolveZeroOAuthCredential,
   nango: resolveRegisteredNangoCredential,
+  manual: resolveManualCredential,
 } satisfies Partial<Record<AuthSource, CredentialResolver>>;
 
 export const resolveConnectionCredential = async (

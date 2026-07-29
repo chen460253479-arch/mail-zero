@@ -14,6 +14,7 @@ export type FrozenOutboundMessage = {
   rawMime: Uint8Array;
   messageId: string;
   remoteThreadId: string | null;
+  remoteParentMessageId?: string | null;
 };
 
 export type OutboundAcceptedResult = {

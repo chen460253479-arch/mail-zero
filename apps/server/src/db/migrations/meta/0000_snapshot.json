@@ -146,12 +146,8 @@
           "tableFrom": "account",
           "tableTo": "user_account",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -240,12 +236,8 @@
           "tableFrom": "authorization_binding",
           "tableTo": "connection",
           "schemaTo": "integration",
-          "columnsFrom": [
-            "connection_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["connection_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -255,17 +247,12 @@
         "authorization_binding_connection_id_unique": {
           "name": "authorization_binding_connection_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "connection_id"
-          ]
+          "columns": ["connection_id"]
         },
         "authorization_binding_nango_ref_uidx": {
           "name": "authorization_binding_nango_ref_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "nango_provider_config_key",
-            "nango_connection_id"
-          ]
+          "columns": ["nango_provider_config_key", "nango_connection_id"]
         }
       },
       "policies": {},
@@ -365,12 +352,8 @@
           "tableFrom": "channel_config",
           "tableTo": "user_account",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["updated_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -380,13 +363,15 @@
         "channel_config_channel_id_unique": {
           "name": "channel_config_channel_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "channel_id"
-          ]
+          "columns": ["channel_id"]
         }
       },
       "policies": {},
       "checkConstraints": {
+        "channel_config_channel_id_chk": {
+          "name": "channel_config_channel_id_chk",
+          "value": "\"integration\".\"channel_config\".\"channel_id\" IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')"
+        },
         "channel_config_auth_source_chk": {
           "name": "channel_config_auth_source_chk",
           "value": "\"integration\".\"channel_config\".\"auth_source\" IN ('zero_oauth', 'nango', 'manual')"
@@ -446,14 +431,15 @@
         "channel_mapping_channel_auth_uidx": {
           "name": "channel_mapping_channel_auth_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "channel_id",
-            "auth_source"
-          ]
+          "columns": ["channel_id", "auth_source"]
         }
       },
       "policies": {},
       "checkConstraints": {
+        "channel_mapping_channel_id_chk": {
+          "name": "channel_mapping_channel_id_chk",
+          "value": "\"integration\".\"channel_mapping\".\"channel_id\" IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')"
+        },
         "channel_mapping_auth_source_chk": {
           "name": "channel_mapping_auth_source_chk",
           "value": "\"integration\".\"channel_mapping\".\"auth_source\" = 'nango'"
@@ -584,12 +570,8 @@
           "tableFrom": "connection",
           "tableTo": "user_account",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -599,19 +581,12 @@
         "connection_user_channel_email_uidx": {
           "name": "connection_user_channel_email_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "user_id",
-            "channel_id",
-            "normalized_email"
-          ]
+          "columns": ["user_id", "channel_id", "normalized_email"]
         },
         "connection_id_user_id_uidx": {
           "name": "connection_id_user_id_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "user_id"
-          ]
+          "columns": ["id", "user_id"]
         }
       },
       "policies": {},
@@ -619,6 +594,10 @@
         "connection_status_chk": {
           "name": "connection_status_chk",
           "value": "\"integration\".\"connection\".\"status\" IN ('connected', 'disconnecting', 'disconnected', 'reconnect_required', 'deleting')"
+        },
+        "connection_channel_id_chk": {
+          "name": "connection_channel_id_chk",
+          "value": "\"integration\".\"connection\".\"channel_id\" IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')"
         },
         "connection_provider_key_chk": {
           "name": "connection_provider_key_chk",
@@ -693,9 +672,7 @@
         "early_access_email_unique": {
           "name": "early_access_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -792,12 +769,8 @@
           "tableFrom": "email_template",
           "tableTo": "user_account",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -807,10 +780,7 @@
         "email_template_user_id_name_uidx": {
           "name": "email_template_user_id_name_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "user_id",
-            "name"
-          ]
+          "columns": ["user_id", "name"]
         }
       },
       "policies": {},
@@ -914,12 +884,8 @@
           "tableFrom": "oauth_session",
           "tableTo": "user_account",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -929,16 +895,14 @@
         "oauth_session_state_hash_unique": {
           "name": "oauth_session_state_hash_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "state_hash"
-          ]
+          "columns": ["state_hash"]
         }
       },
       "policies": {},
       "checkConstraints": {
         "oauth_session_integration_key_chk": {
           "name": "oauth_session_integration_key_chk",
-          "value": "\"integration\".\"oauth_session\".\"integration_key\" = 'gmail_zero_oauth'"
+          "value": "\"integration\".\"oauth_session\".\"integration_key\" IN ('gmail_zero_oauth', 'outlook_zero_oauth', 'zoho_mail_zero_oauth')"
         },
         "oauth_session_purpose_chk": {
           "name": "oauth_session_purpose_chk",
@@ -1120,12 +1084,8 @@
           "tableFrom": "note",
           "tableTo": "user_account",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1134,12 +1094,8 @@
           "tableFrom": "note",
           "tableTo": "connection",
           "schemaTo": "integration",
-          "columnsFrom": [
-            "connection_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["connection_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1241,12 +1197,8 @@
           "tableFrom": "session",
           "tableTo": "user_account",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1256,9 +1208,7 @@
         "session_token_unique": {
           "name": "session_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -1331,12 +1281,8 @@
           "tableFrom": "system_config",
           "tableTo": "user_account",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["updated_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1346,16 +1292,14 @@
         "system_config_integration_key_unique": {
           "name": "system_config_integration_key_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "integration_key"
-          ]
+          "columns": ["integration_key"]
         }
       },
       "policies": {},
       "checkConstraints": {
         "system_integration_key_chk": {
           "name": "system_integration_key_chk",
-          "value": "\"integration\".\"system_config\".\"integration_key\" IN ('gmail_zero_oauth')"
+          "value": "\"integration\".\"system_config\".\"integration_key\" IN ('gmail_zero_oauth', 'outlook_zero_oauth', 'zoho_mail_zero_oauth')"
         },
         "system_integration_status_chk": {
           "name": "system_integration_status_chk",
@@ -1431,9 +1375,7 @@
         "user_account_email_unique": {
           "name": "user_account_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -1492,12 +1434,8 @@
           "tableFrom": "user_hotkeys",
           "tableTo": "user_account",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1567,12 +1505,8 @@
           "tableFrom": "user_settings",
           "tableTo": "user_account",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1582,9 +1516,7 @@
         "user_settings_user_id_unique": {
           "name": "user_settings_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "user_id"
-          ]
+          "columns": ["user_id"]
         }
       },
       "policies": {},
@@ -1780,12 +1712,8 @@
           "tableFrom": "account",
           "tableTo": "user_account",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1794,14 +1722,8 @@
           "tableFrom": "account",
           "tableTo": "connection",
           "schemaTo": "integration",
-          "columnsFrom": [
-            "connection_id",
-            "user_id"
-          ],
-          "columnsTo": [
-            "id",
-            "user_id"
-          ],
+          "columnsFrom": ["connection_id", "user_id"],
+          "columnsTo": ["id", "user_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1811,10 +1733,7 @@
         "mail_account_id_connection_uidx": {
           "name": "mail_account_id_connection_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "connection_id"
-          ]
+          "columns": ["id", "connection_id"]
         }
       },
       "policies": {},
@@ -1952,12 +1871,8 @@
           "tableFrom": "identity",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1967,10 +1882,7 @@
         "mail_identity_id_account_uidx": {
           "name": "mail_identity_id_account_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "mail_account_id"
-          ]
+          "columns": ["id", "mail_account_id"]
         }
       },
       "policies": {},
@@ -2166,12 +2078,8 @@
           "tableFrom": "blob",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2181,10 +2089,7 @@
         "blob_id_account_uidx": {
           "name": "blob_id_account_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "mail_account_id"
-          ]
+          "columns": ["id", "mail_account_id"]
         }
       },
       "policies": {},
@@ -2259,12 +2164,8 @@
           "tableFrom": "change",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2272,12 +2173,7 @@
       "compositePrimaryKeys": {
         "mail_change_pk": {
           "name": "mail_change_pk",
-          "columns": [
-            "mail_account_id",
-            "state_version",
-            "collection",
-            "entity_id"
-          ]
+          "columns": ["mail_account_id", "state_version", "collection", "entity_id"]
         }
       },
       "uniqueConstraints": {},
@@ -2645,12 +2541,8 @@
           "tableFrom": "email",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2659,14 +2551,8 @@
           "tableFrom": "email",
           "tableTo": "identity",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "identity_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["identity_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -2675,14 +2561,8 @@
           "tableFrom": "email",
           "tableTo": "thread",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "thread_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["thread_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2691,14 +2571,8 @@
           "tableFrom": "email",
           "tableTo": "email",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "reply_to_email_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["reply_to_email_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -2707,14 +2581,8 @@
           "tableFrom": "email",
           "tableTo": "blob",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "blob_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["blob_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -2724,10 +2592,7 @@
         "email_id_account_uidx": {
           "name": "email_id_account_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "mail_account_id"
-          ]
+          "columns": ["id", "mail_account_id"]
         }
       },
       "policies": {},
@@ -2835,12 +2700,8 @@
           "tableFrom": "email_address",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2849,14 +2710,8 @@
           "tableFrom": "email_address",
           "tableTo": "email",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "email_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["email_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2864,12 +2719,7 @@
       "compositePrimaryKeys": {
         "email_address_pk": {
           "name": "email_address_pk",
-          "columns": [
-            "mail_account_id",
-            "email_id",
-            "kind",
-            "position"
-          ]
+          "columns": ["mail_account_id", "email_id", "kind", "position"]
         }
       },
       "uniqueConstraints": {},
@@ -2990,12 +2840,8 @@
           "tableFrom": "email_content",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3004,14 +2850,8 @@
           "tableFrom": "email_content",
           "tableTo": "email",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "email_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["email_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3020,14 +2860,8 @@
           "tableFrom": "email_content",
           "tableTo": "blob",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "text_blob_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["text_blob_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -3036,14 +2870,8 @@
           "tableFrom": "email_content",
           "tableTo": "blob",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "html_blob_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["html_blob_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -3051,10 +2879,7 @@
       "compositePrimaryKeys": {
         "email_content_pk": {
           "name": "email_content_pk",
-          "columns": [
-            "mail_account_id",
-            "email_id"
-          ]
+          "columns": ["mail_account_id", "email_id"]
         }
       },
       "uniqueConstraints": {},
@@ -3131,12 +2956,8 @@
           "tableFrom": "email_keyword",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3145,14 +2966,8 @@
           "tableFrom": "email_keyword",
           "tableTo": "email",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "email_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["email_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3160,21 +2975,14 @@
       "compositePrimaryKeys": {
         "email_keyword_pk": {
           "name": "email_keyword_pk",
-          "columns": [
-            "email_id",
-            "keyword"
-          ]
+          "columns": ["email_id", "keyword"]
         }
       },
       "uniqueConstraints": {
         "email_keyword_account_email_position_uidx": {
           "name": "email_keyword_account_email_position_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "mail_account_id",
-            "email_id",
-            "position"
-          ]
+          "columns": ["mail_account_id", "email_id", "position"]
         }
       },
       "policies": {},
@@ -3250,12 +3058,8 @@
           "tableFrom": "email_mailbox",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3264,14 +3068,8 @@
           "tableFrom": "email_mailbox",
           "tableTo": "email",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "email_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["email_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3280,14 +3078,8 @@
           "tableFrom": "email_mailbox",
           "tableTo": "mailbox",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mailbox_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["mailbox_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3295,21 +3087,14 @@
       "compositePrimaryKeys": {
         "email_mailbox_pk": {
           "name": "email_mailbox_pk",
-          "columns": [
-            "email_id",
-            "mailbox_id"
-          ]
+          "columns": ["email_id", "mailbox_id"]
         }
       },
       "uniqueConstraints": {
         "email_mailbox_account_email_position_uidx": {
           "name": "email_mailbox_account_email_position_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "mail_account_id",
-            "email_id",
-            "position"
-          ]
+          "columns": ["mail_account_id", "email_id", "position"]
         }
       },
       "policies": {},
@@ -3466,12 +3251,8 @@
           "tableFrom": "email_part",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3480,14 +3261,8 @@
           "tableFrom": "email_part",
           "tableTo": "email",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "email_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["email_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3496,16 +3271,8 @@
           "tableFrom": "email_part",
           "tableTo": "email_part",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "parent_part_id",
-            "email_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "email_id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["parent_part_id", "email_id", "mail_account_id"],
+          "columnsTo": ["id", "email_id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3514,14 +3281,8 @@
           "tableFrom": "email_part",
           "tableTo": "blob",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "blob_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["blob_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -3531,37 +3292,22 @@
         "email_part_id_account_uidx": {
           "name": "email_part_id_account_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "mail_account_id"
-          ]
+          "columns": ["id", "mail_account_id"]
         },
         "email_part_id_email_account_uidx": {
           "name": "email_part_id_email_account_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "email_id",
-            "mail_account_id"
-          ]
+          "columns": ["id", "email_id", "mail_account_id"]
         },
         "email_part_account_email_path_uidx": {
           "name": "email_part_account_email_path_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "mail_account_id",
-            "email_id",
-            "part_path"
-          ]
+          "columns": ["mail_account_id", "email_id", "part_path"]
         },
         "email_part_account_email_position_uidx": {
           "name": "email_part_account_email_position_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "mail_account_id",
-            "email_id",
-            "position"
-          ]
+          "columns": ["mail_account_id", "email_id", "position"]
         }
       },
       "policies": {},
@@ -3631,12 +3377,8 @@
           "tableFrom": "email_search",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3645,14 +3387,8 @@
           "tableFrom": "email_search",
           "tableTo": "email",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "email_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["email_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3660,10 +3396,7 @@
       "compositePrimaryKeys": {
         "email_search_pk": {
           "name": "email_search_pk",
-          "columns": [
-            "mail_account_id",
-            "email_id"
-          ]
+          "columns": ["mail_account_id", "email_id"]
         }
       },
       "uniqueConstraints": {},
@@ -3735,12 +3468,8 @@
           "tableFrom": "email_trash_restore",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3749,14 +3478,8 @@
           "tableFrom": "email_trash_restore",
           "tableTo": "email",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "email_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["email_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3765,14 +3488,8 @@
           "tableFrom": "email_trash_restore",
           "tableTo": "mailbox",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mailbox_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["mailbox_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3780,21 +3497,14 @@
       "compositePrimaryKeys": {
         "email_trash_restore_pk": {
           "name": "email_trash_restore_pk",
-          "columns": [
-            "email_id",
-            "mailbox_id"
-          ]
+          "columns": ["email_id", "mailbox_id"]
         }
       },
       "uniqueConstraints": {
         "email_trash_restore_account_email_position_uidx": {
           "name": "email_trash_restore_account_email_position_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "mail_account_id",
-            "email_id",
-            "position"
-          ]
+          "columns": ["mail_account_id", "email_id", "position"]
         }
       },
       "policies": {},
@@ -3917,12 +3627,8 @@
           "tableFrom": "remote_email",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3931,14 +3637,8 @@
           "tableFrom": "remote_email",
           "tableTo": "email",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "email_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["email_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3946,7 +3646,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "remote_email_provider_chk": {
+          "name": "remote_email_provider_chk",
+          "value": "\"integration\".\"remote_email\".\"provider\" IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')"
+        }
+      },
       "isRLSEnabled": false
     },
     "mail.mailbox": {
@@ -4172,12 +3877,8 @@
           "tableFrom": "mailbox",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4186,14 +3887,8 @@
           "tableFrom": "mailbox",
           "tableTo": "mailbox",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "parent_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["parent_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4203,10 +3898,7 @@
         "mailbox_id_account_uidx": {
           "name": "mailbox_id_account_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "mail_account_id"
-          ]
+          "columns": ["id", "mail_account_id"]
         }
       },
       "policies": {},
@@ -4290,12 +3982,8 @@
           "tableFrom": "mailbox_thread",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4304,14 +3992,8 @@
           "tableFrom": "mailbox_thread",
           "tableTo": "mailbox",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mailbox_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["mailbox_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4320,14 +4002,8 @@
           "tableFrom": "mailbox_thread",
           "tableTo": "thread",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "thread_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["thread_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4335,11 +4011,7 @@
       "compositePrimaryKeys": {
         "mailbox_thread_pk": {
           "name": "mailbox_thread_pk",
-          "columns": [
-            "mail_account_id",
-            "mailbox_id",
-            "thread_id"
-          ]
+          "columns": ["mail_account_id", "mailbox_id", "thread_id"]
         }
       },
       "uniqueConstraints": {},
@@ -4605,12 +4277,8 @@
           "tableFrom": "submission",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4619,14 +4287,8 @@
           "tableFrom": "submission",
           "tableTo": "email",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "email_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["email_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4635,14 +4297,8 @@
           "tableFrom": "submission",
           "tableTo": "identity",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "identity_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["identity_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -4652,10 +4308,7 @@
         "email_submission_id_account_uidx": {
           "name": "email_submission_id_account_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "mail_account_id"
-          ]
+          "columns": ["id", "mail_account_id"]
         }
       },
       "policies": {},
@@ -4759,12 +4412,8 @@
           "tableFrom": "submission_blob",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4773,14 +4422,8 @@
           "tableFrom": "submission_blob",
           "tableTo": "submission",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "submission_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["submission_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4789,14 +4432,8 @@
           "tableFrom": "submission_blob",
           "tableTo": "blob",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "blob_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["blob_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -4806,12 +4443,7 @@
         "submission_blob_account_submission_kind_position_uidx": {
           "name": "submission_blob_account_submission_kind_position_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "mail_account_id",
-            "submission_id",
-            "kind",
-            "position"
-          ]
+          "columns": ["mail_account_id", "submission_id", "kind", "position"]
         }
       },
       "policies": {},
@@ -4942,12 +4574,8 @@
           "tableFrom": "thread",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4957,10 +4585,7 @@
         "thread_id_account_uidx": {
           "name": "thread_id_account_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "mail_account_id"
-          ]
+          "columns": ["id", "mail_account_id"]
         }
       },
       "policies": {},
@@ -5068,12 +4693,8 @@
           "tableFrom": "thread_reference",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5082,14 +4703,8 @@
           "tableFrom": "thread_reference",
           "tableTo": "email",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "email_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["email_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5098,14 +4713,8 @@
           "tableFrom": "thread_reference",
           "tableTo": "thread",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "thread_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["thread_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5113,12 +4722,7 @@
       "compositePrimaryKeys": {
         "thread_reference_pk": {
           "name": "thread_reference_pk",
-          "columns": [
-            "mail_account_id",
-            "normalized_subject_hash",
-            "message_id_hash",
-            "email_id"
-          ]
+          "columns": ["mail_account_id", "normalized_subject_hash", "message_id_hash", "email_id"]
         }
       },
       "uniqueConstraints": {},
@@ -5172,6 +4776,30 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'activating'"
+        },
+        "subscription_external_id": {
+          "name": "subscription_external_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "subscription_endpoint_token_hash": {
+          "name": "subscription_endpoint_token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "encrypted_subscription_secret": {
+          "name": "encrypted_subscription_secret",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "subscription_established_at": {
+          "name": "subscription_established_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "subscription_expires_at": {
           "name": "subscription_expires_at",
@@ -5293,6 +4921,36 @@
             },
             {
               "expression": "scope_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "inbound_sync_subscription_external_idx": {
+          "name": "inbound_sync_subscription_external_idx",
+          "columns": [
+            {
+              "expression": "subscription_external_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "inbound_sync_subscription_endpoint_token_uidx": {
+          "name": "inbound_sync_subscription_endpoint_token_uidx",
+          "columns": [
+            {
+              "expression": "subscription_endpoint_token_hash",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5432,12 +5090,8 @@
           "tableFrom": "inbound_sync",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5449,6 +5103,10 @@
         "inbound_sync_status_chk": {
           "name": "inbound_sync_status_chk",
           "value": "\"integration\".\"inbound_sync\".\"status\" IN ('activating', 'active', 'paused', 'auth_error')"
+        },
+        "inbound_sync_provider_chk": {
+          "name": "inbound_sync_provider_chk",
+          "value": "\"integration\".\"inbound_sync\".\"provider\" IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')"
         },
         "inbound_sync_scope_version_chk": {
           "name": "inbound_sync_scope_version_chk",
@@ -5563,12 +5221,8 @@
           "tableFrom": "inbound_sync_attempt",
           "tableTo": "inbound_sync_item",
           "schemaTo": "integration",
-          "columnsFrom": [
-            "item_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["item_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5796,12 +5450,8 @@
           "tableFrom": "inbound_sync_item",
           "tableTo": "inbound_sync",
           "schemaTo": "integration",
-          "columnsFrom": [
-            "sync_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["sync_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6008,14 +5658,8 @@
           "tableFrom": "outbound_delivery",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id",
-            "connection_id"
-          ],
-          "columnsTo": [
-            "id",
-            "connection_id"
-          ],
+          "columnsFrom": ["mail_account_id", "connection_id"],
+          "columnsTo": ["id", "connection_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6024,14 +5668,8 @@
           "tableFrom": "outbound_delivery",
           "tableTo": "submission",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "submission_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["submission_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6041,27 +5679,17 @@
         "outbound_delivery_id_account_uidx": {
           "name": "outbound_delivery_id_account_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "mail_account_id"
-          ]
+          "columns": ["id", "mail_account_id"]
         },
         "outbound_delivery_account_submission_uidx": {
           "name": "outbound_delivery_account_submission_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "mail_account_id",
-            "submission_id"
-          ]
+          "columns": ["mail_account_id", "submission_id"]
         },
         "outbound_delivery_id_account_submission_uidx": {
           "name": "outbound_delivery_id_account_submission_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "mail_account_id",
-            "submission_id"
-          ]
+          "columns": ["id", "mail_account_id", "submission_id"]
         }
       },
       "policies": {},
@@ -6214,16 +5842,8 @@
           "tableFrom": "send_attempt",
           "tableTo": "outbound_delivery",
           "schemaTo": "integration",
-          "columnsFrom": [
-            "delivery_id",
-            "mail_account_id",
-            "submission_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id",
-            "submission_id"
-          ],
+          "columnsFrom": ["delivery_id", "mail_account_id", "submission_id"],
+          "columnsTo": ["id", "mail_account_id", "submission_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6232,14 +5852,8 @@
           "tableFrom": "send_attempt",
           "tableTo": "submission",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "submission_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["submission_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6249,19 +5863,12 @@
         "send_attempt_id_account_uidx": {
           "name": "send_attempt_id_account_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "mail_account_id"
-          ]
+          "columns": ["id", "mail_account_id"]
         },
         "send_attempt_account_delivery_number_uidx": {
           "name": "send_attempt_account_delivery_number_uidx",
           "nullsNotDistinct": false,
-          "columns": [
-            "mail_account_id",
-            "delivery_id",
-            "attempt_number"
-          ]
+          "columns": ["mail_account_id", "delivery_id", "attempt_number"]
         }
       },
       "policies": {},
@@ -6404,12 +6011,8 @@
           "tableFrom": "thread_snooze",
           "tableTo": "account",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6418,14 +6021,8 @@
           "tableFrom": "thread_snooze",
           "tableTo": "thread",
           "schemaTo": "mail",
-          "columnsFrom": [
-            "thread_id",
-            "mail_account_id"
-          ],
-          "columnsTo": [
-            "id",
-            "mail_account_id"
-          ],
+          "columnsFrom": ["thread_id", "mail_account_id"],
+          "columnsTo": ["id", "mail_account_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6433,10 +6030,7 @@
       "compositePrimaryKeys": {
         "thread_snooze_pk": {
           "name": "thread_snooze_pk",
-          "columns": [
-            "mail_account_id",
-            "thread_id"
-          ]
+          "columns": ["mail_account_id", "thread_id"]
         }
       },
       "uniqueConstraints": {},

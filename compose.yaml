@@ -15,6 +15,10 @@ x-zero-development: &zero-development
     WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-zerodotemail}
     REDIS_URL: http://upstash-proxy:80
     REDIS_TOKEN: ${REDIS_TOKEN:-upstash-local-token}
+    MAIL_PROTOCOL_WORKER_URL: http://protocol-worker:8790
+    MAIL_PROTOCOL_WORKER_SECRET: ${MAIL_PROTOCOL_WORKER_SECRET:-zero-local-mail-protocol-worker-secret-change-me}
+    MAIL_PROTOCOL_WORKER_PORT: '8790'
+    MAIL_PROTOCOL_ALLOWED_HOSTS: ${MAIL_PROTOCOL_ALLOWED_HOSTS:-}
   volumes:
     - .:/app
     - zero-node-modules:/app/node_modules
@@ -65,6 +69,8 @@ services:
         condition: service_healthy
       upstash-proxy:
         condition: service_healthy
+      protocol-worker:
+        condition: service_healthy
     ports:
       - '${ZERO_SERVER_PORT:-8787}:8787'
     healthcheck:
@@ -79,6 +85,26 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+
+  protocol-worker:
+    <<: *zero-development
+    container_name: zerodotemail-protocol-worker
+    command: ['protocol-worker']
+    restart: unless-stopped
+    expose:
+      - '8790'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8790/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
   db:
     container_name: zerodotemail-db

@@ -25,6 +25,7 @@ const connection = {
     expires_at: '2026-07-24T15:00:00.000Z',
     raw: { refresh_token: 'must-not-store' },
   },
+  connection_config: {},
 };
 
 const createChannel = () =>
@@ -232,6 +233,77 @@ describe('Nango mailbox binding', () => {
       accessToken: 'nango-access-token',
       scope: '',
     });
+  });
+
+  it('binds generic-email BASIC credentials through the IMAP/SMTP plugin contract', async () => {
+    const repository = createRepository();
+    const channel = {
+      id: 'imap_smtp',
+      providerKey: 'imap_smtp',
+      displayName: 'IMAP/SMTP',
+      nangoProviders: ['generic-email'],
+      capabilities: new Set(),
+      credentialTypes: new Set(['imap_smtp']),
+      resolveIdentity: vi.fn().mockResolvedValue({
+        email: 'owner@example.com',
+        name: '',
+        picture: '',
+      }),
+    } satisfies MailChannelPlugin;
+    const genericConnection = {
+      ...connection,
+      provider_config_key: 'generic-email-primary',
+      provider: 'generic-email',
+      credentials: {
+        type: 'BASIC' as const,
+        username: 'owner@example.com',
+        password: 'app-password',
+        raw: {},
+      },
+      connection_config: {
+        imapHost: 'imap.example.com',
+        imapPort: '993',
+        smtpHost: 'smtp.example.com',
+        smtpPort: '465',
+      },
+    };
+
+    await bindNangoMailbox(
+      {
+        userId: 'user-1',
+        channelId: 'imap_smtp',
+        integrationId: 'generic-email-primary',
+        connectionId: 'nango-1',
+      },
+      {
+        client: {
+          getConnection: vi.fn().mockResolvedValue(genericConnection),
+        } as unknown as NangoClient,
+        getChannel: vi.fn().mockReturnValue(channel),
+        isIntegrationAvailable: vi.fn().mockResolvedValue(true),
+        repository,
+        encryptionKey,
+        now: () => new Date('2026-07-24T12:00:00.000Z'),
+      },
+    );
+
+    expect(channel.resolveIdentity).toHaveBeenCalledWith({
+      credential: {
+        type: 'imap_smtp',
+        email: 'owner@example.com',
+        username: 'owner@example.com',
+        password: 'app-password',
+        imap: { host: 'imap.example.com', port: 993, secure: true },
+        smtp: { host: 'smtp.example.com', port: 465, secure: true },
+      },
+    });
+    expect(repository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authorization: expect.objectContaining({
+          credentialType: 'custom',
+        }),
+      }),
+    );
   });
 });
 

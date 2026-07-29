@@ -3,17 +3,21 @@ import { z } from 'zod';
 import { createPostgresConnectionRepository } from '../../modules/mail-accounts/postgres/connection-repository';
 import { provisionGmailMailboxInDatabase } from '../../modules/mail-accounts/runtime/provision-gmail-mailbox';
 import { NangoChannelMappingService } from '../../modules/mail-accounts/application/nango-channel-mapping';
+import { createMailChannelConfigService } from '../../integrations/mail-channel/channel-config-service';
 import { type GmailOAuthService } from '../../modules/mail-accounts/application/connect-gmail-oauth';
 import { createPostgresMailSyncRepository } from '../../modules/mail-sync/postgres/sync-repository';
 import { createChannelConfigRepository } from '../../integrations/core/channel-config-repository';
 import { createGmailChannelConfigService } from '../../integrations/gmail/channel-config-service';
 import { normalizeMailboxEmail } from '../../modules/mail-accounts/application/mailbox-identity';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
+import { createChannelOAuthApplication } from '../../runtime/mail/channel-oauth';
 import { getNangoServiceForEnvironment } from '../../integrations/nango/runtime';
 import type { NangoIntegrationService } from '../../integrations/nango/service';
 import { gmailChannelConfigInputSchema } from '../../mail-channel/gmail/config';
+import { disableChannelSubscriptions } from '../../runtime/mail/channel-watch';
 import { createGmailOAuthApplication } from '../../runtime/mail/gmail-oauth';
 import { defaultMailChannelRegistry } from '../../mail-channel/registry';
+import { mailChannelConfigInputSchema } from '../../mail-channel/config';
 import { mailChannelIds } from '../../mail-channel/contracts';
 import { mapIntegrationError } from './integration-errors';
 import { adminProcedure, router } from '../trpc';
@@ -24,7 +28,10 @@ type IntegrationServices = {
   nango: NangoIntegrationService;
   nangoChannels: NangoChannelMappingService;
   gmail: GmailOAuthService;
+  outlookOAuth: ReturnType<typeof createChannelOAuthApplication>;
+  zohoOAuth: ReturnType<typeof createChannelOAuthApplication>;
   gmailChannel: ReturnType<typeof createGmailChannelConfigService>;
+  channels: ReturnType<typeof createMailChannelConfigService>;
 };
 
 const withIntegrationServices = async <T>(
@@ -68,6 +75,8 @@ const withIntegrationServices = async <T>(
         encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
         backendUrl: env.VITE_PUBLIC_BACKEND_URL,
       }),
+      outlookOAuth: createChannelOAuthApplication(db, env, 'outlook'),
+      zohoOAuth: createChannelOAuthApplication(db, env, 'zoho_mail'),
       gmailChannel: createGmailChannelConfigService({
         channels: channelConfigs,
         integrations: repository,
@@ -78,6 +87,27 @@ const withIntegrationServices = async <T>(
             provider,
             dueAt: new Date(),
           });
+        },
+        disableSubscriptions: async (provider) => {
+          await disableChannelSubscriptions(db, env, provider);
+        },
+      }),
+      channels: createMailChannelConfigService({
+        channels: channelConfigs,
+        integrations: repository,
+        getNangoStatus: () => nango.getStatus(),
+        publicBackendUrl: env.VITE_PUBLIC_BACKEND_URL,
+        protocolWorkerAvailable:
+          env.MAIL_PROTOCOL_WORKER_URL !== undefined &&
+          env.MAIL_PROTOCOL_WORKER_SECRET !== undefined,
+        requestSubscriptionRefresh: async (provider) => {
+          await createPostgresMailSyncRepository(db).markSubscriptionsDue({
+            provider,
+            dueAt: new Date(),
+          });
+        },
+        disableSubscriptions: async (provider) => {
+          await disableChannelSubscriptions(db, env, provider);
         },
       }),
     });
@@ -93,8 +123,19 @@ const gmailCandidateSchema = z.object({
 
 export const integrationsRouter = router({
   getChannels: adminProcedure.query(async ({ ctx }) => {
-    return await withIntegrationServices(ctx.c.env, async ({ gmailChannel }) => {
-      const gmailConfig = await gmailChannel.get();
+    return await withIntegrationServices(ctx.c.env, async ({ gmailChannel, channels }) => {
+      const [gmailConfig, outlookConfig, zohoConfig, imapConfig] = await Promise.all([
+        gmailChannel.get(),
+        channels.get('outlook'),
+        channels.get('zoho_mail'),
+        channels.get('imap_smtp'),
+      ]);
+      const configurations = {
+        gmail: gmailConfig,
+        outlook: outlookConfig,
+        zoho_mail: zohoConfig,
+        imap_smtp: imapConfig,
+      };
       const displayNames = {
         gmail: 'Gmail',
         outlook: 'Outlook',
@@ -107,7 +148,7 @@ export const integrationsRouter = router({
           channelId,
           displayName: plugin?.displayName ?? displayNames[channelId],
           available: plugin !== undefined,
-          configured: channelId === 'gmail' && gmailConfig.configured,
+          configured: configurations[channelId].configured,
         };
       });
     });
@@ -133,6 +174,35 @@ export const integrationsRouter = router({
       }
     }),
 
+  getChannelConfig: adminProcedure
+    .input(z.object({ channelId: z.enum(['outlook', 'zoho_mail', 'imap_smtp']) }))
+    .query(async ({ input, ctx }) => {
+      try {
+        return await withIntegrationServices(ctx.c.env, ({ channels }) =>
+          channels.get(input.channelId),
+        );
+      } catch (error) {
+        mapIntegrationError(error);
+      }
+    }),
+
+  saveChannelConfig: adminProcedure
+    .input(mailChannelConfigInputSchema)
+    .mutation(async ({ input, ctx }) => {
+      try {
+        if (input.channelId === 'gmail') {
+          return await withIntegrationServices(ctx.c.env, ({ gmailChannel }) =>
+            gmailChannel.save({ ...input, updatedBy: ctx.sessionUser.id }),
+          );
+        }
+        return await withIntegrationServices(ctx.c.env, ({ channels }) =>
+          channels.save({ ...input, updatedBy: ctx.sessionUser.id }),
+        );
+      } catch (error) {
+        mapIntegrationError(error);
+      }
+    }),
+
   listNangoGmailIntegrations: adminProcedure.query(async ({ ctx }) => {
     try {
       return await withIntegrationServices(ctx.c.env, async ({ nangoChannels }) =>
@@ -152,6 +222,41 @@ export const integrationsRouter = router({
       try {
         await withIntegrationServices(ctx.c.env, ({ nangoChannels }) =>
           nangoChannels.setMapping('gmail', input.integrationId),
+        );
+        return { saved: true };
+      } catch (error) {
+        mapIntegrationError(error);
+      }
+    }),
+
+  listNangoIntegrations: adminProcedure
+    .input(z.object({ channelId: z.enum(mailChannelIds) }))
+    .query(async ({ input, ctx }) => {
+      try {
+        return await withIntegrationServices(ctx.c.env, async ({ nangoChannels }) =>
+          (await nangoChannels.listIntegrations(input.channelId)).map(
+            ({ unique_key, display_name }) => ({
+              integrationId: unique_key,
+              displayName: display_name,
+            }),
+          ),
+        );
+      } catch (error) {
+        mapIntegrationError(error);
+      }
+    }),
+
+  setNangoIntegration: adminProcedure
+    .input(
+      z.object({
+        channelId: z.enum(mailChannelIds),
+        integrationId: z.string().trim().min(1),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        await withIntegrationServices(ctx.c.env, ({ nangoChannels }) =>
+          nangoChannels.setMapping(input.channelId, input.integrationId),
         );
         return { saved: true };
       } catch (error) {
@@ -192,4 +297,61 @@ export const integrationsRouter = router({
       mapIntegrationError(error);
     }
   }),
+
+  startChannelOAuthValidation: adminProcedure
+    .input(
+      gmailCandidateSchema.extend({
+        channelId: z.enum(['outlook', 'zoho_mail']),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        return await withIntegrationServices(ctx.c.env, (services) =>
+          (input.channelId === 'outlook'
+            ? services.outlookOAuth
+            : services.zohoOAuth
+          ).startValidation({
+            clientId: input.clientId,
+            clientSecret: input.clientSecret,
+            adminId: ctx.sessionUser.id,
+          }),
+        );
+      } catch (error) {
+        mapIntegrationError(error);
+      }
+    }),
+
+  getChannelOAuthValidationStatus: adminProcedure
+    .input(
+      z.object({
+        channelId: z.enum(['outlook', 'zoho_mail']),
+        sessionId: z.string().min(1),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      try {
+        const status = await withIntegrationServices(ctx.c.env, (services) =>
+          (input.channelId === 'outlook'
+            ? services.outlookOAuth
+            : services.zohoOAuth
+          ).getValidationStatus(input.sessionId, ctx.sessionUser.id),
+        );
+        return { status };
+      } catch (error) {
+        mapIntegrationError(error);
+      }
+    }),
+
+  deleteChannelZeroOAuth: adminProcedure
+    .input(z.object({ channelId: z.enum(['outlook', 'zoho_mail']) }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        await withIntegrationServices(ctx.c.env, (services) =>
+          (input.channelId === 'outlook' ? services.outlookOAuth : services.zohoOAuth).delete(),
+        );
+        return { deleted: true };
+      } catch (error) {
+        mapIntegrationError(error);
+      }
+    }),
 });

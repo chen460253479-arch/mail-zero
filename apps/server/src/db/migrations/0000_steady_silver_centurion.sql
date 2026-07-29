@@ -73,6 +73,7 @@ CREATE TABLE "integration"."channel_config" (
 	"created_at" timestamp with time zone NOT NULL,
 	"updated_at" timestamp with time zone NOT NULL,
 	CONSTRAINT "channel_config_channel_id_unique" UNIQUE("channel_id"),
+	CONSTRAINT "channel_config_channel_id_chk" CHECK ("integration"."channel_config"."channel_id" IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')),
 	CONSTRAINT "channel_config_auth_source_chk" CHECK ("integration"."channel_config"."auth_source" IN ('zero_oauth', 'nango', 'manual')),
 	CONSTRAINT "channel_config_sync_interval_chk" CHECK ("integration"."channel_config"."sync_interval_minutes" BETWEEN 1 AND 1440)
 );
@@ -85,6 +86,7 @@ CREATE TABLE "integration"."channel_mapping" (
 	"created_at" timestamp with time zone NOT NULL,
 	"updated_at" timestamp with time zone NOT NULL,
 	CONSTRAINT "channel_mapping_channel_auth_uidx" UNIQUE("channel_id","auth_source"),
+	CONSTRAINT "channel_mapping_channel_id_chk" CHECK ("integration"."channel_mapping"."channel_id" IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')),
 	CONSTRAINT "channel_mapping_auth_source_chk" CHECK ("integration"."channel_mapping"."auth_source" = 'nango')
 );
 --> statement-breakpoint
@@ -104,6 +106,7 @@ CREATE TABLE "integration"."connection" (
 	CONSTRAINT "connection_user_channel_email_uidx" UNIQUE("user_id","channel_id","normalized_email"),
 	CONSTRAINT "connection_id_user_id_uidx" UNIQUE("id","user_id"),
 	CONSTRAINT "connection_status_chk" CHECK ("integration"."connection"."status" IN ('connected', 'disconnecting', 'disconnected', 'reconnect_required', 'deleting')),
+	CONSTRAINT "connection_channel_id_chk" CHECK ("integration"."connection"."channel_id" IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')),
 	CONSTRAINT "connection_provider_key_chk" CHECK ("integration"."connection"."provider_key" ~ '^[a-z][a-z0-9]*([._-][a-z0-9]+)*$')
 );
 --> statement-breakpoint
@@ -142,7 +145,7 @@ CREATE TABLE "integration"."oauth_session" (
 	"consumed_at" timestamp with time zone,
 	"created_at" timestamp with time zone NOT NULL,
 	CONSTRAINT "oauth_session_state_hash_unique" UNIQUE("state_hash"),
-	CONSTRAINT "oauth_session_integration_key_chk" CHECK ("integration"."oauth_session"."integration_key" = 'gmail_zero_oauth'),
+	CONSTRAINT "oauth_session_integration_key_chk" CHECK ("integration"."oauth_session"."integration_key" IN ('gmail_zero_oauth', 'outlook_zero_oauth', 'zoho_mail_zero_oauth')),
 	CONSTRAINT "oauth_session_purpose_chk" CHECK ("integration"."oauth_session"."purpose" IN ('validate_config', 'connect_mailbox'))
 );
 --> statement-breakpoint
@@ -189,7 +192,7 @@ CREATE TABLE "integration"."system_config" (
 	"created_at" timestamp with time zone NOT NULL,
 	"updated_at" timestamp with time zone NOT NULL,
 	CONSTRAINT "system_config_integration_key_unique" UNIQUE("integration_key"),
-	CONSTRAINT "system_integration_key_chk" CHECK ("integration"."system_config"."integration_key" IN ('gmail_zero_oauth')),
+	CONSTRAINT "system_integration_key_chk" CHECK ("integration"."system_config"."integration_key" IN ('gmail_zero_oauth', 'outlook_zero_oauth', 'zoho_mail_zero_oauth')),
 	CONSTRAINT "system_integration_status_chk" CHECK ("integration"."system_config"."status" IN ('active', 'error'))
 );
 --> statement-breakpoint
@@ -419,7 +422,8 @@ CREATE TABLE "integration"."remote_email" (
 	"email_id" text NOT NULL,
 	"content_fingerprint" text,
 	"first_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"last_seen_at" timestamp with time zone DEFAULT now() NOT NULL
+	"last_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "remote_email_provider_chk" CHECK ("integration"."remote_email"."provider" IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp'))
 );
 --> statement-breakpoint
 CREATE TABLE "mail"."mailbox" (
@@ -533,6 +537,10 @@ CREATE TABLE "integration"."inbound_sync" (
 	"scope" jsonb NOT NULL,
 	"checkpoint" jsonb,
 	"status" text DEFAULT 'activating' NOT NULL,
+	"subscription_external_id" text,
+	"subscription_endpoint_token_hash" text,
+	"encrypted_subscription_secret" text,
+	"subscription_established_at" timestamp with time zone,
 	"subscription_expires_at" timestamp with time zone,
 	"last_signal_at" timestamp with time zone,
 	"last_discovered_at" timestamp with time zone,
@@ -550,6 +558,7 @@ CREATE TABLE "integration"."inbound_sync" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "inbound_sync_status_chk" CHECK ("integration"."inbound_sync"."status" IN ('activating', 'active', 'paused', 'auth_error')),
+	CONSTRAINT "inbound_sync_provider_chk" CHECK ("integration"."inbound_sync"."provider" IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')),
 	CONSTRAINT "inbound_sync_scope_version_chk" CHECK (CASE
         WHEN jsonb_typeof("integration"."inbound_sync"."scope"->'version') = 'number'
         THEN ("integration"."inbound_sync"."scope"->>'version')::numeric >= 1
@@ -821,6 +830,8 @@ CREATE INDEX "thread_account_latest_id_idx" ON "mail"."thread" USING btree ("mai
 CREATE INDEX "thread_reference_account_thread_idx" ON "mail"."thread_reference" USING btree ("mail_account_id","thread_id");--> statement-breakpoint
 CREATE INDEX "thread_reference_account_email_idx" ON "mail"."thread_reference" USING btree ("mail_account_id","email_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "inbound_sync_account_provider_scope_uidx" ON "integration"."inbound_sync" USING btree ("account_id","provider","scope_key");--> statement-breakpoint
+CREATE INDEX "inbound_sync_subscription_external_idx" ON "integration"."inbound_sync" USING btree ("subscription_external_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "inbound_sync_subscription_endpoint_token_uidx" ON "integration"."inbound_sync" USING btree ("subscription_endpoint_token_hash");--> statement-breakpoint
 CREATE INDEX "inbound_sync_due_reconcile_idx" ON "integration"."inbound_sync" USING btree ("next_reconcile_at","id") WHERE "integration"."inbound_sync"."status" = 'active';--> statement-breakpoint
 CREATE INDEX "inbound_sync_due_renewal_idx" ON "integration"."inbound_sync" USING btree ("subscription_expires_at","id") WHERE "integration"."inbound_sync"."status" = 'active' AND "integration"."inbound_sync"."subscription_expires_at" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "inbound_sync_lease_idx" ON "integration"."inbound_sync" USING btree ("lease_expires_at","id") WHERE "integration"."inbound_sync"."lease_expires_at" IS NOT NULL;--> statement-breakpoint

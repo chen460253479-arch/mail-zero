@@ -44,13 +44,14 @@ describe('Docker development stack', () => {
   it('runs the full local stack as independently managed services', () => {
     const compose = read('compose.yaml');
 
-    for (const service of ['mail', 'server', 'db', 'valkey', 'upstash-proxy']) {
+    for (const service of ['mail', 'server', 'protocol-worker', 'db', 'valkey', 'upstash-proxy']) {
       expect(compose).toMatch(new RegExp(`^  ${service}:`, 'm'));
     }
     expect(compose).not.toMatch(/^  app:/m);
     expect(compose).not.toMatch(/^  migrations:/m);
     expect(compose).toContain('container_name: zerodotemail-mail');
     expect(compose).toContain('container_name: zerodotemail-server');
+    expect(compose).toContain('container_name: zerodotemail-protocol-worker');
     expect(compose).toContain('container_name: zerodotemail-db');
     expect(compose).toContain('container_name: zerodotemail-redis');
     expect(compose).toContain('container_name: zerodotemail-upstash-proxy');
@@ -62,7 +63,9 @@ describe('Docker development stack', () => {
     expect(compose).toContain('http://127.0.0.1:3000/health');
     expect(compose).not.toContain('/@vite/client');
     expect(compose).toContain("fetch('http://127.0.0.1:8787/health')");
-    expect([...compose.matchAll(/process\.exit\(response\.ok \? 0 : 1\)/g)]).toHaveLength(1);
+    expect(compose).toContain("fetch('http://127.0.0.1:8790/health')");
+    expect([...compose.matchAll(/process\.exit\(response\.ok \? 0 : 1\)/g)]).toHaveLength(2);
+    expect(compose).toMatch(/  protocol-worker:\n(?:    .*\n)*?    expose:\n      - '8790'/);
   });
 
   it('keeps Linux dependencies outside the Windows source mount', () => {

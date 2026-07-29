@@ -15,6 +15,10 @@ describe('inbound synchronization state schema', () => {
         'next_reconcile_at',
         'dispatch_lease_owner',
         'dispatch_lease_expires_at',
+        'subscription_external_id',
+        'subscription_endpoint_token_hash',
+        'encrypted_subscription_secret',
+        'subscription_established_at',
       ]),
     );
     expect(config.checks.map(({ name }) => name)).toEqual(
@@ -29,6 +33,8 @@ describe('inbound synchronization state schema', () => {
         'inbound_sync_due_reconcile_idx',
         'inbound_sync_due_dispatch_idx',
         'inbound_sync_dispatch_lease_idx',
+        'inbound_sync_subscription_external_idx',
+        'inbound_sync_subscription_endpoint_token_uidx',
       ]),
     );
   });
