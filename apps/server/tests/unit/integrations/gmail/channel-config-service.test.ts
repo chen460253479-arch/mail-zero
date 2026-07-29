@@ -130,6 +130,7 @@ describe('Gmail channel configuration service', () => {
 
     expect(saved).toMatchObject({
       authSource: 'nango',
+      authSourceLocked: true,
       authorizationSources: {
         nango: {
           state: 'available',
@@ -139,6 +140,39 @@ describe('Gmail channel configuration service', () => {
       },
     });
     expect(saved.authorizationSources.nango).not.toHaveProperty('gmailIntegrationId');
+  });
+
+  it('blocks changing the configured authorization source without mailbox bindings', async () => {
+    integrations.set('gmail_zero_oauth', activeIntegration());
+    nangoStatus = {
+      state: 'available',
+      checkedAt: now,
+      errorCode: null,
+    };
+    channels.current = {
+      id: 'gmail-channel-config',
+      channelId: 'gmail',
+      authSource: 'nango',
+      inboxWatchEnabled: false,
+      scheduledSyncEnabled: true,
+      syncIntervalMinutes: 10,
+      providerConfig: {},
+      updatedBy: 'admin-1',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await expect(
+      createGmailChannelConfigService(dependencies).save({
+        authSource: 'zero_oauth',
+        inboxWatchEnabled: false,
+        scheduledSyncEnabled: true,
+        syncIntervalMinutes: 10,
+        providerConfig: {},
+        updatedBy: 'admin-1',
+      }),
+    ).rejects.toMatchObject({ code: 'GMAIL_AUTH_SOURCE_IN_USE' });
+    expect(channels.current.authSource).toBe('nango');
   });
 
   it('rejects Zero OAuth mode until its validated configuration is active', async () => {
@@ -284,9 +318,6 @@ describe('Gmail channel configuration service', () => {
       syncIntervalMinutes: 10,
       providerConfig: {
         topicName: 'projects/zero-mail/topics/gmail-inbound',
-        subscriptionName: 'projects/zero-mail/subscriptions/gmail-inbound-push',
-        pushAudience: 'https://mail.example.test/api/mail/channels/gmail/push',
-        pushServiceAccount: 'gmail-push@zero-mail.iam.gserviceaccount.com',
       },
       updatedBy: 'admin-1',
     });

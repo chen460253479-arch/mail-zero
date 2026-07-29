@@ -64,7 +64,7 @@ describe('Docker Mail static runtime', () => {
     expect(buildArgs).not.toHaveProperty('NANGO_IMAP_SMTP_INTEGRATION_KEY');
   });
 
-  it('keeps Server on the persisted development runtime', () => {
+  it('keeps Server on its isolated immutable runtime', () => {
     const server = compose.services.server;
     const volumeTargets = (server.volumes ?? []).map((volume) =>
       typeof volume === 'object' && volume !== null && 'target' in volume
@@ -72,10 +72,10 @@ describe('Docker Mail static runtime', () => {
         : '',
     );
 
-    expect(server.image).toBe('zero-development');
-    expect(server.command).toEqual(['server']);
-    expect(volumeTargets).toContain('/app');
-    expect(volumeTargets).toContain('/app/node_modules');
-    expect(server.environment).toHaveProperty('CHOKIDAR_USEPOLLING', 'true');
+    expect(server.image).toBe('zero-server-runtime');
+    expect(server.build?.dockerfile).toBe('docker/server/Dockerfile');
+    expect(server.command ?? null).toBeNull();
+    expect(volumeTargets).toEqual(['/var/lib/zero/wrangler']);
+    expect(server.environment).not.toHaveProperty('CHOKIDAR_USEPOLLING');
   });
 });

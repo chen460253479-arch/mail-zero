@@ -117,7 +117,7 @@ export const createGmailChannelConfigService = (
       ...config,
       configured: record !== null,
       manualOnly: !config.inboxWatchEnabled && !config.scheduledSyncEnabled,
-      authSourceLocked: bindingCount > 0,
+      authSourceLocked: record !== null || bindingCount > 0,
       bindingCount,
       webhookUrl: `${backendBaseUrl}/api/mail/channels/gmail/push`,
       authorizationSources: {
@@ -175,6 +175,7 @@ export const createGmailChannelConfigService = (
             : null;
       const currentSource = currentRecord?.authSource ?? boundSource;
       if (
+        (currentRecord !== null && currentRecord.authSource !== candidate.authSource) ||
         (nangoBindings > 0 && zeroOAuthBindings > 0) ||
         (nangoBindings + zeroOAuthBindings > 0 &&
           (currentSource === null || currentSource !== candidate.authSource))

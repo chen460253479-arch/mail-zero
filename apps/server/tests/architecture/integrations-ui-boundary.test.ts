@@ -57,4 +57,54 @@ describe('administrator integrations UI boundary', () => {
       expect(source).not.toContain("nango.state === 'validating'");
     }
   });
+
+  it('exposes only the Gmail Pub/Sub topic as editable Inbox Watch configuration', () => {
+    const source = [
+      read('apps/mail/components/integrations/gmail-settings-dialog.tsx'),
+      read('apps/mail/modules/integrations/gmail-config.ts'),
+    ].join('\n');
+
+    for (const forbidden of [
+      'subscriptionName',
+      'pushAudience',
+      'pushServiceAccount',
+      'Subscription name',
+      'OIDC audience',
+      'Push service account',
+    ]) {
+      expect(source).not.toContain(forbidden);
+    }
+  });
+
+  it('clears the dirty guard before closing after a successful Gmail save refresh', () => {
+    const source = read('apps/mail/components/integrations/gmail-settings-dialog.tsx');
+    const saveStart = source.indexOf('const save = async () => {');
+    const saveEnd = source.indexOf('const validateGmailOAuth', saveStart);
+    const saveSource = source.slice(saveStart, saveEnd);
+    const catchStart = saveSource.indexOf('} catch {');
+    const successSource = saveSource.slice(0, catchStart);
+    const failureSource = saveSource.slice(catchStart);
+
+    expect(saveStart).toBeGreaterThanOrEqual(0);
+    expect(saveEnd).toBeGreaterThan(saveStart);
+    expect(catchStart).toBeGreaterThanOrEqual(0);
+    expect(successSource).toContain('await refresh()');
+    expect(successSource.indexOf('await refresh()')).toBeLessThan(
+      successSource.indexOf('dirtyRef.current = false'),
+    );
+    expect(successSource.indexOf('dirtyRef.current = false')).toBeLessThan(
+      successSource.indexOf('requestClose(false)'),
+    );
+    expect(successSource).not.toContain('onOpenChange(false)');
+    expect(failureSource).not.toContain('requestClose(false)');
+  });
+
+  it('waits for the latest Gmail configuration to hydrate before rendering the form', () => {
+    const source = read('apps/mail/components/integrations/gmail-settings-dialog.tsx');
+
+    expect(source).toContain('hydratedConfigUpdatedAt');
+    expect(source).toContain('setHydratedConfigUpdatedAt(config.dataUpdatedAt)');
+    expect(source).toContain('config.isFetching');
+    expect(source).toContain('hydratedConfigUpdatedAt !== config.dataUpdatedAt');
+  });
 });

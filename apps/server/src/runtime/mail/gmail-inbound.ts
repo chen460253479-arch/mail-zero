@@ -3,13 +3,10 @@ import {
   parseGmailChannelConfig,
   type GmailChannelConfig,
 } from '../../mail-channel/gmail/config';
-import {
-  defaultGmailPushAuthenticator,
-  handleGmailWebhookRequest,
-} from '../../mail-channel/gmail/inbound/webhook';
 import { createPostgresMailSyncRepository } from '../../modules/mail-sync/postgres/sync-repository';
 import { createChannelConfigRepository } from '../../integrations/core/channel-config-repository';
 import { activateChannelInboundForAccount, activateChannelInboundForConnection } from './inbound';
+import { handleGmailWebhookRequest } from '../../mail-channel/gmail/inbound/webhook';
 import { createGmailCredentialContext } from './gmail-credential-context';
 import { createGmailPlugin } from '../../mail-channel/gmail/plugin';
 import { createDb, type DB } from '../../db';
@@ -81,7 +78,6 @@ export const handleGmailWebhookForEnvironment = async (
     const repository = createPostgresMailSyncRepository(db);
     return await handleGmailWebhookRequest(request, {
       getChannelConfig: () => readGmailChannelConfig(db),
-      authenticatePush: defaultGmailPushAuthenticator,
       recordSignal: (signal) => repository.recordSignal(signal),
       enqueueDiscover: (syncId) => runtimeEnv.MAIL_INGRESS_QUEUE.send({ type: 'discover', syncId }),
     });

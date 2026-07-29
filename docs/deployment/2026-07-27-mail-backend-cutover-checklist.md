@@ -25,9 +25,8 @@
 - [ ] 数据库已由当前模板清空重建，`mail`、`integration`、`app`、`auth` Schema 与代码一致。
 - [ ] `MAIL_INGRESS_QUEUE`、`MAIL_OUTBOUND_QUEUE` 已创建且生产者、消费者均绑定。
 - [ ] `THREADS_BUCKET` 和 `HYPERDRIVE` 仍指向当前环境的正式资源。
-- [ ] Gmail Pub/Sub 四项配置已注入：
-      `GMAIL_PUBSUB_TOPIC_NAME`、`GMAIL_PUBSUB_SUBSCRIPTION_NAME`、
-      `GMAIL_PUBSUB_PUSH_AUDIENCE`、`GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT`。
+- [ ] Gmail 渠道已启用 Inbox Watch，并在管理界面中保存完整的 Topic name。
+- [ ] Nginx 已将管理界面只读展示的 Gmail Webhook URL 通过公网 HTTPS 暴露。
 - [ ] `CREDENTIAL_ENCRYPTION_KEY`、Gmail OAuth、Nango 等凭证由部署 Secret 提供，未写入仓库。
 - [ ] Wrangler dry-run 在 local、staging、production 三个环境通过。
 - [ ] PostgreSQL 集成测试、Mail Core 测试、服务端 TypeScript 检查和前端生产构建通过。
@@ -36,21 +35,12 @@
 
 每个 GCP Project 执行一次：
 
-- [ ] Topic 名称与 `GMAIL_PUBSUB_TOPIC_NAME` 完全一致，格式为
-      `projects/{project}/topics/{topic}`。
+- [ ] Gmail 渠道中配置的 Topic name 格式为 `projects/{project}/topics/{topic}`。
 - [ ] Gmail 系统发布身份 `gmail-api-push@system.gserviceaccount.com` 对 Topic 具有
       `roles/pubsub.publisher`。
-- [ ] Push Subscription 名称与 `GMAIL_PUBSUB_SUBSCRIPTION_NAME` 完全一致，格式为
-      `projects/{project}/subscriptions/{subscription}`。
-- [ ] Push URL 为
-      `{VITE_PUBLIC_BACKEND_URL}/api/mail/channels/gmail/push`，且仅使用 HTTPS。
-- [ ] Push Subscription 启用 OIDC；签发身份为
-      `GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT`。
-- [ ] OIDC Audience 与 `GMAIL_PUBSUB_PUSH_AUDIENCE` 完全一致。
-- [ ] Pub/Sub 服务代理具备用指定服务账号签发 OIDC Token 所需权限。
-- [ ] 推送请求包含正确的
-      `x-goog-pubsub-subscription-name`，服务端会同时验证 Subscription、Issuer、
-      Audience 和 Service Account。
+- [ ] 已创建一条指向 Zero Gmail Webhook URL 的 Push Subscription；Subscription 名称由
+      GCP 部署侧自行管理，不写入 Zero。
+- [ ] Push URL 与 Gmail 渠道界面只读展示的 Webhook endpoint 一致，且仅使用 HTTPS。
 - [ ] Topic/Subscription 由部署任务管理；普通账号绑定、断开和删除流程无创建、修改或
       删除共享资源的权限。
 

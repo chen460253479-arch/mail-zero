@@ -108,19 +108,26 @@ You can set up Zero in two ways:
    pnpm docker:deploy
    ```
 
-   Docker runs Mail as a prebuilt Nginx static site and keeps the Wrangler backend in development
-   mode. The deployment command builds both images, initializes the Docker dependency volumes,
+   Docker runs Mail as a prebuilt Nginx static site. Server runs from a prebuilt immutable Worker Bundle. Source changes require rebuilding the Server image.
+   The deployment command builds the images, initializes the Protocol Worker dependency volumes,
    starts the complete stack, waits for every service to become healthy, and prints the final
    service status. It does not initialize, migrate, or clear application database schemas.
 
-   Server source changes are hot-reloaded. Rebuild only Mail after changing frontend source or any
-   `VITE_PUBLIC_*` value:
+   Rebuild only Mail after changing frontend source or any `VITE_PUBLIC_*` value:
 
    ```bash
    docker compose up --detach --build --no-deps mail
    ```
 
    `docker compose restart mail` only restarts the existing frontend image.
+
+   Rebuild only Server after changing backend source:
+
+   ```bash
+   docker compose up --detach --build --no-deps server
+   ```
+
+   Wrangler remains a temporary compatibility runtime and Cloudflare Bindings are unchanged in this phase.
 
 4. **Manage the stack**
 

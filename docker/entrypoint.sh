@@ -55,29 +55,11 @@ esac
 if [ "${dependencies_current}" = false ]; then
   echo "Docker workspace dependencies are not initialized for the current lockfile." >&2
   echo "Run this command explicitly, then start the services again:" >&2
-  echo "  docker compose run --rm server install-dependencies" >&2
+  echo "  docker compose run --rm --no-deps protocol-worker install-dependencies" >&2
   exit 78
 fi
 
 case "${1:-}" in
-  server)
-    exec pnpm --dir apps/server exec wrangler dev \
-      --ip 0.0.0.0 \
-      --port 8787 \
-      --show-interactive-dev-session=false \
-      --experimental-vectorize-bind-to-prod \
-      --env "${ZERO_WRANGLER_ENV:-local}" \
-      --env-file /app/.env \
-      --var "DATABASE_URL:${DATABASE_URL}" \
-      --var "MAIL_PROTOCOL_WORKER_URL:${MAIL_PROTOCOL_WORKER_URL}" \
-      --var "MAIL_PROTOCOL_WORKER_SECRET:${MAIL_PROTOCOL_WORKER_SECRET}" \
-      --var "NANGO_GMAIL_INTEGRATION_KEY:${NANGO_GMAIL_INTEGRATION_KEY}" \
-      --var "NANGO_OUTLOOK_INTEGRATION_KEY:${NANGO_OUTLOOK_INTEGRATION_KEY}" \
-      --var "NANGO_ZOHO_MAIL_INTEGRATION_KEY:${NANGO_ZOHO_MAIL_INTEGRATION_KEY}" \
-      --var "NANGO_IMAP_SMTP_INTEGRATION_KEY:${NANGO_IMAP_SMTP_INTEGRATION_KEY}" \
-      --var "REDIS_URL:${REDIS_URL}" \
-      --var "REDIS_TOKEN:${REDIS_TOKEN}"
-    ;;
   protocol-worker)
     exec pnpm --dir apps/server protocol-worker
     ;;

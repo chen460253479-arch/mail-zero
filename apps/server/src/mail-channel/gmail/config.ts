@@ -1,14 +1,9 @@
 import { z } from 'zod';
 
 const googleTopicName = /^projects\/[^/]+\/topics\/[^/]+$/u;
-const googleSubscriptionName = /^projects\/[^/]+\/subscriptions\/[^/]+$/u;
-const googleServiceAccount = /^[A-Za-z0-9][A-Za-z0-9._-]*@[A-Za-z0-9.-]+\.gserviceaccount\.com$/u;
 
 const providerConfigFields = {
   topicName: z.string().regex(googleTopicName).optional(),
-  subscriptionName: z.string().regex(googleSubscriptionName).optional(),
-  pushAudience: z.string().url().optional(),
-  pushServiceAccount: z.string().regex(googleServiceAccount).optional(),
 };
 
 const commonGmailChannelConfig = z.object({
@@ -26,9 +21,6 @@ export const gmailChannelConfigInputSchema = z.discriminatedUnion('inboxWatchEna
     inboxWatchEnabled: z.literal(true),
     providerConfig: z.object({
       topicName: z.string().regex(googleTopicName),
-      subscriptionName: z.string().regex(googleSubscriptionName),
-      pushAudience: z.string().url(),
-      pushServiceAccount: z.string().regex(googleServiceAccount),
     }),
   }),
 ]);
@@ -37,9 +29,6 @@ export type GmailAuthSource = 'zero_oauth' | 'nango';
 
 export type GmailChannelProviderConfig = {
   topicName?: string;
-  subscriptionName?: string;
-  pushAudience?: string;
-  pushServiceAccount?: string;
 };
 
 export type GmailChannelConfig = z.infer<typeof gmailChannelConfigInputSchema> & {

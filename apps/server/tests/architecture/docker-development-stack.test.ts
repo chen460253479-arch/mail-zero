@@ -15,7 +15,7 @@ describe('Docker development stack', () => {
 
     expect(deploySteps).toEqual([
       'docker compose build',
-      'docker compose run --rm --no-deps server install-dependencies',
+      'docker compose run --rm --no-deps protocol-worker install-dependencies',
       'docker compose up --detach --wait --wait-timeout 180',
       'docker compose ps',
     ]);
@@ -65,20 +65,28 @@ describe('Docker development stack', () => {
     expect(compose).toContain("fetch('http://127.0.0.1:8787/health')");
     expect(compose).toContain("fetch('http://127.0.0.1:8790/health')");
     expect([...compose.matchAll(/process\.exit\(response\.ok \? 0 : 1\)/g)]).toHaveLength(2);
+    expect(compose).toMatch(
+      /  protocol-worker:\n(?:    .*\n)*?    build:\n(?:    .*\n)*?      dockerfile: docker\/Dockerfile/,
+    );
     expect(compose).toMatch(/  protocol-worker:\n(?:    .*\n)*?    expose:\n      - '8790'/);
   });
 
-  it('keeps Linux dependencies outside the Windows source mount', () => {
+  it('keeps development mounts only on Protocol Worker', () => {
     const compose = read('compose.yaml');
     const viteConfig = read('apps/mail/vite.config.ts');
+    const serverBlock = compose.match(/  server:\n([\s\S]*?)\n  protocol-worker:/)?.[1] ?? '';
+    const protocolWorkerBlock = compose.match(/  protocol-worker:\n([\s\S]*?)\n  db:/)?.[1] ?? '';
 
+    expect(serverBlock).not.toContain('- .:/app');
+    expect(serverBlock).not.toContain('/app/node_modules');
+    expect(serverBlock).not.toContain('CHOKIDAR_USEPOLLING');
+    expect(serverBlock).not.toContain('ZERO_DOCKER_DEV');
+    expect(protocolWorkerBlock).toContain('<<: *zero-development');
     expect(compose).toContain('- .:/app');
     expect(compose).toContain('/app/node_modules');
     expect(compose).toContain('/app/apps/mail/node_modules');
     expect(compose).toContain('/app/apps/server/node_modules');
-    expect(compose).toContain('CHOKIDAR_USEPOLLING');
-    expect(compose).toMatch(/CHOKIDAR_INTERVAL: ['"]1000['"]/);
-    expect(compose).toContain('ZERO_DOCKER_DEV');
+    expect(protocolWorkerBlock).toContain("command: ['protocol-worker']");
     expect(viteConfig).toContain("process.env.ZERO_DOCKER_DEV === 'true'");
     expect(viteConfig).toContain('...reactCompilerPlugins');
   });
@@ -87,10 +95,13 @@ describe('Docker development stack', () => {
     const compose = read('compose.yaml');
     const dockerfile = read('docker/Dockerfile');
     const entrypoint = read('docker/entrypoint.sh');
+    const serverEntrypoint = read('docker/server/entrypoint.sh');
     const mailDockerfile = read('docker/mail/Dockerfile');
     const mailNginx = read('docker/mail/nginx.conf');
 
-    expect(compose).toMatch(/  server:\n(?:    .*\n)*?    build:/);
+    expect(compose).toMatch(
+      /  server:\n(?:    .*\n)*?    build:\n(?:    .*\n)*?      dockerfile: docker\/server\/Dockerfile/,
+    );
     expect(compose.match(/dockerfile: docker\/Dockerfile/g)).toHaveLength(1);
     expect(compose).toContain('dockerfile: docker/mail/Dockerfile');
     expect(dockerfile).toContain('FROM node:22-bookworm-slim');
@@ -99,7 +110,8 @@ describe('Docker development stack', () => {
     expect(dockerfile).toContain('COPY docker/entrypoint.sh /usr/local/bin/zero-dev-entrypoint');
     expect(dockerfile).toContain('ENTRYPOINT ["zero-dev-entrypoint"]');
     expect(entrypoint).not.toContain('pnpm --dir apps/mail dev');
-    expect(entrypoint).toContain('wrangler dev');
+    expect(entrypoint).not.toContain('wrangler dev');
+    expect(serverEntrypoint).toContain('wrangler dev');
     expect(entrypoint).not.toContain('migrations)');
     expect(entrypoint).not.toContain('db:push');
     expect(mailDockerfile).toContain('FROM node:22-bookworm-slim AS builder');
@@ -110,6 +122,7 @@ describe('Docker development stack', () => {
     expect(mailNginx).toContain('location = /health');
     expect(mailNginx).toContain('max-age=31536000, immutable');
     expect(mailNginx).toContain('try_files $uri $uri/ /index.html');
+    expect(entrypoint).not.toContain('server)');
   });
 
   it('keeps the development runtime script with its image', () => {
@@ -138,9 +151,15 @@ describe('Docker development stack', () => {
     expect(readme).toContain('docker compose up --build --detach');
     expect(readme).toContain('docker compose logs --follow');
     expect(readme).toContain('Mail as a prebuilt Nginx static site');
-    expect(readme).toContain('Server source changes are hot-reloaded');
+    expect(readme).toContain(
+      'Server runs from a prebuilt immutable Worker Bundle. Source changes require rebuilding the Server image.',
+    );
     expect(readme).toContain('docker compose up --detach --build --no-deps mail');
+    expect(readme).toContain('docker compose up --detach --build --no-deps server');
     expect(readme).toContain('docker compose restart mail');
+    expect(readme).toContain(
+      'Wrangler remains a temporary compatibility runtime and Cloudflare Bindings are unchanged in this phase.',
+    );
     expect(readme).not.toContain('COMPOSE_PROFILES');
     expect(readme).not.toContain('production application container');
     expect(readme).not.toContain('applies migrations automatically');

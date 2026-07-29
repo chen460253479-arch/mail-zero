@@ -4,9 +4,6 @@ export type GmailConfigForm = {
   scheduledSyncEnabled: boolean;
   syncIntervalMinutes: number;
   topicName: string;
-  subscriptionName: string;
-  pushAudience: string;
-  pushServiceAccount: string;
 };
 
 export const defaultGmailConfigForm: GmailConfigForm = {
@@ -15,9 +12,6 @@ export const defaultGmailConfigForm: GmailConfigForm = {
   scheduledSyncEnabled: true,
   syncIntervalMinutes: 10,
   topicName: '',
-  subscriptionName: '',
-  pushAudience: '',
-  pushServiceAccount: '',
 };
 
 export const isManualOnly = (form: GmailConfigForm): boolean =>
@@ -34,15 +28,8 @@ export const getGmailConfigErrors = (
   ) {
     errors.syncIntervalMinutes = 'Enter a value from 1 to 1440';
   }
-  if (form.inboxWatchEnabled) {
-    for (const key of [
-      'topicName',
-      'subscriptionName',
-      'pushAudience',
-      'pushServiceAccount',
-    ] as const) {
-      if (form[key].trim().length === 0) errors[key] = 'Required';
-    }
+  if (form.inboxWatchEnabled && form.topicName.trim().length === 0) {
+    errors.topicName = 'Required';
   }
   return errors;
 };

@@ -16,7 +16,9 @@ describe('Docker workspace dependency bootstrap', () => {
     expect(entrypoint).toContain('scripts/package.json');
     expect(entrypoint).not.toContain('scripts/*/package.json');
     expect(entrypoint).toContain('.zero-dependencies-fingerprint');
-    expect(entrypoint).toContain('docker compose run --rm server install-dependencies');
+    expect(entrypoint).toContain(
+      'docker compose run --rm --no-deps protocol-worker install-dependencies',
+    );
     expect(entrypoint).not.toContain(
       'Workspace dependencies changed; refreshing Docker node_modules volumes...',
     );

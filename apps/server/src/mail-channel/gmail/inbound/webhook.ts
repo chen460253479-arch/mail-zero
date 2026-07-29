@@ -1,5 +1,4 @@
-import { authenticateGmailPush, type GmailPushAuthenticationConfig } from './push-auth';
-import type { GmailChannelConfig, GmailChannelProviderConfig } from '../config';
+import type { GmailChannelConfig } from '../config';
 import { handleGmailPush } from './handle-push';
 
 type GmailSignal = {
@@ -10,25 +9,9 @@ type GmailSignal = {
 
 export type GmailWebhookDependencies = {
   getChannelConfig(): Promise<GmailChannelConfig>;
-  authenticatePush(
-    input: {
-      authorizationHeader: string | undefined;
-      subscriptionName: string | undefined;
-    },
-    config: GmailPushAuthenticationConfig,
-  ): Promise<boolean>;
   recordSignal(signal: GmailSignal): Promise<string[]>;
   enqueueDiscover(syncId: string): Promise<void>;
 };
-
-const requiredPushConfig = (
-  providerConfig: GmailChannelProviderConfig,
-): GmailPushAuthenticationConfig => ({
-  topicName: providerConfig.topicName!,
-  subscriptionName: providerConfig.subscriptionName!,
-  pushAudience: providerConfig.pushAudience!,
-  pushServiceAccount: providerConfig.pushServiceAccount!,
-});
 
 export const handleGmailWebhookRequest = async (
   request: Request,
@@ -37,17 +20,6 @@ export const handleGmailWebhookRequest = async (
   const config = await dependencies.getChannelConfig();
   if (!config.inboxWatchEnabled) {
     return Response.json({ message: 'Watch disabled' }, { status: 200 });
-  }
-
-  const authenticated = await dependencies.authenticatePush(
-    {
-      authorizationHeader: request.headers.get('authorization') ?? undefined,
-      subscriptionName: request.headers.get('x-goog-pubsub-subscription-name') ?? undefined,
-    },
-    requiredPushConfig(config.providerConfig),
-  );
-  if (!authenticated) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   let payload: unknown;
@@ -72,6 +44,3 @@ export const handleGmailWebhookRequest = async (
     { status: 200 },
   );
 };
-
-export const defaultGmailPushAuthenticator: GmailWebhookDependencies['authenticatePush'] =
-  authenticateGmailPush;

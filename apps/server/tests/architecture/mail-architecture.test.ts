@@ -306,14 +306,11 @@ describe('mail server architecture', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps Gmail webhook authentication and payload handling out of the server entrypoint', () => {
+  it('keeps Gmail webhook payload handling out of the server entrypoint', () => {
     const entrypointImports = readImports(resolve(srcRoot, 'main.ts'));
 
     expect(entrypointImports).not.toEqual(
-      expect.arrayContaining([
-        './mail-channel/gmail/inbound/push-auth',
-        './runtime/mail/gmail-inbound-config',
-      ]),
+      expect.arrayContaining(['./runtime/mail/gmail-inbound-config']),
     );
     expect(readFileSync(resolve(srcRoot, 'main.ts'), 'utf8')).not.toContain(
       'recordGmailPushSignal',

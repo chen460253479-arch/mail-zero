@@ -82,12 +82,12 @@ Builder 阶段：
 1. 使用固定 Node.js 与 pnpm 版本；
 2. 复制 `.dockerignore` 允许的 Workspace 源码；
 3. 执行 `pnpm install --frozen-lockfile`；
-4. 使用 Wrangler dry-run 生成单一 Server Bundle；
+4. 使用 Wrangler dry-run 在独立产物目录生成 Server 多模块 Bundle，并以 `main.js` 作为运行入口；
 5. 构建阶段不读取 `.env`，不注入 Nango Secret、数据库密码或其他运行时凭据。
 
 Runtime 阶段：
 
-1. 只复制 Worker Bundle、Wrangler 配置和运行 Wrangler 所需的最小依赖；
+1. 只复制 Worker 构建产物、Wrangler 配置和运行 Wrangler 所需的依赖；
 2. 不复制业务源码目录；
 3. 不运行 `pnpm install`；
 4. 不包含依赖指纹检查和开发依赖卷初始化流程；

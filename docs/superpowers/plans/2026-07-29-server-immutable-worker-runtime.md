@@ -4,7 +4,7 @@
 
 **Goal:** Build Zero Server once during Docker image construction and run an immutable Worker Bundle without host source mounts or runtime TypeScript bundling.
 
-**Architecture:** A dedicated multi-stage Server image uses Wrangler dry-run to produce `/app/server-dist/worker.js`. The runtime image contains only that Bundle, Wrangler runtime dependencies, its configuration and a small environment-file writer; it starts the Bundle through `wrangler dev --no-bundle` while preserving all current Worker Bindings. Protocol Worker remains on the existing development image until its own later migration.
+**Architecture:** A dedicated multi-stage Server image uses Wrangler dry-run to produce a multi-module Worker build under `/app/server-dist`, with `/app/server-dist/main.js` as its entrypoint. The runtime image contains only those build artifacts, Wrangler runtime dependencies, its configuration and a small environment-file writer; it starts the entrypoint through `wrangler dev --no-bundle` while preserving all current Worker Bindings. Protocol Worker remains on the existing development image until its own later migration.
 
 **Tech Stack:** Docker Compose, Node.js 22, pnpm 10.15, Wrangler/Miniflare, POSIX shell, TypeScript 5.8, Vitest 3.
 
@@ -55,11 +55,12 @@ Read the proposed runtime files and assert:
 
 ```ts
 expect(serverDockerfile).toContain('wrangler deploy --dry-run');
-expect(serverDockerfile).toContain('--outfile /app/server-dist/worker.js');
+expect(serverDockerfile).toContain('--outdir /app/server-dist');
+expect(serverDockerfile).not.toContain('--outfile');
 expect(serverDockerfile).toContain('FROM node:22-bookworm-slim AS runtime');
 expect(serverDockerfile).not.toMatch(/FROM node:22-bookworm-slim AS runtime[\s\S]*COPY \. \./);
 expect(serverEntrypoint).toContain('--no-bundle');
-expect(serverEntrypoint).toContain('/app/server-dist/worker.js');
+expect(serverEntrypoint).toContain('/app/server-dist/main.js');
 expect(serverEntrypoint).toContain('--persist-to /var/lib/zero/wrangler');
 expect(serverEntrypoint).not.toContain('pnpm install');
 expect(serverEntrypoint).not.toContain('wrangler deploy');
@@ -226,7 +227,7 @@ RUN mkdir -p /app/server-dist \
     && pnpm --dir apps/server exec wrangler deploy \
       --dry-run \
       --env local \
-      --outfile /app/server-dist/worker.js
+      --outdir /app/server-dist
 ```
 
 Runtime requirements:
@@ -257,7 +258,7 @@ The POSIX shell entrypoint must:
 #!/bin/sh
 set -eu
 
-bundle_path=/app/server-dist/worker.js
+bundle_path=/app/server-dist/main.js
 runtime_env_path="${ZERO_RUNTIME_ENV_PATH:-/run/zero/server.env}"
 wrangler_environment="${ZERO_WRANGLER_ENV:-local}"
 
@@ -423,7 +424,7 @@ Expected: both commands exit 0.
 Run:
 
 ```powershell
-docker run --rm --entrypoint sh zero-server-runtime -c "test -f /app/server-dist/worker.js && test ! -d /app/apps/server/src"
+docker run --rm --entrypoint sh zero-server-runtime -c "test -f /app/server-dist/main.js && test ! -d /app/apps/server/src"
 ```
 
 Expected: exit 0.

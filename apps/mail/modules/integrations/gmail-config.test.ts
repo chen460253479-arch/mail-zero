@@ -28,7 +28,7 @@ describe('Gmail integration form', () => {
     ).toBe(false);
   });
 
-  it('requires Pub/Sub fields only while Inbox Watch is enabled', () => {
+  it('requires only the Pub/Sub topic while Inbox Watch is enabled', () => {
     expect(getGmailConfigErrors(defaultGmailConfigForm)).toEqual({});
     expect(
       getGmailConfigErrors({
@@ -37,9 +37,6 @@ describe('Gmail integration form', () => {
       }),
     ).toEqual({
       topicName: 'Required',
-      subscriptionName: 'Required',
-      pushAudience: 'Required',
-      pushServiceAccount: 'Required',
     });
   });
 });

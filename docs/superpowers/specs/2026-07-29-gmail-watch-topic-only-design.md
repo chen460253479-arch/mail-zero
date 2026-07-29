@@ -82,7 +82,19 @@ Inbox Watch 开启后的界面只显示：
 - `OIDC audience`
 - `Push service account`
 
-其他 Gmail 配置，包括授权方式、定时增量同步开关和同步间隔，保持不变。
+定时增量同步开关和同步间隔保持不变。
+
+授权方式遵循全局单一来源规则：
+
+- Gmail 渠道首次保存后，数据库中的 `authSource` 成为该渠道的固定授权来源。
+- 后续保存可以调整 Watch、Topic 和定时同步配置，但不得切换授权来源。
+- 前端必须等待最新配置完成回填后再展示表单，并禁用已配置渠道的授权来源选择。
+- 后续更换授权来源必须使用独立的渠道重置流程，本次不增加该流程。
+
+保存交互：
+
+- 渠道配置保存并刷新外层集成数据成功后，同步清除未保存标记，显示成功提示并关闭弹窗。
+- 保存或刷新失败时保持弹窗打开，保留当前输入并显示错误提示。
 
 ## 错误处理
 
@@ -99,6 +111,9 @@ Inbox Watch 开启后的界面只显示：
 - 开启 Watch 时只要求 `topicName`。
 - Gmail 渠道配置的解析结果不再保留三个已删除字段。
 - 前端不再渲染或序列化三个已删除字段。
+- Gmail 渠道保存并刷新成功后关闭弹窗，失败时不关闭。
+- Gmail 渠道首次保存后授权来源锁定，API 与前端都不能直接切换。
+- 表单只在最新 Gmail 配置完成回填后展示，已保存的 Nango 不得显示成默认 Zero OAuth。
 - Gmail `watchInbox()` 仍只接收 `topicName`。
 - Webhook 不要求 Authorization Header 或 Subscription Header。
 - Watch 关闭时 Webhook 不记录同步信号。
@@ -112,4 +127,5 @@ Inbox Watch 开启后的界面只显示：
 - Zero 不新增任何 Gmail Pub/Sub 环境变量。
 - Gmail 渠道配置中不再存在 Subscription、OIDC Audience、Push Service Account。
 - 固定 Webhook endpoint 仍然可复制使用。
+- 已配置为 Nango 的 Gmail 渠道重新打开后显示并锁定 Nango。
 - Gmail Watch 创建、续订、Webhook 唤醒和增量同步链路测试全部通过。

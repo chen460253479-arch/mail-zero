@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Inputs, Outputs } from '@zero/server/trpc';
 import { Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -42,9 +42,6 @@ const toForm = (data: NonNullable<GmailConfig>): GmailConfigForm => ({
   scheduledSyncEnabled: data.scheduledSyncEnabled,
   syncIntervalMinutes: data.syncIntervalMinutes,
   topicName: data.providerConfig.topicName ?? '',
-  subscriptionName: data.providerConfig.subscriptionName ?? '',
-  pushAudience: data.providerConfig.pushAudience ?? '',
-  pushServiceAccount: data.providerConfig.pushServiceAccount ?? '',
 });
 
 const waitForValidationPopup = (
@@ -117,6 +114,8 @@ export function GmailSettingsDialog({
   const [baseline, setBaseline] = useState<GmailConfigForm>(defaultGmailConfigForm);
   const [gmailClientId, setGmailClientId] = useState('');
   const [gmailClientSecret, setGmailClientSecret] = useState('');
+  const [hydratedConfigUpdatedAt, setHydratedConfigUpdatedAt] = useState<number | null>(null);
+  const dirtyRef = useRef(false);
 
   useEffect(() => {
     if (!config.data) return;
@@ -124,9 +123,11 @@ export function GmailSettingsDialog({
     setForm(next);
     setBaseline(next);
     setGmailClientId(config.data.authorizationSources.zero_oauth.clientId ?? '');
-  }, [config.data]);
+    setHydratedConfigUpdatedAt(config.dataUpdatedAt);
+  }, [config.data, config.dataUpdatedAt]);
 
   const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
+  dirtyRef.current = dirty;
   const errors = useMemo(() => getGmailConfigErrors(form), [form]);
   const selectedSourceReady =
     form.authSource === 'nango'
@@ -144,7 +145,11 @@ export function GmailSettingsDialog({
   };
 
   const requestClose = (nextOpen: boolean) => {
-    if (!nextOpen && dirty && !window.confirm('Discard the unsaved Gmail channel changes?')) {
+    if (
+      !nextOpen &&
+      dirtyRef.current &&
+      !window.confirm('Discard the unsaved Gmail channel changes?')
+    ) {
       return;
     }
     onOpenChange(nextOpen);
@@ -166,9 +171,6 @@ export function GmailSettingsDialog({
           inboxWatchEnabled: true,
           providerConfig: {
             topicName: form.topicName.trim(),
-            subscriptionName: form.subscriptionName.trim(),
-            pushAudience: form.pushAudience.trim(),
-            pushServiceAccount: form.pushServiceAccount.trim(),
           },
         }
       : {
@@ -176,13 +178,6 @@ export function GmailSettingsDialog({
           inboxWatchEnabled: false,
           providerConfig: {
             ...(form.topicName.trim() ? { topicName: form.topicName.trim() } : {}),
-            ...(form.subscriptionName.trim()
-              ? { subscriptionName: form.subscriptionName.trim() }
-              : {}),
-            ...(form.pushAudience.trim() ? { pushAudience: form.pushAudience.trim() } : {}),
-            ...(form.pushServiceAccount.trim()
-              ? { pushServiceAccount: form.pushServiceAccount.trim() }
-              : {}),
           },
         };
     try {
@@ -192,7 +187,9 @@ export function GmailSettingsDialog({
       setForm(next);
       setBaseline(next);
       await refresh();
+      dirtyRef.current = false;
       toast.success('Gmail channel configuration saved');
+      requestClose(false);
     } catch {
       toast.error(
         selectedSourceReady
@@ -275,7 +272,10 @@ export function GmailSettingsDialog({
               Try again
             </Button>
           </div>
-        ) : config.isLoading || !data ? (
+        ) : config.isLoading ||
+          config.isFetching ||
+          !data ||
+          hydratedConfigUpdatedAt !== config.dataUpdatedAt ? (
           <div className="flex flex-1 items-center justify-center">
             <Loader2 className="text-muted-foreground size-6 animate-spin" />
           </div>
@@ -352,8 +352,7 @@ export function GmailSettingsDialog({
                 </RadioGroup>
                 {data.authSourceLocked ? (
                   <p className="text-muted-foreground text-xs">
-                    Disconnect the {data.bindingCount} Gmail mailbox binding
-                    {data.bindingCount === 1 ? '' : 's'} before changing the authorization source.
+                    The authorization source is fixed for this configured Gmail channel.
                   </p>
                 ) : null}
               </FormSection>
@@ -479,34 +478,25 @@ export function GmailSettingsDialog({
                   />
                 </div>
                 {form.inboxWatchEnabled ? (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {[
-                      ['topicName', 'Topic name'],
-                      ['subscriptionName', 'Subscription name'],
-                      ['pushAudience', 'OIDC audience'],
-                      ['pushServiceAccount', 'Push service account'],
-                    ].map(([key, label]) => (
-                      <div key={key} className="grid gap-2">
-                        <Label htmlFor={`gmail-${key}`}>{label}</Label>
-                        <Input
-                          id={`gmail-${key}`}
-                          value={form[key as keyof GmailConfigForm] as string}
-                          aria-invalid={Boolean(errors[key as keyof GmailConfigForm])}
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              [key]: event.target.value,
-                            }))
-                          }
-                        />
-                        {errors[key as keyof GmailConfigForm] ? (
-                          <p className="text-destructive text-xs">
-                            {errors[key as keyof GmailConfigForm]}
-                          </p>
-                        ) : null}
-                      </div>
-                    ))}
-                    <div className="grid gap-2 md:col-span-2">
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="gmail-topic-name">Topic name</Label>
+                      <Input
+                        id="gmail-topic-name"
+                        value={form.topicName}
+                        aria-invalid={Boolean(errors.topicName)}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            topicName: event.target.value,
+                          }))
+                        }
+                      />
+                      {errors.topicName ? (
+                        <p className="text-destructive text-xs">{errors.topicName}</p>
+                      ) : null}
+                    </div>
+                    <div className="grid gap-2">
                       <Label>Webhook endpoint</Label>
                       <Input readOnly value={data.webhookUrl} />
                       <p className="text-muted-foreground text-xs">

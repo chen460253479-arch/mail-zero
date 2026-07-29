@@ -33,9 +33,6 @@ describe('Gmail inbound trigger policy', () => {
       syncIntervalMinutes: 10,
       providerConfig: {
         topicName: 'projects/zero-mail/topics/gmail-inbound',
-        subscriptionName: 'projects/zero-mail/subscriptions/gmail-inbound-push',
-        pushAudience: 'https://mail.example.test/api/mail/channels/gmail/push',
-        pushServiceAccount: 'gmail-push@zero-mail.iam.gserviceaccount.com',
       },
     };
 
