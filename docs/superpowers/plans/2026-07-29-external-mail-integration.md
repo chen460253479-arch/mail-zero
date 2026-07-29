@@ -548,7 +548,7 @@ GET /api/integrations/mail/attachments/:attachmentId/content
 
 所有路由必须使用 `INTEGRATION_API_TOKEN`。查询必须验证邮件所属 `mailAccount.userId` 是内部集成主体。
 
-- [ ] **步骤 1：编写失败的 DTO 和投影测试**
+- [x] **步骤 1：编写失败的 DTO 和投影测试**
 
 ```ts
 it('使用本地 email.id 作为外部 messageId', async () => {
@@ -577,13 +577,13 @@ it('附件列表只返回附件元数据', async () => {
 });
 ```
 
-- [ ] **步骤 2：运行测试并确认查询服务不存在**
+- [x] **步骤 2：运行测试并确认查询服务不存在**
 
 ```bash
 pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration/application/read-message.test.ts
 ```
 
-- [ ] **步骤 3：实现受限查询 Repository 和应用服务**
+- [x] **步骤 3：实现受限查询 Repository 和应用服务**
 
 先通过本地 `messageId` 解析邮件范围：
 
@@ -605,7 +605,7 @@ const email = await core.getEmail({
 
 摘要只读取邮件记录。`getContent` 才读取正文 Blob。附件内容接口必须先验证附件 Part 属于该集成主体的邮件，再流式返回 Blob。
 
-- [ ] **步骤 4：编写失败的 HTTP 鉴权和隔离测试**
+- [x] **步骤 4：编写失败的 HTTP 鉴权和隔离测试**
 
 ```ts
 it('返回集成主体邮件摘要', async () => {
@@ -625,13 +625,13 @@ it('附件内容接口必须使用固定 Token', async () => {
 });
 ```
 
-- [ ] **步骤 5：运行测试并确认外部查询路由不存在**
+- [x] **步骤 5：运行测试并确认外部查询路由不存在**
 
 ```bash
 pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration/http/mail.test.ts tests/integration/modules/external-integration/message-read.integration.test.ts
 ```
 
-- [ ] **步骤 6：挂载邮件查询路由**
+- [x] **步骤 6：挂载邮件查询路由**
 
 复用任务 1 的 Token Guard。以下情况统一返回 `404`：
 
@@ -642,7 +642,7 @@ pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration/h
 
 不得增加历史邮件列表接口。
 
-- [ ] **步骤 7：验证任务 3**
+- [x] **步骤 7：验证任务 3**
 
 ```bash
 pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration tests/integration/modules/external-integration/message-read.integration.test.ts
@@ -651,7 +651,7 @@ pnpm --dir apps/server exec tsc --noEmit
 
 预期：全部通过。
 
-- [ ] **步骤 8：提交任务 3**
+- [x] **步骤 8：提交任务 3**
 
 ```bash
 git add apps/server/src/modules/external-integration apps/server/tests/unit/modules/external-integration apps/server/tests/integration/modules/external-integration
