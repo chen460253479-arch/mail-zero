@@ -16,7 +16,7 @@ import type { MailDatabase } from './database';
 
 export const createPostgresRepositories = (
   db: MailDatabase,
-): Omit<MailTransaction, 'lockAccount' | 'nextStateVersion'> => ({
+): Omit<MailTransaction, 'lockAccount' | 'nextStateVersion' | 'notifications'> => ({
   accounts: createAccountRepository(db),
   mailboxes: createMailboxRepository(db),
   blobs: createBlobRepository(db),

@@ -21,12 +21,15 @@ export type CreateMailCoreRuntimeInput = {
   idFactory: { next<Kind extends string>(): Id<Kind> };
   sanitizeHtml(html: string): string;
   cursorSigningKey: string;
+  notificationsEnabled?: boolean;
 };
 
 export const createMailCoreDependencies = (
   input: CreateMailCoreRuntimeInput,
 ): MailCoreDependencies => ({
-  unitOfWork: new PostgresMailUnitOfWork(input.db),
+  unitOfWork: new PostgresMailUnitOfWork(input.db, {
+    notificationsEnabled: input.notificationsEnabled ?? false,
+  }),
   searchStore: new PostgresSearchStore(input.db),
   blobStore: input.blobStore,
   blobReadAuditSink: input.blobReadAuditSink,

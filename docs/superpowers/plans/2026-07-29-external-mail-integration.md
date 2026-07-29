@@ -717,7 +717,7 @@ JSON.stringify({
 });
 ```
 
-- [ ] **步骤 1：编写失败的 Mail Core 通知测试**
+- [x] **步骤 1：编写失败的 Mail Core 通知测试**
 
 ```ts
 it('新收件提交时记录一条 received 通知', async () => {
@@ -754,13 +754,13 @@ it('普通邮件状态修改不产生通知', async () => {
 });
 ```
 
-- [ ] **步骤 2：运行测试并确认事务通知端口不存在**
+- [x] **步骤 2：运行测试并确认事务通知端口不存在**
 
 ```bash
 pnpm --filter @zero/mail-core exec vitest run tests/notifications/email-notifications.test.ts
 ```
 
-- [ ] **步骤 3：增加事务通知端口**
+- [x] **步骤 3：增加事务通知端口**
 
 给 `MailTransaction` 增加 `notifications: MailNotificationRepository`。
 
@@ -770,7 +770,7 @@ pnpm --filter @zero/mail-core exec vitest run tests/notifications/email-notifica
 - PostgreSQL 使用 `INSERT ... SELECT`，仅允许内部集成主体拥有的 Mail Account 写入 Outbox。
 - 普通 Zero 用户邮件不得进入外部通知 Outbox。
 
-- [ ] **步骤 4：编写失败的 Payload 和重试测试**
+- [x] **步骤 4：编写失败的 Payload 和重试测试**
 
 ```ts
 it('只投递 eventId 和 messageId', async () => {
@@ -813,13 +813,13 @@ it('不添加签名或自定义 Zero Header', async () => {
 });
 ```
 
-- [ ] **步骤 5：运行测试并确认 Outbox 和 Worker 不存在**
+- [x] **步骤 5：运行测试并确认 Outbox 和 Worker 不存在**
 
 ```bash
 pnpm --dir apps/server exec vitest run tests/unit/modules/mail-notifications/deliver-pending.test.ts tests/unit/modules/mail-notifications/worker.test.ts tests/integration/modules/mail-notifications/outbox.integration.test.ts
 ```
 
-- [ ] **步骤 6：实现 Outbox Repository 和 Worker**
+- [x] **步骤 6：实现 Outbox Repository 和 Worker**
 
 - 使用 `FOR UPDATE SKIP LOCKED` 领取待投递记录。
 - 所有 `2xx` 响应视为成功。
@@ -829,7 +829,7 @@ pnpm --dir apps/server exec vitest run tests/unit/modules/mail-notifications/del
 - 最多投递 10 次。
 - `MAIL_WEBHOOK_ENABLED=false` 时事务通知 Repository 为 No-op，不创建 Outbox 记录。
 
-- [ ] **步骤 7：生成并检查数据库 Migration**
+- [x] **步骤 7：生成并检查数据库 Migration**
 
 ```bash
 pnpm db:generate
@@ -837,7 +837,7 @@ pnpm db:generate
 
 预期：只增加通知 Outbox 表和领取、到期、重试相关索引，不修改无关表。
 
-- [ ] **步骤 8：验证任务 4**
+- [x] **步骤 8：验证任务 4**
 
 ```bash
 pnpm --filter @zero/mail-core exec vitest run tests/notifications/email-notifications.test.ts

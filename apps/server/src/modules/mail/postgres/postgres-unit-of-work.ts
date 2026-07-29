@@ -6,6 +6,7 @@ import {
 } from '@zero/mail-core';
 import { eq, sql } from 'drizzle-orm';
 
+import { createPostgresMailNotificationRepository } from '../../mail-notifications/postgres/repository';
 import { runAdapter, type MailDatabase } from './repositories/database';
 import { createPostgresRepositories } from './repositories';
 import { mailAccount } from './schema';
@@ -18,8 +19,16 @@ export class CallbackFailure {
 export const createPostgresMailTransaction = (
   transaction: MailDatabase,
   allocated: Map<MailAccountId, bigint>,
+  options: {
+    notificationsEnabled: boolean;
+  } = {
+    notificationsEnabled: false,
+  },
 ): MailTransaction => ({
   ...createPostgresRepositories(transaction),
+  notifications: createPostgresMailNotificationRepository(transaction as DB, {
+    enabled: options.notificationsEnabled,
+  }),
   lockAccount: (accountId) =>
     runAdapter(async () => {
       const rows = await transaction
@@ -55,12 +64,20 @@ export const createPostgresMailTransaction = (
 export async function runPostgresMailTransaction<Result>(
   db: DB,
   operation: (tx: MailTransaction, database: MailDatabase) => Promise<Result>,
+  options: {
+    notificationsEnabled: boolean;
+  } = {
+    notificationsEnabled: false,
+  },
 ): Promise<Result> {
   try {
     return await db.transaction(async (transaction) => {
       const allocated = new Map<MailAccountId, bigint>();
       try {
-        return await operation(createPostgresMailTransaction(transaction, allocated), transaction);
+        return await operation(
+          createPostgresMailTransaction(transaction, allocated, options),
+          transaction,
+        );
       } catch (error) {
         throw new CallbackFailure(error);
       }
@@ -74,9 +91,16 @@ export async function runPostgresMailTransaction<Result>(
 }
 
 export class PostgresMailUnitOfWork implements MailUnitOfWork {
-  constructor(private readonly db: DB) {}
+  constructor(
+    private readonly db: DB,
+    private readonly options: {
+      notificationsEnabled: boolean;
+    } = {
+      notificationsEnabled: false,
+    },
+  ) {}
 
   run<Result>(operation: (tx: MailTransaction) => Promise<Result>): Promise<Result> {
-    return runPostgresMailTransaction(this.db, (tx) => operation(tx));
+    return runPostgresMailTransaction(this.db, (tx) => operation(tx), this.options);
   }
 }

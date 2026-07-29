@@ -39,10 +39,16 @@ export const createMailOutboundRuntimeForEnvironment = (
   const runtimeEnv = resources.environment;
   const clock = { now: () => new Date() };
   const blobStore = resources.blobStore;
-  const unitOfWork = new PostgresMailOutboundUnitOfWork(db, {
-    nextId: () => ulid(),
-    nextLeaseToken: () => crypto.randomUUID(),
-  });
+  const unitOfWork = new PostgresMailOutboundUnitOfWork(
+    db,
+    {
+      nextId: () => ulid(),
+      nextLeaseToken: () => crypto.randomUUID(),
+    },
+    {
+      notificationsEnabled: runtimeEnv.MAIL_WEBHOOK_ENABLED === 'true',
+    },
+  );
   const mailCoreDependencies: MailCoreDependencies = {
     unitOfWork: unitOfWork.mailUnitOfWork,
     searchStore: new PostgresSearchStore(db),

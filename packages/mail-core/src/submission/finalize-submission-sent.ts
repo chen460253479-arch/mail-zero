@@ -212,6 +212,13 @@ export async function finalizeSubmissionSentInTransaction(
     ],
     createdAt: now,
   });
+  await tx.notifications.enqueue({
+    eventId: dependencies.idFactory.next<'MailNotification'>(),
+    messageId: updatedEmail.id,
+    accountId: input.accountId,
+    kind: 'sent',
+    createdAt: now,
+  });
   return { submission: updatedSubmission, email: updatedEmail, stateVersion };
 }
 

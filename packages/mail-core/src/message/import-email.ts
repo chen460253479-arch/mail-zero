@@ -695,6 +695,13 @@ export async function importEmail(
         mailboxChanges,
         now,
       );
+      await tx.notifications.enqueue({
+        eventId: dependencies.idFactory.next<'MailNotification'>(),
+        messageId: emailId,
+        accountId: input.accountId,
+        kind: 'received',
+        createdAt: now,
+      });
       importOperationCompleted = true;
       return { created: true, emailId };
     });

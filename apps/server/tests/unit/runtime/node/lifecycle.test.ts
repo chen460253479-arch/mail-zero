@@ -32,6 +32,15 @@ const createHarness = () => {
     }),
     notify: vi.fn(),
   };
+  const notificationWorker = {
+    start: vi.fn(() => {
+      events.push('notification worker');
+    }),
+    stop: vi.fn(async () => {
+      events.push('notification worker stop');
+    }),
+    notify: vi.fn(),
+  };
   const scheduler = {
     start: vi.fn(() => {
       events.push('scheduler');
@@ -43,6 +52,7 @@ const createHarness = () => {
   };
   const services = {
     taskWorker,
+    notificationWorker,
     scheduler,
     integrationHealth: {
       initialize: vi.fn(async () => {
@@ -102,14 +112,16 @@ describe('native Node server lifecycle', () => {
       'blob',
       'Nango validation',
       'worker',
+      'notification worker',
       'scheduler',
       'HTTP',
     ]);
 
     await server.close();
-    expect(harness.events.slice(7)).toEqual([
+    expect(harness.events.slice(8)).toEqual([
       'HTTP close',
       'scheduler stop',
+      'notification worker stop',
       'worker stop',
       'external clients close',
       'database close',

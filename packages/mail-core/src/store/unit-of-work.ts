@@ -11,6 +11,7 @@ import type {
   ThreadReferenceRepository,
   ThreadRepository,
 } from './repositories';
+import type { MailNotificationRepository } from '../notifications';
 import type { ThreadQueryRepository } from './thread-query-store';
 import type { MailAccountId } from '../types';
 
@@ -27,6 +28,7 @@ export interface MailTransaction {
   identities: IdentityRepository;
   submissions: SubmissionRepository;
   changes: ChangeRepository;
+  notifications: MailNotificationRepository;
   /**
    * Acquires an account-scoped exclusive write lock until this unit of work
    * settles. Adapters must serialize callers that lock the same account.

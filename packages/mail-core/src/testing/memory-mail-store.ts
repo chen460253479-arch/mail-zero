@@ -37,6 +37,7 @@ import type {
   MailboxRole,
   ThreadId,
 } from '../types';
+import type { EnqueueMailNotification, MailNotificationRepository } from '../notifications';
 import type { ThreadQueryProjection, ThreadQueryRepository } from '../store/thread-query-store';
 import { calculateEmailAggregateDelta } from '../mailbox/email-aggregate-delta';
 import type { MailTransaction, MailUnitOfWork } from '../store/unit-of-work';
@@ -66,6 +67,7 @@ export interface MemoryMailState {
   identities: Map<string, IdentityRecord>;
   submissions: Map<string, SubmissionRecord>;
   changes: Map<string, MailChangeRecord>;
+  notifications: Map<string, EnqueueMailNotification>;
   oldestAvailableStates: Map<MailAccountId, bigint>;
 }
 
@@ -113,6 +115,7 @@ const createEmptyState = (): MemoryMailState => ({
   identities: new Map(),
   submissions: new Map(),
   changes: new Map(),
+  notifications: new Map(),
   oldestAvailableStates: new Map(),
 });
 
@@ -1027,6 +1030,14 @@ const createRepositories = (
     },
   };
 
+  const notifications: MailNotificationRepository = {
+    async enqueue(input) {
+      if (!state.notifications.has(input.eventId)) {
+        state.notifications.set(input.eventId, copy(input));
+      }
+    },
+  };
+
   return {
     accounts,
     mailboxes,
@@ -1040,6 +1051,7 @@ const createRepositories = (
     identities,
     submissions,
     changes,
+    notifications,
   };
 };
 
@@ -1181,6 +1193,7 @@ export interface MemoryMailInspector {
   submission(id: EmailSubmissionId): Promise<SubmissionRecord | null>;
   submissionQueries(): QuerySubmissionPageInput[];
   changes(accountId?: MailAccountId): Promise<MailChangeRecord[]>;
+  notifications(accountId?: MailAccountId): Promise<EnqueueMailNotification[]>;
   changeQueries(): Promise<QueryChangesInput[]>;
   stateVersion(accountId: MailAccountId): Promise<bigint>;
   seedMailboxEmail(mailboxId: MailboxId): Promise<void>;
@@ -1259,6 +1272,9 @@ export const createMemoryMailInspector = (
   },
   async changes(accountId) {
     return filterByAccount(unitOfWork.snapshot().changes.values(), accountId);
+  },
+  async notifications(accountId) {
+    return filterByAccount(unitOfWork.snapshot().notifications.values(), accountId);
   },
   async changeQueries() {
     return unitOfWork.observedChangeQueries();

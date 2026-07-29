@@ -101,6 +101,7 @@ export const startZeroServer = async (
   let services: RuntimeServices | undefined;
   let listener: NodeHttpListener | undefined;
   let workerStarted = false;
+  let notificationWorkerStarted = false;
   let schedulerStarted = false;
   let closePromise: Promise<void> | undefined;
   const disposeSignals: Array<() => void> = [];
@@ -110,6 +111,9 @@ export const startZeroServer = async (
       disposeSignals.splice(0).forEach((dispose) => dispose());
       if (listener) await listener.close();
       if (schedulerStarted && services) await services.scheduler.stop();
+      if (notificationWorkerStarted && services) {
+        await services.notificationWorker.stop();
+      }
       if (workerStarted && services) await services.taskWorker.stop();
       if (services) await services.externalClients.close();
       if (database) await database.close();
@@ -134,6 +138,8 @@ export const startZeroServer = async (
     services.taskWorker.start();
     workerStarted = true;
     markReady(services, 'worker');
+    services.notificationWorker.start();
+    notificationWorkerStarted = true;
     services.scheduler.start();
     schedulerStarted = true;
     markReady(services, 'scheduler');

@@ -111,6 +111,7 @@ const createMailCore = (db: DB, resources: MailInboundRuntimeResources) =>
     },
     sanitizeHtml: preprocessEmailHtml,
     cursorSigningKey: resources.environment.BETTER_AUTH_SECRET,
+    notificationsEnabled: resources.environment.MAIL_WEBHOOK_ENABLED === 'true',
   });
 
 const resolveConnectionId = async (db: DB, accountId: string): Promise<string> => {

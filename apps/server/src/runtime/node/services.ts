@@ -2,6 +2,13 @@ import { Resend } from 'resend';
 import { ulid } from 'ulid';
 
 import {
+  createDisabledMailNotificationWorker,
+  createMailNotificationWorker,
+  createPostgresMailNotificationRepository,
+  deliverPendingEvent,
+  type MailNotificationWorker,
+} from '../../modules/mail-notifications';
+import {
   createMailScheduler,
   createMailTaskWorker,
   createPostgresMailTaskRepository,
@@ -99,6 +106,7 @@ export type RuntimeServices = {
   taskRepository: MailTaskRepository;
   taskQueue: MailTaskQueuePort;
   taskWorker: MailTaskWorker;
+  notificationWorker: MailNotificationWorker;
   scheduler: MailScheduler;
   userWorkspace: UserWorkspaceService;
   integrationHealth: IntegrationHealth;
@@ -206,6 +214,28 @@ export const createRuntimeServices = async ({
     newOwner: () => crypto.randomUUID(),
   });
   taskWorkerReference.current = taskWorker;
+  const notificationRepository = createPostgresMailNotificationRepository(database.db, {
+    enabled: config.externalIntegration.webhook.enabled,
+  });
+  const webhookUrl = config.externalIntegration.webhook.url;
+  const notificationWorker =
+    config.externalIntegration.webhook.enabled && webhookUrl !== undefined
+      ? createMailNotificationWorker({
+          repository: notificationRepository,
+          deliver: async (event) =>
+            await deliverPendingEvent(event, {
+              webhookUrl,
+              fetch,
+              repository: notificationRepository,
+              clock: { now: () => new Date() },
+            }),
+          concurrency: 2,
+          pollIntervalMs: 1_000,
+          leaseForMs: 5 * 60_000,
+          clock: { now: () => new Date() },
+          newOwner: () => crypto.randomUUID(),
+        })
+      : createDisabledMailNotificationWorker();
   const scheduler = createMailScheduler({
     repository: taskRepository,
     enqueueDueIngress: async () => await enqueueDueMailIngressWork(database.db, mailResources),
@@ -253,6 +283,7 @@ export const createRuntimeServices = async ({
     taskRepository,
     taskQueue,
     taskWorker,
+    notificationWorker,
     scheduler,
     userWorkspace,
     integrationHealth,

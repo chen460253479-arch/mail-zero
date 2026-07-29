@@ -8,6 +8,7 @@ import type { DB } from '../../db';
 export type MailCoreRuntimeResources = {
   blobStore: BlobStore;
   cursorSigningKey: string;
+  notificationsEnabled?: boolean;
 };
 
 export const createMailCoreForEnvironment = (db: DB, resources: MailCoreRuntimeResources) =>
@@ -23,6 +24,7 @@ export const createMailCoreForEnvironment = (db: DB, resources: MailCoreRuntimeR
     },
     sanitizeHtml: preprocessEmailHtml,
     cursorSigningKey: resources.cursorSigningKey,
+    notificationsEnabled: resources.notificationsEnabled,
   });
 
 export const createMailCoreDependenciesForEnvironment = (
@@ -41,4 +43,5 @@ export const createMailCoreDependenciesForEnvironment = (
     },
     sanitizeHtml: preprocessEmailHtml,
     cursorSigningKey: resources.cursorSigningKey,
+    notificationsEnabled: resources.notificationsEnabled,
   });

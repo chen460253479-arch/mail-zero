@@ -28,8 +28,13 @@ export class PostgresMailOutboundUnitOfWork implements MailOutboundUnitOfWork {
   constructor(
     private readonly db: DB,
     private readonly factories: MailOutboundRepositoryFactories,
+    private readonly options: {
+      notificationsEnabled: boolean;
+    } = {
+      notificationsEnabled: false,
+    },
   ) {
-    this.mailUnitOfWork = new PostgresMailUnitOfWork(db);
+    this.mailUnitOfWork = new PostgresMailUnitOfWork(db, options);
   }
 
   async run<Result>(operation: (tx: MailOutboundTransaction) => Promise<Result>): Promise<Result> {
@@ -37,7 +42,11 @@ export class PostgresMailOutboundUnitOfWork implements MailOutboundUnitOfWork {
       return await this.db.transaction(async (transaction) => {
         try {
           return await operation({
-            mail: createPostgresMailTransaction(transaction, new Map<MailAccountId, bigint>()),
+            mail: createPostgresMailTransaction(
+              transaction,
+              new Map<MailAccountId, bigint>(),
+              this.options,
+            ),
             outbound: createMailOutboundRepository(transaction, this.factories),
           });
         } catch (error) {
