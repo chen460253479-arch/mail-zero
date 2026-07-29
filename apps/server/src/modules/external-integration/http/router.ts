@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+import { ulid } from 'ulid';
 import { Hono } from 'hono';
 
 import {
@@ -5,22 +7,36 @@ import {
   type ConnectNangoMailboxInput,
 } from '../../mail-accounts/application/connect-nango-mailbox';
 import {
+  createPostgresExternalAccessRepository,
+  createPostgresExternalMessageRepository,
+} from '../postgres/repository';
+import {
   createExternalMessageReader,
   type ExternalMessageReader,
 } from '../application/read-message';
 import { ensureExternalIntegrationPrincipal, type IntegrationPrincipal } from '../principal';
+import { accessGrantInputSchema, type AccessGrantInput } from '../contracts/access';
 import { NangoBindingError } from '../../mail-accounts/application/bind-nango-mailbox';
-import { createPostgresExternalMessageRepository } from '../postgres/repository';
+import { handleExternalLaunch, type ConsumeExternalLaunchCode } from './launch';
 import { createMailCoreForEnvironment } from '../../../runtime/mail/core';
+import { createAccessGrant } from '../application/create-access-grant';
+import { consumeLaunchCode } from '../application/consume-launch-code';
 import type { RuntimeServices } from '../../../runtime/node/services';
 import { requireIntegrationServiceToken } from '../service-auth';
 import { externalBindInputSchema } from '../contracts/bind';
+import { ExternalIntegrationError } from '../errors';
 import { registerExternalMailRoutes } from './mail';
 
 export type ExternalIntegrationRouterDependencies = {
   ensurePrincipal(database: RuntimeServices['database']['db']): Promise<IntegrationPrincipal>;
   connect(input: ConnectNangoMailboxInput, services: RuntimeServices): Promise<{ id: string }>;
   createMessageReader(ownerUserId: string, services: RuntimeServices): ExternalMessageReader;
+  createAccessGrant(
+    input: AccessGrantInput,
+    principal: IntegrationPrincipal,
+    services: RuntimeServices,
+  ): Promise<{ launchCode: string }>;
+  consumeLaunchCode: ConsumeExternalLaunchCode;
 };
 
 const defaultDependencies: ExternalIntegrationRouterDependencies = {
@@ -34,6 +50,21 @@ const defaultDependencies: ExternalIntegrationRouterDependencies = {
         blobStore: services.blobStore,
         cursorSigningKey: services.config.betterAuthSecret,
       }),
+    }),
+  createAccessGrant: async (input, principal, services) =>
+    await createAccessGrant(input, {
+      ownerUserId: principal.userId,
+      repository: createPostgresExternalAccessRepository(services.database.db),
+      clock: { now: () => new Date() },
+      nextId: () => ulid(),
+      randomBytes,
+    }),
+  consumeLaunchCode: async (input, services) =>
+    await consumeLaunchCode(input, {
+      repository: createPostgresExternalAccessRepository(services.database.db),
+      clock: { now: () => new Date() },
+      nextId: () => ulid(),
+      randomBytes,
     }),
 };
 
@@ -91,6 +122,36 @@ export const createExternalIntegrationRouter = (
       throw error;
     }
   });
+
+  app.post('/access-grants', async (context) => {
+    const authorization = await authorize(context.req.header('Authorization'));
+    if (authorization instanceof Response) return authorization;
+    const body = await context.req.json().catch(() => null);
+    const parsed = accessGrantInputSchema.safeParse(body);
+    if (!parsed.success) {
+      return context.json({ error: 'INVALID_REQUEST' }, 400);
+    }
+    try {
+      return context.json(
+        await dependencies.createAccessGrant(parsed.data, authorization, services),
+        201,
+      );
+    } catch (error) {
+      if (
+        error instanceof ExternalIntegrationError &&
+        error.code === 'NANGO_CONNECTION_NOT_BOUND'
+      ) {
+        return context.json({ error: error.code }, 412);
+      }
+      throw error;
+    }
+  });
+
+  app.post(
+    '/launch',
+    async (context) =>
+      await handleExternalLaunch(context, services, dependencies.consumeLaunchCode),
+  );
 
   registerExternalMailRoutes(app, {
     authorize: async (context) => await authorize(context.req.header('Authorization')),

@@ -15,6 +15,13 @@
       "when": 1785329274820,
       "tag": "0001_calm_smiling_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785329972411,
+      "tag": "0002_needy_tinkerer",
+      "breakpoints": true
     }
   ]
 }

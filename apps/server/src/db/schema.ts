@@ -5,4 +5,5 @@ export * from '../modules/mail-outbound/postgres/schema';
 export * from '../modules/mail-snooze/postgres/schema';
 export * from '../modules/mail-tasks/postgres/schema';
 export * from '../modules/mail-notifications/postgres/schema';
+export * from '../modules/external-integration/postgres/schema';
 export { appSchema, authSchema, integrationSchema, mailSchema } from './pg-schemas';

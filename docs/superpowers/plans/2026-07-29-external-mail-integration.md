@@ -848,7 +848,7 @@ pnpm --dir apps/server exec tsc --noEmit
 
 预期：全部通过。
 
-- [ ] **步骤 9：提交任务 4**
+- [x] **步骤 9：提交任务 4**
 
 ```bash
 git add packages/mail-core apps/server/src/modules/mail-notifications apps/server/src/modules/mail apps/server/src/modules/mail-outbound apps/server/src/runtime apps/server/src/db apps/server/tests
@@ -907,7 +907,7 @@ type ExternalBrowserSession = {
 - 非本地环境必须启用 `Secure`。
 - Cookie Domain 使用 Zero 已配置的跨子域 Domain。
 
-- [ ] **步骤 1：编写失败的 Access Grant 契约测试**
+- [x] **步骤 1：编写失败的 Access Grant 契约测试**
 
 ```ts
 it('只接收 allowedNangoConnectIds', () => {
@@ -930,7 +930,7 @@ it('拒绝默认账号、用户、租户、模式和返回地址', () => {
 });
 ```
 
-- [ ] **步骤 2：编写失败的允许范围解析测试**
+- [x] **步骤 2：编写失败的允许范围解析测试**
 
 ```ts
 it('把每个 Nango ID 解析为一个有效邮箱', async () => {
@@ -973,13 +973,13 @@ it('拒绝未绑定或存在歧义的 Nango ID', async () => {
 });
 ```
 
-- [ ] **步骤 3：运行测试并确认 Grant 服务不存在**
+- [x] **步骤 3：运行测试并确认 Grant 服务不存在**
 
 ```bash
 pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration/application/create-access-grant.test.ts
 ```
 
-- [ ] **步骤 4：实现 Grant 持久化和服务端接口**
+- [x] **步骤 4：实现 Grant 持久化和服务端接口**
 
 服务端保存：
 
@@ -991,7 +991,7 @@ pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration/a
 
 HTTP 请求体保持严格的 `{ allowedNangoConnectIds }`，响应保持严格的 `{ launchCode }`。
 
-- [ ] **步骤 5：编写失败的一次性消费测试**
+- [x] **步骤 5：编写失败的一次性消费测试**
 
 ```ts
 it('Launch Code 只能消费一次', async () => {
@@ -1043,13 +1043,13 @@ it('数据库不保存原始 Launch Code 或 Session Token', async () => {
 });
 ```
 
-- [ ] **步骤 6：运行测试并确认 Session 尚未实现**
+- [x] **步骤 6：运行测试并确认 Session 尚未实现**
 
 ```bash
 pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration/application/consume-launch-code.test.ts tests/integration/modules/external-integration/access-session.integration.test.ts tests/unit/modules/external-integration/http/launch.test.ts
 ```
 
-- [ ] **步骤 7：实现 Launch POST 和 Session 续期**
+- [x] **步骤 7：实现 Launch POST 和 Session 续期**
 
 使用单条原子更新消费 Code：
 
@@ -1070,7 +1070,7 @@ new URL('/mail/inbox', services.config.publicAppUrl).toString();
 
 Launch 接口不得接收 `returnUrl`，不得创建 Better Auth Session，也不得把 Launch Code 放入 URL。
 
-- [ ] **步骤 8：生成并检查数据库 Migration**
+- [x] **步骤 8：生成并检查数据库 Migration**
 
 ```bash
 pnpm db:generate
@@ -1078,7 +1078,7 @@ pnpm db:generate
 
 预期：增加 Access Grant 和外部浏览器 Session 表、Digest 唯一约束与过期索引，不出现 CRM 专用字段。
 
-- [ ] **步骤 9：验证任务 5**
+- [x] **步骤 9：验证任务 5**
 
 ```bash
 pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration tests/integration/modules/external-integration/access-session.integration.test.ts
