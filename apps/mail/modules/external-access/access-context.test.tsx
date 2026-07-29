@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  AppAccessProvider,
-  loadAppAccess,
-  resolveAppAccess,
-  useAppAccess,
-} from './access-context';
+import { AppAccessProvider, loadAppAccess, resolveAppAccess, useAppAccess } from './access-context';
 import { getQueryCacheStorageKey } from '../mail/api/query-cache-scope';
 import { renderToStaticMarkup } from 'react-dom/server';
 

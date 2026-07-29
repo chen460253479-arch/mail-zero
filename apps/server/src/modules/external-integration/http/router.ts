@@ -15,8 +15,8 @@ import {
   type ExternalMessageReader,
 } from '../application/read-message';
 import { ensureExternalIntegrationPrincipal, type IntegrationPrincipal } from '../principal';
-import { accessGrantInputSchema, type AccessGrantInput } from '../contracts/access';
 import { NangoBindingError } from '../../mail-accounts/application/bind-nango-mailbox';
+import { accessGrantInputSchema, type AccessGrantInput } from '../contracts/access';
 import { handleExternalLaunch, type ConsumeExternalLaunchCode } from './launch';
 import { createMailCoreForEnvironment } from '../../../runtime/mail/core';
 import { createAccessGrant } from '../application/create-access-grant';

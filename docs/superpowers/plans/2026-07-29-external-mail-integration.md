@@ -1431,7 +1431,7 @@ pnpm --dir apps/server exec vitest run tests/architecture/external-mail-frontend
 - 浏览器不持久化 Launch Code
 - 外部模式不显示设置和连接管理入口
 
-- [ ] **步骤 9：提交任务 7**
+- [x] **步骤 9：提交任务 7**
 
 ```bash
 git add apps/mail apps/server/tests/architecture/external-mail-frontend-boundary.test.ts
@@ -1463,7 +1463,7 @@ git commit -m "feat(mail): add scoped external mail window"
 → 允许范围内的多账号 Zero 邮件主页
 ```
 
-- [ ] **步骤 1：增加静态契约守卫**
+- [x] **步骤 1：增加静态契约守卫**
 
 ```ts
 it('Webhook Payload 字段保持精确', () => {
@@ -1485,7 +1485,7 @@ it('不存在历史同步路由或事件', () => {
 });
 ```
 
-- [ ] **步骤 2：增加端到端 Happy Path 测试**
+- [x] **步骤 2：增加端到端 Happy Path 测试**
 
 测试必须完成以下真实流程：
 
@@ -1500,7 +1500,7 @@ it('不存在历史同步路由或事件', () => {
 9. 使用返回的 Cookie 查询允许的邮箱。
 10. 验证该 Cookie 无法访问设置和绑定接口。
 
-- [ ] **步骤 3：运行服务端专项验证**
+- [x] **步骤 3：运行服务端专项验证**
 
 ```bash
 pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration tests/unit/modules/mail-notifications tests/integration/modules/external-integration tests/integration/modules/mail-notifications tests/architecture/external-integration-contract.test.ts tests/architecture/external-session-permissions.test.ts tests/integration/external-integration-flow.integration.test.ts
@@ -1508,7 +1508,7 @@ pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration t
 
 预期：全部通过。
 
-- [ ] **步骤 4：运行 Mail Core 回归验证**
+- [x] **步骤 4：运行 Mail Core 回归验证**
 
 ```bash
 pnpm --filter @zero/mail-core test
@@ -1518,7 +1518,7 @@ pnpm --dir apps/server run test:mail-core
 
 预期：全部通过。
 
-- [ ] **步骤 5：运行应用构建验证**
+- [x] **步骤 5：运行应用构建验证**
 
 ```bash
 pnpm --dir apps/server exec tsc --noEmit
@@ -1530,7 +1530,11 @@ pnpm check:format
 
 预期：全部通过，且不修改无关文件。
 
-- [ ] **步骤 6：检查最终工作区**
+执行说明：Server 与 Mail 的类型检查和生产构建通过。本仓库全量
+`pnpm check:format` 会被 852 个既有或生成文件的格式基线阻塞；本计划从
+`cb0f5c7` 之后新增和修改的所有 Prettier 支持文件已单独检查并通过，没有批量改写无关文件。
+
+- [x] **步骤 6：检查最终工作区**
 
 ```bash
 git status --short
@@ -1539,7 +1543,7 @@ git diff --check
 
 预期：只包含外部集成、邮件通知、受限邮件权限、前端、Migration、测试和文档改动；`git diff --check` 无输出。
 
-- [ ] **步骤 7：提交端到端守卫**
+- [x] **步骤 7：提交端到端守卫**
 
 ```bash
 git add apps/server/tests

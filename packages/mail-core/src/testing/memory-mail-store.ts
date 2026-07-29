@@ -37,8 +37,8 @@ import type {
   MailboxRole,
   ThreadId,
 } from '../types';
-import type { EnqueueMailNotification, MailNotificationRepository } from '../notifications';
 import type { ThreadQueryProjection, ThreadQueryRepository } from '../store/thread-query-store';
+import type { EnqueueMailNotification, MailNotificationRepository } from '../notifications';
 import { calculateEmailAggregateDelta } from '../mailbox/email-aggregate-delta';
 import type { MailTransaction, MailUnitOfWork } from '../store/unit-of-work';
 import type { AggregateMismatch, MailAggregateValues } from '../mailbox';
