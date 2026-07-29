@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Bell, Lightning, Mail, ScanEye, Tag, User, X, Search } from '../icons/icons';
 import { useCategorySettings, useDefaultCategoryId } from '@/hooks/use-categories';
 import { ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import { useAppAccess } from '@/modules/external-access/access-context';
 import { useCommandPalette } from '../context/command-palette-context';
 import { useHotkeys, useHotkeysContext } from 'react-hotkeys-hook';
 import { ThreadDisplay } from '@/components/mail/thread-display';
@@ -25,7 +26,6 @@ import { clearBulkSelectionAtom } from './use-mail';
 import { useThreads } from '@/hooks/use-threads';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
-import { useSession } from '@/lib/auth-client';
 import { m } from '@/paraglide/messages';
 import { isMac } from '@/lib/platform';
 import { useQueryState } from 'nuqs';
@@ -39,7 +39,7 @@ export function MailLayout() {
   const [, clearBulkSelection] = useAtom(clearBulkSelectionAtom);
   const isMobile = useIsMobile();
   const navigate = useNavigate();
-  const { data: session, isPending } = useSession();
+  const access = useAppAccess();
   const prevFolderRef = useRef(folder);
   const { enableScope, disableScope } = useHotkeysContext();
   const { data: activeConnection, isPending: isConnectionPending } = useActiveConnection();
@@ -54,10 +54,10 @@ export function MailLayout() {
   }, [folder, mail.bulkSelected.length, clearBulkSelection]);
 
   useEffect(() => {
-    if (!session?.user && !isPending) {
+    if (access.mode === 'anonymous') {
       navigate('/login');
     }
-  }, [session?.user, isPending]);
+  }, [access.mode, navigate]);
 
   const [{ isFetching, refetch: refetchThreads }] = useThreads({
     enabled: Boolean(activeConnection?.id),
@@ -268,18 +268,23 @@ export function MailLayout() {
                     <div className="bg-primary/10 mb-4 flex h-12 w-12 items-center justify-center rounded-full">
                       <Mail className="h-5 w-5" />
                     </div>
-                    <h2 className="text-base font-semibold">Zero is ready</h2>
+                    <h2 className="text-base font-semibold">
+                      {access.mode === 'external' ? 'No mailboxes are available' : 'Zero is ready'}
+                    </h2>
                     <p className="text-muted-foreground mt-2 max-w-sm text-sm leading-6">
-                      You are signed in as the instance administrator. Connect a mail provider when
-                      you are ready to sync, organize, and send email.
+                      {access.mode === 'external'
+                        ? 'This mail window has no available mailbox in its granted scope.'
+                        : 'You are signed in as the instance administrator. Connect a mail provider when you are ready to sync, organize, and send email.'}
                     </p>
-                    <Button
-                      className="mt-5"
-                      variant="outline"
-                      onClick={() => navigate('/settings/connections')}
-                    >
-                      Manage connections
-                    </Button>
+                    {access.mode !== 'external' && (
+                      <Button
+                        className="mt-5"
+                        variant="outline"
+                        onClick={() => navigate('/settings/connections')}
+                      >
+                        Manage connections
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>

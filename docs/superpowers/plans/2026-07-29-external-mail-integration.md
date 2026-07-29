@@ -1279,7 +1279,7 @@ pnpm --dir apps/server exec tsc --noEmit
 
 预期：全部通过。
 
-- [ ] **步骤 9：提交任务 6**
+- [x] **步骤 9：提交任务 6**
 
 ```bash
 git add apps/server/src/ctx.ts apps/server/src/runtime/node/application.ts apps/server/src/trpc apps/server/src/modules/mail-api apps/server/src/modules/external-integration apps/server/tests
@@ -1330,7 +1330,7 @@ type AppAccessContext =
 
 Root Loader 先检查 Better Auth，再检查 `externalAccess.current`。查询缓存使用 `cacheSubject` 隔离普通用户和外部 Session。
 
-- [ ] **步骤 1：编写失败的访问模式和缓存隔离测试**
+- [x] **步骤 1：编写失败的访问模式和缓存隔离测试**
 
 ```tsx
 it('没有 Better Auth 用户时识别外部 Session', () => {
@@ -1352,13 +1352,13 @@ it('普通用户与外部 Session 使用不同缓存 Key', () => {
 });
 ```
 
-- [ ] **步骤 2：运行测试并确认 Access Context 不存在**
+- [x] **步骤 2：运行测试并确认 Access Context 不存在**
 
 ```bash
 pnpm --dir apps/mail exec vitest run modules/external-access/access-context.test.tsx
 ```
 
-- [ ] **步骤 3：实现 Root Access Context**
+- [x] **步骤 3：实现 Root Access Context**
 
 - 通过 `ServerProviders` 暴露 `AppAccessContext`。
 - 有效外部 Session 可以访问 `/mail/*`。
@@ -1366,7 +1366,7 @@ pnpm --dir apps/mail exec vitest run modules/external-access/access-context.test
 - 根路径 `/` 对普通用户和外部 Session 都重定向 `/mail/inbox`。
 - Query Persistence 使用 `cacheSubject`，避免不同主体共享 IndexedDB 查询缓存。
 
-- [ ] **步骤 4：编写失败的账号切换和隐藏入口测试**
+- [x] **步骤 4：编写失败的账号切换和隐藏入口测试**
 
 ```tsx
 it('展示 Grant 中全部邮箱并调用 setDefault 切换', async () => {
@@ -1391,13 +1391,13 @@ it('不显示设置、添加账号和连接管理入口', () => {
 });
 ```
 
-- [ ] **步骤 5：运行测试并确认当前 Sidebar 依赖 Better Auth**
+- [x] **步骤 5：运行测试并确认当前 Sidebar 依赖 Better Auth**
 
 ```bash
 pnpm --dir apps/mail exec vitest run components/ui/external-account-switcher.test.tsx modules/external-access/access-context.test.tsx modules/mail/providers/mail-account-selection.test.ts
 ```
 
-- [ ] **步骤 6：实现外部模式邮件导航**
+- [x] **步骤 6：实现外部模式邮件导航**
 
 当 `mode === 'external'`：
 
@@ -1409,7 +1409,7 @@ pnpm --dir apps/mail exec vitest run components/ui/external-account-switcher.tes
 
 后端仍是最终权限边界。
 
-- [ ] **步骤 7：验证前端**
+- [x] **步骤 7：验证前端**
 
 ```bash
 pnpm --dir apps/mail exec vitest run modules/external-access components/ui/external-account-switcher.test.tsx modules/mail/providers/mail-account-selection.test.ts
@@ -1419,7 +1419,7 @@ pnpm --dir apps/mail build
 
 预期：全部通过。
 
-- [ ] **步骤 8：验证前端边界**
+- [x] **步骤 8：验证前端边界**
 
 ```bash
 pnpm --dir apps/server exec vitest run tests/architecture/external-mail-frontend-boundary.test.ts

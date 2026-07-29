@@ -64,20 +64,20 @@ export const makeQueryClient = () =>
 
 const browserQueryClient = {
   queryClient: null,
-  activeUserId: null,
+  activeSubject: null,
 } as {
   queryClient: QueryClient | null;
-  activeUserId: string | null;
+  activeSubject: string | null;
 };
 
-const getQueryClient = (userId: string | null) => {
+const getQueryClient = (cacheSubject: string | null) => {
   if (typeof window === 'undefined') {
     return makeQueryClient();
   } else {
-    if (!browserQueryClient.queryClient || browserQueryClient.activeUserId !== userId) {
+    if (!browserQueryClient.queryClient || browserQueryClient.activeSubject !== cacheSubject) {
       browserQueryClient.queryClient?.clear();
       browserQueryClient.queryClient = makeQueryClient();
-      browserQueryClient.activeUserId = userId;
+      browserQueryClient.activeSubject = cacheSubject;
     }
     return browserQueryClient.queryClient;
   }
@@ -110,8 +110,11 @@ export const trpcClient = createTRPCClient<AppRouter>({
 });
 
 type TrpcHook = ReturnType<typeof useTRPC>;
-export function QueryProvider({ children, userId }: PropsWithChildren<{ userId: string | null }>) {
-  const storageKey = getQueryCacheStorageKey(userId);
+export function QueryProvider({
+  children,
+  cacheSubject,
+}: PropsWithChildren<{ cacheSubject: string | null }>) {
+  const storageKey = getQueryCacheStorageKey(cacheSubject);
   const persister = useMemo(() => {
     if (storageKey) {
       return createIDBPersister(storageKey);
@@ -123,7 +126,7 @@ export function QueryProvider({ children, userId }: PropsWithChildren<{ userId: 
       removeClient: async () => undefined,
     } satisfies Persister;
   }, [storageKey]);
-  const queryClient = useMemo(() => getQueryClient(userId), [userId]);
+  const queryClient = useMemo(() => getQueryClient(cacheSubject), [cacheSubject]);
 
   return (
     <PersistQueryClientProvider

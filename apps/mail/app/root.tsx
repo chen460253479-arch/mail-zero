@@ -9,15 +9,16 @@ import {
   useNavigate,
   type MetaFunction,
 } from 'react-router';
+import { loadAppAccess } from '@/modules/external-access/access-context';
 import { ServerProviders } from '@/providers/server-providers';
 import { ClientProviders } from '@/providers/client-providers';
 import { getServerBackendUrl } from '@/lib/server-backend-url';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
-import type { PropsWithChildren } from 'react';
 import type { AppRouter } from '@zero/server/trpc';
 import { Button } from '@/components/ui/button';
 import { getLocale } from '@/paraglide/runtime';
 import { siteConfig } from '@/lib/site-config';
+import type { PropsWithChildren } from 'react';
 import { authProxy } from '@/lib/auth-proxy';
 import { signOut } from '@/lib/auth-client';
 import type { Route } from './+types/root';
@@ -31,7 +32,16 @@ const getUrl = () => getServerBackendUrl() + '/api/trpc';
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await authProxy.api.getSession({ headers: request.headers });
-  return { userId: session?.user.id ?? null };
+  const userId = session?.user.id ?? null;
+  return {
+    access: await loadAppAccess({
+      userId,
+      loadExternalSessionId: async () => {
+        const externalAccess = await getServerTrpc(request).externalAccess.current.query();
+        return externalAccess?.sessionId ?? null;
+      },
+    }),
+  };
 }
 
 export const getServerTrpc = (req: Request) =>
@@ -60,7 +70,7 @@ export const meta: MetaFunction = () => {
 };
 
 export function Layout({ children }: PropsWithChildren) {
-  const { userId } = useLoaderData<typeof loader>();
+  const { access } = useLoaderData<typeof loader>();
 
   return (
     <html lang={getLocale()} suppressHydrationWarning>
@@ -74,7 +84,7 @@ export function Layout({ children }: PropsWithChildren) {
         <Links />
       </head>
       <body className="antialiased">
-        <ServerProviders userId={userId}>
+        <ServerProviders access={access}>
           <ClientProviders>{children}</ClientProviders>
         </ServerProviders>
         <ScrollRestoration />

@@ -1,3 +1,3 @@
-export function getQueryCacheStorageKey(userId: string | null): string | null {
-  return userId ? `zero-query-cache-${userId}` : null;
+export function getQueryCacheStorageKey(cacheSubject: string | null): string | null {
+  return cacheSubject ? `zero-query-cache-${cacheSubject}` : null;
 }
