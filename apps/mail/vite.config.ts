@@ -17,6 +17,7 @@ const reactCompilerPlugins =
     : [
         babel({
           filter: /\.[jt]sx?$/,
+          exclude: /node_modules/,
           babelConfig: {
             presets: ['@babel/preset-typescript'],
             plugins: [['babel-plugin-react-compiler', ReactCompilerConfig]],

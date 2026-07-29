@@ -1,7 +1,7 @@
 import { assertAdministrator } from '../integrations/core/permissions';
+import { Ratelimit, type RatelimitConfig } from '@upstash/ratelimit';
 import { getActiveConnection } from '../lib/server-utils';
 import { getConnInfo } from '@hono/node-server/conninfo';
-import { Ratelimit, type RatelimitConfig } from '@upstash/ratelimit';
 import type { HonoContext, HonoVariables } from '../ctx';
 import { initTRPC, TRPCError } from '@trpc/server';
 

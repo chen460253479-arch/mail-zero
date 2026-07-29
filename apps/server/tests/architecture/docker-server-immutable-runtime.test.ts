@@ -67,9 +67,16 @@ describe('Docker Server immutable runtime', () => {
     const dockerfile = read('docker/server/Dockerfile');
     const entrypoint = read('docker/server/entrypoint.sh');
     const packageJson = read('apps/server/package.json');
+    const bundleVerification = read('apps/server/scripts/verify-bundle.mjs');
     const viteConfig = read('apps/server/vite.node.config.ts');
 
-    expect(packageJson).toContain('"build": "vite build --config vite.node.config.ts"');
+    expect(packageJson).toContain(
+      '"build": "vite build --config vite.node.config.ts && node scripts/verify-bundle.mjs"',
+    );
+    expect(bundleVerification).toContain(
+      "await import(new URL('../dist/main.js', import.meta.url))",
+    );
+    expect(bundleVerification).toContain('process.exit(0)');
     expect(viteConfig).toContain("ssr: 'src/runtime/node/main.ts'");
     expect(viteConfig).toContain("entryFileNames: 'main.js'");
     expect(viteConfig).toContain("'@zero/mail-core'");

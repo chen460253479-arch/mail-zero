@@ -13,7 +13,7 @@ describe('Docker self-hosted stack', () => {
     const deployCommand = packageJson.scripts['docker:deploy'] ?? '';
 
     expect(deployCommand.split(/\s*&&\s*/)).toEqual([
-      'docker compose up --detach --build --wait --wait-timeout 180',
+      'docker compose up --detach --build --remove-orphans --wait --wait-timeout 180',
       'docker compose ps',
     ]);
     expect(deployCommand).not.toMatch(

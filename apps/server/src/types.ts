@@ -1,4 +1,3 @@
-import type { Context } from 'hono';
 import { z } from 'zod';
 
 export enum EProviders {
@@ -215,8 +214,6 @@ export interface DeleteAllSpamResponse {
   count?: number;
   error?: string;
 }
-
-export type AppContext = Context<{ Bindings: Env }>;
 
 export interface IEmailSendBatch {
   messageId: string;

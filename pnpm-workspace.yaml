@@ -27,5 +27,8 @@ onlyBuiltDependencies:
   - sharp
   - unrs-resolver
 
+overrides:
+  '@react-router/dev>wrangler': '-'
+
 patchedDependencies:
   novel: patches/novel.patch

@@ -11,7 +11,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
-import { connection, user } from '../../../../db/schema';
+import { connection, user } from '../../../../db/core-schema';
 import { createMailTable } from '../table';
 
 export const mailAccount = createMailTable(

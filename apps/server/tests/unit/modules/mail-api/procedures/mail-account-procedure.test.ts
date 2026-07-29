@@ -25,6 +25,7 @@ const account = (patch: Partial<MailAccountRecord> = {}): MailAccountRecord => (
 describe('mailAccountProcedure', () => {
   it('opens an owned active account runtime and always closes it', async () => {
     const close = vi.fn(async () => undefined);
+    const services = {};
     const open = vi.fn(
       async (): Promise<OwnedMailApiRuntime> => ({
         account: account(),
@@ -48,13 +49,13 @@ describe('mailAccountProcedure', () => {
     await expect(
       testRouter
         .createCaller({
-          c: { env: {}, var: {} } as never,
+          c: { var: { services } } as never,
           sessionUser: { id: 'user-1' } as never,
           auth: {} as never,
         })
         .read({ accountId: 'account-1', value: 7 }),
     ).resolves.toEqual({ accountId: 'account-1', value: 7 });
-    expect(open).toHaveBeenCalledWith('user-1', 'account-1', {});
+    expect(open).toHaveBeenCalledWith('user-1', 'account-1', services);
     expect(close).toHaveBeenCalledOnce();
   });
 

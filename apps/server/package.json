@@ -6,7 +6,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "vite build --config vite.node.config.ts",
+    "build": "vite build --config vite.node.config.ts && node scripts/verify-bundle.mjs",
     "start": "node dist/main.js",
     "dev": "tsx watch src/runtime/node/main.ts",
     "lint": "eslint .",

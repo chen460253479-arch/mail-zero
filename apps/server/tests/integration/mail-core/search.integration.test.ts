@@ -27,7 +27,7 @@ describe('PostgreSQL mail search', () => {
         userId: 'search-user',
         email: 'search@example.test',
         normalizedEmail: 'search@example.test',
-        channelId: 'search-channel' as typeof connection.$inferInsert.channelId,
+        channelId: 'gmail',
         providerKey: 'test.postgres',
         createdAt: now,
         updatedAt: now,

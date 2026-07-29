@@ -398,7 +398,7 @@ describe('PostgreSQL outbound repository', () => {
       );
 
       expect(snapshot).toMatchObject({
-        channelId: 'postgres-channel-outbound-snapshot',
+        channelId: 'gmail',
         messageId: persistedReply!.messageId,
         envelope: {
           from: identity.email,

@@ -180,15 +180,17 @@ export const createRuntimeServices = async ({
   const taskRepository = createPostgresMailTaskRepository(database.db, {
     nextId: () => ulid(),
   });
-  let taskWorker: MailTaskWorker | undefined;
-  const taskQueue = createMailTaskQueuePort(taskRepository, () => taskWorker?.notify());
+  const taskWorkerReference: { current?: MailTaskWorker } = {};
+  const taskQueue = createMailTaskQueuePort(taskRepository, () =>
+    taskWorkerReference.current?.notify(),
+  );
   const mailResources: MailInboundRuntimeResources = {
     environment,
     nango,
     blobStore,
     taskQueue,
   };
-  taskWorker = createMailTaskWorker({
+  const taskWorker = createMailTaskWorker({
     repository: taskRepository,
     processIngress: async (command) =>
       await runMailIngressCommand(database.db, mailResources, command),
@@ -200,6 +202,7 @@ export const createRuntimeServices = async ({
     clock: { now: () => new Date() },
     newOwner: () => crypto.randomUUID(),
   });
+  taskWorkerReference.current = taskWorker;
   const scheduler = createMailScheduler({
     repository: taskRepository,
     enqueueDueIngress: async () => await enqueueDueMailIngressWork(database.db, mailResources),

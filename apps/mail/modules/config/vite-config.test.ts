@@ -39,4 +39,20 @@ describe('Mail Vite config', () => {
       'vite-plugin-oxlint',
     );
   });
+
+  it('does not run the React compiler over third-party dependencies', async () => {
+    const config = await resolveConfig(viteConfig, 'build');
+    const plugins = (config.plugins ?? [])
+      .flatMap((plugin) => (Array.isArray(plugin) ? plugin : [plugin]))
+      .filter((plugin): plugin is Plugin => typeof plugin === 'object' && plugin !== null);
+    const babelPlugin = plugins.find((plugin) => plugin.name === 'babel-plugin');
+
+    expect(babelPlugin).toBeDefined();
+    expect(
+      await (babelPlugin?.transform as ((code: string, id: string) => unknown) | undefined)?.(
+        'export const value = 1;',
+        '/app/node_modules/example/index.ts',
+      ),
+    ).toBeUndefined();
+  });
 });

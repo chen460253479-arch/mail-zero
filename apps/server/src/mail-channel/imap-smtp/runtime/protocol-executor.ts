@@ -18,15 +18,8 @@ import {
   type SmtpSendRequest,
   type SmtpSendResponse,
 } from '../shared/contracts';
-import {
-  discoverImapMessages,
-  establishImapBaseline,
-  fetchImapRawMessage,
-} from './imap/client';
-import {
-  classifyMailProtocolError,
-  MailProtocolOperationError,
-} from '../shared/errors';
+import { discoverImapMessages, establishImapBaseline, fetchImapRawMessage } from './imap/client';
+import { classifyMailProtocolError, MailProtocolOperationError } from '../shared/errors';
 import { sendSmtpMessage, verifySmtpConnection } from './smtp/client';
 
 export interface ImapSmtpProtocolExecutor {

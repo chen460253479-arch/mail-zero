@@ -31,7 +31,7 @@ describe('PostgreSQL mail adapters', () => {
         userId: 'postgres-user-1',
         email: 'postgres-user-1@example.test',
         normalizedEmail: 'postgres-user-1@example.test',
-        channelId: 'postgres-channel-1' as typeof connection.$inferInsert.channelId,
+        channelId: 'gmail',
         providerKey: 'test.postgres',
         createdAt: now,
         updatedAt: now,

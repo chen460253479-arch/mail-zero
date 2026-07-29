@@ -28,9 +28,12 @@ const request = (headers: Record<string, string> = {}) =>
 
 describe('Zoho Mail webhook endpoint', () => {
   it('is exposed as a public tokenized provider route', () => {
-    const main = readFileSync(resolve(process.cwd(), 'src/main.ts'), 'utf8');
-    expect(main).toContain("post('/api/webhooks/mail/zoho/:endpointToken'");
-    expect(main).toContain('handleZohoMailWebhookForEnvironment');
+    const application = readFileSync(
+      resolve(process.cwd(), 'src/runtime/node/application.ts'),
+      'utf8',
+    );
+    expect(application).toContain("post('/api/webhooks/mail/zoho/:endpointToken'");
+    expect(application).toContain('services.webhooks.zohoMail');
   });
 
   it('uses the opaque endpoint token and triggers only the common incremental scan', async () => {

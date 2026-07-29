@@ -44,7 +44,7 @@ describe('Nango frontend credential boundary', () => {
   });
 
   it('does not persist Nango service configuration in the system config table', () => {
-    const schema = read('apps/server/src/db/schema.ts');
+    const schema = read('apps/server/src/db/core-schema.ts');
     const table = schema.slice(
       schema.indexOf('export const systemIntegrationConfig'),
       schema.indexOf('export const channelConfig'),

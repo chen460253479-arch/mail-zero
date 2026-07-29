@@ -5,11 +5,11 @@ import {
   establishImapBaseline,
   fetchImapRawMessage,
 } from '../../../../src/mail-channel/imap-smtp/runtime/imap/client';
-import { createImapSmtpProtocolExecutor } from '../../../../src/mail-channel/imap-smtp/runtime/protocol-executor';
 import {
   sendSmtpMessage,
   verifySmtpConnection,
 } from '../../../../src/mail-channel/imap-smtp/runtime/smtp/client';
+import { createImapSmtpProtocolExecutor } from '../../../../src/mail-channel/imap-smtp/runtime/protocol-executor';
 import { MailProtocolOperationError } from '../../../../src/mail-channel/imap-smtp/shared/errors';
 
 vi.mock('../../../../src/mail-channel/imap-smtp/runtime/imap/client', () => ({

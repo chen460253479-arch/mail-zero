@@ -229,7 +229,7 @@ const seedPlannerFixtures = async (
       )
       SELECT
         ${accountId},
-        'test',
+        'gmail',
         'plan-remote-' || value,
         'plan-remote-email-' || lpad(value::text, 4, '0'),
         now(),

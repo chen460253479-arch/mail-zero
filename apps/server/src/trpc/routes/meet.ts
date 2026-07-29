@@ -44,7 +44,7 @@ export const meetRouter = router({
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create meeting' });
       }
 
-      const data = await response.json<MeetResponse>();
+      const data = (await response.json()) as MeetResponse;
       return data;
     }),
 });

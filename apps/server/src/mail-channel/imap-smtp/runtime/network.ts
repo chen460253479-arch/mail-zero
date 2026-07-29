@@ -1,9 +1,6 @@
 import { lookup } from 'node:dns/promises';
 
-import {
-  assertResolvedMailEndpoint,
-  parseAllowedMailHosts,
-} from '../shared/endpoint-policy';
+import { assertResolvedMailEndpoint, parseAllowedMailHosts } from '../shared/endpoint-policy';
 import type { MailProtocolEndpoint } from '../../contracts';
 
 export type ResolvedMailEndpoint = MailProtocolEndpoint & {

@@ -1,12 +1,8 @@
 {
   "extends": "@zero/tsconfig/base",
-  "include": [
-    "src/**/*.ts",
-    "src/overrides.d.ts",
-    "drizzle.config.ts",
-    "tests/**/*.ts"
-  ],
+  "include": ["src/**/*.ts", "src/overrides.d.ts", "drizzle.config.ts", "tests/**/*.ts"],
   "compilerOptions": {
+    "lib": ["ESNext", "DOM"],
     "plugins": [
       {
         "name": "@effect/language-service"

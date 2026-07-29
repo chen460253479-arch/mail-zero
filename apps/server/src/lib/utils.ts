@@ -1,26 +1,10 @@
-import type { AppContext, Sender } from '../types';
-import { env } from '../env';
+import type { Sender } from '../types';
 
 export const parseHeaders = (token: string) => {
   const headers = new Headers();
   headers.set('Cookie', token);
   return headers;
 };
-
-/**
- * Mock context for testing
- */
-export const c = {
-  env,
-  json: (data: unknown, status: number) => ({
-    data,
-    status,
-  }),
-  text: (data: unknown, status: number) => ({
-    data,
-    status,
-  }),
-} as unknown as AppContext;
 
 export const FOLDERS = {
   SPAM: 'spam',

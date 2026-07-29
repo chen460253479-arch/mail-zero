@@ -37,7 +37,7 @@ describe('PostgreSQL import integration', () => {
       const importRaw = (remoteEmailId: string, messageId: string, references: string[]) =>
         importEmail(harness.dependencies, {
           accountId: harness.accountId,
-          provider: 'fixture-provider',
+          provider: 'gmail',
           remoteEmailId,
           remoteThreadId: null,
           raw: makeRaw(messageId, references),
@@ -82,7 +82,7 @@ describe('PostgreSQL import integration', () => {
         );
       const first = await importEmail(harness.dependencies, {
         accountId: harness.accountId,
-        provider: 'fixture-provider',
+        provider: 'gmail',
         remoteEmailId: 'thread-tie-first',
         remoteThreadId: null,
         raw: makeRaw('thread-tie-first@example.test', 'first projection', null),
@@ -92,7 +92,7 @@ describe('PostgreSQL import integration', () => {
       });
       const second = await importEmail(harness.dependencies, {
         accountId: harness.accountId,
-        provider: 'fixture-provider',
+        provider: 'gmail',
         remoteEmailId: 'thread-tie-second',
         remoteThreadId: null,
         raw: makeRaw(
@@ -121,7 +121,7 @@ describe('PostgreSQL import integration', () => {
       const harness = await createPostgresMailTestHarness(db, unitOfWork);
       const input = {
         accountId: harness.accountId,
-        provider: 'fixture-provider',
+        provider: 'gmail',
         remoteEmailId: 'remote-concurrent-1',
         remoteThreadId: null,
         raw,

@@ -22,7 +22,6 @@ import { createZohoMailPlugin } from '../../mail-channel/zoho-mail';
 import { createOutlookPlugin } from '../../mail-channel/outlook';
 import { preprocessEmailHtml } from '../../lib/email-processor';
 import type { MailTaskQueuePort } from './task-queue';
-import type { ZeroEnv } from '../../env';
 import type { DB } from '../../db';
 
 const OUTBOUND_LEASE_MS = 5 * 60_000;
@@ -131,7 +130,7 @@ export const createMailOutboundRuntimeForEnvironment = (
     leaseForMs: OUTBOUND_LEASE_MS,
     scanLimit: OUTBOUND_SCAN_LIMIT,
     jitter: Math.random,
-    onWakeupError: (error) => console.error('[MAIL_OUTBOUND_QUEUE] wakeup failed', error),
+    onWakeupError: (error) => console.error('[MAIL_OUTBOUND] wakeup failed', error),
   });
 };
 

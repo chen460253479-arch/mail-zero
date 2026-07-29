@@ -2,8 +2,8 @@ import { dirname, extname, relative, resolve, sep } from 'node:path';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+import ts from 'typescript';
 
 const architectureRoot = dirname(fileURLToPath(import.meta.url));
 const serverRoot = resolve(architectureRoot, '../..');
@@ -38,6 +38,13 @@ const dependencyNames = (manifest: PackageManifest): string[] => [
   ...Object.keys(manifest.dependencies ?? {}),
   ...Object.keys(manifest.devDependencies ?? {}),
 ];
+
+const workspaceManifestPaths = ['apps', 'packages'].flatMap((workspaceDirectory) =>
+  readdirSync(resolve(repositoryRoot, workspaceDirectory), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => `${workspaceDirectory}/${entry.name}/package.json`)
+    .filter((path) => existsSync(resolve(repositoryRoot, path))),
+);
 
 const collectTypeScriptFiles = (directory: string): string[] =>
   readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -135,9 +142,9 @@ describe('mail server architecture', () => {
         .map((binding) => `${normalizePath(relative(srcRoot, file))}:${binding}`);
     });
 
-    expect(
-      retiredRuntimePaths.filter((path) => existsSync(resolve(repositoryRoot, path))),
-    ).toEqual([]);
+    expect(retiredRuntimePaths.filter((path) => existsSync(resolve(repositoryRoot, path)))).toEqual(
+      [],
+    );
     expect(violations).toEqual([]);
   });
 
@@ -150,6 +157,15 @@ describe('mail server architecture', () => {
       'KVNamespace',
       'R2Bucket',
     ]);
+    const retiredBindingNames = [
+      'HYPERDRIVE',
+      'MAIL_INGRESS_QUEUE',
+      'MAIL_OUTBOUND_QUEUE',
+      'MAIL_PROTOCOL_WORKER_SECRET',
+      'MAIL_PROTOCOL_WORKER_URL',
+      'THREADS_BUCKET',
+      'ZERO_DB',
+    ];
     const compilerOptions: ts.CompilerOptions = {
       module: ts.ModuleKind.ESNext,
       moduleResolution: ts.ModuleResolutionKind.Bundler,
@@ -166,8 +182,17 @@ describe('mail server architecture', () => {
       const relativeFile = normalizePath(relative(srcRoot, file));
       const fileViolations: string[] = [];
 
+      for (const identifier of retiredBindingNames) {
+        if (source.includes(identifier))
+          fileViolations.push(`${relativeFile}:binding:${identifier}`);
+      }
       for (const specifier of readImports(file)) {
-        const resolved = ts.resolveModuleName(specifier, file, compilerOptions, ts.sys).resolvedModule;
+        const resolved = ts.resolveModuleName(
+          specifier,
+          file,
+          compilerOptions,
+          ts.sys,
+        ).resolvedModule;
         if (
           forbiddenModules.has(specifier) ||
           (resolved?.resolvedFileName.includes('/wrangler/') ?? false) ||
@@ -242,8 +267,9 @@ describe('mail server architecture', () => {
     ).toEqual([]);
     expect(serverManifest.dependencies).not.toHaveProperty('wrangler');
     expect(serverManifest.devDependencies).not.toHaveProperty('wrangler');
-    expect(Object.values(serverManifest.scripts ?? {}).some((script) => script.includes('wrangler')))
-      .toBe(false);
+    expect(
+      Object.values(serverManifest.scripts ?? {}).some((script) => script.includes('wrangler')),
+    ).toBe(false);
     expect(serverManifest.dependencies).toEqual(
       expect.objectContaining({
         '@googleapis/gmail': expect.any(String),
@@ -312,8 +338,9 @@ describe('mail server architecture', () => {
     expect(mailManifest.devDependencies).toHaveProperty('@tailwindcss/typography');
     expect(mailManifest.devDependencies).not.toHaveProperty('@cloudflare/vite-plugin');
     expect(mailManifest.devDependencies).not.toHaveProperty('wrangler');
-    expect(Object.values(mailManifest.scripts ?? {}).some((script) => script.includes('wrangler')))
-      .toBe(false);
+    expect(
+      Object.values(mailManifest.scripts ?? {}).some((script) => script.includes('wrangler')),
+    ).toBe(false);
     expect(globalsCss).toContain('@plugin "@tailwindcss/typography";');
     expect(mailDependencies).toEqual(
       expect.arrayContaining([
@@ -329,9 +356,25 @@ describe('mail server architecture', () => {
 
   it('declares no workspace-owned Wrangler or workerd dependency', () => {
     const workspace = readFileSync(resolve(repositoryRoot, 'pnpm-workspace.yaml'), 'utf8');
+    const lockfile = readFileSync(resolve(repositoryRoot, 'pnpm-lock.yaml'), 'utf8');
+    const forbiddenDependencies = new Set([
+      '@cloudflare/playwright',
+      '@cloudflare/vite-plugin',
+      '@cloudflare/workers-types',
+      'workerd',
+      'wrangler',
+    ]);
+    const violations = workspaceManifestPaths.flatMap((path) =>
+      dependencyNames(readManifest(path))
+        .filter((dependency) => forbiddenDependencies.has(dependency))
+        .map((dependency) => `${path}:${dependency}`),
+    );
 
     expect(workspace).not.toMatch(/^\s+wrangler:/mu);
     expect(workspace).not.toMatch(/^\s+- workerd$/mu);
+    expect(lockfile).not.toMatch(/^\s{2}(?:workerd|wrangler)@/mu);
+    expect(lockfile).not.toMatch(/^\s{2}'@cloudflare\/workerd-/mu);
+    expect(violations).toEqual([]);
   });
 
   it('declares no retired mail onboarding module or dependency', () => {

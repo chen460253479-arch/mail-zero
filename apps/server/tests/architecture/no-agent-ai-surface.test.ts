@@ -67,7 +67,10 @@ describe('Agent, Chat, Brain, and mail AI removal', () => {
   });
 
   it('removes MCP OIDC Provider storage while preserving Zero JWT authentication', () => {
-    const schema = readSource('apps/server/src/db/schema.ts');
+    const schema = [
+      readSource('apps/server/src/db/schema.ts'),
+      readSource('apps/server/src/db/core-schema.ts'),
+    ].join('\n');
     const auth = readSource('apps/server/src/lib/auth.ts');
     const retiredModels = [
       'oauthApplication',

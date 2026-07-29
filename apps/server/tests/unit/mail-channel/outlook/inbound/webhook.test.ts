@@ -18,9 +18,12 @@ const dependencies = (
 
 describe('Outlook webhook endpoint', () => {
   it('is exposed as a public provider webhook before session-dependent APIs', () => {
-    const main = readFileSync(resolve(process.cwd(), 'src/main.ts'), 'utf8');
-    expect(main).toContain("post('/api/webhooks/mail/outlook'");
-    expect(main).toContain('handleOutlookWebhookForEnvironment');
+    const application = readFileSync(
+      resolve(process.cwd(), 'src/runtime/node/application.ts'),
+      'utf8',
+    );
+    expect(application).toContain("post('/api/webhooks/mail/outlook'");
+    expect(application).toContain('services.webhooks.outlook');
   });
 
   it('echoes the Graph validation token as plain text without reading a notification body', async () => {

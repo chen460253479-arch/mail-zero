@@ -24,7 +24,7 @@
     "docker:db:stop": "docker compose stop db valkey upstash-proxy",
     "docker:db:down": "docker compose rm --stop --force db valkey upstash-proxy",
     "docker:db:clean": "docker compose down --volumes",
-    "docker:deploy": "docker compose up --detach --build --wait --wait-timeout 180 && docker compose ps",
+    "docker:deploy": "docker compose up --detach --build --remove-orphans --wait --wait-timeout 180 && docker compose ps",
     "docker:inspect:server": "node scripts/inspect-server-image.mjs",
     "db:generate": "dotenv -- pnpm run -C apps/server db:generate",
     "db:migrate": "dotenv -- pnpm run -C apps/server db:migrate",

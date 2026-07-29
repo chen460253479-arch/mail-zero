@@ -6,9 +6,9 @@ import type {
   ProtocolVerifyResponse,
   SmtpSendResponse,
 } from './contracts';
-import { MailProtocolOperationError } from './errors';
 import type { ImapSmtpProtocolExecutor } from '../runtime/protocol-executor';
 import type { ImapSmtpCredential } from '../../contracts';
+import { MailProtocolOperationError } from './errors';
 
 export type ProtocolFailureClassification =
   | 'authentication'
