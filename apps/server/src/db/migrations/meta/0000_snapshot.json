@@ -5828,6 +5828,247 @@
       },
       "isRLSEnabled": false
     },
+    "mail.task": {
+      "name": "task",
+      "schema": "mail",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "queue": {
+          "name": "queue",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dedupe_key": {
+          "name": "dedupe_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ready'"
+        },
+        "run_at": {
+          "name": "run_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "max_attempts": {
+          "name": "max_attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 5
+        },
+        "lease_owner": {
+          "name": "lease_owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_code": {
+          "name": "last_error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_message": {
+          "name": "last_error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "mail_task_live_dedupe_uidx": {
+          "name": "mail_task_live_dedupe_uidx",
+          "columns": [
+            {
+              "expression": "queue",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "dedupe_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"mail\".\"task\".\"status\" IN ('ready', 'running', 'retry')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "mail_task_due_idx": {
+          "name": "mail_task_due_idx",
+          "columns": [
+            {
+              "expression": "queue",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "run_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"mail\".\"task\".\"status\" IN ('ready', 'retry')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "mail_task_lease_expiry_idx": {
+          "name": "mail_task_lease_expiry_idx",
+          "columns": [
+            {
+              "expression": "lease_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"mail\".\"task\".\"status\" = 'running'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "mail_task_dead_idx": {
+          "name": "mail_task_dead_idx",
+          "columns": [
+            {
+              "expression": "completed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"mail\".\"task\".\"status\" = 'dead'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "mail_task_queue_chk": {
+          "name": "mail_task_queue_chk",
+          "value": "\"mail\".\"task\".\"queue\" IN ('ingress', 'outbound')"
+        },
+        "mail_task_type_chk": {
+          "name": "mail_task_type_chk",
+          "value": "char_length(\"mail\".\"task\".\"type\") > 0"
+        },
+        "mail_task_status_chk": {
+          "name": "mail_task_status_chk",
+          "value": "\"mail\".\"task\".\"status\" IN ('ready', 'running', 'retry', 'dead')"
+        },
+        "mail_task_attempts_chk": {
+          "name": "mail_task_attempts_chk",
+          "value": "\"mail\".\"task\".\"attempts\" >= 0"
+        },
+        "mail_task_max_attempts_chk": {
+          "name": "mail_task_max_attempts_chk",
+          "value": "\"mail\".\"task\".\"max_attempts\" >= 1"
+        },
+        "mail_task_lease_chk": {
+          "name": "mail_task_lease_chk",
+          "value": "(\n        \"mail\".\"task\".\"status\" = 'running'\n        AND \"mail\".\"task\".\"lease_owner\" IS NOT NULL\n        AND \"mail\".\"task\".\"lease_expires_at\" IS NOT NULL\n      ) OR (\n        \"mail\".\"task\".\"status\" <> 'running'\n        AND \"mail\".\"task\".\"lease_owner\" IS NULL\n        AND \"mail\".\"task\".\"lease_expires_at\" IS NULL\n      )"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "mail.thread_snooze": {
       "name": "thread_snooze",
       "schema": "mail",

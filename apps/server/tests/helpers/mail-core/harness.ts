@@ -28,7 +28,7 @@ export const createPostgresMailTestHarness = async (
     userId,
     email: `${suffix}@example.test`,
     normalizedEmail: `${suffix}@example.test`,
-    channelId: `postgres-channel-${suffix}` as typeof connection.$inferInsert.channelId,
+    channelId: 'gmail',
     providerKey: 'test.postgres',
     createdAt: now,
     updatedAt: now,

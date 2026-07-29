@@ -240,6 +240,39 @@ CREATE TABLE "mail"."account" (
 	CONSTRAINT "mail_account_quota_nonnegative_check" CHECK ("mail"."account"."storage_quota_bytes" IS NULL OR "mail"."account"."storage_quota_bytes" >= 0)
 );
 --> statement-breakpoint
+CREATE TABLE "mail"."task" (
+	"id" text PRIMARY KEY NOT NULL,
+	"queue" text NOT NULL,
+	"type" text NOT NULL,
+	"payload" jsonb NOT NULL,
+	"dedupe_key" text NOT NULL,
+	"status" text DEFAULT 'ready' NOT NULL,
+	"run_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"attempts" integer DEFAULT 0 NOT NULL,
+	"max_attempts" integer DEFAULT 5 NOT NULL,
+	"lease_owner" text,
+	"lease_expires_at" timestamp with time zone,
+	"last_error_code" text,
+	"last_error_message" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"completed_at" timestamp with time zone,
+	CONSTRAINT "mail_task_queue_chk" CHECK ("mail"."task"."queue" IN ('ingress', 'outbound')),
+	CONSTRAINT "mail_task_type_chk" CHECK (char_length("mail"."task"."type") > 0),
+	CONSTRAINT "mail_task_status_chk" CHECK ("mail"."task"."status" IN ('ready', 'running', 'retry', 'dead')),
+	CONSTRAINT "mail_task_attempts_chk" CHECK ("mail"."task"."attempts" >= 0),
+	CONSTRAINT "mail_task_max_attempts_chk" CHECK ("mail"."task"."max_attempts" >= 1),
+	CONSTRAINT "mail_task_lease_chk" CHECK ((
+        "mail"."task"."status" = 'running'
+        AND "mail"."task"."lease_owner" IS NOT NULL
+        AND "mail"."task"."lease_expires_at" IS NOT NULL
+      ) OR (
+        "mail"."task"."status" <> 'running'
+        AND "mail"."task"."lease_owner" IS NULL
+        AND "mail"."task"."lease_expires_at" IS NULL
+      ))
+);
+--> statement-breakpoint
 CREATE TABLE "mail"."identity" (
 	"id" text PRIMARY KEY NOT NULL,
 	"mail_account_id" text NOT NULL,
@@ -833,5 +866,9 @@ CREATE INDEX "inbound_sync_item_lease_idx" ON "integration"."inbound_sync_item" 
 CREATE INDEX "outbound_delivery_due_idx" ON "integration"."outbound_delivery" USING btree ("status","available_at","id") WHERE "integration"."outbound_delivery"."status" IN ('scheduled', 'ready', 'retry_wait', 'uncertain');--> statement-breakpoint
 CREATE INDEX "outbound_delivery_expired_lease_idx" ON "integration"."outbound_delivery" USING btree ("lease_expires_at","id") WHERE "integration"."outbound_delivery"."status" = 'leased';--> statement-breakpoint
 CREATE UNIQUE INDEX "send_attempt_open_delivery_uidx" ON "integration"."send_attempt" USING btree ("mail_account_id","delivery_id") WHERE "integration"."send_attempt"."finished_at" IS NULL AND "integration"."send_attempt"."kind" = 'send';--> statement-breakpoint
+CREATE UNIQUE INDEX "mail_task_live_dedupe_uidx" ON "mail"."task" USING btree ("queue","dedupe_key") WHERE "mail"."task"."status" IN ('ready', 'running', 'retry');--> statement-breakpoint
+CREATE INDEX "mail_task_due_idx" ON "mail"."task" USING btree ("queue","status","run_at","id") WHERE "mail"."task"."status" IN ('ready', 'retry');--> statement-breakpoint
+CREATE INDEX "mail_task_lease_expiry_idx" ON "mail"."task" USING btree ("lease_expires_at","id") WHERE "mail"."task"."status" = 'running';--> statement-breakpoint
+CREATE INDEX "mail_task_dead_idx" ON "mail"."task" USING btree ("completed_at","id") WHERE "mail"."task"."status" = 'dead';--> statement-breakpoint
 CREATE INDEX "thread_snooze_due_idx" ON "mail"."thread_snooze" USING btree ("status","wake_at","thread_id") WHERE "mail"."thread_snooze"."status" = 'scheduled';--> statement-breakpoint
 CREATE INDEX "thread_snooze_expired_lease_idx" ON "mail"."thread_snooze" USING btree ("lease_expires_at","thread_id") WHERE "mail"."thread_snooze"."status" = 'waking';
