@@ -59,7 +59,6 @@ const labels = {
 
 const nangoStateLabels = {
   unconfigured: 'Not configured',
-  validating: 'Validating',
   available: 'Available',
   unavailable: 'Unavailable',
 } as const;
@@ -143,15 +142,8 @@ export function ManagedChannelSettingsDialog({
   const config = useQuery({
     ...trpc.integrations.getChannelConfig.queryOptions({ channelId }),
     enabled: open,
-    refetchInterval: (query) =>
-      query.state.data?.authorizationSources.nango.state === 'validating' ? 1000 : false,
-  });
-  const nangoIntegrations = useQuery({
-    ...trpc.integrations.listNangoIntegrations.queryOptions({ channelId }),
-    enabled: open && config.data?.authorizationSources.nango.state === 'available',
   });
   const saveChannel = useMutation(trpc.integrations.saveChannelConfig.mutationOptions());
-  const setNangoMapping = useMutation(trpc.integrations.setNangoIntegration.mutationOptions());
   const startValidation = useMutation(
     trpc.integrations.startChannelOAuthValidation.mutationOptions(),
   );
@@ -219,11 +211,6 @@ export function ManagedChannelSettingsDialog({
   const save = async () => {
     if (!validInterval) return;
     try {
-      const selectedIntegration = config.data?.authorizationSources.nango.integrationId ?? null;
-      if (form.authSource === 'nango' && !selectedIntegration) {
-        toast.error('Select a Nango Integration first');
-        return;
-      }
       let input: Inputs['integrations']['saveChannelConfig'];
       if (channelId === 'outlook') {
         input = {
@@ -343,69 +330,40 @@ export function ManagedChannelSettingsDialog({
                     </Label>
                   ) : null}
                   <Label className="flex cursor-pointer items-start gap-3 rounded-lg border p-4">
-                    <RadioGroupItem value="nango" />
-                    <span>
+                    <RadioGroupItem
+                      value="nango"
+                      disabled={data.authorizationSources.nango.state !== 'available'}
+                    />
+                    <span className="min-w-0">
                       <span className="block font-medium">Nango</span>
                       <span className="text-muted-foreground mt-1 block text-xs">
                         Nango stores credentials; Zero still runs all mailbox logic locally.
+                      </span>
+                      <span className="mt-2 flex flex-wrap items-center gap-2">
+                        <Badge
+                          variant={
+                            data.authorizationSources.nango.state === 'available'
+                              ? 'default'
+                              : 'outline'
+                          }
+                        >
+                          {nangoStateLabels[data.authorizationSources.nango.state]}
+                        </Badge>
+                        <span className="text-muted-foreground text-xs">
+                          {data.authorizationSources.nango.bindingCount} mailbox bindings
+                        </span>
+                        {data.authorizationSources.nango.errorCode ? (
+                          <span className="text-muted-foreground break-all text-xs">
+                            {data.authorizationSources.nango.errorCode}
+                          </span>
+                        ) : null}
                       </span>
                     </span>
                   </Label>
                 </RadioGroup>
               </FormSection>
 
-              {form.authSource === 'nango' ? (
-                <FormSection
-                  title="Nango Integration"
-                  description="Select the one Nango Integration mapped to this channel."
-                >
-                  <div className="flex items-center gap-3">
-                    <Badge
-                      variant={
-                        data.authorizationSources.nango.state === 'available'
-                          ? 'default'
-                          : 'outline'
-                      }
-                    >
-                      {nangoStateLabels[data.authorizationSources.nango.state]}
-                    </Badge>
-                    <span className="text-muted-foreground text-xs">
-                      {data.authorizationSources.nango.bindingCount} mailbox bindings
-                    </span>
-                  </div>
-                  <Select
-                    value={data.authorizationSources.nango.integrationId ?? undefined}
-                    disabled={
-                      data.authSourceLocked ||
-                      nangoIntegrations.isLoading ||
-                      data.authorizationSources.nango.state !== 'available'
-                    }
-                    onValueChange={async (integrationId) => {
-                      try {
-                        await setNangoMapping.mutateAsync({ channelId, integrationId });
-                        await refresh();
-                        toast.success('Nango Integration selected');
-                      } catch {
-                        toast.error('Unable to select Nango Integration');
-                      }
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select an Integration" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(nangoIntegrations.data ?? []).map((integration) => (
-                        <SelectItem
-                          key={integration.integrationId}
-                          value={integration.integrationId}
-                        >
-                          {integration.displayName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FormSection>
-              ) : form.authSource === 'zero_oauth' && zeroOAuth ? (
+              {form.authSource === 'zero_oauth' && zeroOAuth ? (
                 <FormSection
                   title="Zero-managed OAuth"
                   description="Validate the global OAuth client before enabling mailbox connections."

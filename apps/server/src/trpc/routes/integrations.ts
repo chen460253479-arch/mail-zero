@@ -2,17 +2,15 @@ import { z } from 'zod';
 
 import { createPostgresConnectionRepository } from '../../modules/mail-accounts/postgres/connection-repository';
 import { provisionGmailMailboxInDatabase } from '../../modules/mail-accounts/runtime/provision-gmail-mailbox';
-import { NangoChannelMappingService } from '../../modules/mail-accounts/application/nango-channel-mapping';
 import { createMailChannelConfigService } from '../../integrations/mail-channel/channel-config-service';
 import { type GmailOAuthService } from '../../modules/mail-accounts/application/connect-gmail-oauth';
 import { createPostgresMailSyncRepository } from '../../modules/mail-sync/postgres/sync-repository';
 import { createChannelConfigRepository } from '../../integrations/core/channel-config-repository';
 import { createGmailChannelConfigService } from '../../integrations/gmail/channel-config-service';
 import { normalizeMailboxEmail } from '../../modules/mail-accounts/application/mailbox-identity';
+import { getNangoChannelServiceForEnvironment } from '../../integrations/nango/runtime';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import { createChannelOAuthApplication } from '../../runtime/mail/channel-oauth';
-import { getNangoServiceForEnvironment } from '../../integrations/nango/runtime';
-import type { NangoIntegrationService } from '../../integrations/nango/service';
 import { gmailChannelConfigInputSchema } from '../../mail-channel/gmail/config';
 import { disableChannelSubscriptions } from '../../runtime/mail/channel-watch';
 import { createGmailOAuthApplication } from '../../runtime/mail/gmail-oauth';
@@ -25,8 +23,6 @@ import type { ZeroEnv } from '../../env';
 import { createDb } from '../../db';
 
 type IntegrationServices = {
-  nango: NangoIntegrationService;
-  nangoChannels: NangoChannelMappingService;
   gmail: GmailOAuthService;
   outlookOAuth: ReturnType<typeof createChannelOAuthApplication>;
   zohoOAuth: ReturnType<typeof createChannelOAuthApplication>;
@@ -42,14 +38,8 @@ const withIntegrationServices = async <T>(
   try {
     const repository = createSystemIntegrationRepository(db);
     const channelConfigs = createChannelConfigRepository(db);
-    const nango = getNangoServiceForEnvironment(env);
+    const nangoChannels = getNangoChannelServiceForEnvironment(env);
     return await run({
-      nango,
-      nangoChannels: new NangoChannelMappingService({
-        repository,
-        listIntegrations: () => nango.listIntegrations(),
-        getChannel: (channelId) => defaultMailChannelRegistry.get(channelId),
-      }),
       gmail: createGmailOAuthApplication({
         repository,
         saveMailbox: async (userId, mailbox, authorization) => {
@@ -80,7 +70,7 @@ const withIntegrationServices = async <T>(
       gmailChannel: createGmailChannelConfigService({
         channels: channelConfigs,
         integrations: repository,
-        getNangoStatus: () => nango.getStatus(),
+        getNangoStatus: () => nangoChannels.getStatus('gmail'),
         publicBackendUrl: env.VITE_PUBLIC_BACKEND_URL,
         requestSubscriptionRefresh: async (provider) => {
           await createPostgresMailSyncRepository(db).markSubscriptionsDue({
@@ -95,7 +85,7 @@ const withIntegrationServices = async <T>(
       channels: createMailChannelConfigService({
         channels: channelConfigs,
         integrations: repository,
-        getNangoStatus: () => nango.getStatus(),
+        getNangoStatus: (channelId) => nangoChannels.getStatus(channelId),
         publicBackendUrl: env.VITE_PUBLIC_BACKEND_URL,
         protocolWorkerAvailable:
           env.MAIL_PROTOCOL_WORKER_URL !== undefined &&
@@ -198,67 +188,6 @@ export const integrationsRouter = router({
         return await withIntegrationServices(ctx.c.env, ({ channels }) =>
           channels.save({ ...input, updatedBy: ctx.sessionUser.id }),
         );
-      } catch (error) {
-        mapIntegrationError(error);
-      }
-    }),
-
-  listNangoGmailIntegrations: adminProcedure.query(async ({ ctx }) => {
-    try {
-      return await withIntegrationServices(ctx.c.env, async ({ nangoChannels }) =>
-        (await nangoChannels.listIntegrations('gmail')).map(({ unique_key, display_name }) => ({
-          integrationId: unique_key,
-          displayName: display_name,
-        })),
-      );
-    } catch (error) {
-      mapIntegrationError(error);
-    }
-  }),
-
-  setNangoGmailIntegration: adminProcedure
-    .input(z.object({ integrationId: z.string().trim().min(1) }))
-    .mutation(async ({ input, ctx }) => {
-      try {
-        await withIntegrationServices(ctx.c.env, ({ nangoChannels }) =>
-          nangoChannels.setMapping('gmail', input.integrationId),
-        );
-        return { saved: true };
-      } catch (error) {
-        mapIntegrationError(error);
-      }
-    }),
-
-  listNangoIntegrations: adminProcedure
-    .input(z.object({ channelId: z.enum(mailChannelIds) }))
-    .query(async ({ input, ctx }) => {
-      try {
-        return await withIntegrationServices(ctx.c.env, async ({ nangoChannels }) =>
-          (await nangoChannels.listIntegrations(input.channelId)).map(
-            ({ unique_key, display_name }) => ({
-              integrationId: unique_key,
-              displayName: display_name,
-            }),
-          ),
-        );
-      } catch (error) {
-        mapIntegrationError(error);
-      }
-    }),
-
-  setNangoIntegration: adminProcedure
-    .input(
-      z.object({
-        channelId: z.enum(mailChannelIds),
-        integrationId: z.string().trim().min(1),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      try {
-        await withIntegrationServices(ctx.c.env, ({ nangoChannels }) =>
-          nangoChannels.setMapping(input.channelId, input.integrationId),
-        );
-        return { saved: true };
       } catch (error) {
         mapIntegrationError(error);
       }

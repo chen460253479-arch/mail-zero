@@ -43,6 +43,7 @@ describe('mail channel connection UI boundary', () => {
     const route = read('apps/server/src/trpc/routes/connections.ts');
     expect(route).not.toContain('nangoChannels:');
     expect(route).not.toContain('nangoConnections:');
-    expect(route).toContain('const integrationId = mapping.externalIntegrationId');
+    expect(route).not.toContain('mapping.externalIntegrationId');
+    expect(route).toContain('runtime.channels.requireIntegrationKey');
   });
 });

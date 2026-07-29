@@ -56,9 +56,10 @@ export class NangoClient {
     this.timeoutMs = config.timeoutMs ?? 10_000;
   }
 
-  async validateAccess(): Promise<void> {
-    await this.listIntegrations();
+  async validateAccess(): Promise<NangoIntegration[]> {
+    const integrations = await this.listIntegrations();
     await this.listConnectionsPage(1, 0);
+    return integrations;
   }
 
   async listIntegrations(): Promise<NangoIntegration[]> {

@@ -10,7 +10,7 @@ import type {
   SaveChannelConfigInput,
 } from '../core/channel-config-repository';
 import { parsePublicConfig, type SystemIntegrationRepository } from '../core/repository';
-import type { NangoRuntimeStatus } from '../nango/service';
+import type { NangoChannelRuntimeStatus } from '../nango/channels';
 
 export type GmailChannelConfigErrorCode =
   | 'GMAIL_AUTH_SOURCE_NOT_CONFIGURED'
@@ -24,14 +24,14 @@ export class GmailChannelConfigError extends Error {
   }
 }
 
-type GmailIntegrationRepository = Pick<SystemIntegrationRepository, 'get' | 'getMapping'> & {
+type GmailIntegrationRepository = Pick<SystemIntegrationRepository, 'get'> & {
   countBindings(channelId: 'gmail', authSource?: GmailAuthSource): Promise<number>;
 };
 
 export type GmailChannelConfigServiceDependencies = {
   channels: ChannelConfigRepository;
   integrations: GmailIntegrationRepository;
-  getNangoStatus(): NangoRuntimeStatus;
+  getNangoStatus(): Promise<NangoChannelRuntimeStatus>;
   publicBackendUrl: string;
   requestSubscriptionRefresh(provider: 'gmail'): Promise<void>;
   disableSubscriptions(provider: 'gmail'): Promise<void>;
@@ -63,10 +63,9 @@ export type SafeGmailChannelConfig = GmailChannelConfig & {
       };
     };
     nango: {
-      state: NangoRuntimeStatus['state'];
-      checkedAt: Date | null;
+      state: NangoChannelRuntimeStatus['state'];
+      checkedAt: Date;
       errorCode: string | null;
-      gmailIntegrationId: string | null;
       bindingCount: number;
     };
   };
@@ -99,16 +98,15 @@ export const createGmailChannelConfigService = (
   dependencies: GmailChannelConfigServiceDependencies,
 ): GmailChannelConfigService => {
   const readSafeConfig = async (): Promise<SafeGmailChannelConfig> => {
-    const [record, zeroOAuth, gmailMapping, nangoBindings, zeroOAuthBindings] = await Promise.all([
+    const [record, zeroOAuth, nangoBindings, zeroOAuthBindings, nangoStatus] = await Promise.all([
       dependencies.channels.get('gmail'),
       dependencies.integrations.get('gmail_zero_oauth'),
-      dependencies.integrations.getMapping('gmail', 'nango'),
       dependencies.integrations.countBindings('gmail', 'nango'),
       dependencies.integrations.countBindings('gmail', 'zero_oauth'),
+      dependencies.getNangoStatus(),
     ]);
     const config = parseRecord(record);
     const bindingCount = nangoBindings + zeroOAuthBindings;
-    const nangoStatus = dependencies.getNangoStatus();
     const zeroOAuthPublicConfig =
       zeroOAuth?.status === 'active'
         ? parsePublicConfig('gmail_zero_oauth', zeroOAuth.publicConfig)
@@ -134,7 +132,6 @@ export const createGmailChannelConfigService = (
         },
         nango: {
           ...nangoStatus,
-          gmailIntegrationId: gmailMapping?.externalIntegrationId ?? null,
           bindingCount: nangoBindings,
         },
       },
@@ -159,17 +156,15 @@ export const createGmailChannelConfigService = (
         throw new GmailChannelConfigError('GMAIL_CHANNEL_CONFIG_INVALID');
       }
 
-      const [currentRecord, zeroOAuth, gmailMapping, nangoBindings, zeroOAuthBindings] =
+      const [currentRecord, zeroOAuth, nangoBindings, zeroOAuthBindings, nangoStatus] =
         await Promise.all([
           dependencies.channels.get('gmail'),
           candidate.authSource === 'zero_oauth'
             ? dependencies.integrations.get('gmail_zero_oauth')
             : Promise.resolve(null),
-          candidate.authSource === 'nango'
-            ? dependencies.integrations.getMapping('gmail', 'nango')
-            : Promise.resolve(null),
           dependencies.integrations.countBindings('gmail', 'nango'),
           dependencies.integrations.countBindings('gmail', 'zero_oauth'),
+          dependencies.getNangoStatus(),
         ]);
 
       const boundSource =
@@ -189,7 +184,7 @@ export const createGmailChannelConfigService = (
 
       const selectedSourceReady =
         candidate.authSource === 'nango'
-          ? dependencies.getNangoStatus().state === 'available' && gmailMapping !== null
+          ? nangoStatus.state === 'available'
           : zeroOAuth?.status === 'active';
       if (!selectedSourceReady) {
         throw new GmailChannelConfigError('GMAIL_AUTH_SOURCE_NOT_CONFIGURED');

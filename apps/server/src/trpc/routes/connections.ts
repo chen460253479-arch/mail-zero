@@ -17,9 +17,9 @@ import { manualCredentialSnapshotSchema } from '../../modules/mail-accounts/cred
 import { withNangoRuntime, type NangoRuntime } from '../../modules/mail-accounts/runtime/nango';
 import { resolveFetchedNangoCredential } from '../../modules/mail-accounts/credentials/nango';
 import { createIdentityMailChannelRegistry } from '../../runtime/mail/channel-registry';
+import { getNangoChannelServiceForEnvironment } from '../../integrations/nango/runtime';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import { mailChannelIds, type MailChannelId } from '../../mail-channel/contracts';
-import { getNangoServiceForEnvironment } from '../../integrations/nango/runtime';
 import { createZohoWebhookSetup } from '../../runtime/mail/zoho-webhook-setup';
 import { mailAccount } from '../../modules/mail/postgres/schema/accounts';
 import { defaultMailChannelRegistry } from '../../mail-channel/registry';
@@ -37,6 +37,10 @@ const nangoRuntimeConfig = () => ({
   databaseUrl: env.HYPERDRIVE.connectionString,
   NANGO_BASE_URL: env.NANGO_BASE_URL,
   NANGO_SECRET_KEY: env.NANGO_SECRET_KEY,
+  NANGO_GMAIL_INTEGRATION_KEY: env.NANGO_GMAIL_INTEGRATION_KEY,
+  NANGO_OUTLOOK_INTEGRATION_KEY: env.NANGO_OUTLOOK_INTEGRATION_KEY,
+  NANGO_ZOHO_MAIL_INTEGRATION_KEY: env.NANGO_ZOHO_MAIL_INTEGRATION_KEY,
+  NANGO_IMAP_SMTP_INTEGRATION_KEY: env.NANGO_IMAP_SMTP_INTEGRATION_KEY,
 });
 
 const withConfiguredNango = async <T>(run: (runtime: NangoRuntime) => Promise<T>): Promise<T> => {
@@ -59,15 +63,14 @@ const withConfiguredNango = async <T>(run: (runtime: NangoRuntime) => Promise<T>
 const getGmailAuthorizationOptionsForDatabase = async (db: DB) => {
   const repository = createSystemIntegrationRepository(db);
   const channelRepository = createChannelConfigRepository(db);
-  const [zeroOAuth, nangoMapping, channelConfig] = await Promise.all([
+  const [zeroOAuth, channelConfig, nangoStatus] = await Promise.all([
     repository.get('gmail_zero_oauth'),
-    repository.getMapping('gmail', 'nango'),
     channelRepository.get('gmail'),
+    getNangoChannelServiceForEnvironment(env).getStatus('gmail'),
   ]);
-  const nangoStatus = getNangoServiceForEnvironment(env).getStatus();
   const availability = {
     zeroOAuthAvailable: zeroOAuth?.status === 'active',
-    nangoAvailable: nangoStatus.state === 'available' && nangoMapping !== null,
+    nangoAvailable: nangoStatus.state === 'available',
   };
   const selectedAuthSource =
     channelConfig?.authSource === 'zero_oauth' || channelConfig?.authSource === 'nango'
@@ -89,17 +92,16 @@ const integrationKeyByChannel = {
 const getChannelAuthorizationOptionsForDatabase = async (db: DB, channelId: MailChannelId) => {
   const repository = createSystemIntegrationRepository(db);
   const channelRepository = createChannelConfigRepository(db);
-  const [zeroOAuth, nangoMapping, channelConfig] = await Promise.all([
+  const [zeroOAuth, channelConfig, nangoStatus] = await Promise.all([
     channelId === 'imap_smtp'
       ? Promise.resolve(null)
       : repository.get(integrationKeyByChannel[channelId]),
-    repository.getMapping(channelId, 'nango'),
     channelRepository.get(channelId),
+    getNangoChannelServiceForEnvironment(env).getStatus(channelId),
   ]);
-  const nangoStatus = getNangoServiceForEnvironment(env).getStatus();
   const availability = {
     zeroOAuthAvailable: zeroOAuth?.status === 'active',
-    nangoAvailable: nangoStatus.state === 'available' && nangoMapping !== null,
+    nangoAvailable: nangoStatus.state === 'available',
     manualAvailable:
       channelId === 'imap_smtp' &&
       env.MAIL_PROTOCOL_WORKER_URL !== undefined &&
@@ -172,24 +174,15 @@ const listChannelNangoConnections = async (channelId: MailChannelId) => {
     });
   }
   return await withConfiguredNango(async (runtime) => {
-    const mapping = await runtime.integrationRepository.getMapping(channelId, 'nango');
-    if (!mapping) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: 'MAIL_CHANNEL_UNAVAILABLE',
-      });
-    }
+    const integrationKey = await runtime.channels.requireIntegrationKey(channelId);
     const database = createDb(env.HYPERDRIVE.connectionString);
     try {
       const channel = createIdentityMailChannelRegistry(database.db, env).get(channelId);
       const connections = await listSafeNangoConnections(
-        mapping.externalIntegrationId,
+        integrationKey,
         runtime.client,
         async (connectionId) => {
-          const connection = await runtime.client.getConnection(
-            connectionId,
-            mapping.externalIntegrationId,
-          );
+          const connection = await runtime.client.getConnection(connectionId, integrationKey);
           const resolved = resolveFetchedNangoCredential(
             connection.credentials,
             connection.connection_config,
@@ -283,11 +276,7 @@ export const connectionsRouter = router({
           throw new NangoBindingError('MAIL_CHANNEL_UNAVAILABLE');
         }
         return await withConfiguredNango(async (runtime) => {
-          const mapping = await runtime.integrationRepository.getMapping(input.channelId, 'nango');
-          if (!mapping) {
-            throw new NangoBindingError('MAIL_CHANNEL_UNAVAILABLE');
-          }
-          const integrationId = mapping.externalIntegrationId;
+          const integrationId = await runtime.channels.requireIntegrationKey(input.channelId);
           const connectionRepository = createPostgresConnectionRepository(database.db);
           const channels = createIdentityMailChannelRegistry(database.db, env);
           const binding = await bindNangoMailbox(

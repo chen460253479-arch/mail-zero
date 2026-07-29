@@ -4,7 +4,6 @@ export * from './application/disconnect-mailbox';
 export * from './application/gmail-connection-options';
 export * from './application/list-nango-channels';
 export * from './application/mailbox-identity';
-export * from './application/nango-channel-mapping';
 export * from './application/provision-mailbox';
 export * from './credentials/nango';
 export * from './credentials/resolve';

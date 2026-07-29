@@ -20,12 +20,15 @@ const createClient = (fetchMock: typeof fetch) =>
 
 describe('Nango client', () => {
   it('validates integrations and one bounded connections page', async () => {
+    const integrations = [
+      { unique_key: 'gmail-primary', display_name: 'Gmail', provider: 'google-mail' },
+    ];
     const fetchMock = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(Response.json({ data: [] }))
+      .mockResolvedValueOnce(Response.json({ data: integrations }))
       .mockResolvedValueOnce(Response.json({ connections: [] }));
 
-    await createClient(fetchMock).validateAccess();
+    await expect(createClient(fetchMock).validateAccess()).resolves.toEqual(integrations);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.nango.dev/integrations');

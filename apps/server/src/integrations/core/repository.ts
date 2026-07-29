@@ -1,16 +1,15 @@
 import {
-  authorizationBinding,
-  channelIntegrationMapping,
-  connection,
-  integrationOAuthSession,
-  systemIntegrationConfig,
-} from '../../db/schema';
-import {
   parsePublicConfig,
   type IntegrationKey,
   type IntegrationOAuthPurpose,
   type IntegrationPublicConfigMap,
 } from './schemas';
+import {
+  authorizationBinding,
+  connection,
+  integrationOAuthSession,
+  systemIntegrationConfig,
+} from '../../db/schema';
 import type { MailChannelId } from '../../mail-channel/contracts';
 import { and, count, eq, gt, isNull, lt } from 'drizzle-orm';
 import type { DB } from '../../db';
@@ -62,12 +61,6 @@ export interface SystemIntegrationRepository {
   get<K extends IntegrationKey>(key: K): Promise<SystemIntegrationRecord | null>;
   saveActive<K extends IntegrationKey>(input: SaveActiveIntegrationInput<K>): Promise<void>;
   delete(key: IntegrationKey): Promise<void>;
-  getMapping(
-    channelId: MailChannelId,
-    authSource: 'nango',
-  ): Promise<typeof channelIntegrationMapping.$inferSelect | null>;
-  setMapping(channelId: MailChannelId, authSource: 'nango', integrationId: string): Promise<void>;
-  deleteMapping(channelId: MailChannelId, authSource: 'nango'): Promise<void>;
   countBindings(
     channelId: MailChannelId,
     authSource?: 'zero_oauth' | 'nango' | 'manual',
@@ -124,43 +117,6 @@ export const createSystemIntegrationRepository = (db: DB): SystemIntegrationRepo
 
   delete: async (key) => {
     await db.delete(systemIntegrationConfig).where(eq(systemIntegrationConfig.integrationKey, key));
-  },
-
-  getMapping: async (channelId, authSource) =>
-    (await db.query.channelIntegrationMapping.findFirst({
-      where: and(
-        eq(channelIntegrationMapping.channelId, channelId),
-        eq(channelIntegrationMapping.authSource, authSource),
-      ),
-    })) ?? null,
-
-  setMapping: async (channelId, authSource, integrationId) => {
-    const now = new Date();
-    await db
-      .insert(channelIntegrationMapping)
-      .values({
-        id: crypto.randomUUID(),
-        channelId,
-        authSource,
-        externalIntegrationId: integrationId,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: [channelIntegrationMapping.channelId, channelIntegrationMapping.authSource],
-        set: { externalIntegrationId: integrationId, updatedAt: now },
-      });
-  },
-
-  deleteMapping: async (channelId, authSource) => {
-    await db
-      .delete(channelIntegrationMapping)
-      .where(
-        and(
-          eq(channelIntegrationMapping.channelId, channelId),
-          eq(channelIntegrationMapping.authSource, authSource),
-        ),
-      );
   },
 
   countBindings: async (channelId, authSource) => {

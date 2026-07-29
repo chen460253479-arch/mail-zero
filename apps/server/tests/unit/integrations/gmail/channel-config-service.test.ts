@@ -9,8 +9,8 @@ import {
   createGmailChannelConfigService,
   type GmailChannelConfigServiceDependencies,
 } from '../../../../src/integrations/gmail/channel-config-service';
+import type { NangoChannelRuntimeStatus } from '../../../../src/integrations/nango/channels';
 import type { SystemIntegrationRecord } from '../../../../src/integrations/core/repository';
-import type { NangoRuntimeStatus } from '../../../../src/integrations/nango/service';
 
 const now = new Date('2026-07-28T08:00:00.000Z');
 
@@ -47,37 +47,34 @@ const createChannelRepository = (): ChannelConfigRepository & {
 describe('Gmail channel configuration service', () => {
   let channels: ReturnType<typeof createChannelRepository>;
   let integrations: Map<string, SystemIntegrationRecord>;
-  let gmailMapping: { externalIntegrationId: string } | null;
   let bindingCounts: { nango: number; zero_oauth: number };
   let subscriptionRefreshes: string[];
   let subscriptionDisables: string[];
-  let nangoStatus: NangoRuntimeStatus;
+  let nangoStatus: NangoChannelRuntimeStatus;
   let dependencies: GmailChannelConfigServiceDependencies;
 
   beforeEach(() => {
     channels = createChannelRepository();
     integrations = new Map();
-    gmailMapping = null;
     bindingCounts = { nango: 0, zero_oauth: 0 };
     subscriptionRefreshes = [];
     subscriptionDisables = [];
     nangoStatus = {
       state: 'unconfigured',
-      checkedAt: null,
-      errorCode: null,
+      checkedAt: now,
+      errorCode: 'NANGO_CHANNEL_KEY_MISSING',
     };
     dependencies = {
       channels,
       integrations: {
         get: async (key) => integrations.get(key) ?? null,
-        getMapping: async () => gmailMapping as never,
         countBindings: async (_channelId, authSource) =>
           authSource === undefined
             ? bindingCounts.nango + bindingCounts.zero_oauth
             : bindingCounts[authSource],
       },
       publicBackendUrl: 'https://mail.example.test/',
-      getNangoStatus: () => nangoStatus,
+      getNangoStatus: async () => nangoStatus,
       requestSubscriptionRefresh: async (provider) => {
         subscriptionRefreshes.push(provider);
       },
@@ -87,8 +84,8 @@ describe('Gmail channel configuration service', () => {
     };
   });
 
-  it.each(['unconfigured', 'validating', 'unavailable'] as const)(
-    'rejects Nango mode while the environment runtime is %s',
+  it.each(['unconfigured', 'unavailable'] as const)(
+    'rejects Nango mode while the fixed channel Integration is %s',
     async (state) => {
       nangoStatus =
         state === 'unavailable'
@@ -99,10 +96,9 @@ describe('Gmail channel configuration service', () => {
             }
           : {
               state,
-              checkedAt: null,
-              errorCode: null,
+              checkedAt: now,
+              errorCode: 'NANGO_CHANNEL_KEY_MISSING',
             };
-      gmailMapping = { externalIntegrationId: 'gmail-integration' };
 
       await expect(
         createGmailChannelConfigService(dependencies).save({
@@ -117,53 +113,32 @@ describe('Gmail channel configuration service', () => {
     },
   );
 
-  it('rejects Nango mode until a Gmail Integration mapping is selected', async () => {
+  it('allows Nango mode when the fixed Gmail Integration is available', async () => {
     nangoStatus = {
       state: 'available',
       checkedAt: now,
       errorCode: null,
     };
+    const saved = await createGmailChannelConfigService(dependencies).save({
+      authSource: 'nango',
+      inboxWatchEnabled: false,
+      scheduledSyncEnabled: true,
+      syncIntervalMinutes: 10,
+      providerConfig: {},
+      updatedBy: 'admin-1',
+    });
 
-    await expect(
-      createGmailChannelConfigService(dependencies).save({
-        authSource: 'nango',
-        inboxWatchEnabled: false,
-        scheduledSyncEnabled: true,
-        syncIntervalMinutes: 10,
-        providerConfig: {},
-        updatedBy: 'admin-1',
-      }),
-    ).rejects.toMatchObject({ code: 'GMAIL_AUTH_SOURCE_NOT_CONFIGURED' });
-  });
-
-  it('allows Nango mode when the environment runtime and Gmail mapping are ready', async () => {
-    nangoStatus = {
-      state: 'available',
-      checkedAt: now,
-      errorCode: null,
-    };
-    gmailMapping = { externalIntegrationId: 'gmail-integration' };
-
-    await expect(
-      createGmailChannelConfigService(dependencies).save({
-        authSource: 'nango',
-        inboxWatchEnabled: false,
-        scheduledSyncEnabled: true,
-        syncIntervalMinutes: 10,
-        providerConfig: {},
-        updatedBy: 'admin-1',
-      }),
-    ).resolves.toMatchObject({
+    expect(saved).toMatchObject({
       authSource: 'nango',
       authorizationSources: {
         nango: {
           state: 'available',
           checkedAt: now,
           errorCode: null,
-          gmailIntegrationId: 'gmail-integration',
         },
       },
     });
+    expect(saved.authorizationSources.nango).not.toHaveProperty('gmailIntegrationId');
   });
 
   it('rejects Zero OAuth mode until its validated configuration is active', async () => {
@@ -180,7 +155,6 @@ describe('Gmail channel configuration service', () => {
   });
 
   it('blocks changing the authorization source while Gmail bindings exist', async () => {
-    gmailMapping = { externalIntegrationId: 'gmail-integration' };
     bindingCounts.zero_oauth = 1;
     channels.current = {
       id: 'gmail-channel-config',
@@ -280,8 +254,8 @@ describe('Gmail channel configuration service', () => {
         },
         nango: {
           state: 'unconfigured',
-          checkedAt: null,
-          errorCode: null,
+          checkedAt: now,
+          errorCode: 'NANGO_CHANNEL_KEY_MISSING',
           bindingCount: 0,
         },
       },

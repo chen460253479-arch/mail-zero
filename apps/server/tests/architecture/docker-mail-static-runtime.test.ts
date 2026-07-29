@@ -58,6 +58,10 @@ describe('Docker Mail static runtime', () => {
     expect(buildArgs).not.toHaveProperty('REDIS_TOKEN');
     expect(buildArgs).not.toHaveProperty('NANGO_BASE_URL');
     expect(buildArgs).not.toHaveProperty('NANGO_SECRET_KEY');
+    expect(buildArgs).not.toHaveProperty('NANGO_GMAIL_INTEGRATION_KEY');
+    expect(buildArgs).not.toHaveProperty('NANGO_OUTLOOK_INTEGRATION_KEY');
+    expect(buildArgs).not.toHaveProperty('NANGO_ZOHO_MAIL_INTEGRATION_KEY');
+    expect(buildArgs).not.toHaveProperty('NANGO_IMAP_SMTP_INTEGRATION_KEY');
   });
 
   it('keeps Server on the persisted development runtime', () => {

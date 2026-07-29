@@ -78,18 +78,6 @@ CREATE TABLE "integration"."channel_config" (
 	CONSTRAINT "channel_config_sync_interval_chk" CHECK ("integration"."channel_config"."sync_interval_minutes" BETWEEN 1 AND 1440)
 );
 --> statement-breakpoint
-CREATE TABLE "integration"."channel_mapping" (
-	"id" text PRIMARY KEY NOT NULL,
-	"channel_id" text NOT NULL,
-	"auth_source" text NOT NULL,
-	"external_integration_id" text NOT NULL,
-	"created_at" timestamp with time zone NOT NULL,
-	"updated_at" timestamp with time zone NOT NULL,
-	CONSTRAINT "channel_mapping_channel_auth_uidx" UNIQUE("channel_id","auth_source"),
-	CONSTRAINT "channel_mapping_channel_id_chk" CHECK ("integration"."channel_mapping"."channel_id" IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')),
-	CONSTRAINT "channel_mapping_auth_source_chk" CHECK ("integration"."channel_mapping"."auth_source" = 'nango')
-);
---> statement-breakpoint
 CREATE TABLE "integration"."connection" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,

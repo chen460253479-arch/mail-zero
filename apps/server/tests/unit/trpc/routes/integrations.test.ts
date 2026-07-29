@@ -11,25 +11,29 @@ vi.mock('cloudflare:workers', () => ({ env: {} }));
 describe('administrator integrations router', () => {
   it('exposes the unified Gmail channel configuration procedures', () => {
     const procedures = Object.keys(integrationsRouter._def.procedures);
-    for (const procedure of [
-      'getChannels',
-      'getGmailConfig',
-      'saveGmailConfig',
-      'listNangoGmailIntegrations',
-      'setNangoGmailIntegration',
-    ]) {
+    for (const procedure of ['getChannels', 'getGmailConfig', 'saveGmailConfig']) {
       expect(procedures).toContain(procedure);
     }
-    for (const removedProcedure of ['getOverview', 'validateAndSaveNango', 'deleteNango']) {
+    for (const removedProcedure of [
+      'getOverview',
+      'validateAndSaveNango',
+      'deleteNango',
+      'listNangoGmailIntegrations',
+      'setNangoGmailIntegration',
+      'listNangoIntegrations',
+      'setNangoIntegration',
+    ]) {
       expect(procedures).not.toContain(removedProcedure);
     }
   });
 
-  it('maps an occupied Nango channel mapping to conflict', () => {
-    expect(() => mapIntegrationError(new NangoIntegrationError('INTEGRATION_IN_USE'))).toThrow(
+  it('maps an unavailable fixed Nango Integration to a stable precondition', () => {
+    expect(() =>
+      mapIntegrationError(new NangoIntegrationError('NANGO_INTEGRATION_NOT_FOUND')),
+    ).toThrow(
       expect.objectContaining({
-        code: 'CONFLICT',
-        message: 'INTEGRATION_IN_USE',
+        code: 'PRECONDITION_FAILED',
+        message: 'NANGO_INTEGRATION_NOT_FOUND',
       }),
     );
   });

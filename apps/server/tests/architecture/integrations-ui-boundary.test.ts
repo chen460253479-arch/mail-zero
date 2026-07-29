@@ -25,18 +25,36 @@ describe('administrator integrations UI boundary', () => {
     }
   });
 
-  it('keeps the Nango Integration mapping controls in the Gmail dialog', () => {
-    const source = read('apps/mail/components/integrations/gmail-settings-dialog.tsx');
+  it('does not expose fixed Nango channel Integration keys as user-selectable mappings', () => {
+    const sources = [
+      read('apps/mail/components/integrations/gmail-settings-dialog.tsx'),
+      read('apps/mail/components/integrations/managed-channel-settings-dialog.tsx'),
+    ];
 
-    expect(source).toContain('listNangoGmailIntegrations');
-    expect(source).toContain('setNangoGmailIntegration');
-    expect(source).toContain('gmailIntegrationId');
+    for (const source of sources) {
+      for (const forbidden of [
+        'listNangoGmailIntegrations',
+        'setNangoGmailIntegration',
+        'listNangoIntegrations',
+        'setNangoIntegration',
+        'gmailIntegrationId',
+        'authorizationSources.nango.integrationId',
+        'Select a Gmail Integration',
+        'Select an Integration',
+      ]) {
+        expect(source).not.toContain(forbidden);
+      }
+    }
   });
 
-  it('polls only the safe runtime status while startup validation is pending', () => {
-    const source = read('apps/mail/components/integrations/gmail-settings-dialog.tsx');
+  it('does not poll for the removed Nango validating state', () => {
+    const sources = [
+      read('apps/mail/components/integrations/gmail-settings-dialog.tsx'),
+      read('apps/mail/components/integrations/managed-channel-settings-dialog.tsx'),
+    ];
 
-    expect(source).toContain('refetchInterval');
-    expect(source).toContain("nango.state === 'validating'");
+    for (const source of sources) {
+      expect(source).not.toContain("nango.state === 'validating'");
+    }
   });
 });

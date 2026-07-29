@@ -24,6 +24,10 @@ describe('mail provider configuration boundaries', () => {
     expect(read('.env.example')).toContain('NANGO_SECRET_KEY=');
     expect(read('apps/server/src/env.ts')).toContain('NANGO_BASE_URL?: string');
     expect(read('apps/server/src/env.ts')).toContain('NANGO_SECRET_KEY?: string');
+    for (const channel of ['GMAIL', 'OUTLOOK', 'ZOHO_MAIL', 'IMAP_SMTP']) {
+      expect(read('.env.example')).toContain(`NANGO_${channel}_INTEGRATION_KEY=`);
+      expect(read('apps/server/src/env.ts')).toContain(`NANGO_${channel}_INTEGRATION_KEY?: string`);
+    }
   });
 
   it('does not register or invoke Google or Microsoft social login', () => {

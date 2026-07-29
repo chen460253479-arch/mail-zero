@@ -125,6 +125,7 @@ export class NangoIntegrationService {
   private status: NangoRuntimeStatus;
   private initialization: Promise<NangoRuntimeStatus> | undefined;
   private client: NangoClientLike | undefined;
+  private integrations: NangoIntegration[] | undefined;
 
   constructor(private readonly dependencies: NangoIntegrationServiceDependencies) {
     this.status =
@@ -146,7 +147,8 @@ export class NangoIntegrationService {
 
   async listIntegrations(): Promise<NangoIntegration[]> {
     try {
-      return await (await this.getValidatedClient()).listIntegrations();
+      await this.getValidatedClient();
+      return [...(this.integrations ?? [])];
     } catch (error) {
       if (error instanceof NangoIntegrationError) throw error;
       throw mapNangoClientError(error);
@@ -187,7 +189,7 @@ export class NangoIntegrationService {
 
     try {
       this.client = this.dependencies.createClient(result.config);
-      await this.client.validateAccess();
+      this.integrations = await this.client.validateAccess();
       this.status = {
         state: 'available',
         checkedAt: this.dependencies.now(),
@@ -196,6 +198,7 @@ export class NangoIntegrationService {
       return this.status;
     } catch (error) {
       this.client = undefined;
+      this.integrations = undefined;
       const failure = toRuntimeFailure(error);
       return this.recordFailure(failure.errorCode, failure.operation, failure.status);
     }

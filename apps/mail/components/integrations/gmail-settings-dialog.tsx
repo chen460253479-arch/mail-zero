@@ -17,13 +17,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ConfirmIntegrationDelete } from './confirm-delete';
 import { Separator } from '@/components/ui/separator';
@@ -39,7 +32,6 @@ type GmailConfig = Outputs['integrations']['getGmailConfig'];
 
 const nangoStateLabels = {
   unconfigured: 'Not configured',
-  validating: 'Validating',
   available: 'Available',
   unavailable: 'Unavailable',
 } as const;
@@ -114,13 +106,8 @@ export function GmailSettingsDialog({
 }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const config = useQuery({
-    ...trpc.integrations.getGmailConfig.queryOptions(),
-    refetchInterval: (query) =>
-      query.state.data?.authorizationSources.nango.state === 'validating' ? 1000 : false,
-  });
+  const config = useQuery(trpc.integrations.getGmailConfig.queryOptions());
   const saveChannel = useMutation(trpc.integrations.saveGmailConfig.mutationOptions());
-  const setNangoMapping = useMutation(trpc.integrations.setNangoGmailIntegration.mutationOptions());
   const startGmailValidation = useMutation(
     trpc.integrations.startGmailValidation.mutationOptions(),
   );
@@ -130,14 +117,6 @@ export function GmailSettingsDialog({
   const [baseline, setBaseline] = useState<GmailConfigForm>(defaultGmailConfigForm);
   const [gmailClientId, setGmailClientId] = useState('');
   const [gmailClientSecret, setGmailClientSecret] = useState('');
-
-  const nangoIntegrations = useQuery({
-    ...trpc.integrations.listNangoGmailIntegrations.queryOptions(),
-    enabled:
-      open &&
-      form.authSource === 'nango' &&
-      config.data?.authorizationSources.nango.state === 'available',
-  });
 
   useEffect(() => {
     if (!config.data) return;
@@ -151,8 +130,7 @@ export function GmailSettingsDialog({
   const errors = useMemo(() => getGmailConfigErrors(form), [form]);
   const selectedSourceReady =
     form.authSource === 'nango'
-      ? config.data?.authorizationSources.nango.state === 'available' &&
-        Boolean(config.data.authorizationSources.nango.gmailIntegrationId)
+      ? config.data?.authorizationSources.nango.state === 'available'
       : config.data?.authorizationSources.zero_oauth.configured;
 
   const refresh = async () => {
@@ -361,9 +339,9 @@ export function GmailSettingsDialog({
                             >
                               {nangoStateLabels[data.authorizationSources.nango.state]}
                             </Badge>
-                            {data.authorizationSources.nango.gmailIntegrationId ? (
+                            {data.authorizationSources.nango.errorCode ? (
                               <span className="text-muted-foreground break-all text-xs">
-                                Integration: {data.authorizationSources.nango.gmailIntegrationId}
+                                {data.authorizationSources.nango.errorCode}
                               </span>
                             ) : null}
                           </span>
@@ -382,69 +360,7 @@ export function GmailSettingsDialog({
 
               <Separator />
 
-              {form.authSource === 'nango' ? (
-                <FormSection
-                  title="Nango Gmail authorization"
-                  description="The Server validates its fixed Nango environment configuration once at startup."
-                >
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Badge
-                      variant={
-                        data.authorizationSources.nango.state === 'available'
-                          ? 'default'
-                          : 'outline'
-                      }
-                    >
-                      {nangoStateLabels[data.authorizationSources.nango.state]}
-                    </Badge>
-                    {data.authorizationSources.nango.errorCode ? (
-                      <span className="text-muted-foreground text-xs">
-                        {data.authorizationSources.nango.errorCode}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Gmail Nango Integration</Label>
-                    <Select
-                      value={data.authorizationSources.nango.gmailIntegrationId ?? undefined}
-                      disabled={
-                        data.authorizationSources.nango.state !== 'available' ||
-                        data.authorizationSources.nango.bindingCount > 0 ||
-                        nangoIntegrations.isLoading
-                      }
-                      onValueChange={async (integrationId) => {
-                        try {
-                          await setNangoMapping.mutateAsync({ integrationId });
-                          await refresh();
-                          toast.success('Nango Gmail Integration selected');
-                        } catch {
-                          toast.error('Unable to select the Nango Gmail Integration');
-                        }
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a Gmail Integration" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(nangoIntegrations.data ?? []).map((integration) => (
-                          <SelectItem
-                            key={integration.integrationId}
-                            value={integration.integrationId}
-                          >
-                            {integration.displayName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {data.authorizationSources.nango.gmailIntegrationId &&
-                    data.authorizationSources.nango.state !== 'available' ? (
-                      <p className="text-muted-foreground text-xs">
-                        Selected Integration: {data.authorizationSources.nango.gmailIntegrationId}
-                      </p>
-                    ) : null}
-                  </div>
-                </FormSection>
-              ) : (
+              {form.authSource === 'zero_oauth' ? (
                 <FormSection
                   title="Zero-managed Gmail OAuth"
                   description="Validate the global OAuth client before enabling it for mailbox connections."
@@ -540,7 +456,7 @@ export function GmailSettingsDialog({
                     </Button>
                   </ConfirmIntegrationDelete>
                 </FormSection>
-              )}
+              ) : null}
 
               <Separator />
 

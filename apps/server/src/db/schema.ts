@@ -279,26 +279,6 @@ export const channelConfig = createIntegrationTable(
   ],
 );
 
-export const channelIntegrationMapping = createIntegrationTable(
-  'channel_mapping',
-  {
-    id: text('id').primaryKey(),
-    channelId: text('channel_id').$type<MailChannelId>().notNull(),
-    authSource: text('auth_source').$type<'nango'>().notNull(),
-    externalIntegrationId: text('external_integration_id').notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
-  },
-  (t) => [
-    unique('channel_mapping_channel_auth_uidx').on(t.channelId, t.authSource),
-    check(
-      'channel_mapping_channel_id_chk',
-      sql`${t.channelId} IN ('gmail', 'outlook', 'zoho_mail', 'imap_smtp')`,
-    ),
-    check('channel_mapping_auth_source_chk', sql`${t.authSource} = 'nango'`),
-  ],
-);
-
 export const integrationOAuthSession = createIntegrationTable(
   'oauth_session',
   {

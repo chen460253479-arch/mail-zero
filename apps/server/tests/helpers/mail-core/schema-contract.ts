@@ -19,7 +19,6 @@ export const expectedLocations = [
   ['authorizationBinding', schema.authorizationBinding, 'integration', 'authorization_binding'],
   ['systemIntegrationConfig', schema.systemIntegrationConfig, 'integration', 'system_config'],
   ['channelConfig', schema.channelConfig, 'integration', 'channel_config'],
-  ['channelIntegrationMapping', schema.channelIntegrationMapping, 'integration', 'channel_mapping'],
   ['integrationOAuthSession', schema.integrationOAuthSession, 'integration', 'oauth_session'],
   ['remoteEmail', schema.remoteEmail, 'integration', 'remote_email'],
   ['outboundDelivery', schema.outboundDelivery, 'integration', 'outbound_delivery'],

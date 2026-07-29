@@ -9,7 +9,7 @@ import { NangoIntegrationError } from '../../integrations/nango/errors';
 export const mapIntegrationError = (error: unknown): never => {
   if (error instanceof NangoIntegrationError) {
     throw new TRPCError({
-      code: error.code === 'INTEGRATION_IN_USE' ? 'CONFLICT' : 'PRECONDITION_FAILED',
+      code: 'PRECONDITION_FAILED',
       message: error.message,
     });
   }

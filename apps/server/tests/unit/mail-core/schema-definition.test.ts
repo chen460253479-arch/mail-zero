@@ -37,11 +37,7 @@ describe('local mail schema', () => {
         constraint.getName(),
       ),
     ).toContain('authorization_binding_nango_ref_uidx');
-    expect(
-      getTableConfig(schema.channelIntegrationMapping).uniqueConstraints.map((constraint) =>
-        constraint.getName(),
-      ),
-    ).toContain('channel_mapping_channel_auth_uidx');
+    expect(schema).not.toHaveProperty('channelIntegrationMapping');
   });
 
   it.each([

@@ -5,8 +5,8 @@ import type {
 import { defaultMailChannelConfig, parseMailChannelConfig } from '../../mail-channel/config';
 import type { MailChannelConfig, MailChannelConfigInput } from '../../mail-channel/config';
 import { parsePublicConfig, type SystemIntegrationRepository } from '../core/repository';
+import type { NangoChannelRuntimeStatus } from '../nango/channels';
 import type { MailChannelId } from '../../mail-channel/contracts';
-import type { NangoRuntimeStatus } from '../nango/service';
 import type { IntegrationKey } from '../core/schemas';
 
 export type ManagedChannelId = Exclude<MailChannelId, 'gmail'>;
@@ -23,7 +23,7 @@ export class MailChannelConfigError extends Error {
   }
 }
 
-type IntegrationRepository = Pick<SystemIntegrationRepository, 'get' | 'getMapping'> & {
+type IntegrationRepository = Pick<SystemIntegrationRepository, 'get'> & {
   countBindings(
     channelId: MailChannelId,
     authSource?: 'zero_oauth' | 'nango' | 'manual',
@@ -33,7 +33,7 @@ type IntegrationRepository = Pick<SystemIntegrationRepository, 'get' | 'getMappi
 export type MailChannelConfigServiceDependencies = {
   channels: ChannelConfigRepository;
   integrations: IntegrationRepository;
-  getNangoStatus(): NangoRuntimeStatus;
+  getNangoStatus(channelId: MailChannelId): Promise<NangoChannelRuntimeStatus>;
   publicBackendUrl: string;
   protocolWorkerAvailable: boolean;
   requestSubscriptionRefresh(provider: MailChannelId): Promise<void>;
@@ -60,10 +60,9 @@ export type SafeManagedChannelConfig = MailChannelConfig & {
         })
       | null;
     nango: SourceSummary & {
-      state: NangoRuntimeStatus['state'];
-      checkedAt: Date | null;
+      state: NangoChannelRuntimeStatus['state'];
+      checkedAt: Date;
       errorCode: string | null;
-      integrationId: string | null;
     };
     manual: (SourceSummary & { available: boolean }) | null;
   };
@@ -123,20 +122,19 @@ export const createMailChannelConfigService = (
   ): Promise<SafeManagedChannelConfig> => {
     const channelId = assertManagedChannel(candidateChannelId);
     const integrationKey = channelId === 'imap_smtp' ? null : integrationKeyByChannel[channelId];
-    const [record, integration, mapping, zeroBindings, nangoBindings, manualBindings] =
+    const [record, integration, zeroBindings, nangoBindings, manualBindings, nangoStatus] =
       await Promise.all([
         dependencies.channels.get(channelId),
         integrationKey === null
           ? Promise.resolve(null)
           : dependencies.integrations.get(integrationKey),
-        dependencies.integrations.getMapping(channelId, 'nango'),
         dependencies.integrations.countBindings(channelId, 'zero_oauth'),
         dependencies.integrations.countBindings(channelId, 'nango'),
         dependencies.integrations.countBindings(channelId, 'manual'),
+        dependencies.getNangoStatus(channelId),
       ]);
     const config = parseRecord(channelId, record);
     const bindingCount = zeroBindings + nangoBindings + manualBindings;
-    const nangoStatus = dependencies.getNangoStatus();
     const zeroPublic =
       integrationKey !== null && integration?.status === 'active'
         ? parsePublicConfig(integrationKey, integration.publicConfig)
@@ -165,8 +163,7 @@ export const createMailChannelConfigService = (
               },
         nango: {
           ...nangoStatus,
-          configured: nangoStatus.state === 'available' && mapping !== null,
-          integrationId: mapping?.externalIntegrationId ?? null,
+          configured: nangoStatus.state === 'available',
           bindingCount: nangoBindings,
         },
         manual:
@@ -196,16 +193,16 @@ export const createMailChannelConfigService = (
       }
 
       const integrationKey = channelId === 'imap_smtp' ? null : integrationKeyByChannel[channelId];
-      const [current, integration, mapping, zeroBindings, nangoBindings, manualBindings] =
+      const [current, integration, zeroBindings, nangoBindings, manualBindings, nangoStatus] =
         await Promise.all([
           dependencies.channels.get(channelId),
           integrationKey === null
             ? Promise.resolve(null)
             : dependencies.integrations.get(integrationKey),
-          dependencies.integrations.getMapping(channelId, 'nango'),
           dependencies.integrations.countBindings(channelId, 'zero_oauth'),
           dependencies.integrations.countBindings(channelId, 'nango'),
           dependencies.integrations.countBindings(channelId, 'manual'),
+          dependencies.getNangoStatus(channelId),
         ]);
       const counts = {
         zero_oauth: zeroBindings,
@@ -225,7 +222,7 @@ export const createMailChannelConfigService = (
         candidate.authSource === 'zero_oauth'
           ? integration?.status === 'active'
           : candidate.authSource === 'nango'
-            ? dependencies.getNangoStatus().state === 'available' && mapping !== null
+            ? nangoStatus.state === 'available'
             : dependencies.protocolWorkerAvailable;
       if (!sourceReady) {
         throw new MailChannelConfigError('MAIL_CHANNEL_AUTH_SOURCE_NOT_CONFIGURED');

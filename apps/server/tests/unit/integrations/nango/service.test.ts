@@ -34,7 +34,7 @@ const credentialConnection = {
 
 const createClient = () =>
   ({
-    validateAccess: vi.fn().mockResolvedValue(undefined),
+    validateAccess: vi.fn().mockResolvedValue([integration]),
     listIntegrations: vi.fn().mockResolvedValue([integration]),
     listConnections: vi.fn().mockResolvedValue([connectionSummary]),
     getConnection: vi.fn().mockResolvedValue(credentialConnection),
@@ -105,11 +105,11 @@ describe('Nango environment runtime service', () => {
   });
 
   it('shares one validation promise across concurrent startup events', async () => {
-    let releaseValidation: (() => void) | undefined;
+    let releaseValidation: ((integrations: (typeof integration)[]) => void) | undefined;
     const client = createClient();
     client.validateAccess.mockImplementation(
       () =>
-        new Promise<void>((resolve) => {
+        new Promise<(typeof integration)[]>((resolve) => {
           releaseValidation = resolve;
         }),
     );
@@ -137,7 +137,7 @@ describe('Nango environment runtime service', () => {
     });
     expect(client.validateAccess).toHaveBeenCalledOnce();
 
-    releaseValidation?.();
+    releaseValidation?.([integration]);
 
     await expect(first).resolves.toEqual({
       state: 'available',
@@ -246,5 +246,6 @@ describe('Nango environment runtime service', () => {
       credentialConnection,
     );
     expect(client.validateAccess).toHaveBeenCalledOnce();
+    expect(client.listIntegrations).not.toHaveBeenCalled();
   });
 });

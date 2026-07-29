@@ -35,7 +35,6 @@ const createChannelRepository = (): ChannelConfigRepository & {
 describe('managed mail-channel configuration', () => {
   let channels: ReturnType<typeof createChannelRepository>;
   let integrations: Map<string, SystemIntegrationRecord>;
-  let mappings: Map<string, string>;
   let counts: Record<string, number>;
   let refreshed: string[];
   let disabled: string[];
@@ -44,7 +43,6 @@ describe('managed mail-channel configuration', () => {
   beforeEach(() => {
     channels = createChannelRepository();
     integrations = new Map();
-    mappings = new Map();
     counts = {};
     refreshed = [];
     disabled = [];
@@ -52,14 +50,10 @@ describe('managed mail-channel configuration', () => {
       channels,
       integrations: {
         get: async (key) => integrations.get(key) ?? null,
-        getMapping: async (channelId) => {
-          const externalIntegrationId = mappings.get(channelId);
-          return externalIntegrationId ? ({ externalIntegrationId } as never) : null;
-        },
         countBindings: async (channelId, authSource) =>
           counts[`${channelId}:${authSource ?? 'all'}`] ?? 0,
       },
-      getNangoStatus: () => ({
+      getNangoStatus: async () => ({
         state: 'available',
         checkedAt: now,
         errorCode: null,
@@ -75,7 +69,13 @@ describe('managed mail-channel configuration', () => {
     };
   });
 
-  it('requires a selected Nango integration for Outlook', async () => {
+  it('requires the fixed Nango Integration for Outlook to be available', async () => {
+    dependencies.getNangoStatus = async () => ({
+      state: 'unavailable',
+      checkedAt: now,
+      errorCode: 'NANGO_INTEGRATION_NOT_FOUND',
+    });
+
     await expect(
       createMailChannelConfigService(dependencies).save({
         channelId: 'outlook',
@@ -90,8 +90,6 @@ describe('managed mail-channel configuration', () => {
   });
 
   it('persists Zoho data-center and exposes the fixed webhook template', async () => {
-    mappings.set('zoho_mail', 'zoho-primary');
-
     const saved = await createMailChannelConfigService(dependencies).save({
       channelId: 'zoho_mail',
       authSource: 'nango',
@@ -107,9 +105,10 @@ describe('managed mail-channel configuration', () => {
       providerConfig: { dataCenter: 'eu' },
       webhookUrl: 'https://mail.example.test/api/webhooks/mail/zoho/:endpointToken',
       authorizationSources: {
-        nango: { integrationId: 'zoho-primary', configured: true },
+        nango: { configured: true, state: 'available' },
       },
     });
+    expect(saved.authorizationSources.nango).not.toHaveProperty('integrationId');
     expect(refreshed).toEqual(['zoho_mail']);
   });
 
@@ -138,7 +137,6 @@ describe('managed mail-channel configuration', () => {
   });
 
   it('locks the selected authorization source while bindings exist', async () => {
-    mappings.set('outlook', 'outlook-primary');
     counts['outlook:zero_oauth'] = 1;
     channels.records.set('outlook', {
       id: 'outlook-config',
@@ -167,8 +165,6 @@ describe('managed mail-channel configuration', () => {
   });
 
   it('clears provider subscription routing when Inbox Watch is disabled', async () => {
-    mappings.set('zoho_mail', 'zoho-primary');
-
     await createMailChannelConfigService(dependencies).save({
       channelId: 'zoho_mail',
       authSource: 'nango',

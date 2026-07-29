@@ -1,24 +1,23 @@
 import {
-  createSystemIntegrationRepository,
-  type SystemIntegrationRepository,
-} from '../../../integrations/core/repository';
+  getNangoChannelServiceForEnvironment,
+  getNangoServiceForEnvironment,
+  type NangoEnvironment,
+} from '../../../integrations/nango/runtime';
 import {
   createNangoCredentialRepository,
   type NangoCredentialResolverOptions,
 } from '../credentials/nango';
-import { getNangoServiceForEnvironment } from '../../../integrations/nango/runtime';
+import type { NangoChannelIntegrationService } from '../../../integrations/nango/channels';
 import type { NangoClient } from '../../../integrations/nango/client';
 import { createDb } from '../../../db';
 
 export type NangoRuntimeConfig = {
   databaseUrl: string;
-  NANGO_BASE_URL?: string;
-  NANGO_SECRET_KEY?: string;
-};
+} & NangoEnvironment;
 
 export type NangoRuntime = {
   client: Pick<NangoClient, 'listConnections' | 'getConnection'>;
-  integrationRepository: SystemIntegrationRepository;
+  channels: NangoChannelIntegrationService;
   credentialRepository: NangoCredentialResolverOptions['repository'];
 };
 
@@ -28,12 +27,11 @@ export const withNangoRuntime = async <T>(
 ): Promise<T> => {
   const { db, conn } = createDb(config.databaseUrl);
   try {
-    const integrationRepository = createSystemIntegrationRepository(db);
     const integrationService = getNangoServiceForEnvironment(config);
     await integrationService.initialize();
     return await run({
       client: integrationService,
-      integrationRepository,
+      channels: getNangoChannelServiceForEnvironment(config),
       credentialRepository: createNangoCredentialRepository(db),
     });
   } finally {

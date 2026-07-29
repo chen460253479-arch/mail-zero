@@ -28,6 +28,10 @@ describe('Nango frontend credential boundary', () => {
       for (const forbidden of [
         'NANGO_BASE_URL',
         'NANGO_SECRET_KEY',
+        'NANGO_GMAIL_INTEGRATION_KEY',
+        'NANGO_OUTLOOK_INTEGRATION_KEY',
+        'NANGO_ZOHO_MAIL_INTEGRATION_KEY',
+        'NANGO_IMAP_SMTP_INTEGRATION_KEY',
         'access_token',
         'refresh_token',
       ]) {
