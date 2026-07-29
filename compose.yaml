@@ -1,40 +1,5 @@
 name: zero
 
-x-zero-development: &zero-development
-  image: zero-development
-  env_file:
-    - .env
-  environment:
-    ZERO_WRANGLER_ENV: ${ZERO_WRANGLER_ENV:-local}
-    ZERO_DOCKER_DEV: 'true'
-    VITE_INTERNAL_BACKEND_URL: ${VITE_INTERNAL_BACKEND_URL:-http://server:8787}
-    CHOKIDAR_USEPOLLING: 'true'
-    CHOKIDAR_INTERVAL: '1000'
-    DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-zerodotemail}
-    CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-zerodotemail}
-    WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-zerodotemail}
-    REDIS_URL: http://upstash-proxy:80
-    REDIS_TOKEN: ${REDIS_TOKEN:-upstash-local-token}
-    MAIL_PROTOCOL_WORKER_URL: http://protocol-worker:8790
-    MAIL_PROTOCOL_WORKER_SECRET: ${MAIL_PROTOCOL_WORKER_SECRET:-zero-local-mail-protocol-worker-secret-change-me}
-    MAIL_PROTOCOL_WORKER_PORT: '8790'
-    MAIL_PROTOCOL_ALLOWED_HOSTS: ${MAIL_PROTOCOL_ALLOWED_HOSTS:-}
-    NANGO_GMAIL_INTEGRATION_KEY: ${NANGO_GMAIL_INTEGRATION_KEY:-gmail}
-    NANGO_OUTLOOK_INTEGRATION_KEY: ${NANGO_OUTLOOK_INTEGRATION_KEY:-outlook}
-    NANGO_ZOHO_MAIL_INTEGRATION_KEY: ${NANGO_ZOHO_MAIL_INTEGRATION_KEY:-zoho-mail}
-    NANGO_IMAP_SMTP_INTEGRATION_KEY: ${NANGO_IMAP_SMTP_INTEGRATION_KEY:-imap-smtp}
-  volumes:
-    - .:/app
-    - zero-node-modules:/app/node_modules
-    - zero-mail-node-modules:/app/apps/mail/node_modules
-    - zero-server-node-modules:/app/apps/server/node_modules
-    - zero-cli-node-modules:/app/packages/cli/node_modules
-    - zero-eslint-config-node-modules:/app/packages/eslint-config/node_modules
-    - zero-mail-core-node-modules:/app/packages/mail-core/node_modules
-    - zero-testing-node-modules:/app/packages/testing/node_modules
-    - zero-tsconfig-node-modules:/app/packages/tsconfig/node_modules
-    - zero-wrangler-state:/app/apps/server/.wrangler
-
 services:
   mail:
     image: zero-mail-runtime
@@ -61,35 +26,51 @@ services:
       start_period: 10s
 
   server:
-    image: zero-server-runtime
+    image: zero-server
     container_name: zerodotemail-server
     build:
       context: .
       dockerfile: docker/server/Dockerfile
-    env_file:
-      - .env
     environment:
-      ZERO_WRANGLER_ENV: ${ZERO_WRANGLER_ENV:-local}
+      NODE_ENV: production
+      ZERO_SERVER_HOST: 0.0.0.0
+      ZERO_SERVER_PORT: '8787'
+      ZERO_SHUTDOWN_GRACE_MS: ${ZERO_SHUTDOWN_GRACE_MS:-30000}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-zerodotemail}
-      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-zerodotemail}
-      WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-zerodotemail}
+      MAIL_BLOB_ROOT: /var/lib/zero/mail-blobs
+      VITE_PUBLIC_APP_URL: ${VITE_PUBLIC_APP_URL:-http://localhost:3000}
+      VITE_PUBLIC_BACKEND_URL: ${VITE_PUBLIC_BACKEND_URL:-http://localhost:8787}
+      BASE_URL: ${BASE_URL:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:8787}
+      BETTER_AUTH_TRUSTED_ORIGINS: ${BETTER_AUTH_TRUSTED_ORIGINS:-http://localhost:3000}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-localhost}
+      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      NANGO_BASE_URL: ${NANGO_BASE_URL:-}
+      NANGO_SECRET_KEY: ${NANGO_SECRET_KEY:-}
       REDIS_URL: http://upstash-proxy:80
       REDIS_TOKEN: ${REDIS_TOKEN:-upstash-local-token}
-      MAIL_PROTOCOL_WORKER_URL: http://protocol-worker:8790
-      MAIL_PROTOCOL_WORKER_SECRET: ${MAIL_PROTOCOL_WORKER_SECRET:-zero-local-mail-protocol-worker-secret-change-me}
-      NANGO_GMAIL_INTEGRATION_KEY: ${NANGO_GMAIL_INTEGRATION_KEY:-gmail}
+      MAIL_PROTOCOL_ALLOWED_HOSTS: ${MAIL_PROTOCOL_ALLOWED_HOSTS:-}
+      NANGO_GMAIL_INTEGRATION_KEY: ${NANGO_GMAIL_INTEGRATION_KEY:-google-mail}
       NANGO_OUTLOOK_INTEGRATION_KEY: ${NANGO_OUTLOOK_INTEGRATION_KEY:-outlook}
       NANGO_ZOHO_MAIL_INTEGRATION_KEY: ${NANGO_ZOHO_MAIL_INTEGRATION_KEY:-zoho-mail}
-      NANGO_IMAP_SMTP_INTEGRATION_KEY: ${NANGO_IMAP_SMTP_INTEGRATION_KEY:-imap-smtp}
+      NANGO_IMAP_SMTP_INTEGRATION_KEY: ${NANGO_IMAP_SMTP_INTEGRATION_KEY:-generic-email}
+      ZERO_ADMIN_AUTO_PROVISION: ${ZERO_ADMIN_AUTO_PROVISION:-false}
+      ZERO_ADMIN_NAME: ${ZERO_ADMIN_NAME:-}
+      ZERO_ADMIN_EMAIL: ${ZERO_ADMIN_EMAIL:-}
+      ZERO_ADMIN_PASSWORD: ${ZERO_ADMIN_PASSWORD:-}
+      ZERO_ADMIN_BOOTSTRAP_SECRET: ${ZERO_ADMIN_BOOTSTRAP_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
     volumes:
-      - zero-wrangler-state:/var/lib/zero/wrangler
+      - zero-mail-blobs:/var/lib/zero/mail-blobs
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
       upstash-proxy:
-        condition: service_healthy
-      protocol-worker:
         condition: service_healthy
     ports:
       - '${ZERO_SERVER_PORT:-8787}:8787'
@@ -105,29 +86,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
-
-  protocol-worker:
-    <<: *zero-development
-    container_name: zerodotemail-protocol-worker
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    command: ['protocol-worker']
-    restart: unless-stopped
-    expose:
-      - '8790'
-    healthcheck:
-      test:
-        [
-          'CMD',
-          'node',
-          '-e',
-          "fetch('http://127.0.0.1:8790/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 10s
 
   db:
     container_name: zerodotemail-db
@@ -187,12 +145,4 @@ services:
 volumes:
   postgres-data:
   valkey-data:
-  zero-node-modules:
-  zero-mail-node-modules:
-  zero-server-node-modules:
-  zero-cli-node-modules:
-  zero-eslint-config-node-modules:
-  zero-mail-core-node-modules:
-  zero-testing-node-modules:
-  zero-tsconfig-node-modules:
-  zero-wrangler-state:
+  zero-mail-blobs:

@@ -108,10 +108,11 @@ You can set up Zero in two ways:
    pnpm docker:deploy
    ```
 
-   Docker runs Mail as a prebuilt Nginx static site. Server runs from a prebuilt immutable Worker Bundle. Source changes require rebuilding the Server image.
-   The deployment command builds the images, initializes the Protocol Worker dependency volumes,
-   starts the complete stack, waits for every service to become healthy, and prints the final
-   service status. It does not initialize, migrate, or clear application database schemas.
+   Docker runs Mail as a prebuilt Nginx static site and Server as an immutable native Node.js
+   backend image. The two images remain independently deployable. The deployment command builds
+   the images, starts the complete stack, waits for every service to become healthy, and prints
+   the final service status. It does not initialize, migrate, or clear application database
+   schemas.
 
    Rebuild only Mail after changing frontend source or any `VITE_PUBLIC_*` value:
 
@@ -127,7 +128,8 @@ You can set up Zero in two ways:
    docker compose up --detach --build --no-deps server
    ```
 
-   Wrangler remains a temporary compatibility runtime and Cloudflare Bindings are unchanged in this phase.
+   Rebuilding Server replaces only the backend container. Local mail blobs remain in the
+   `zero-mail-blobs` volume.
 
 4. **Manage the stack**
 
@@ -138,9 +140,9 @@ You can set up Zero in two ways:
    docker compose down
    ```
 
-   Open [http://localhost:3000](http://localhost:3000). Container ports and the Wrangler
-   environment can be changed in `.env` using the `ZERO_*` variables from `.env.example`.
-   `compose.yaml` is the only Compose definition and is intended exclusively for development.
+   Open [http://localhost:3000](http://localhost:3000). Container ports and the native Node.js
+   runtime can be configured in `.env` using the variables from `.env.example`. `compose.yaml`
+   is the only Compose definition.
 
    Rebuild after changing dependencies or the lockfile:
 
@@ -235,7 +237,8 @@ You can set up Zero in two ways:
 
 For Docker development, copy `.env.example` to `.env` and edit the values before starting the
 stack. Docker Compose loads this file directly, so `pnpm nizzy sync` is not required.
-`ZERO_WRANGLER_ENV` and the `ZERO_*_PORT` variables control the development containers.
+The `ZERO_*_PORT` variables control the self-hosted containers. `MAIL_BLOB_ROOT` points to the
+persistent local-mail blob directory inside Server.
 
 For manual host development, `pnpm nizzy env` creates `.env` and `pnpm nizzy sync` copies it to the
 individual applications.

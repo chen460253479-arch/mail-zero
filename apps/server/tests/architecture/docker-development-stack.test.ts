@@ -5,164 +5,68 @@ import { resolve } from 'node:path';
 const root = resolve(process.cwd(), '../..');
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 
-describe('Docker development stack', () => {
-  it('provides a safe full-stack Docker deployment command', () => {
+describe('Docker self-hosted stack', () => {
+  it('builds and starts immutable images with one deployment command', () => {
     const packageJson = JSON.parse(read('package.json')) as {
       scripts: Record<string, string>;
     };
     const deployCommand = packageJson.scripts['docker:deploy'] ?? '';
-    const deploySteps = deployCommand.split(/\s*&&\s*/);
 
-    expect(deploySteps).toEqual([
-      'docker compose build',
-      'docker compose run --rm --no-deps protocol-worker install-dependencies',
-      'docker compose up --detach --wait --wait-timeout 180',
+    expect(deployCommand.split(/\s*&&\s*/)).toEqual([
+      'docker compose up --detach --build --wait --wait-timeout 180',
       'docker compose ps',
     ]);
-    expect(deployCommand).not.toMatch(/\bdown\b|--volumes|db:push|db:migrate|db:seed/);
+    expect(deployCommand).not.toMatch(
+      /install-dependencies|\bdown\b|--volumes|db:push|db:migrate|db:seed/,
+    );
   });
 
-  it('uses one local Compose file during the static Mail transition', () => {
+  it('runs frontend and backend independently without a Protocol Worker service', () => {
     const compose = read('compose.yaml');
-    const env = read('.env.example');
-    const packageJson = read('package.json');
+
+    for (const service of ['mail', 'server', 'db', 'valkey', 'upstash-proxy']) {
+      expect(compose).toMatch(new RegExp(`^  ${service}:`, 'm'));
+    }
+    expect(compose).not.toMatch(/^  protocol-worker:/m);
+    expect(compose).not.toMatch(/^x-zero-development:/m);
+    expect(compose).not.toContain('zerodotemail-protocol-worker');
+    expect(compose).not.toContain('CLOUDFLARE_HYPERDRIVE');
+    expect(compose).not.toContain('WRANGLER_HYPERDRIVE');
+    expect(compose).not.toContain('MAIL_PROTOCOL_WORKER');
+    expect(compose).not.toContain('zero-wrangler-state');
+    expect(compose).not.toContain('- .:/app');
+    expect(compose).not.toContain('/app/node_modules');
+    expect(compose).toContain('image: zero-mail-runtime');
+    expect(compose).toContain('image: zero-server');
+    expect(compose).toContain('zero-mail-blobs:/var/lib/zero/mail-blobs');
+  });
+
+  it('uses one Compose definition and no retired development image', () => {
+    const compose = read('compose.yaml');
 
     expect(compose).toMatch(/^name: zero$/m);
     expect(compose).not.toContain('include:');
-    expect(compose).not.toContain('ZERO_COMPOSE_FILE');
     expect(compose).not.toContain('profiles:');
-    expect(compose).not.toMatch(/^  app:/m);
-    expect(env).not.toContain('COMPOSE_PROFILES');
-    expect(env).not.toContain('ZERO_RUNTIME_ENV');
-    expect(env).not.toContain('ZERO_COMPOSE_FILE');
-    expect(existsSync(resolve(root, 'docker-compose.dev.yaml'))).toBe(false);
-    expect(existsSync(resolve(root, 'docker-compose.prod.yaml'))).toBe(false);
-    expect(existsSync(resolve(root, 'docker/app'))).toBe(false);
-    expect(packageJson).not.toContain('docker-compose.db.yaml');
+    expect(existsSync(resolve(root, 'docker/Dockerfile'))).toBe(false);
+    expect(existsSync(resolve(root, 'docker/entrypoint.sh'))).toBe(false);
+    expect(existsSync(resolve(root, 'docker/server/write-runtime-env.mjs'))).toBe(false);
   });
 
-  it('runs the full local stack as independently managed services', () => {
-    const compose = read('compose.yaml');
-
-    for (const service of ['mail', 'server', 'protocol-worker', 'db', 'valkey', 'upstash-proxy']) {
-      expect(compose).toMatch(new RegExp(`^  ${service}:`, 'm'));
-    }
-    expect(compose).not.toMatch(/^  app:/m);
-    expect(compose).not.toMatch(/^  migrations:/m);
-    expect(compose).toContain('container_name: zerodotemail-mail');
-    expect(compose).toContain('container_name: zerodotemail-server');
-    expect(compose).toContain('container_name: zerodotemail-protocol-worker');
-    expect(compose).toContain('container_name: zerodotemail-db');
-    expect(compose).toContain('container_name: zerodotemail-redis');
-    expect(compose).toContain('container_name: zerodotemail-upstash-proxy');
-    expect(compose).toContain('CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE');
-    expect(compose).toContain('WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE');
-    expect(compose).toContain('image: docker.io/bitnami/valkey:latest');
-    expect(compose).toContain('postgres-data:/var/lib/postgresql/data');
-    expect(compose).toContain('valkey-data:/bitnami/valkey/data');
-    expect(compose).toContain('http://127.0.0.1:3000/health');
-    expect(compose).not.toContain('/@vite/client');
-    expect(compose).toContain("fetch('http://127.0.0.1:8787/health')");
-    expect(compose).toContain("fetch('http://127.0.0.1:8790/health')");
-    expect([...compose.matchAll(/process\.exit\(response\.ok \? 0 : 1\)/g)]).toHaveLength(2);
-    expect(compose).toMatch(
-      /  protocol-worker:\n(?:    .*\n)*?    build:\n(?:    .*\n)*?      dockerfile: docker\/Dockerfile/,
-    );
-    expect(compose).toMatch(/  protocol-worker:\n(?:    .*\n)*?    expose:\n      - '8790'/);
-  });
-
-  it('keeps development mounts only on Protocol Worker', () => {
-    const compose = read('compose.yaml');
-    const viteConfig = read('apps/mail/vite.config.ts');
-    const serverBlock = compose.match(/  server:\n([\s\S]*?)\n  protocol-worker:/)?.[1] ?? '';
-    const protocolWorkerBlock = compose.match(/  protocol-worker:\n([\s\S]*?)\n  db:/)?.[1] ?? '';
-
-    expect(serverBlock).not.toContain('- .:/app');
-    expect(serverBlock).not.toContain('/app/node_modules');
-    expect(serverBlock).not.toContain('CHOKIDAR_USEPOLLING');
-    expect(serverBlock).not.toContain('ZERO_DOCKER_DEV');
-    expect(protocolWorkerBlock).toContain('<<: *zero-development');
-    expect(compose).toContain('- .:/app');
-    expect(compose).toContain('/app/node_modules');
-    expect(compose).toContain('/app/apps/mail/node_modules');
-    expect(compose).toContain('/app/apps/server/node_modules');
-    expect(protocolWorkerBlock).toContain("command: ['protocol-worker']");
-    expect(viteConfig).toContain("process.env.ZERO_DOCKER_DEV === 'true'");
-    expect(viteConfig).toContain('...reactCompilerPlugins');
-  });
-
-  it('uses a dedicated development image and entrypoint', () => {
-    const compose = read('compose.yaml');
-    const dockerfile = read('docker/Dockerfile');
-    const entrypoint = read('docker/entrypoint.sh');
-    const serverEntrypoint = read('docker/server/entrypoint.sh');
-    const mailDockerfile = read('docker/mail/Dockerfile');
-    const mailNginx = read('docker/mail/nginx.conf');
-
-    expect(compose).toMatch(
-      /  server:\n(?:    .*\n)*?    build:\n(?:    .*\n)*?      dockerfile: docker\/server\/Dockerfile/,
-    );
-    expect(compose.match(/dockerfile: docker\/Dockerfile/g)).toHaveLength(1);
-    expect(compose).toContain('dockerfile: docker/mail/Dockerfile');
-    expect(dockerfile).toContain('FROM node:22-bookworm-slim');
-    expect(dockerfile).toContain('libc++1');
-    expect(dockerfile).toContain('pnpm@10.15.0');
-    expect(dockerfile).toContain('COPY docker/entrypoint.sh /usr/local/bin/zero-dev-entrypoint');
-    expect(dockerfile).toContain('ENTRYPOINT ["zero-dev-entrypoint"]');
-    expect(entrypoint).not.toContain('pnpm --dir apps/mail dev');
-    expect(entrypoint).not.toContain('wrangler dev');
-    expect(serverEntrypoint).toContain('wrangler dev');
-    expect(entrypoint).not.toContain('migrations)');
-    expect(entrypoint).not.toContain('db:push');
-    expect(mailDockerfile).toContain('FROM node:22-bookworm-slim AS builder');
-    expect(mailDockerfile).toContain('pnpm@10.15.0');
-    expect(mailDockerfile).toContain('pnpm --filter @zero/mail build');
-    expect(mailDockerfile).toContain('FROM nginx:1.28-alpine AS runtime');
-    expect(mailDockerfile).toContain('apps/mail/build/client');
-    expect(mailNginx).toContain('location = /health');
-    expect(mailNginx).toContain('max-age=31536000, immutable');
-    expect(mailNginx).toContain('try_files $uri $uri/ /index.html');
-    expect(entrypoint).not.toContain('server)');
-  });
-
-  it('keeps the development runtime script with its image', () => {
-    const attributes = read('.gitattributes');
-    const script = read('docker/entrypoint.sh');
-
-    expect(attributes).toContain('*.sh text eol=lf');
-    expect(script).not.toContain('\r\n');
-    expect(existsSync(resolve(root, 'docker/dev'))).toBe(false);
-    expect(existsSync(resolve(root, 'scripts/docker'))).toBe(false);
-  });
-
-  it('documents the Docker runtime controls in the environment template', () => {
+  it('documents the native Node self-hosted deployment workflow', () => {
     const env = read('.env.example');
-
-    expect(env).toContain('ZERO_WRANGLER_ENV=local');
-    expect(env).not.toContain('COMPOSE_PROFILES');
-    expect(env).not.toContain('ZERO_RUNTIME_ENV');
-    expect(env).toContain('ZERO_MAIL_PORT=3000');
-    expect(env).toContain('ZERO_SERVER_PORT=8787');
-  });
-
-  it('documents Docker as the default development workflow', () => {
     const readme = read('README.md');
 
-    expect(readme).toContain('docker compose up --build --detach');
-    expect(readme).toContain('docker compose logs --follow');
-    expect(readme).toContain('Mail as a prebuilt Nginx static site');
-    expect(readme).toContain(
-      'Server runs from a prebuilt immutable Worker Bundle. Source changes require rebuilding the Server image.',
-    );
+    expect(env).not.toContain('ZERO_WRANGLER_ENV');
+    expect(env).not.toContain('MAIL_PROTOCOL_WORKER_URL');
+    expect(env).not.toContain('MAIL_PROTOCOL_WORKER_SECRET');
+    expect(env).toContain('MAIL_BLOB_ROOT=/var/lib/zero/mail-blobs');
+    expect(readme).toContain('pnpm docker:deploy');
+    expect(readme).toContain('native Node.js');
     expect(readme).toContain('docker compose up --detach --build --no-deps mail');
     expect(readme).toContain('docker compose up --detach --build --no-deps server');
-    expect(readme).toContain('docker compose restart mail');
-    expect(readme).toContain(
-      'Wrangler remains a temporary compatibility runtime and Cloudflare Bindings are unchanged in this phase.',
-    );
-    expect(readme).not.toContain('COMPOSE_PROFILES');
-    expect(readme).not.toContain('production application container');
-    expect(readme).not.toContain('applies migrations automatically');
+    expect(readme).not.toContain('immutable Worker Bundle');
+    expect(readme).not.toContain('Wrangler remains');
+    expect(readme).not.toContain('Protocol Worker dependency volumes');
   });
 
   it('keeps database schema deployment outside production Compose', () => {
@@ -171,6 +75,5 @@ describe('Docker development stack', () => {
     expect(compose).not.toMatch(/^  migrations:/m);
     expect(compose).not.toContain('service_completed_successfully');
     expect(compose).not.toContain('docker/db/Dockerfile');
-    expect(existsSync(resolve(root, 'docker/db/Dockerfile'))).toBe(false);
   });
 });

@@ -1,47 +1,27 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-describe('Docker workspace dependency bootstrap', () => {
-  it('requires an explicit command before refreshing persisted node_modules', async () => {
-    const entrypoint = await readFile(resolve(process.cwd(), '../../docker/entrypoint.sh'), 'utf8');
+const root = resolve(process.cwd(), '../..');
+const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 
-    const refreshIndex = entrypoint.indexOf('pnpm install --frozen-lockfile');
-    const explicitInstallIndex = entrypoint.indexOf('install-dependencies)');
+describe('Docker immutable dependencies', () => {
+  it('installs dependencies only while building the Server image', () => {
+    const dockerfile = read('docker/server/Dockerfile');
+    const entrypoint = read('docker/server/entrypoint.sh');
+    const compose = read('compose.yaml');
 
-    expect(refreshIndex).toBeGreaterThan(-1);
-    expect(explicitInstallIndex).toBeGreaterThan(-1);
-    expect(refreshIndex).toBeGreaterThan(explicitInstallIndex);
-    expect(entrypoint).toContain('pnpm-lock.yaml');
-    expect(entrypoint).toContain('scripts/package.json');
-    expect(entrypoint).not.toContain('scripts/*/package.json');
-    expect(entrypoint).toContain('.zero-dependencies-fingerprint');
-    expect(entrypoint).toContain(
-      'docker compose run --rm --no-deps protocol-worker install-dependencies',
-    );
-    expect(entrypoint).not.toContain(
-      'Workspace dependencies changed; refreshing Docker node_modules volumes...',
-    );
+    expect(dockerfile).toContain('pnpm install --frozen-lockfile');
+    expect(dockerfile).toContain('--prod deploy --legacy /app/server-runtime');
+    expect(entrypoint).not.toContain('pnpm');
+    expect(compose).not.toContain('install-dependencies');
+    expect(compose).not.toContain('node_modules');
+    expect(compose).not.toContain('.zero-dependencies-fingerprint');
   });
 
-  it('isolates every workspace node_modules directory from the host bind mount', async () => {
-    const compose = await readFile(resolve(process.cwd(), '../../compose.yaml'), 'utf8');
-    const entrypoint = await readFile(resolve(process.cwd(), '../../docker/entrypoint.sh'), 'utf8');
-
-    const isolatedWorkspacePaths = [
-      '/app/node_modules',
-      '/app/apps/mail/node_modules',
-      '/app/apps/server/node_modules',
-      '/app/packages/cli/node_modules',
-      '/app/packages/eslint-config/node_modules',
-      '/app/packages/mail-core/node_modules',
-      '/app/packages/testing/node_modules',
-      '/app/packages/tsconfig/node_modules',
-    ];
-
-    for (const workspacePath of isolatedWorkspacePaths) {
-      expect(compose).toContain(`:${workspacePath}`);
-      expect(entrypoint).toContain(workspacePath);
-    }
+  it('removes the retired source-mounted development bootstrap', () => {
+    expect(existsSync(resolve(root, 'docker/Dockerfile'))).toBe(false);
+    expect(existsSync(resolve(root, 'docker/entrypoint.sh'))).toBe(false);
+    expect(existsSync(resolve(root, 'docker/server/write-runtime-env.mjs'))).toBe(false);
   });
 });

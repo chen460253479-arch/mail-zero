@@ -72,10 +72,10 @@ describe('Docker Mail static runtime', () => {
         : '',
     );
 
-    expect(server.image).toBe('zero-server-runtime');
+    expect(server.image).toBe('zero-server');
     expect(server.build?.dockerfile).toBe('docker/server/Dockerfile');
     expect(server.command ?? null).toBeNull();
-    expect(volumeTargets).toEqual(['/var/lib/zero/wrangler']);
+    expect(volumeTargets).toEqual(['/var/lib/zero/mail-blobs']);
     expect(server.environment).not.toHaveProperty('CHOKIDAR_USEPOLLING');
   });
 });

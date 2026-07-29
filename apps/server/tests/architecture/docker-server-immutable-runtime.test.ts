@@ -4,12 +4,18 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 
+type ComposeVolume = {
+  source?: string;
+  target?: string;
+  type?: string;
+};
+
 type ComposeService = {
   build?: { context?: string; dockerfile?: string };
   command?: string[] | null;
   environment?: Record<string, string>;
   image?: string;
-  volumes?: unknown[];
+  volumes?: ComposeVolume[];
 };
 
 type ComposeConfig = {
@@ -33,38 +39,63 @@ if (result.status !== 0) {
 const compose = JSON.parse(result.stdout) as ComposeConfig;
 
 describe('Docker Server immutable runtime', () => {
-  it('runs Server from a dedicated image without development mounts', () => {
+  it('runs one native Node backend with only persistent mail blobs mounted', () => {
     const server = compose.services.server;
-    const volumeTargets = (server.volumes ?? []).map((volume) =>
-      typeof volume === 'object' && volume !== null && 'target' in volume
-        ? String(volume.target)
-        : '',
-    );
 
-    expect(server.image).toBe('zero-server-runtime');
+    expect(server.image).toBe('zero-server');
     expect(server.build?.dockerfile).toBe('docker/server/Dockerfile');
     expect(server.command ?? null).toBeNull();
-    expect(volumeTargets).toEqual(['/var/lib/zero/wrangler']);
-    expect(server.environment).not.toHaveProperty('CHOKIDAR_USEPOLLING');
-    expect(server.environment).not.toHaveProperty('CHOKIDAR_INTERVAL');
-    expect(server.environment).not.toHaveProperty('ZERO_DOCKER_DEV');
+    expect(server.volumes).toEqual([
+      expect.objectContaining({
+        type: 'volume',
+        source: 'zero-mail-blobs',
+        target: '/var/lib/zero/mail-blobs',
+      }),
+    ]);
+    for (const forbidden of [
+      'CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE',
+      'WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE',
+      'MAIL_PROTOCOL_WORKER_URL',
+      'MAIL_PROTOCOL_WORKER_SECRET',
+      'ZERO_WRANGLER_ENV',
+    ]) {
+      expect(server.environment).not.toHaveProperty(forbidden);
+    }
   });
 
-  it('builds the Worker Bundle before starting the runtime image', () => {
-    const serverDockerfile = read('docker/server/Dockerfile');
-    const serverEntrypoint = read('docker/server/entrypoint.sh');
+  it('builds and starts a Node 22 artifact without Wrangler or workerd', () => {
+    const dockerfile = read('docker/server/Dockerfile');
+    const entrypoint = read('docker/server/entrypoint.sh');
+    const packageJson = read('apps/server/package.json');
+    const viteConfig = read('apps/server/vite.node.config.ts');
 
-    expect(serverDockerfile).toContain('wrangler deploy --dry-run');
-    expect(serverDockerfile).toContain('--outdir /app/server-dist');
-    expect(serverDockerfile).not.toContain('--outfile');
-    expect(serverDockerfile).toContain('FROM node:22-bookworm-slim AS runtime');
-    expect(serverDockerfile).not.toMatch(/FROM node:22-bookworm-slim AS runtime[\s\S]*COPY \. \./);
-    expect(serverEntrypoint).toContain('--no-bundle');
-    expect(serverEntrypoint).toContain('/app/server-dist/main.js');
-    expect(serverEntrypoint).toContain('--persist-to /var/lib/zero/wrangler');
-    expect(serverEntrypoint).not.toContain('pnpm install');
-    expect(serverEntrypoint).not.toContain('wrangler deploy');
-    expect(serverEntrypoint).not.toContain('--var');
+    expect(packageJson).toContain('"build": "vite build --config vite.node.config.ts"');
+    expect(viteConfig).toContain("ssr: 'src/runtime/node/main.ts'");
+    expect(viteConfig).toContain("entryFileNames: 'main.js'");
+    expect(viteConfig).toContain("'@zero/mail-core'");
+    expect(dockerfile).toContain('pnpm --filter @zero/server build');
+    expect(dockerfile).toContain(
+      'pnpm --filter @zero/server --prod deploy --legacy /app/server-runtime',
+    );
+    expect(dockerfile).toContain('FROM node:22-bookworm-slim AS runtime');
+    expect(dockerfile).toContain('/var/lib/zero/mail-blobs');
+    expect(dockerfile).not.toContain('wrangler');
+    expect(dockerfile).not.toContain('workerd');
+    expect(dockerfile).not.toMatch(/FROM node:22-bookworm-slim AS runtime[\s\S]*COPY \. \./);
+    expect(entrypoint).toContain('exec node /app/dist/main.js');
+    expect(entrypoint).not.toContain('pnpm install');
+    expect(entrypoint).not.toContain('wrangler');
+  });
+
+  it('provides an operator check for the built runtime image', () => {
+    const inspection = read('scripts/inspect-server-image.mjs');
+
+    expect(inspection).toContain("const image = process.argv[2] ?? 'zero-server'");
+    expect(inspection).toContain('docker');
+    expect(inspection).toContain('/app/dist/main.js');
+    expect(inspection).toContain('wrangler');
+    expect(inspection).toContain('workerd');
+    expect(inspection).toContain('/app/src');
   });
 
   it('keeps environment files outside the Docker build context', () => {

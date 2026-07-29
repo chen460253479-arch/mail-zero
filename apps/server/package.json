@@ -2,8 +2,13 @@
   "name": "@zero/server",
   "type": "module",
   "private": true,
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "dev": "wrangler dev --show-interactive-dev-session=false --experimental-vectorize-bind-to-prod --env local",
+    "build": "vite build --config vite.node.config.ts",
+    "start": "node dist/main.js",
+    "dev": "tsx watch src/runtime/node/main.ts",
     "deploy": "wrangler deploy",
     "types": "wrangler types --env local",
     "lint": "eslint .",
