@@ -26,7 +26,7 @@ describe('protected route Session boundary', () => {
     expect((response as Response).headers.get('Location')).toBe('/login');
   });
 
-  it('returns the authenticated user ID for user-scoped providers', async () => {
+  it('returns an administrator user ID without requiring a password change', async () => {
     await expect(
       loadProtectedRouteSession(new Request('http://localhost:3000/mail/inbox'), {
         getSession: vi.fn(async () => ({
@@ -40,37 +40,15 @@ describe('protected route Session boundary', () => {
           },
         })),
       }),
-    ).resolves.toEqual({ userId: 'user-1' });
+    ).resolves.toEqual({
+      userId: 'user-1',
+      passwordChangeRequired: false,
+    });
   });
 
-  it('requires a password-authenticated managed user to change the initial password', async () => {
-    const response = await loadProtectedRouteSession(
-      new Request('http://localhost:3000/mail/inbox'),
-      {
-        getSession: vi.fn(async () => ({
-          user: {
-            id: 'user-1',
-            role: 'user',
-            mustChangePassword: true,
-          },
-          session: {
-            authMethod: 'password',
-          },
-        })),
-      },
-    ).then(
-      () => null,
-      (cause: unknown) => cause,
-    );
-
-    expect(response).toBeInstanceOf(Response);
-    expect((response as Response).status).toBe(302);
-    expect((response as Response).headers.get('Location')).toBe('/change-password');
-  });
-
-  it('lets that managed user render the password change page through the same Session boundary', async () => {
+  it('returns the password change requirement for a managed password Session', async () => {
     await expect(
-      loadProtectedRouteSession(new Request('http://localhost:3000/change-password'), {
+      loadProtectedRouteSession(new Request('http://localhost:3000/mail/inbox'), {
         getSession: vi.fn(async () => ({
           user: {
             id: 'user-1',
@@ -82,10 +60,13 @@ describe('protected route Session boundary', () => {
           },
         })),
       }),
-    ).resolves.toEqual({ userId: 'user-1' });
+    ).resolves.toEqual({
+      userId: 'user-1',
+      passwordChangeRequired: true,
+    });
   });
 
-  it('lets a Launch Session use the same protected route without a second access mode', async () => {
+  it('does not require a password change for a Launch Session', async () => {
     await expect(
       loadProtectedRouteSession(new Request('http://localhost:3000/mail/inbox'), {
         getSession: vi.fn(async () => ({
@@ -99,15 +80,18 @@ describe('protected route Session boundary', () => {
           },
         })),
       }),
-    ).resolves.toEqual({ userId: 'user-1' });
+    ).resolves.toEqual({
+      userId: 'user-1',
+      passwordChangeRequired: false,
+    });
   });
 
-  it('registers the password change page beneath the protected route layout', () => {
+  it('does not register a standalone password change route', () => {
     const protectedLayout = (routes as TestRoute[]).find(
       (route) => route.file === '(routes)/layout.tsx',
     );
 
-    expect(protectedLayout?.children).toEqual(
+    expect(protectedLayout?.children).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           file: '(auth)/change-password/page.tsx',

@@ -18,14 +18,13 @@ type ProtectedRouteSessionDependencies = {
 };
 
 export async function loadProtectedRouteSession(
-  request: Pick<Request, 'headers' | 'url'>,
+  request: Pick<Request, 'headers'>,
   dependencies: ProtectedRouteSessionDependencies,
-): Promise<{ userId: string }> {
+): Promise<{ userId: string; passwordChangeRequired: boolean }> {
   const session = await dependencies.getSession({ headers: request.headers });
   if (!session) throw redirect('/login');
-  const isPasswordChangePage = new URL(request.url).pathname === '/change-password';
-  if (requiresInitialPasswordChange(session) && !isPasswordChangePage) {
-    throw redirect('/change-password');
-  }
-  return { userId: session.user.id };
+  return {
+    userId: session.user.id,
+    passwordChangeRequired: requiresInitialPasswordChange(session),
+  };
 }
