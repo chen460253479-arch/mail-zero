@@ -51,8 +51,10 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { format, subDays } from 'date-fns';
+import { getDateLocale } from '@/lib/i18n/date-locale';
 import { VisuallyHidden } from 'radix-ui';
 import { m } from '@/paraglide/messages';
+import { getLocale } from '@/paraglide/runtime';
 import { Pencil2 } from '../icons/icons';
 import { Button } from '../ui/button';
 import { useQueryState } from 'nuqs';
@@ -171,6 +173,7 @@ const deleteSavedSearch = (id: string) => {
 };
 
 export function CommandPalette({ children }: { children: React.ReactNode }) {
+  const dateLocale = getDateLocale(getLocale());
   const [open, setOpen] = useQueryState('isCommandPaletteOpen');
   const [, setIsComposeOpen] = useQueryState('isComposeOpen');
   const [currentView, setCurrentView] = useState<CommandView>('main');
@@ -1265,7 +1268,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
                         id: `filter-${Date.now()}`,
                         type: 'dateRange',
                         value: filterValue,
-                        display: `${format(date, 'MMM d')} - ${format(dateRangeEnd, 'MMM d, yyyy')}`,
+                        display: `${format(date, 'MMM d', { locale: dateLocale })} - ${format(dateRangeEnd, 'MMM d, yyyy', { locale: dateLocale })}`,
                       };
                       addFilter(activeFilter);
                       executeSearch(filterValue);
@@ -1290,7 +1293,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
                         id: `filter-${Date.now()}`,
                         type: 'dateRange',
                         value: filterValue,
-                        display: `${format(dateRangeStart, 'MMM d')} - ${format(date, 'MMM d, yyyy')}`,
+                        display: `${format(dateRangeStart, 'MMM d', { locale: dateLocale })} - ${format(date, 'MMM d, yyyy', { locale: dateLocale })}`,
                       };
                       addFilter(activeFilter);
                       executeSearch(filterValue);
@@ -1338,7 +1341,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
                             selectedDateFilter === 'after'
                               ? m['common.commandPalette.mailSearch.after']()
                               : m['common.commandPalette.mailSearch.before']()
-                          } ${format(date, 'MMM d, yyyy')}`,
+                          } ${format(date, 'MMM d, yyyy', { locale: dateLocale })}`,
                     };
                     addFilter(activeFilter);
                     executeSearch(filterValue);

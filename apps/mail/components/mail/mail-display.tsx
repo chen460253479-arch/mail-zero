@@ -48,6 +48,8 @@ import { useQueryState } from 'nuqs';
 import { Badge } from '../ui/badge';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { getDateLocale } from '@/lib/i18n/date-locale';
+import { getLocale } from '@/paraglide/runtime';
 
 // Add formatFileSize utility function
 const formatFileSize = (size: number) => {
@@ -402,6 +404,7 @@ const openAttachment = async (attachment: {
 };
 
 const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }: Props) => {
+  const dateLocale = getDateLocale(getLocale());
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   const { data: threadData } = useThread(emailData.threadId ?? null);
   const messageAttachments = emailData.attachments ?? [];
@@ -1156,7 +1159,9 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                                   <span className="text-muted-foreground ml-3 text-nowrap">
                                     {emailData?.receivedOn &&
                                     !isNaN(new Date(emailData.receivedOn).getTime())
-                                      ? format(new Date(emailData.receivedOn), 'PPpp')
+                                      ? format(new Date(emailData.receivedOn), 'PPpp', {
+                                          locale: dateLocale,
+                                        })
                                       : ''}
                                   </span>
                                 </div>

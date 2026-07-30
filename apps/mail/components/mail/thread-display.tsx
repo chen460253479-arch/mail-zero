@@ -54,6 +54,8 @@ import { useQueryState } from 'nuqs';
 import { format } from 'date-fns';
 import { useAtom } from 'jotai';
 import { toast } from 'sonner';
+import { getDateLocale } from '@/lib/i18n/date-locale';
+import { getLocale } from '@/paraglide/runtime';
 
 const formatFileSize = (size: number) => {
   const sizeInMB = (size / (1024 * 1024)).toFixed(2);
@@ -158,6 +160,7 @@ function ThreadActionButton({
 }
 const isFullscreen = false;
 export function ThreadDisplay() {
+  const dateLocale = getDateLocale(getLocale());
   const isMobile = useIsMobile();
   const params = useParams<{ folder: string }>();
 
@@ -585,7 +588,7 @@ export function ThreadDisplay() {
 
                   <div class="meta-row">
                     <span class="meta-label">${m['common.mailDisplay.date']()}:</span>
-                    <span class="meta-value">${format(new Date(message.receivedOn), 'PPpp')}</span>
+                    <span class="meta-value">${format(new Date(message.receivedOn), 'PPpp', { locale: dateLocale })}</span>
                   </div>
                 </div>
               </div>

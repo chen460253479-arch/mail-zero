@@ -5,13 +5,16 @@ import { useCallback, useMemo } from 'react';
 import { addMonths, subMonths, getYear, getMonth, setYear, setMonth, format } from 'date-fns';
 
 import { buttonVariants } from '@/components/ui/button';
+import { getDateLocale } from '@/lib/i18n/date-locale';
 import { cn } from '@/lib/utils';
+import { getLocale } from '@/paraglide/runtime';
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker> & {
   yearRange?: number; 
 };
 
 function Calendar({ className, classNames, showOutsideDays = true, captionLayout, yearRange = 10, ...props }: CalendarProps) {
+  const dateLocale = getDateLocale(getLocale());
   const [currentMonth, setCurrentMonth] = React.useState(new Date());
   
   const years = useMemo(() => Array.from({ length: yearRange }, (_, i) => new Date().getFullYear() + i), [yearRange]);
@@ -116,7 +119,7 @@ function Calendar({ className, classNames, showOutsideDays = true, captionLayout
                   const monthDate = new Date(2024, i, 1);
                   return (
                     <option key={i} value={i.toString()}>
-                      {format(monthDate, 'MMMM')}
+                      {format(monthDate, 'MMMM', { locale: dateLocale })}
                     </option>
                   );
                 })}

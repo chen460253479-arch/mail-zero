@@ -7,6 +7,8 @@ import { toast } from 'sonner';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { m } from '@/paraglide/messages';
+import { getLocale } from '@/paraglide/runtime';
+import { getDateLocale } from '@/lib/i18n/date-locale';
 
 const pad2 = (n: number) => n.toString().padStart(2, '0');
 const getLocalTimeFromDate = (d: Date) => `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
@@ -25,6 +27,7 @@ export const ScheduleSendPicker: React.FC<ScheduleSendPickerProps> = ({
   className,
   onValidityChange,
 }) => {
+  const dateLocale = getDateLocale(getLocale());
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [timePickerOpen, setTimePickerOpen] = useState(false);
 
@@ -104,7 +107,7 @@ export const ScheduleSendPicker: React.FC<ScheduleSendPickerProps> = ({
       const [hhStr, mmStr = '00'] = timeStr.split(':');
       const preview = new Date();
       preview.setHours(Number(hhStr), Number(mmStr), 0, 0);
-      return format(preview, 'hh:mm aaa');
+      return format(preview, 'hh:mm aaa', { locale: dateLocale });
     } catch {
       return timeStr;
     }
@@ -114,7 +117,7 @@ export const ScheduleSendPicker: React.FC<ScheduleSendPickerProps> = ({
     if (!selectedDate) return m['pages.createEmail.sendLater']();
     try {
       const formattedTime = formatTime12Hour(time);
-      const formattedDate = format(selectedDate, 'dd MMM yyyy');
+      const formattedDate = format(selectedDate, 'dd MMM yyyy', { locale: dateLocale });
       return `${formattedDate} ${formattedTime}`;
     } catch {
       return m['pages.createEmail.sendLater']();
@@ -135,7 +138,9 @@ export const ScheduleSendPicker: React.FC<ScheduleSendPickerProps> = ({
             >
               <CalendarIcon className="h-4 w-4" />
               <span>
-                {selectedDate ? format(selectedDate, 'dd MMM yyyy') : m['pages.createEmail.selectDate']()}
+                {selectedDate
+                  ? format(selectedDate, 'dd MMM yyyy', { locale: dateLocale })
+                  : m['pages.createEmail.selectDate']()}
               </span>
             </button>
           </PopoverTrigger>
