@@ -162,6 +162,7 @@ describe('Nango mailbox binding', () => {
     });
     vi.mocked(repository.findByNangoReference).mockResolvedValue({
       connectionId: 'existing',
+      userId: 'user-1',
     });
 
     await bindNangoMailbox(input, dependencies);
@@ -189,7 +190,10 @@ describe('Nango mailbox binding', () => {
 
   it('rejects a Nango connection already bound elsewhere', async () => {
     const { repository, dependencies } = createDependencies();
-    vi.mocked(repository.findByNangoReference).mockResolvedValue({ connectionId: 'other-mailbox' });
+    vi.mocked(repository.findByNangoReference).mockResolvedValue({
+      connectionId: 'other-mailbox',
+      userId: 'user-2',
+    });
 
     await expect(bindNangoMailbox(input, dependencies)).rejects.toMatchObject({
       code: 'NANGO_CONNECTION_ALREADY_BOUND',
@@ -201,7 +205,7 @@ describe('Nango mailbox binding', () => {
     const { repository, dependencies } = createDependencies();
     vi.mocked(repository.findByNangoReference)
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ connectionId: 'other-mailbox' });
+      .mockResolvedValueOnce({ connectionId: 'other-mailbox', userId: 'user-2' });
     vi.mocked(repository.save).mockRejectedValue(new Error('unique conflict'));
 
     await expect(bindNangoMailbox(input, dependencies)).rejects.toMatchObject({
@@ -233,6 +237,30 @@ describe('Nango mailbox binding', () => {
       accessToken: 'nango-access-token',
       scope: '',
     });
+  });
+
+  it('returns the existing mailbox for the same user and Nango reference', async () => {
+    const { repository, dependencies } = createDependencies();
+    vi.mocked(repository.findByNangoReference).mockResolvedValue({
+      connectionId: 'existing',
+      userId: 'user-1',
+    });
+    vi.mocked(repository.findMailboxByNormalizedEmail).mockResolvedValue({
+      id: 'existing',
+      userId: 'user-1',
+      channelId: 'gmail',
+      status: 'connected',
+    });
+
+    await expect(bindNangoMailbox(input, dependencies)).resolves.toEqual({
+      id: 'existing',
+      identity: {
+        email: 'Owner@Example.com',
+        name: 'Mailbox Owner',
+        picture: 'https://example.com/avatar.png',
+      },
+    });
+    expect(repository.save).not.toHaveBeenCalled();
   });
 
   it('binds generic-email BASIC credentials through the IMAP/SMTP plugin contract', async () => {

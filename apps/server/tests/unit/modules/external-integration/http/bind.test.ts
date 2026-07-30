@@ -5,6 +5,10 @@ import type { RuntimeServices } from '../../../../../src/runtime/node/services';
 
 const createRouter = () => {
   const connect = vi.fn(async () => ({ id: 'zero-connection-1' }));
+  const provisionManagedUser = vi.fn(async () => ({
+    userId: 'managed-user-1',
+    created: true,
+  }));
   const services = {
     config: {
       externalIntegration: {
@@ -19,12 +23,10 @@ const createRouter = () => {
     },
   } as RuntimeServices;
   const app = createExternalIntegrationRouter(services, {
-    ensurePrincipal: vi.fn(async () => ({
-      userId: 'zero-external-integration' as const,
-    })),
+    provisionManagedUser,
     connect,
   });
-  return { app, connect };
+  return { app, connect, provisionManagedUser };
 };
 
 const requestBind = async (
@@ -46,12 +48,13 @@ const requestBind = async (
   });
 
 describe('external Nango connection binding HTTP contract', () => {
-  it('accepts only channelId and connectionId', async () => {
-    const { app, connect } = createRouter();
+  it('accepts only externalUserId, channelId, and connectionId', async () => {
+    const { app, connect, provisionManagedUser } = createRouter();
 
     const response = await requestBind(app, {
       token: 'fixed-token',
       body: {
+        externalUserId: 'user_200',
         channelId: 'gmail',
         connectionId: 'connect-gmail-1',
       },
@@ -63,27 +66,31 @@ describe('external Nango connection binding HTTP contract', () => {
     });
     expect(connect).toHaveBeenCalledWith(
       {
-        userId: 'zero-external-integration',
+        userId: 'managed-user-1',
         channelId: 'gmail',
         connectionId: 'connect-gmail-1',
       },
       expect.anything(),
     );
+    expect(provisionManagedUser).toHaveBeenCalledWith(
+      { externalUserId: 'user_200' },
+      expect.anything(),
+    );
   });
 
-  it('rejects additional external identity fields', async () => {
-    const { app, connect } = createRouter();
+  it('requires externalUserId', async () => {
+    const { app, connect, provisionManagedUser } = createRouter();
 
     const response = await requestBind(app, {
       token: 'fixed-token',
       body: {
         channelId: 'gmail',
         connectionId: 'connect-gmail-1',
-        externalUserId: 'not-accepted',
       },
     });
 
     expect(response.status).toBe(400);
+    expect(provisionManagedUser).not.toHaveBeenCalled();
     expect(connect).not.toHaveBeenCalled();
   });
 
@@ -93,6 +100,7 @@ describe('external Nango connection binding HTTP contract', () => {
     const response = await requestBind(app, {
       sessionCookie: 'better-auth.session_token=user-session',
       body: {
+        externalUserId: 'user_200',
         channelId: 'gmail',
         connectionId: 'connect-gmail-1',
       },

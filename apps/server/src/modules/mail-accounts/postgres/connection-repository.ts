@@ -143,8 +143,12 @@ export const createPostgresConnectionRepository = (db: DB, options: RepositoryOp
 
     findByNangoReference: async (providerConfigKey: string, nangoConnectionId: string) => {
       const [binding] = await db
-        .select({ connectionId: authorizationBinding.connectionId })
+        .select({
+          connectionId: authorizationBinding.connectionId,
+          userId: connection.userId,
+        })
         .from(authorizationBinding)
+        .innerJoin(connection, eq(connection.id, authorizationBinding.connectionId))
         .where(
           and(
             eq(authorizationBinding.authSource, 'nango'),

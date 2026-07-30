@@ -56,7 +56,7 @@ export interface NangoBindingRepository {
   findByNangoReference(
     integrationId: string,
     connectionId: string,
-  ): Promise<{ connectionId: string } | null>;
+  ): Promise<{ connectionId: string; userId: string } | null>;
   save(input: SaveNangoBindingInput): Promise<{ id: string }>;
 }
 
@@ -102,6 +102,9 @@ export const bindNangoMailbox = async (
     input.integrationId,
     input.connectionId,
   );
+  if (boundReference !== null && boundReference.userId !== input.userId) {
+    throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
+  }
 
   const connection = await dependencies.client
     .getConnection(input.connectionId, input.integrationId)
@@ -153,6 +156,9 @@ export const bindNangoMailbox = async (
     existing.status !== 'disconnected' &&
     !(existing.status === 'reconnect_required' && existing.userId === input.userId)
   ) {
+    if (boundReference?.connectionId === existing.id && existing.userId === input.userId) {
+      return { id: existing.id, identity };
+    }
     throw new NangoBindingError('MAILBOX_ALREADY_CONNECTED');
   }
 
@@ -192,6 +198,9 @@ export const bindNangoMailbox = async (
       input.integrationId,
       input.connectionId,
     );
+    if (racedReference !== null && racedReference.userId !== input.userId) {
+      throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
+    }
     if (racedReference !== null && racedReference.connectionId !== existing?.id) {
       throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
     }

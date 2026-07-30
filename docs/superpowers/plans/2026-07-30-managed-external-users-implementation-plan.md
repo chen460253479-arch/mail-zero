@@ -59,7 +59,7 @@ Router 7、React Query、Vitest。
 - Changes `findByNangoReference` result to:
   `{ connectionId: string; userId: string } | null`
 
-- [ ] **Step 1: Write failing managed-user contract and application tests**
+- [x] **Step 1: Write failing managed-user contract and application tests**
 
   Add literal cases for `user_200`, invalid whitespace/characters, idempotent lookup, `role = user`,
   `mustChangePassword = true`, deterministic internal email, initial password hashing, and rejection
@@ -85,14 +85,14 @@ Router 7、React Query、Vitest。
   });
   ```
 
-- [ ] **Step 2: Run the new tests and verify RED**
+- [x] **Step 2: Run the new tests and verify RED**
 
   Run:
   `pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration/application/provision-managed-user.test.ts`
 
   Expected: FAIL because `provision-managed-user.ts` and the schema fields do not exist.
 
-- [ ] **Step 3: Implement managed-user schema and repository**
+- [x] **Step 3: Implement managed-user schema and repository**
 
   Add the Better Auth Username fields and password state:
 
@@ -109,7 +109,7 @@ Router 7、React Query、Vitest。
   default `app.user_settings` in one transaction protected by an advisory lock based on
   `externalUserId`.
 
-- [ ] **Step 4: Write and run failing bind ownership tests**
+- [x] **Step 4: Write and run failing bind ownership tests**
 
   Update bind tests so the route rejects a missing `externalUserId`, provisions/looks up the user,
   and passes that returned `userId` to `connectNangoMailbox`.
@@ -135,7 +135,7 @@ Router 7、React Query、Vitest。
   Expected: FAIL because the route still binds to `zero-external-integration` and repeat binding
   returns `MAILBOX_ALREADY_CONNECTED`.
 
-- [ ] **Step 5: Implement user-owned, idempotent bind**
+- [x] **Step 5: Implement user-owned, idempotent bind**
 
   Resolve `externalUserId` before binding and call:
 
@@ -153,13 +153,13 @@ Router 7、React Query、Vitest。
   Return the existing mailbox ID when the Nango reference is already bound to the same user.
   Return `NANGO_CONNECTION_ALREADY_BOUND` when its stored `connection.userId` differs.
 
-- [ ] **Step 6: Fix administrator provisioning with multiple users**
+- [x] **Step 6: Fix administrator provisioning with multiple users**
 
   Replace the total-user count rule with a `role = 'admin'` lookup under the existing advisory lock.
   Existing ordinary users must not block first admin creation; a second different admin must still
   raise `AdminProvisioningConflictError`.
 
-- [ ] **Step 7: Run Task 1 tests and commit**
+- [x] **Step 7: Run Task 1 tests and commit**
 
   Run:
   `pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration/application/provision-managed-user.test.ts tests/unit/modules/external-integration/http/bind.test.ts tests/unit/modules/mail-accounts/application/bind-nango-mailbox.test.ts tests/integration/modules/external-integration/managed-user.integration.test.ts`

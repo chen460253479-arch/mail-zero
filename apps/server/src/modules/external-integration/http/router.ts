@@ -1,3 +1,4 @@
+import { hashPassword } from 'better-auth/crypto';
 import { randomBytes } from 'node:crypto';
 import { ulid } from 'ulid';
 import { Hono } from 'hono';
@@ -11,10 +12,15 @@ import {
   createPostgresExternalMessageRepository,
 } from '../postgres/repository';
 import {
+  provisionManagedUser,
+  type ProvisionManagedUserDependencies,
+} from '../application/provision-managed-user';
+import {
   createExternalMessageReader,
   type ExternalMessageReader,
 } from '../application/read-message';
 import { ensureExternalIntegrationPrincipal, type IntegrationPrincipal } from '../principal';
+import { createPostgresManagedUserRepository } from '../postgres/managed-user-repository';
 import { NangoBindingError } from '../../mail-accounts/application/bind-nango-mailbox';
 import { accessGrantInputSchema, type AccessGrantInput } from '../contracts/access';
 import { handleExternalLaunch, type ConsumeExternalLaunchCode } from './launch';
@@ -29,6 +35,10 @@ import { registerExternalMailRoutes } from './mail';
 
 export type ExternalIntegrationRouterDependencies = {
   ensurePrincipal(database: RuntimeServices['database']['db']): Promise<IntegrationPrincipal>;
+  provisionManagedUser(
+    input: { externalUserId: string },
+    services: RuntimeServices,
+  ): Promise<{ userId: string; created: boolean }>;
   connect(input: ConnectNangoMailboxInput, services: RuntimeServices): Promise<{ id: string }>;
   createMessageReader(ownerUserId: string, services: RuntimeServices): ExternalMessageReader;
   createAccessGrant(
@@ -41,6 +51,15 @@ export type ExternalIntegrationRouterDependencies = {
 
 const defaultDependencies: ExternalIntegrationRouterDependencies = {
   ensurePrincipal: ensureExternalIntegrationPrincipal,
+  provisionManagedUser: async (input, services) => {
+    const dependencies: ProvisionManagedUserDependencies = {
+      repository: createPostgresManagedUserRepository(services.database.db),
+      hashPassword,
+      now: () => new Date(),
+      newId: () => ulid(),
+    };
+    return await provisionManagedUser(input, dependencies);
+  },
   connect: connectNangoMailbox,
   createMessageReader: (ownerUserId, services) =>
     createExternalMessageReader({
@@ -96,8 +115,14 @@ export const createExternalIntegrationRouter = (
   };
 
   const app = new Hono().post('/nango/connections/bind', async (context) => {
-    const authorization = await authorize(context.req.header('Authorization'));
-    if (authorization instanceof Response) return authorization;
+    try {
+      requireIntegrationServiceToken(
+        services.config.externalIntegration.apiToken,
+        context.req.header('Authorization'),
+      );
+    } catch {
+      return context.json({ error: 'INTEGRATION_UNAUTHORIZED' }, 401);
+    }
     const body = await context.req.json().catch(() => null);
     const parsed = externalBindInputSchema.safeParse(body);
     if (!parsed.success) {
@@ -105,11 +130,16 @@ export const createExternalIntegrationRouter = (
     }
 
     try {
+      const managedUser = await dependencies.provisionManagedUser(
+        { externalUserId: parsed.data.externalUserId },
+        services,
+      );
       return context.json(
         await dependencies.connect(
           {
-            userId: authorization.userId,
-            ...parsed.data,
+            userId: managedUser.userId,
+            channelId: parsed.data.channelId,
+            connectionId: parsed.data.connectionId,
           },
           services,
         ),
@@ -118,6 +148,9 @@ export const createExternalIntegrationRouter = (
     } catch (error) {
       if (error instanceof NangoBindingError) {
         return context.json({ error: error.code }, bindingStatus(error));
+      }
+      if (error instanceof ExternalIntegrationError && error.code === 'EXTERNAL_USER_INVALID') {
+        return context.json({ error: error.code }, 409);
       }
       throw error;
     }

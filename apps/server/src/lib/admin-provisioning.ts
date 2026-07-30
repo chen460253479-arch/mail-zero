@@ -1,5 +1,5 @@
 import { hashPassword } from 'better-auth/crypto';
-import { and, count, eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import {
   parseAdminProvisioningConfig,
@@ -34,33 +34,31 @@ export const provisionAdmin = async (
   const result = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext('zero-local-superadmin'))`);
 
-    const [userCount] = await tx.select({ value: count() }).from(user);
+    const [existingAdmin] = await tx.select().from(user).where(eq(user.role, 'admin')).limit(1);
     const [existingUser] = await tx.select().from(user).where(eq(user.email, normalized.email));
 
-    if (userCount?.value) {
-      if (userCount.value === 1 && existingUser) {
-        const [credentialAccount] = await tx
-          .select()
-          .from(account)
-          .where(and(eq(account.userId, existingUser.id), eq(account.providerId, 'credential')));
-        if (credentialAccount) {
-          return {
-            created: false,
-            email: existingUser.email,
-            userId: existingUser.id,
-          };
-        }
+    if (existingAdmin !== undefined && existingAdmin.email !== normalized.email) {
+      throw new AdminProvisioningConflictError(
+        'Zero already contains a local superadmin. Provisioning a second administrator is not allowed.',
+      );
+    }
 
-        const now = new Date();
-        await tx
-          .update(user)
-          .set({
-            name: normalized.name,
-            emailVerified: true,
-            role: 'admin',
-            updatedAt: now,
-          })
-          .where(eq(user.id, existingUser.id));
+    if (existingUser !== undefined) {
+      const [credentialAccount] = await tx
+        .select()
+        .from(account)
+        .where(and(eq(account.userId, existingUser.id), eq(account.providerId, 'credential')));
+      const now = new Date();
+      await tx
+        .update(user)
+        .set({
+          name: normalized.name,
+          emailVerified: true,
+          role: 'admin',
+          updatedAt: now,
+        })
+        .where(eq(user.id, existingUser.id));
+      if (credentialAccount === undefined) {
         await tx.insert(account).values({
           id: crypto.randomUUID(),
           accountId: existingUser.id,
@@ -70,17 +68,12 @@ export const provisionAdmin = async (
           createdAt: now,
           updatedAt: now,
         });
-
-        return {
-          created: true,
-          email: existingUser.email,
-          userId: existingUser.id,
-        };
       }
-
-      throw new AdminProvisioningConflictError(
-        'Zero already contains a user. Local superadmin provisioning is intentionally one-time.',
-      );
+      return {
+        created: credentialAccount === undefined || existingAdmin === undefined,
+        email: existingUser.email,
+        userId: existingUser.id,
+      };
     }
 
     const now = new Date();
