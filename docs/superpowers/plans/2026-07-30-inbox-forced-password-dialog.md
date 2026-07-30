@@ -35,7 +35,7 @@
 - Consumes: `requiresInitialPasswordChange(session): boolean`
 - Produces: `loadProtectedRouteSession(...): Promise<{ userId: string; passwordChangeRequired: boolean }>`
 
-- [ ] **Step 1: 修改测试，描述 Inbox 弹窗所需的 Session 合约**
+- [x] **Step 1: 修改测试，描述 Inbox 弹窗所需的 Session 合约**
 
 将密码登录普通用户的断言从 `/change-password` 重定向改为：
 
@@ -74,7 +74,7 @@ expect(protectedLayout?.children).not.toEqual(
 );
 ```
 
-- [ ] **Step 2: 运行测试并确认 RED**
+- [x] **Step 2: 运行测试并确认 RED**
 
 Run:
 
@@ -84,7 +84,7 @@ pnpm --dir apps/mail exec vitest run "modules/external-access/protected-route-se
 
 Expected: FAIL，因为当前实现仍抛出 `/change-password` 重定向、返回值没有 `passwordChangeRequired`，并且路由仍存在。
 
-- [ ] **Step 3: 实现最小 Session 合约并移除独立路由**
+- [x] **Step 3: 实现最小 Session 合约并移除独立路由**
 
 将 loader 收敛为：
 
@@ -110,7 +110,7 @@ route('/change-password', '(auth)/change-password/page.tsx'),
 
 删除不再被路由引用的 `apps/mail/app/(auth)/change-password/page.tsx`。
 
-- [ ] **Step 4: 运行定向测试并确认 GREEN**
+- [x] **Step 4: 运行定向测试并确认 GREEN**
 
 Run:
 
@@ -120,7 +120,7 @@ pnpm --dir apps/mail exec vitest run "modules/external-access/protected-route-se
 
 Expected: PASS。
 
-- [ ] **Step 5: 提交 Session 合约**
+- [x] **Step 5: 提交 Session 合约**
 
 ```powershell
 git add -- "apps/mail/modules/auth/protected-route-session.ts" "apps/mail/modules/external-access/protected-route-session.test.ts" "apps/mail/app/routes.ts" "apps/mail/app/(auth)/change-password/page.tsx"
@@ -142,7 +142,7 @@ git commit -m "refactor(auth): expose password change requirement"
 - Produces: `submitForcedPasswordChange(input, dependencies): Promise<void>`
 - Produces: `ForcedPasswordChangeDialog(): JSX.Element`
 
-- [ ] **Step 1: 为保持 Session 的成功流程编写失败测试**
+- [x] **Step 1: 为保持 Session 的成功流程编写失败测试**
 
 先在现有 `change-password-client.test.tsx` 中修改提交测试。测试仍调用当前
 `submitPasswordChange`，同时传入旧 `navigate` 和新 `reloadInbox`，使当前实现产生明确的断言失败而不是模块加载错误：
@@ -221,7 +221,7 @@ expect(html).toContain('data-dialog-open="true"');
 expect(html).not.toContain('data-dialog-close');
 ```
 
-- [ ] **Step 2: 运行新测试并确认 RED**
+- [x] **Step 2: 运行新测试并确认 RED**
 
 Run:
 
@@ -231,7 +231,7 @@ pnpm --dir apps/mail exec vitest run "app/(auth)/change-password/change-password
 
 Expected: FAIL，因为当前 helper 仍调用 SPA `navigate`，组件仍是独立全屏页面。
 
-- [ ] **Step 3: 实现不可关闭弹窗**
+- [x] **Step 3: 实现不可关闭弹窗**
 
 先在现有文件中将提交 helper 改为：
 
@@ -351,7 +351,7 @@ export function ForcedPasswordChangeDialog() {
 不渲染 `DialogClose`，不调用 `signOut`，不调用 SPA `navigate`。GREEN 后使用
 `apply_patch` 的 move 操作把组件和测试移动到最终模块路径，并更新测试 import。
 
-- [ ] **Step 4: 运行弹窗测试并确认 GREEN**
+- [x] **Step 4: 运行弹窗测试并确认 GREEN**
 
 Run:
 
@@ -361,7 +361,7 @@ pnpm --dir apps/mail exec vitest run "modules/auth/forced-password-change-dialog
 
 Expected: PASS。
 
-- [ ] **Step 5: 提交弹窗组件**
+- [x] **Step 5: 提交弹窗组件**
 
 ```powershell
 git add -- "apps/mail/modules/auth/forced-password-change-dialog.tsx" "apps/mail/modules/auth/forced-password-change-dialog.test.tsx" "apps/mail/app/(auth)/change-password/change-password-client.tsx" "apps/mail/app/(auth)/change-password/change-password-client.test.tsx"
@@ -384,7 +384,7 @@ git commit -m "feat(auth): add forced password change dialog"
 - Consumes: `ForcedPasswordChangeDialog`
 - Produces: `PasswordChangeRequiredView(): JSX.Element`
 
-- [ ] **Step 1: 修改 Provider 生命周期测试并确认目标行为**
+- [x] **Step 1: 修改 Provider 生命周期测试并确认目标行为**
 
 让 `useLoaderData` mock 返回可变状态：
 
@@ -419,7 +419,7 @@ expect(html).toContain('data-cache-subject="user:user-1"');
 expect(html).not.toContain('mail route');
 ```
 
-- [ ] **Step 2: 运行 Provider 测试并确认 RED**
+- [x] **Step 2: 运行 Provider 测试并确认 RED**
 
 Run:
 
@@ -429,7 +429,7 @@ pnpm --dir apps/mail exec vitest run "modules/mail/routing/mail-route-provider-o
 
 Expected: FAIL，因为布局仍按 `/change-password` pathname 分支，尚未使用 Session 标记。
 
-- [ ] **Step 3: 实现静态 Inbox 背景和布局门禁**
+- [x] **Step 3: 实现静态 Inbox 背景和布局门禁**
 
 `PasswordChangeRequiredView` 只能引用无数据查询的 UI 组件，例如 `Skeleton` 和 `ForcedPasswordChangeDialog`：
 
@@ -504,7 +504,7 @@ return (
 - `HotkeyProviderWrapper`
 - `Outlet`
 
-- [ ] **Step 4: 运行登录与 Provider 定向测试并确认 GREEN**
+- [x] **Step 4: 运行登录与 Provider 定向测试并确认 GREEN**
 
 Run:
 
@@ -514,7 +514,7 @@ pnpm --dir apps/mail exec vitest run "modules/mail/routing/mail-route-provider-o
 
 Expected: PASS。
 
-- [ ] **Step 5: 提交 Inbox 门禁**
+- [x] **Step 5: 提交 Inbox 门禁**
 
 ```powershell
 git add -- "apps/mail/modules/auth/password-change-required-view.tsx" "apps/mail/app/(routes)/layout.tsx" "apps/mail/modules/mail/routing/mail-route-provider-order.test.tsx"
@@ -534,7 +534,7 @@ git commit -m "feat(auth): gate inbox with password dialog"
 - Consumes: Tasks 1–3 的最终实现
 - Produces: 可审查的验证记录和干净的认证改动提交
 
-- [ ] **Step 1: 运行邮件应用完整测试**
+- [x] **Step 1: 运行邮件应用完整测试**
 
 Run:
 
@@ -544,7 +544,7 @@ pnpm --dir apps/mail test
 
 Expected: 所有测试文件和测试用例通过，0 failures。
 
-- [ ] **Step 2: 运行 TypeScript 检查**
+- [x] **Step 2: 运行 TypeScript 检查**
 
 Run:
 
@@ -554,7 +554,7 @@ pnpm --filter @zero/mail exec tsc --noEmit
 
 Expected: exit code 0。
 
-- [ ] **Step 3: 运行定向格式和差异检查**
+- [x] **Step 3: 运行定向格式和差异检查**
 
 Run:
 
@@ -565,7 +565,7 @@ git diff --check
 
 Expected: 格式通过且没有空白错误。
 
-- [ ] **Step 4: 复审需求覆盖**
+- [x] **Step 4: 复审需求覆盖**
 
 逐项确认：
 
@@ -578,7 +578,7 @@ Expected: 格式通过且没有空白错误。
 - `.gitignore` 未暂存。
 - 未执行构建、打包或 Docker 操作。
 
-- [ ] **Step 5: 提交计划完成状态**
+- [x] **Step 5: 提交计划完成状态**
 
 ```powershell
 git add -- "docs/superpowers/plans/2026-07-30-inbox-forced-password-dialog.md"
