@@ -69,6 +69,14 @@ describe('Docker self-hosted stack', () => {
     expect(readme).not.toContain('Protocol Worker dependency volumes');
   });
 
+  it('passes external mail integration settings into the Server container', () => {
+    const compose = read('compose.yaml');
+
+    expect(compose).toContain('INTEGRATION_API_TOKEN: ${INTEGRATION_API_TOKEN:-}');
+    expect(compose).toContain('MAIL_WEBHOOK_ENABLED: ${MAIL_WEBHOOK_ENABLED:-false}');
+    expect(compose).toContain('MAIL_WEBHOOK_URL: ${MAIL_WEBHOOK_URL:-}');
+  });
+
   it('keeps database schema deployment outside production Compose', () => {
     const compose = read('compose.yaml');
 
