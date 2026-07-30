@@ -1,12 +1,11 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router';
 
-import { Button } from '@/components/ui/button';
+import { enterMailboxAfterLogin } from '@/modules/auth/login-navigation';
 import { resolveLoginMethod } from '@/modules/auth/login-method';
+import { Button } from '@/components/ui/button';
 import { signIn } from '@/lib/auth-client';
 
 export function LoginClient() {
-  const navigate = useNavigate();
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string>();
@@ -37,7 +36,7 @@ export function LoginClient() {
         return;
       }
 
-      navigate('/mail/inbox', { replace: true });
+      enterMailboxAfterLogin();
     } catch {
       setError('Unable to reach the Zero server');
     } finally {
@@ -83,7 +82,10 @@ export function LoginClient() {
           </label>
 
           {error ? (
-            <p role="alert" className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            <p
+              role="alert"
+              className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-300"
+            >
               {error}
             </p>
           ) : null}
