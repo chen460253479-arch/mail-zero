@@ -121,6 +121,7 @@ describe('mail UI adapters', () => {
 
     expect(adaptThreadSummaryForList(summary, mailboxes)).toMatchObject({
       id: 'thread-1',
+      emailId: 'email-1',
       threadId: 'thread-1',
       subject: 'Quarterly report',
       sender: { name: 'Ada', email: 'ada@example.com' },

@@ -21,6 +21,13 @@ const toLabel = (mailbox: Mailbox, labels?: Label[]): Label => ({
   ...(labels && labels.length > 0 ? { labels } : {}),
 });
 
+export function buildMailboxStats(mailboxes: readonly Mailbox[]) {
+  return mailboxes.map((mailbox) => ({
+    label: mailbox.role ?? mailbox.name,
+    count: mailbox.totalThreads,
+  }));
+}
+
 export function buildLabelView(mailboxes: readonly Mailbox[]) {
   const userMailboxes = mailboxes
     .filter((mailbox) => mailbox.kind === 'folder' || mailbox.kind === 'label')

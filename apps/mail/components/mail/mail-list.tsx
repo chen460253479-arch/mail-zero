@@ -576,8 +576,15 @@ const Thread = memo(
   },
 );
 
-const Draft = memo(({ message, index }: { message: { id: string }; index: number }) => {
-  const draftQuery = useDraft(message.id);
+const Draft = memo(function Draft({
+  message,
+  index,
+}: {
+  message: { id: string; emailId?: string };
+  index: number;
+}) {
+  const draftId = message.emailId ?? null;
+  const draftQuery = useDraft(draftId);
   const draft = draftQuery.data;
   const [, setComposeOpen] = useQueryState('isComposeOpen');
   const [, setDraftId] = useQueryState('draftId');
@@ -585,20 +592,22 @@ const Draft = memo(({ message, index }: { message: { id: string }; index: number
   const optimisticState = useOptimisticThreadState(message.id);
 
   const handleMailClick = useCallback(() => {
+    if (!draftId) return;
     setComposeOpen('true');
-    setDraftId(message.id);
+    setDraftId(draftId);
     return;
-  }, [message.id]);
+  }, [draftId, setComposeOpen, setDraftId]);
 
   const handleDeleteDraft = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      optimisticDeleteDraft(message.id);
+      if (!draftId) return;
+      optimisticDeleteDraft(draftId, message.id);
     },
-    [message.id, optimisticDeleteDraft],
+    [draftId, message.id, optimisticDeleteDraft],
   );
 
-  if (optimisticState.shouldHide) {
+  if (optimisticState.shouldHide || !draftId) {
     return null;
   }
 

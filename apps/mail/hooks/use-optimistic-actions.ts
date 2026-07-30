@@ -535,17 +535,17 @@ export function useOptimisticActions() {
     });
   }
 
-  function optimisticDeleteDraft(draftId: string) {
-    if (!draftId) return;
+  function optimisticDeleteDraft(draftId: string, threadId: string) {
+    if (!draftId || !threadId) return;
 
     const optimisticId = addOptimisticAction({
       type: 'DELETE_DRAFT',
-      threadIds: [draftId],
+      threadIds: [threadId],
     });
 
     createPendingAction({
       type: 'DELETE_DRAFT',
-      threadIds: [draftId],
+      threadIds: [threadId],
       params: {},
       optimisticId,
       execute: async () => {

@@ -79,6 +79,7 @@ export function adaptThreadSummaryForList(
 ): ParsedMessage {
   return {
     id: summary.id,
+    emailId: summary.latestEmail.id,
     threadId: summary.id,
     title: summary.subject,
     subject: summary.subject,

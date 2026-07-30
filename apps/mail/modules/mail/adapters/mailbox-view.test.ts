@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { buildLabelView, buildMailboxStats } from './mailbox-view';
 import type { Mailbox } from '../model/mailbox';
-import { buildLabelView } from './mailbox-view';
 
 const mailbox = (
   id: string,
@@ -51,5 +51,22 @@ describe('buildLabelView', () => {
       { id: '$important', name: 'IMPORTANT', type: 'system' },
       { id: '$flagged', name: 'STARRED', type: 'system' },
     ]);
+  });
+});
+
+describe('buildMailboxStats', () => {
+  it('reports the number of threads visible in each mailbox instead of unread threads', () => {
+    expect(
+      buildMailboxStats([
+        {
+          ...mailbox('mailbox-sent', 'Sent', 'system'),
+          role: 'sent',
+          totalEmails: 1,
+          totalThreads: 1,
+          unreadEmails: 0,
+          unreadThreads: 0,
+        },
+      ]),
+    ).toEqual([{ label: 'sent', count: 1 }]);
   });
 });

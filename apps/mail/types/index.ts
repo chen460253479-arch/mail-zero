@@ -60,6 +60,7 @@ export interface Sender {
 
 export interface ParsedMessage {
   id: string;
+  emailId?: string;
   connectionId?: string;
   title: string;
   subject: string;
