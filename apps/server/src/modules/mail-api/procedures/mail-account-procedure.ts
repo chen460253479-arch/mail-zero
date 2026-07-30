@@ -47,16 +47,10 @@ export const createMailAccountProcedure = (
     .input(z.object({ accountId: mailAccountIdSchema }).passthrough())
     .use(async ({ ctx, input, next }) => {
       const access = ctx.mailAccess;
-      if (
-        access.kind === 'external' &&
-        !access.scopes.some(({ mailAccountId }) => mailAccountId === input.accountId)
-      ) {
-        throw new TRPCError({ code: 'NOT_FOUND' });
-      }
       let runtime: OwnedMailApiRuntime;
       try {
         runtime = await openRuntime(
-          access.kind === 'user' ? access.userId : access.ownerUserId,
+          access.userId,
           input.accountId as MailAccountId,
           ctx.c.var.services!,
         );

@@ -63,23 +63,13 @@ export const privateProcedure = publicProcedure.use(async ({ ctx, next }) => {
 });
 
 export const mailSessionProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  let mailAccess: MailAccessSubject;
-  if (ctx.sessionUser !== undefined) {
-    mailAccess = {
-      kind: 'user',
-      userId: ctx.sessionUser.id,
-    };
-  } else if (ctx.externalSession !== undefined) {
-    mailAccess = {
-      kind: 'external',
-      sessionId: ctx.externalSession.id,
-      ownerUserId: ctx.externalSession.ownerUserId,
-      scopes: ctx.externalSession.scopes,
-      activeConnectionId: ctx.externalSession.activeConnectionId,
-    };
-  } else {
+  if (ctx.sessionUser === undefined) {
     throw new TRPCError({ code: 'UNAUTHORIZED' });
   }
+  const mailAccess: MailAccessSubject = {
+    kind: 'user',
+    userId: ctx.sessionUser.id,
+  };
   return await next({
     ctx: {
       ...ctx,

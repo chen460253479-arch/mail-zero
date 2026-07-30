@@ -207,7 +207,7 @@ Router 7、React Query、Vitest。
 - Produces Better Auth API:
   `auth.api.consumeManagedLaunch({ body: { launchCode }, asResponse: true }): Promise<Response>`.
 
-- [ ] **Step 1: Write failing Grant tests**
+- [x] **Step 1: Write failing Grant tests**
 
   Cover exact input shape, unknown user, user without active mailbox, digest-only persistence,
   five-minute expiry and one-time consumption.
@@ -224,7 +224,7 @@ Router 7、React Query、Vitest。
   ).toThrow();
   ```
 
-- [ ] **Step 2: Run Grant tests and verify RED**
+- [x] **Step 2: Run Grant tests and verify RED**
 
   Run:
   `pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration/application/create-access-grant.test.ts tests/unit/modules/external-integration/application/consume-launch-code.test.ts`
@@ -232,28 +232,28 @@ Router 7、React Query、Vitest。
   Expected: FAIL because the implementation still resolves mailbox scopes and creates an external
   browser session.
 
-- [ ] **Step 3: Implement user-only Grant persistence**
+- [x] **Step 3: Implement user-only Grant persistence**
 
   `createAccessGrant` must resolve the `role = user` row by Username, verify at least one connected
   Connection with an active Mail Account, and store only `userId` plus the code digest.
   `consumeLaunchCode` must atomically set `consumedAt` and return only the target `userId`.
   Delete the `external_browser_session` Drizzle table and all Scope/session repository methods.
 
-- [ ] **Step 4: Write failing standard-session endpoint test**
+- [x] **Step 4: Write failing standard-session endpoint test**
 
   Test the Better Auth plugin handler with real endpoint behavior: it consumes the code, calls
   `internalAdapter.createSession(userId, ctx, false, { authMethod: 'launch' })`, sets the Better Auth
   signed Session Cookie, returns status 303 and redirects only to the configured `/mail/inbox`.
   Assert the response contains no `zero-external-session` cookie.
 
-- [ ] **Step 5: Run endpoint tests and verify RED**
+- [x] **Step 5: Run endpoint tests and verify RED**
 
   Run:
   `pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration/auth/managed-launch.test.ts tests/unit/modules/external-integration/http/launch.test.ts`
 
   Expected: FAIL because the managed Launch Better Auth plugin does not exist.
 
-- [ ] **Step 6: Implement Better Auth managed Launch plugin**
+- [x] **Step 6: Implement Better Auth managed Launch plugin**
 
   Configure:
 
@@ -288,7 +288,7 @@ Router 7、React Query、Vitest。
 
   The existing `/api/integrations/launch` form handler delegates to this typed Better Auth API.
 
-- [ ] **Step 7: Run Task 2 tests and commit**
+- [x] **Step 7: Run Task 2 tests and commit**
 
   Run:
   `pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration/application/create-access-grant.test.ts tests/unit/modules/external-integration/application/consume-launch-code.test.ts tests/unit/modules/external-integration/auth/managed-launch.test.ts tests/unit/modules/external-integration/http/launch.test.ts tests/integration/modules/external-integration/access-session.integration.test.ts`

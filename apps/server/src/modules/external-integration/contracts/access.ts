@@ -1,21 +1,12 @@
 import { z } from 'zod';
 
-const nangoConnectionIdSchema = z.string().trim().min(1).max(255);
+import { externalUserIdSchema } from './bind';
 
 export const accessGrantInputSchema = z
   .object({
-    allowedNangoConnectIds: z.array(nangoConnectionIdSchema).min(1).max(50),
+    externalUserId: externalUserIdSchema,
   })
-  .strict()
-  .superRefine(({ allowedNangoConnectIds }, context) => {
-    if (new Set(allowedNangoConnectIds).size !== allowedNangoConnectIds.length) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['allowedNangoConnectIds'],
-        message: 'Nango connection IDs must be unique',
-      });
-    }
-  });
+  .strict();
 
 export const accessGrantResponseSchema = z
   .object({
@@ -30,18 +21,3 @@ export const launchCodeInputSchema = z
   .strict();
 
 export type AccessGrantInput = z.infer<typeof accessGrantInputSchema>;
-
-export type GrantedMailboxScope = {
-  nangoConnectionId: string;
-  connectionId: string;
-  mailAccountId: string;
-};
-
-export type ExternalBrowserSession = {
-  id: string;
-  ownerUserId: 'zero-external-integration';
-  scopes: GrantedMailboxScope[];
-  activeConnectionId: string;
-  expiresAt: Date;
-  updatedAt: Date;
-};

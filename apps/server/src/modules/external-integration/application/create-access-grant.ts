@@ -1,31 +1,26 @@
 import { createHash } from 'node:crypto';
 
-import type { AccessGrantInput, GrantedMailboxScope } from '../contracts/access';
-import type { IntegrationPrincipal } from '../principal';
+import type { AccessGrantInput } from '../contracts/access';
 import { ExternalIntegrationError } from '../errors';
 
 export const EXTERNAL_LAUNCH_CODE_TTL_MS = 5 * 60_000;
 
 export type CreateExternalAccessGrantRecord = {
   id: string;
-  ownerUserId: IntegrationPrincipal['userId'];
+  userId: string;
   codeDigest: string;
-  scopes: GrantedMailboxScope[];
   createdAt: Date;
   expiresAt: Date;
   consumedAt: null;
 };
 
 export interface ExternalAccessGrantWriter {
-  resolveMailboxScopes(input: {
-    ownerUserId: IntegrationPrincipal['userId'];
-    nangoConnectionIds: string[];
-  }): Promise<GrantedMailboxScope[]>;
+  findManagedUser(externalUserId: string): Promise<{ userId: string; role: string } | null>;
+  hasActiveMailbox(userId: string): Promise<boolean>;
   createGrant(input: CreateExternalAccessGrantRecord): Promise<void>;
 }
 
 export type CreateAccessGrantDependencies = {
-  ownerUserId: IntegrationPrincipal['userId'];
   repository: ExternalAccessGrantWriter;
   clock: {
     now(): Date;
@@ -49,31 +44,20 @@ export const createAccessGrant = async (
   input: AccessGrantInput,
   dependencies: CreateAccessGrantDependencies,
 ): Promise<{ launchCode: string }> => {
-  const resolved = await dependencies.repository.resolveMailboxScopes({
-    ownerUserId: dependencies.ownerUserId,
-    nangoConnectionIds: input.allowedNangoConnectIds,
-  });
-  const byNangoId = new Map<string, GrantedMailboxScope[]>();
-  for (const scope of resolved) {
-    const matches = byNangoId.get(scope.nangoConnectionId) ?? [];
-    matches.push(scope);
-    byNangoId.set(scope.nangoConnectionId, matches);
+  const managedUser = await dependencies.repository.findManagedUser(input.externalUserId);
+  if (managedUser === null || managedUser.role !== 'user') {
+    throw new ExternalIntegrationError('EXTERNAL_USER_NOT_FOUND');
   }
-  const scopes = input.allowedNangoConnectIds.map((nangoConnectionId) => {
-    const matches = byNangoId.get(nangoConnectionId);
-    if (matches?.length !== 1) {
-      throw new ExternalIntegrationError('NANGO_CONNECTION_NOT_BOUND');
-    }
-    return matches[0]!;
-  });
+  if (!(await dependencies.repository.hasActiveMailbox(managedUser.userId))) {
+    throw new ExternalIntegrationError('ACTIVE_MAILBOX_NOT_FOUND');
+  }
 
   const launchCode = generateExternalSecret(dependencies.randomBytes);
   const createdAt = dependencies.clock.now();
   await dependencies.repository.createGrant({
     id: dependencies.nextId(),
-    ownerUserId: dependencies.ownerUserId,
+    userId: managedUser.userId,
     codeDigest: digestExternalSecret(launchCode),
-    scopes,
     createdAt,
     expiresAt: new Date(createdAt.getTime() + EXTERNAL_LAUNCH_CODE_TTL_MS),
     consumedAt: null,

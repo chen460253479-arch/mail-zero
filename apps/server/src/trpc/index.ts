@@ -1,4 +1,3 @@
-import { externalAccessRouter } from '../modules/external-integration/trpc/router';
 import { type inferRouterInputs, type inferRouterOutputs } from '@trpc/server';
 import { integrationsRouter } from './routes/integrations';
 import { connectionsRouter } from './routes/connections';
@@ -19,7 +18,6 @@ export const appRouter = router({
   bimi: bimiRouter,
   categories: categoriesRouter,
   connections: connectionsRouter,
-  externalAccess: externalAccessRouter,
   integrations: integrationsRouter,
   mail: mailApiRouter,
   notes: notesRouter,
@@ -40,7 +38,6 @@ export const serverTrpc = () => {
   return appRouter.createCaller({
     c,
     sessionUser: c.var.sessionUser,
-    externalSession: c.var.externalSession,
     auth: c.var.auth,
     services: c.var.services,
   });

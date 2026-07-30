@@ -24,15 +24,9 @@ export const createAccountRouter = (openRuntime: OpenMailSessionRuntime = openMa
         try {
           const access = ctx.mailAccess;
           const result = await createAccountService(runtime.core).list({
-            userId: access.kind === 'user' ? access.userId : access.ownerUserId,
+            userId: access.userId,
           });
-          if (access.kind === 'user') return result;
-          const allowedAccountIds = new Set(
-            access.scopes.map(({ mailAccountId }) => mailAccountId),
-          );
-          return {
-            accounts: result.accounts.filter(({ id }) => allowedAccountIds.has(id)),
-          };
+          return result;
         } catch (error) {
           throw toMailApiTrpcError(error);
         }

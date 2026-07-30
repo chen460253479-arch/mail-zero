@@ -1,10 +1,13 @@
-import { createAuthMiddleware, jwt, bearer } from 'better-auth/plugins';
+import { createAuthMiddleware, jwt, bearer, username } from 'better-auth/plugins';
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError } from 'better-auth/api';
 import { eq } from 'drizzle-orm';
 
+import { createPostgresExternalAccessRepository } from '../modules/external-integration/postgres/repository';
 import { createMailboxLifecycleForDatabase } from '../modules/mail-accounts/runtime/lifecycle-environment';
+import { consumeLaunchCode } from '../modules/external-integration/application/consume-launch-code';
+import { managedLaunch } from '../modules/external-integration/auth/managed-launch';
 import type { UserWorkspaceService } from '../modules/user-workspace/service';
 import type { MailInboundRuntimeResources } from '../runtime/mail/inbound';
 import { getBrowserTimezone, isValidTimezone } from './timezones';
@@ -40,6 +43,14 @@ const createAuthConfig = (dependencies: AuthRuntimeDependencies) =>
     baseURL: dependencies.config.publicBackendUrl,
     trustedOrigins: dependencies.config.betterAuthTrustedOrigins,
     session: {
+      additionalFields: {
+        authMethod: {
+          type: 'string',
+          required: false,
+          defaultValue: 'password',
+          input: false,
+        },
+      },
       cookieCache: {
         enabled: false,
       },
@@ -57,13 +68,35 @@ const createAuthConfig = (dependencies: AuthRuntimeDependencies) =>
 
 export const createAuth = (dependencies: AuthRuntimeDependencies) =>
   betterAuth({
-    plugins: [jwt(), bearer()],
+    plugins: [
+      username({
+        minUsernameLength: 3,
+        maxUsernameLength: 64,
+        usernameNormalization: false,
+      }),
+      managedLaunch({
+        consumeLaunchCode: async (input) =>
+          await consumeLaunchCode(input, {
+            repository: createPostgresExternalAccessRepository(dependencies.db),
+            clock: { now: () => new Date() },
+          }),
+        publicAppUrl: dependencies.config.publicAppUrl,
+      }),
+      jwt(),
+      bearer(),
+    ],
     user: {
       additionalFields: {
         role: {
           type: 'string',
           required: false,
-          defaultValue: 'admin',
+          defaultValue: 'user',
+          input: false,
+        },
+        mustChangePassword: {
+          type: 'boolean',
+          required: false,
+          defaultValue: false,
           input: false,
         },
       },

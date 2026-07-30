@@ -25,23 +25,12 @@ export function mailHttpErrorResponse(c: Context<HonoContext>, error: unknown): 
 
 export async function authorizeMailAccount(c: Context<HonoContext>, accountId: string) {
   const user = c.var.sessionUser;
-  const externalSession = c.var.externalSession;
-  if (user === undefined && externalSession === undefined) {
+  if (user === undefined) {
     return { response: c.json({ code: 'UNAUTHORIZED' }, 401) } as const;
-  }
-  if (
-    user === undefined &&
-    !externalSession!.scopes.some(({ mailAccountId }) => mailAccountId === accountId)
-  ) {
-    return { response: c.json({ code: 'NOT_FOUND' }, 404) } as const;
   }
   try {
     return {
-      runtime: await openOwnedMailApiRuntime(
-        user?.id ?? externalSession!.ownerUserId,
-        accountId as never,
-        c.var.services!,
-      ),
+      runtime: await openOwnedMailApiRuntime(user.id, accountId as never, c.var.services!),
     } as const;
   } catch (error) {
     return { response: mailHttpErrorResponse(c, error) } as const;

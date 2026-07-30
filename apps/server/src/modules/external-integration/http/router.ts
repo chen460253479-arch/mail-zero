@@ -23,10 +23,9 @@ import { ensureExternalIntegrationPrincipal, type IntegrationPrincipal } from '.
 import { createPostgresManagedUserRepository } from '../postgres/managed-user-repository';
 import { NangoBindingError } from '../../mail-accounts/application/bind-nango-mailbox';
 import { accessGrantInputSchema, type AccessGrantInput } from '../contracts/access';
-import { handleExternalLaunch, type ConsumeExternalLaunchCode } from './launch';
+import { handleExternalLaunch, type ConsumeManagedLaunch } from './launch';
 import { createMailCoreForEnvironment } from '../../../runtime/mail/core';
 import { createAccessGrant } from '../application/create-access-grant';
-import { consumeLaunchCode } from '../application/consume-launch-code';
 import type { RuntimeServices } from '../../../runtime/node/services';
 import { requireIntegrationServiceToken } from '../service-auth';
 import { externalBindInputSchema } from '../contracts/bind';
@@ -43,10 +42,9 @@ export type ExternalIntegrationRouterDependencies = {
   createMessageReader(ownerUserId: string, services: RuntimeServices): ExternalMessageReader;
   createAccessGrant(
     input: AccessGrantInput,
-    principal: IntegrationPrincipal,
     services: RuntimeServices,
   ): Promise<{ launchCode: string }>;
-  consumeLaunchCode: ConsumeExternalLaunchCode;
+  consumeManagedLaunch: ConsumeManagedLaunch;
 };
 
 const defaultDependencies: ExternalIntegrationRouterDependencies = {
@@ -70,20 +68,17 @@ const defaultDependencies: ExternalIntegrationRouterDependencies = {
         cursorSigningKey: services.config.betterAuthSecret,
       }),
     }),
-  createAccessGrant: async (input, principal, services) =>
+  createAccessGrant: async (input, services) =>
     await createAccessGrant(input, {
-      ownerUserId: principal.userId,
       repository: createPostgresExternalAccessRepository(services.database.db),
       clock: { now: () => new Date() },
       nextId: () => ulid(),
       randomBytes,
     }),
-  consumeLaunchCode: async (input, services) =>
-    await consumeLaunchCode(input, {
-      repository: createPostgresExternalAccessRepository(services.database.db),
-      clock: { now: () => new Date() },
-      nextId: () => ulid(),
-      randomBytes,
+  consumeManagedLaunch: async (input, services) =>
+    await services.auth.api.consumeManagedLaunch({
+      body: input,
+      asResponse: true,
     }),
 };
 
@@ -157,24 +152,30 @@ export const createExternalIntegrationRouter = (
   });
 
   app.post('/access-grants', async (context) => {
-    const authorization = await authorize(context.req.header('Authorization'));
-    if (authorization instanceof Response) return authorization;
+    try {
+      requireIntegrationServiceToken(
+        services.config.externalIntegration.apiToken,
+        context.req.header('Authorization'),
+      );
+    } catch {
+      return context.json({ error: 'INTEGRATION_UNAUTHORIZED' }, 401);
+    }
     const body = await context.req.json().catch(() => null);
     const parsed = accessGrantInputSchema.safeParse(body);
     if (!parsed.success) {
       return context.json({ error: 'INVALID_REQUEST' }, 400);
     }
     try {
-      return context.json(
-        await dependencies.createAccessGrant(parsed.data, authorization, services),
-        201,
-      );
+      return context.json(await dependencies.createAccessGrant(parsed.data, services), 201);
     } catch (error) {
       if (
         error instanceof ExternalIntegrationError &&
-        error.code === 'NANGO_CONNECTION_NOT_BOUND'
+        (error.code === 'EXTERNAL_USER_NOT_FOUND' || error.code === 'ACTIVE_MAILBOX_NOT_FOUND')
       ) {
-        return context.json({ error: error.code }, 412);
+        return context.json(
+          { error: error.code },
+          error.code === 'EXTERNAL_USER_NOT_FOUND' ? 404 : 412,
+        );
       }
       throw error;
     }
@@ -183,7 +184,7 @@ export const createExternalIntegrationRouter = (
   app.post(
     '/launch',
     async (context) =>
-      await handleExternalLaunch(context, services, dependencies.consumeLaunchCode),
+      await handleExternalLaunch(context, services, dependencies.consumeManagedLaunch),
   );
 
   registerExternalMailRoutes(app, {

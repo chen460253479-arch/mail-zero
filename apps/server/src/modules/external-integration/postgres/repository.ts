@@ -15,35 +15,11 @@ import {
   email,
   emailPart,
   mailAccount,
+  user,
 } from '../../../db/schema';
-import type { ExternalScopedConnectionRepository } from '../application/list-scoped-connections';
 import type { ExternalLaunchCodeConsumer } from '../application/consume-launch-code';
-import { externalAccessGrant, externalBrowserSession } from './schema';
-import { EXTERNAL_INTEGRATION_PRINCIPAL_USER_ID } from '../principal';
-import type { ExternalSessionRepository } from '../session/resolve';
-import type { ExternalBrowserSession } from '../contracts/access';
-import type { GrantedMailboxScope } from '../contracts/access';
+import { externalAccessGrant } from './schema';
 import type { DB } from '../../../db';
-
-const toExternalBrowserSession = (row: {
-  id: string;
-  ownerUserId: string;
-  scopes: GrantedMailboxScope[];
-  activeConnectionId: string;
-  expiresAt: Date;
-  updatedAt: Date;
-}): ExternalBrowserSession => {
-  if (row.ownerUserId !== EXTERNAL_INTEGRATION_PRINCIPAL_USER_ID) {
-    throw new Error('EXTERNAL_SESSION_INVALID_OWNER');
-  }
-  if (!row.scopes.some(({ connectionId }) => connectionId === row.activeConnectionId)) {
-    throw new Error('EXTERNAL_SESSION_ACTIVE_SCOPE_MISMATCH');
-  }
-  return {
-    ...row,
-    ownerUserId: EXTERNAL_INTEGRATION_PRINCIPAL_USER_ID,
-  };
-};
 
 export const createPostgresExternalMessageRepository = (db: DB): ExternalMessageRepository => ({
   findMessageScope: async ({ messageId, ownerUserId }) => {
@@ -125,44 +101,33 @@ export const createPostgresExternalMessageRepository = (db: DB): ExternalMessage
 
 export const createPostgresExternalAccessRepository = (
   db: DB,
-): ExternalAccessGrantWriter &
-  ExternalLaunchCodeConsumer &
-  ExternalSessionRepository &
-  ExternalScopedConnectionRepository => ({
-  resolveMailboxScopes: async ({ ownerUserId, nangoConnectionIds }) => {
-    const rows = await db
-      .select({
-        nangoConnectionId: authorizationBinding.nangoConnectionId,
-        connectionId: connection.id,
-        mailAccountId: mailAccount.id,
-      })
-      .from(authorizationBinding)
-      .innerJoin(connection, eq(connection.id, authorizationBinding.connectionId))
+): ExternalAccessGrantWriter & ExternalLaunchCodeConsumer => ({
+  findManagedUser: async (externalUserId) => {
+    const [record] = await db
+      .select({ userId: user.id, role: user.role })
+      .from(user)
+      .where(eq(user.username, externalUserId))
+      .limit(1);
+    return record ?? null;
+  },
+
+  hasActiveMailbox: async (userId) => {
+    const [record] = await db
+      .select({ id: mailAccount.id })
+      .from(connection)
       .innerJoin(
         mailAccount,
         and(eq(mailAccount.connectionId, connection.id), eq(mailAccount.userId, connection.userId)),
       )
       .where(
         and(
-          eq(connection.userId, ownerUserId),
-          eq(authorizationBinding.authSource, 'nango'),
-          isNotNull(authorizationBinding.nangoConnectionId),
-          inArray(authorizationBinding.nangoConnectionId, nangoConnectionIds),
+          eq(connection.userId, userId),
           eq(connection.status, 'connected'),
           eq(mailAccount.status, 'active'),
         ),
-      );
-    return rows.flatMap((row): GrantedMailboxScope[] =>
-      row.nangoConnectionId === null
-        ? []
-        : [
-            {
-              nangoConnectionId: row.nangoConnectionId,
-              connectionId: row.connectionId,
-              mailAccountId: row.mailAccountId,
-            },
-          ],
-    );
+      )
+      .limit(1);
+    return record !== undefined;
   },
 
   createGrant: async (input: CreateExternalAccessGrantRecord) => {
@@ -181,106 +146,7 @@ export const createPostgresExternalAccessRepository = (
             gt(externalAccessGrant.expiresAt, input.now),
           ),
         )
-        .returning({
-          ownerUserId: externalAccessGrant.ownerUserId,
-          scopes: externalAccessGrant.scopes,
-        });
-      const activeConnectionId = grant?.scopes[0]?.connectionId;
-      if (grant === undefined) return null;
-      if (activeConnectionId === undefined) {
-        throw new Error('EXTERNAL_ACCESS_GRANT_EMPTY_SCOPE');
-      }
-      if (grant.ownerUserId !== EXTERNAL_INTEGRATION_PRINCIPAL_USER_ID) {
-        throw new Error('EXTERNAL_ACCESS_GRANT_INVALID_OWNER');
-      }
-      const [session] = await transaction
-        .insert(externalBrowserSession)
-        .values({
-          ...input.session,
-          ownerUserId: grant.ownerUserId,
-          scopes: grant.scopes,
-          activeConnectionId,
-        })
-        .returning();
-      if (session === undefined) {
-        throw new Error('EXTERNAL_SESSION_CREATE_FAILED');
-      }
-      return toExternalBrowserSession({
-        id: session.id,
-        ownerUserId: session.ownerUserId,
-        scopes: session.scopes,
-        activeConnectionId: session.activeConnectionId,
-        expiresAt: session.expiresAt,
-        updatedAt: session.updatedAt,
-      });
+        .returning({ userId: externalAccessGrant.userId });
+      return grant ?? null;
     }),
-
-  findSessionByDigest: async (input) => {
-    const [session] = await db
-      .select()
-      .from(externalBrowserSession)
-      .where(
-        and(
-          eq(externalBrowserSession.tokenDigest, input.tokenDigest),
-          gt(externalBrowserSession.expiresAt, input.now),
-        ),
-      )
-      .limit(1);
-    return session === undefined ? null : toExternalBrowserSession(session);
-  },
-
-  renewSession: async (input) => {
-    const [session] = await db
-      .update(externalBrowserSession)
-      .set({
-        updatedAt: input.now,
-        expiresAt: input.expiresAt,
-      })
-      .where(
-        and(
-          eq(externalBrowserSession.id, input.id),
-          gt(externalBrowserSession.expiresAt, input.now),
-        ),
-      )
-      .returning();
-    return session === undefined ? null : toExternalBrowserSession(session);
-  },
-
-  list: async (ownerUserId) => {
-    const rows = await db
-      .select({
-        connection,
-        authorization: authorizationBinding,
-      })
-      .from(connection)
-      .leftJoin(authorizationBinding, eq(authorizationBinding.connectionId, connection.id))
-      .where(eq(connection.userId, ownerUserId));
-    return rows.map(({ connection: record, authorization }) => ({
-      id: record.id,
-      email: record.email,
-      name: record.name,
-      picture: record.picture,
-      createdAt: record.createdAt,
-      channelId: record.channelId,
-      status: record.status,
-      authSource: authorization?.authSource ?? null,
-    }));
-  },
-
-  setActiveConnection: async (input) => {
-    const [session] = await db
-      .update(externalBrowserSession)
-      .set({
-        activeConnectionId: input.connectionId,
-      })
-      .where(
-        and(
-          eq(externalBrowserSession.id, input.sessionId),
-          eq(externalBrowserSession.ownerUserId, EXTERNAL_INTEGRATION_PRINCIPAL_USER_ID),
-          gt(externalBrowserSession.expiresAt, input.now),
-        ),
-      )
-      .returning();
-    return session === undefined ? null : toExternalBrowserSession(session);
-  },
 });

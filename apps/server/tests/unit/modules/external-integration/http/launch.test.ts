@@ -3,29 +3,21 @@ import { describe, expect, it, vi } from 'vitest';
 import { createExternalIntegrationRouter } from '../../../../../src/modules/external-integration/http/router';
 import type { RuntimeServices } from '../../../../../src/runtime/node/services';
 
-const createRouter = (nodeEnv: 'local' | 'production' = 'local') => {
-  const consumeLaunchCode = vi.fn(async () => ({
-    sessionToken: 'browser-session-token',
-    session: {
-      id: 'external-session-1',
-      ownerUserId: 'zero-external-integration' as const,
-      scopes: [
-        {
-          nangoConnectionId: 'connect-gmail-1',
-          connectionId: 'connection-gmail-1',
-          mailAccountId: 'account-gmail-1',
+const createRouter = () => {
+  const consumeManagedLaunch = vi.fn(
+    async () =>
+      new Response(null, {
+        status: 303,
+        headers: {
+          location: 'https://mail.zero.example.test/mail/inbox',
+          'set-cookie':
+            'better-auth.session_token=standard-session-token.signed; HttpOnly; Path=/; SameSite=Lax',
         },
-      ],
-      activeConnectionId: 'connection-gmail-1',
-      updatedAt: new Date('2026-07-29T10:00:00.000Z'),
-      expiresAt: new Date('2026-08-28T10:00:00.000Z'),
-    },
-  }));
+      }),
+  );
   const services = {
     config: {
-      nodeEnv,
       publicAppUrl: 'https://mail.zero.example.test',
-      cookieDomain: 'zero.example.test',
       externalIntegration: {
         apiToken: 'fixed-token',
         webhook: { enabled: false },
@@ -34,9 +26,9 @@ const createRouter = (nodeEnv: 'local' | 'production' = 'local') => {
     database: { db: {} },
   } as RuntimeServices;
   return {
-    consumeLaunchCode,
+    consumeManagedLaunch,
     app: createExternalIntegrationRouter(services, {
-      consumeLaunchCode,
+      consumeManagedLaunch,
     }),
   };
 };
@@ -54,36 +46,25 @@ const launch = async (
   });
 
 describe('external launch HTTP endpoint', () => {
-  it('sets an HttpOnly session cookie and redirects to the mail homepage', async () => {
-    const { app, consumeLaunchCode } = createRouter();
+  it('delegates to Better Auth and returns its standard Session response', async () => {
+    const { app, consumeManagedLaunch } = createRouter();
 
     const response = await launch(app, new URLSearchParams({ launchCode: 'one-time-code' }));
 
     expect(response.status).toBe(303);
     expect(response.headers.get('location')).toBe('https://mail.zero.example.test/mail/inbox');
     const cookie = response.headers.get('set-cookie');
-    expect(cookie).toContain('zero-external-session=browser-session-token');
-    expect(cookie).toContain('HttpOnly');
-    expect(cookie).toContain('Path=/');
-    expect(cookie).toContain('SameSite=Lax');
-    expect(cookie).toContain('Domain=zero.example.test');
+    expect(cookie).toContain('better-auth.session_token=standard-session-token.signed');
+    expect(cookie).not.toContain('zero-external-session');
     expect(cookie).not.toContain('one-time-code');
-    expect(consumeLaunchCode).toHaveBeenCalledWith(
+    expect(consumeManagedLaunch).toHaveBeenCalledWith(
       { launchCode: 'one-time-code' },
       expect.anything(),
     );
   });
 
-  it('uses Secure cookies outside local development', async () => {
-    const { app } = createRouter('production');
-
-    const response = await launch(app, new URLSearchParams({ launchCode: 'one-time-code' }));
-
-    expect(response.headers.get('set-cookie')).toContain('Secure');
-  });
-
-  it('rejects returnUrl and does not redirect to caller-controlled URLs', async () => {
-    const { app, consumeLaunchCode } = createRouter();
+  it('rejects returnUrl before calling Better Auth', async () => {
+    const { app, consumeManagedLaunch } = createRouter();
 
     const response = await launch(
       app,
@@ -94,6 +75,6 @@ describe('external launch HTTP endpoint', () => {
     );
 
     expect(response.status).toBe(400);
-    expect(consumeLaunchCode).not.toHaveBeenCalled();
+    expect(consumeManagedLaunch).not.toHaveBeenCalled();
   });
 });
