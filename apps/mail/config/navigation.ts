@@ -49,7 +49,7 @@ export const navigationConfig: Record<string, NavConfig> = {
     path: '/mail',
     sections: [
       {
-        title: 'Core',
+        title: m['navigation.sections.core'](),
         items: [
           {
             id: 'inbox',
@@ -75,7 +75,7 @@ export const navigationConfig: Record<string, NavConfig> = {
         ],
       },
       {
-        title: 'Management',
+        title: m['navigation.sections.management'](),
         items: [
           {
             id: 'archive',
@@ -140,7 +140,7 @@ export const navigationConfig: Record<string, NavConfig> = {
     path: '/settings',
     sections: [
       {
-        title: 'Settings',
+        title: m['navigation.sections.settings'](),
         items: [
           {
             title: m['common.actions.back'](),
@@ -161,7 +161,7 @@ export const navigationConfig: Record<string, NavConfig> = {
             icon: Users,
           },
           {
-            title: 'Integrations',
+            title: m['navigation.settings.integrations'](),
             url: '/settings/integrations',
             icon: PlugZap,
             adminOnly: true,

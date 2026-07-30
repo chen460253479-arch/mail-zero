@@ -33,11 +33,12 @@ import { useTheme } from 'next-themes';
 import { motion } from 'motion/react';
 import { useEffect } from 'react';
 import Footer from './footer';
+import { m } from '@/paraglide/messages';
 
 const tabs = [
-  { label: 'Local Inbox', value: 'local-inbox' },
-  { label: 'Folders and Labels', value: 'organization' },
-  { label: 'Compose and Reply', value: 'delivery' },
+  { label: m['pages.home.tabs.localInbox'](), value: 'local-inbox' },
+  { label: m['pages.home.tabs.organization'](), value: 'organization' },
+  { label: m['pages.home.tabs.delivery'](), value: 'delivery' },
 ];
 
 export default function HomeContent() {
@@ -69,7 +70,7 @@ export default function HomeContent() {
           className="text-center text-4xl font-medium md:text-6xl"
         >
           <Balancer className="mb-3 max-w-[1130px]">
-            Your Email, Stored and Organized Locally
+            {m['pages.home.heroTitle']()}
           </Balancer>
         </motion.h1>
         <motion.p
@@ -78,9 +79,11 @@ export default function HomeContent() {
           transition={{ duration: 0.5, delay: 0.4 }}
           className="mx-auto mb-4 max-w-2xl text-center text-base font-medium text-[#B7B7B7] md:text-lg"
         >
-          Zero synchronizes provider mail into a local mailbox you control.
+          {m['pages.home.heroDescription']()}
         </motion.p>
-        <p className="mb-4 ml-0.5 text-xs text-[#B7B7B7]/60">No credit card required.</p>
+        <p className="mb-4 ml-0.5 text-xs text-[#B7B7B7]/60">
+          {m['pages.home.noCreditCard']()}
+        </p>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -88,17 +91,17 @@ export default function HomeContent() {
           className="border-input/50 mb-6 inline-flex items-center gap-4 rounded-full border border-[#2A2A2A] bg-[#1E1E1E] px-4 py-1"
         >
           <Link to="https://yc.vc" target="_blank" className="flex items-center gap-2 text-sm">
-            Backed by
+            {m['pages.home.backedBy']()}
             <span>
               <img
                 src="/yc-small.svg"
-                alt="Y Combinator"
+                alt={m['pages.home.yCombinator']()}
                 className="rounded-[2px]"
                 width={18}
                 height={18}
               />
             </span>
-            Combinator
+            {m['pages.home.combinator']()}
           </Link>
         </motion.div>
 
@@ -118,7 +121,7 @@ export default function HomeContent() {
               }
             }}
           >
-            Get Started
+            {m['pages.home.getStarted']()}
           </Button>
         </motion.div>
       </section>
@@ -146,7 +149,7 @@ export default function HomeContent() {
                 <TabsContent key={tab.value} value={tab.value}>
                   <img
                     src="/email-preview.png"
-                    alt="Zero Email Preview"
+                    alt={m['pages.home.emailPreview']()}
                     width={1920}
                     height={1080}
                     className="relative hidden md:block"
@@ -162,7 +165,7 @@ export default function HomeContent() {
       <div className="flex items-center justify-center px-4 md:hidden">
         <img
           src="/email-preview.png"
-          alt="Zero Email Preview"
+          alt={m['pages.home.emailPreview']()}
           width={1920}
           height={1080}
           className="mt-10 h-fit w-full rounded-xl border"
@@ -180,7 +183,7 @@ export default function HomeContent() {
           className="flex items-center justify-center"
         >
           <h1 className="text-lg font-light text-white/40 md:text-xl">
-            Designed for power users who value time
+            {m['pages.home.powerUsers']()}
           </h1>
         </motion.div>
         <motion.div
@@ -190,10 +193,10 @@ export default function HomeContent() {
           className="mt-2 flex flex-col items-center justify-center md:mt-8"
         >
           <h1 className="text-center text-4xl font-medium text-white md:text-6xl">
-            Speed Is Everything
+            {m['pages.home.speedTitle']()}
           </h1>
           <h1 className="mb-3 text-center text-4xl font-medium text-white/40 md:text-6xl">
-            Reply in seconds
+            {m['pages.home.speedSubtitle']()}
           </h1>
         </motion.div>
         <motion.div
@@ -204,7 +207,9 @@ export default function HomeContent() {
         >
           <div className="bg-panelDark mx-auto mt-10 inline-flex max-w-[600px] flex-col items-center justify-center overflow-hidden rounded-2xl shadow-md">
             <div className="inline-flex h-12 items-center justify-start gap-2 self-stretch border-b-[0.50px] p-4">
-              <div className="text-base-gray-500/50 justify-start text-sm leading-none">To:</div>
+              <div className="text-base-gray-500/50 justify-start text-sm leading-none">
+                {m['pages.home.to']()}
+              </div>
               <div className="flex flex-1 items-center justify-start gap-1">
                 <div className="outline-tokens-badge-default/10 flex items-center justify-start gap-1.5 rounded-full border border-[#2B2B2B] py-1 pl-1 pr-1.5">
                   <img
@@ -212,12 +217,12 @@ export default function HomeContent() {
                     width={20}
                     className="h-5 w-5 rounded-full"
                     src="/adam.jpg"
-                    alt="Adam"
+                    alt={m['pages.home.adam']()}
                   />
                   <div className="flex items-center justify-start">
                     <div className="flex items-center justify-center gap-2.5 pr-0.5">
                       <div className="text-base-gray-950 justify-start text-sm leading-none">
-                        Adam
+                        {m['pages.home.adam']()}
                       </div>
                     </div>
                   </div>
@@ -228,12 +233,12 @@ export default function HomeContent() {
                     width={20}
                     className="h-5 w-5 rounded-full"
                     src="/ryan.jpg"
-                    alt="Ryan"
+                    alt={m['pages.home.ryan']()}
                   />{' '}
                   <div className="flex items-center justify-start">
                     <div className="flex items-center justify-center gap-2.5 pr-0.5">
                       <div className="text-base-gray-950 justify-start text-sm leading-none">
-                        Ryan
+                        {m['pages.home.ryan']()}
                       </div>
                     </div>
                   </div>
@@ -245,7 +250,7 @@ export default function HomeContent() {
               <div className="inline-flex flex-1 flex-col items-start justify-start gap-3">
                 <div className="inline-flex items-center justify-start gap-1 self-stretch">
                   <div className="text-base-gray-950 flex-1 justify-start text-sm font-normal leading-none">
-                    Re: Code review feedback
+                    {m['pages.home.codeReviewSubject']()}
                   </div>
                 </div>
               </div>
@@ -253,16 +258,13 @@ export default function HomeContent() {
             <div className="flex flex-col items-start justify-start gap-12 self-stretch rounded-2xl bg-[#202020] px-4 py-3">
               <div className="flex flex-col items-start justify-start gap-3 self-stretch">
                 <div className="justify-start self-stretch text-sm font-normal leading-normal text-white">
-                  Hey team,
+                  {m['pages.home.greeting']()}
                 </div>
                 <div className="justify-start self-stretch text-sm font-normal leading-normal text-white">
-                  I took a look at the code review feedback. Really like the keyboard navigation -
-                  it makes everything much faster to access. The search implementation is clean,
-                  though I&apos;d love to see the link to test it out myself.
+                  {m['pages.home.codeReviewBody']()}
                 </div>
                 <div className="justify-start self-stretch text-sm font-normal leading-normal text-white">
-                  Let me know when you can share the preview and I&apos;ll provide more detailed
-                  feedback.
+                  {m['pages.home.codeReviewFollowUp']()}
                 </div>
               </div>
               <div className="inline-flex items-center justify-between self-stretch">
@@ -271,7 +273,8 @@ export default function HomeContent() {
                     <div className="flex h-7 items-center justify-center gap-1.5 overflow-hidden rounded-bl-md rounded-tl-md bg-white pl-1.5 pr-1">
                       <div className="flex items-center justify-center gap-2.5 pl-0.5">
                         <div className="justify-start text-center text-sm leading-none text-black">
-                          Send <span className="hidden md:inline">now</span>
+                          {m['pages.home.send']()}{' '}
+                          <span className="hidden md:inline">{m['pages.home.now']()}</span>
                         </div>
                       </div>
                       <div className="flex h-5 items-center justify-center gap-2.5 rounded bg-[#E7E7E7] px-1 outline outline-1 -outline-offset-1 outline-[#D2D2D2]">
@@ -291,7 +294,8 @@ export default function HomeContent() {
                     <Plus className="relative h-2.5 w-2.5 overflow-hidden fill-[#9A9A9A]" />
                     <div className="flex items-center justify-center gap-2.5 px-0.5">
                       <div className="text-base-gray-950 justify-start text-sm leading-none">
-                        Add <span className="hidden md:inline">files</span>
+                        {m['pages.home.add']()}{' '}
+                        <span className="hidden md:inline">{m['pages.home.files']()}</span>
                       </div>
                     </div>
                   </div>
@@ -302,7 +306,7 @@ export default function HomeContent() {
 
                     <div className="flex items-center justify-center gap-2.5 px-0.5">
                       <div className="text-base-gray-950 justify-start text-sm leading-none">
-                        Neutral
+                        {m['pages.home.neutral']()}
                       </div>
                     </div>
                   </div>
@@ -311,7 +315,7 @@ export default function HomeContent() {
 
                     <div className="flex items-center justify-center gap-2.5 px-0.5">
                       <div className="text-base-gray-950 justify-start text-sm leading-none">
-                        Medium-length
+                        {m['pages.home.mediumLength']()}
                       </div>
                     </div>
                   </div>
@@ -332,7 +336,9 @@ export default function HomeContent() {
                     </div>
                   </div>
                 </div>
-                <div className="justify-start text-sm leading-none text-[#8C8C8C]">to navigate</div>
+                <div className="justify-start text-sm leading-none text-[#8C8C8C]">
+                  {m['pages.home.toNavigate']()}
+                </div>
               </div>
               <div className="flex h-12 flex-1 items-center justify-center gap-2">
                 <div className="flex h-5 items-center justify-center gap-2.5 rounded-[5px] bg-[#2B2B2B] px-1">
@@ -341,7 +347,7 @@ export default function HomeContent() {
                   </div>
                 </div>
                 <div className="justify-start text-sm leading-none text-[#8C8C8C]">
-                  return generation
+                  {m['pages.home.returnGeneration']()}
                 </div>
               </div>
             </div>
@@ -364,12 +370,16 @@ export default function HomeContent() {
                   <div className="flex flex-1 items-center justify-start gap-2">
                     <div className="flex flex-1 items-center justify-start gap-1.5">
                       <PanelLeftOpen className="h-3 w-3 fill-[#8C8C8C]" />
-                      <div className="ml-1 justify-start text-xs leading-3 text-white">Inbox</div>
+                      <div className="ml-1 justify-start text-xs leading-3 text-white">
+                        {m['pages.home.inbox']()}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center justify-start gap-1">
                     <Check className="h-2.5 w-2.5 fill-[#8C8C8C]" />
-                    <div className="justify-start text-xs leading-3 text-[#8C8C8C]">Select</div>
+                    <div className="justify-start text-xs leading-3 text-[#8C8C8C]">
+                      {m['pages.home.select']()}
+                    </div>
                   </div>
                   <div className="relative h-2.5 w-[0.76px] rounded-full bg-[#252525]" />
                   <div className="flex items-center justify-start gap-2">
@@ -380,7 +390,7 @@ export default function HomeContent() {
                   <div className="inline-flex h-7 items-center justify-start gap-1 self-stretch overflow-hidden rounded bg-[#141414] pl-1.5 pr-[3.04px]">
                     <Search className="relative mr-1 h-3 w-3 overflow-hidden rounded-[1.14px] fill-[#8C8C8C]" />
                     <div className="flex-1 justify-start text-xs leading-3 text-[#929292]">
-                      Search
+                      {m['pages.home.search']()}
                     </div>
                     <div className="flex h-5 items-center justify-center gap-2 rounded-sm bg-[#262626] px-1">
                       <div className="justify-start text-xs leading-3 text-[#929292]">⌘K</div>
@@ -396,7 +406,9 @@ export default function HomeContent() {
                     <div className="flex h-6 flex-1 items-center justify-center gap-[3.04px] overflow-hidden rounded bg-[#39AE4A] px-2.5">
                       <User className="relative h-3 w-3 overflow-hidden fill-white" />
                       <div className="flex items-center justify-center gap-2 px-[1.52px]">
-                        <div className="justify-start text-xs leading-3 text-white">Personal</div>
+                        <div className="justify-start text-xs leading-3 text-white">
+                          {m['pages.home.personal']()}
+                        </div>
                       </div>
                     </div>
                     <div className="flex h-6 w-6 items-center justify-center gap-[3.04px] overflow-hidden rounded bg-[#313131]">
@@ -408,25 +420,26 @@ export default function HomeContent() {
                   </div>
                   <div className="relative flex flex-col items-start justify-center gap-2.5 self-stretch overflow-hidden rounded-md bg-[#12341D] px-2 py-2.5">
                     <div className="justify-start self-stretch text-xs leading-3 text-[#A3E1B3]">
-                      Security, Deadlines, and Urgent Updates
+                      {m['pages.home.urgentTitle']()}
                     </div>
                     <div className="justify-start self-stretch text-xs font-normal leading-none text-[#F4FBF6]">
-                      Time-sensitive notifications, security alerts, <br />
-                      and critical project updates.
+                      {m['pages.home.urgentDescription']()}
                     </div>
                     <div className="absolute left-[239.80px] top-[6.07px] h-3 w-3 overflow-hidden opacity-50" />
                   </div>
                 </div>
                 <div className="inline-flex items-center justify-start gap-1 self-stretch px-4 pb-3 pt-5">
                   <div className="flex flex-1 items-center justify-start gap-1">
-                    <div className="justify-start text-xs leading-3 text-[#8C8C8C]">Pinned</div>
+                    <div className="justify-start text-xs leading-3 text-[#8C8C8C]">
+                      {m['pages.home.pinned']()}
+                    </div>
                     <div className="justify-start text-xs leading-3 text-[#8C8C8C]">[3]</div>
                   </div>
                 </div>
                 <div className="flex flex-col items-start justify-start gap-1.5 self-stretch px-1.5">
                   <div className="inline-flex items-center justify-start gap-2.5 self-stretch rounded-md p-2.5">
                     <img
-                      alt="Nizzy"
+                      alt={m['pages.home.nizzy']()}
                       height={250}
                       width={250}
                       className="h-6 w-6 rounded-full object-cover"
@@ -437,18 +450,20 @@ export default function HomeContent() {
                         <div className="flex flex-1 items-center justify-start gap-2.5">
                           <div className="flex items-center justify-start gap-[3.04px]">
                             <div className="text-base-gray-950 justify-start text-xs leading-3">
-                              Nizzy
+                              {m['pages.home.nizzy']()}
                             </div>
                             <div className="justify-start text-center text-xs leading-3 text-[#8C8C8C]">
                               [9]
                             </div>
                           </div>
                         </div>
-                        <div className="text-xs font-normal leading-3 text-[#8C8C8C]">Mar 29</div>
+                        <div className="text-xs font-normal leading-3 text-[#8C8C8C]">
+                          {m['pages.home.mar29']()}
+                        </div>
                       </div>
                       <div className="inline-flex items-center justify-start gap-2 self-stretch">
                         <div className="text-xs font-normal leading-3 text-[#8C8C8C]">
-                          New design review
+                          {m['pages.home.newDesignReview']()}
                         </div>
                         <div className="flex items-start justify-start gap-[3.04px]">
                           <div className="relative h-3.5 w-3.5 overflow-hidden" />
@@ -465,18 +480,20 @@ export default function HomeContent() {
                         <div className="flex flex-1 items-center justify-start gap-2.5">
                           <div className="flex items-center justify-start gap-1">
                             <div className="text-base-gray-950 justify-start text-xs leading-3">
-                              Alex, Ali, Sarah
+                              {m['pages.home.participants']()}
                             </div>
                             <div className="justify-start text-center text-xs leading-3 text-[#8C8C8C]">
                               [6]
                             </div>
                           </div>
                         </div>
-                        <div className="text-xs font-normal leading-3 text-[#8C8C8C]">Mar 28</div>
+                        <div className="text-xs font-normal leading-3 text-[#8C8C8C]">
+                          {m['pages.home.mar28']()}
+                        </div>
                       </div>
                       <div className="inline-flex items-center justify-start gap-2 self-stretch">
                         <div className="text-xs font-normal leading-3 text-[#8C8C8C]">
-                          Re: Design review feedback
+                          {m['pages.home.designReviewSubject']()}
                         </div>
                         <div className="flex items-start justify-start gap-[3.04px]">
                           <div className="relative h-3.5 w-3.5 overflow-hidden" />
@@ -490,11 +507,10 @@ export default function HomeContent() {
             </div>
             <div className="mt-4 gap-4">
               <h1 className="mb-2 text-xl font-medium leading-loose text-white">
-                Lightning-Fast Interface
+                {m['pages.home.interfaceTitle']()}
               </h1>
               <p className="max-w-sm text-sm font-light text-[#979797]">
-                Email at the speed of thought. Navigate your entire inbox using just your keyboard.
-                Process hundreds of emails in minutes.
+                {m['pages.home.interfaceDescription']()}
               </p>
             </div>
           </motion.div>
@@ -527,7 +543,7 @@ export default function HomeContent() {
                         <div className="relative h-3 w-3" />
                         <div className="flex items-center justify-center gap-2 pl-[0.71px] pr-[1.42px]">
                           <div className="text-base-gray-950 justify-start text-[9.92px] leading-[9.92px]">
-                            Reply all
+                            {m['pages.home.replyAll']()}
                           </div>
                         </div>
                       </div>
@@ -550,7 +566,7 @@ export default function HomeContent() {
                       <div className="flex flex-col items-start justify-start gap-2.5 self-stretch">
                         <div className="inline-flex items-start justify-start gap-[2.83px] self-stretch">
                           <div className="text-base-gray-950 justify-start text-xs leading-3">
-                            Re: Design review feedback
+                            {m['pages.home.designReviewSubject']()}
                           </div>
                           <div className="text-base-gray-500/50 justify-start text-center text-xs leading-3">
                             [6]
@@ -559,7 +575,7 @@ export default function HomeContent() {
                         <div className="inline-flex items-start justify-start gap-1 self-stretch">
                           <Calendar className="relative bottom-px h-2.5 w-2.5 overflow-hidden fill-[#8C8C8C]" />
                           <div className="text-base-gray-500/50 flex-1 justify-start text-[9.92px] font-normal leading-[9.92px]">
-                            March 25 - March 29
+                            {m['pages.home.dateRange']()}
                           </div>
                         </div>
                       </div>
@@ -582,7 +598,7 @@ export default function HomeContent() {
                               A
                             </span>
                             <div className="text-base-gray-950 justify-start text-[9.92px] leading-[9.92px]">
-                              Ali
+                              {m['pages.home.ali']()}
                             </div>
                           </div>
                           <div className="outline-tokens-badge-default/10 flex items-center justify-start gap-1 overflow-hidden rounded-full py-[2.83px] pl-[2.83px] pr-2 outline outline-[0.35px] outline-offset-[-0.35px]">
@@ -590,7 +606,7 @@ export default function HomeContent() {
                               N
                             </span>
                             <div className="text-base-gray-950 justify-start text-[9.92px] leading-[9.92px]">
-                              Nick
+                              {m['pages.home.nick']()}
                             </div>
                           </div>
                           <div className="outline-tokens-badge-default/10 flex items-center justify-start gap-1 overflow-hidden rounded-full py-[2.83px] pl-[2.83px] pr-2 outline outline-[0.35px] outline-offset-[-0.35px]">
@@ -598,7 +614,7 @@ export default function HomeContent() {
                               S
                             </span>
                             <div className="text-base-gray-950 justify-start text-[9.92px] leading-[9.92px]">
-                              Sarah
+                              {m['pages.home.sarah']()}
                             </div>
                           </div>
                         </div>
@@ -607,19 +623,17 @@ export default function HomeContent() {
                     <div className="bg-tokens-surface-on-secondary/5 outline-base-secondary-500 flex flex-col items-start justify-start gap-3.5 self-stretch rounded-lg p-3 outline outline-[0.35px] outline-offset-[-0.35px]">
                       <div className="inline-flex items-center justify-start gap-1">
                         <div className="justify-start text-[9.92px] leading-[9.92px] text-[#948CA4]">
-                          Thread note
+                          {m['pages.home.threadNote']()}
                         </div>
                       </div>
                       <div className="text-base-gray-950 justify-start self-stretch text-[9.92px] font-normal leading-none">
-                        Design review of new email client features. Team discussed command center
-                        improvements and category system. General positive feedback, with
-                        suggestions for quick actions placement.
+                        {m['pages.home.threadNoteBody']()}
                       </div>
                     </div>
                     <div className="flex flex-col items-start justify-start gap-2.5 self-stretch">
                       <div className="inline-flex items-center justify-start gap-[2.83px]">
                         <div className="text-base-gray-950 justify-start text-[9.92px] leading-[9.92px]">
-                          Attachments
+                          {m['pages.home.attachments']()}
                         </div>
                         <div className="text-base-gray-500/50 justify-start text-center text-[9.92px] leading-[9.92px]">
                           [4]
@@ -632,10 +646,10 @@ export default function HomeContent() {
                           </div>
                           <div className="flex items-center justify-start gap-[2.83px]">
                             <div className="text-base-gray-950 justify-start text-[9.92px] leading-[9.92px]">
-                              cmd.center.fig
+                              {m['pages.home.figmaAttachment']()}
                             </div>
                             <div className="justify-start text-[9.92px] leading-[9.92px] opacity-50">
-                              21 MB
+                              {m['pages.home.figmaAttachmentSize']()}
                             </div>
                           </div>
                         </div>
@@ -643,10 +657,10 @@ export default function HomeContent() {
                           <Docx className="relative h-2 w-2 overflow-hidden fill-blue-500" />
                           <div className="flex items-center justify-start gap-[2.83px]">
                             <div className="text-base-gray-950 justify-start text-[9.92px] leading-[9.92px]">
-                              comments.docx
+                              {m['pages.home.documentAttachment']()}
                             </div>
                             <div className="justify-start text-[9.92px] leading-[9.92px] opacity-50">
-                              3.7 MB
+                              {m['pages.home.documentAttachmentSize']()}
                             </div>
                           </div>
                         </div>
@@ -654,10 +668,10 @@ export default function HomeContent() {
                           <ImageFile className="relative h-2 w-2 overflow-hidden fill-purple-500" />
                           <div className="flex items-center justify-start gap-[2.83px]">
                             <div className="text-base-gray-950 justify-start text-[9.92px] leading-[9.92px]">
-                              img.png
+                              {m['pages.home.imageAttachment']()}
                             </div>
                             <div className="justify-start text-[9.92px] leading-[9.92px] opacity-50">
-                              2.3 MB
+                              {m['pages.home.imageAttachmentSize']()}
                             </div>
                           </div>
                         </div>
@@ -667,7 +681,7 @@ export default function HomeContent() {
                   <div className="border-tokens-stroke-light/5 flex-col items-start justify-start gap-6 self-stretch overflow-hidden border-b-[0.35px] p-3.5">
                     <div className="inline-flex items-center justify-start gap-3 self-stretch">
                       <img
-                        alt="Ahmet"
+                        alt={m['pages.home.ahmet']()}
                         height={200}
                         width={200}
                         className="h-6 w-6 rounded-full"
@@ -678,17 +692,17 @@ export default function HomeContent() {
                           <div className="flex flex-1 items-center justify-start gap-2">
                             <div className="flex items-center justify-start gap-[2.83px]">
                               <div className="text-base-gray-950 justify-start text-[9.92px] leading-[9.92px]">
-                                Ahmet
+                                {m['pages.home.ahmet']()}
                               </div>
                             </div>
                           </div>
                         </div>
                         <div className="inline-flex items-center justify-start gap-[2.83px] self-stretch opacity-50">
                           <div className="text-base-gray-500/50 justify-start text-[9.92px] font-normal leading-[9.92px]">
-                            To:
+                            {m['pages.home.to']()}
                           </div>
                           <div className="text-base-gray-500/50 justify-start text-[9.92px] font-normal leading-[9.92px]">
-                            Alex, Sarah
+                            {m['pages.home.participants']()}
                           </div>
                         </div>
                       </div>
@@ -700,31 +714,30 @@ export default function HomeContent() {
                 <div className="absolute left-0 top-[121px] inline-flex w-[650px] flex-col items-start justify-start gap-4 overflow-hidden rounded-3xl border border-[#8B5CF6] bg-[#2A1D48] p-6 outline outline-[#3F325F]">
                   <div className="inline-flex items-center justify-start gap-1.5">
                     <div className="relative h-3.5 w-3.5">
-                      <img src="/star.svg" alt="Thread note" width={16} height={16} />
+                      <img
+                        src="/star.svg"
+                        alt={m['pages.home.threadNote']()}
+                        width={16}
+                        height={16}
+                      />
                     </div>
                     <div className="flex items-center justify-start gap-1 text-xs leading-3 text-[#948CA4]">
-                      Thread note
+                      {m['pages.home.threadNote']()}
                       <ChevronDown className="relative h-2 w-2 overflow-hidden fill-[#8C8C8C]" />
                     </div>
                   </div>
                   <div className="justify-start self-stretch text-base font-normal leading-snug text-white">
-                    Design review of new email client features. Team discussed command center
-                    improvements and{' '}
-                    <span className="text-[#D8C8FC]">
-                      category system. General positive feedback, with suggestions for quick actions
-                      placement.
-                    </span>
+                    {m['pages.home.threadNoteBody']()}
                   </div>
                 </div>
               </div>
             </div>
             <div>
               <h1 className="mb-2 mt-4 text-lg font-medium leading-loose text-white">
-                Notes and Thread Context
+                {m['pages.home.threadContextTitle']()}
               </h1>
               <p className="max-w-sm text-sm font-light text-[#979797]">
-                Keep local notes beside conversations and review participants, labels, and
-                attachments in one thread view.
+                {m['pages.home.threadContextDescription']()}
               </p>
             </div>
           </motion.div>
@@ -746,14 +759,14 @@ export default function HomeContent() {
                   <div className="flex flex-1 items-center justify-start gap-1">
                     <div className="relative w-px self-stretch rounded-full bg-[#767676]" />
                     <div className="flex-1 justify-center text-sm font-normal leading-none text-[#767676]">
-                      Search by sender, subject, or content...
+                      {m['pages.home.searchPlaceholder']()}
                     </div>
                   </div>
                 </div>
                 <div className="bg-tokens-surface-secondary border-tokens-stroke-light/5 flex flex-col items-start justify-start self-stretch overflow-hidden border-b-[0.50px]">
                   <div className="inline-flex items-center justify-start gap-1.5 self-stretch px-5 pb-3 pt-5">
                     <div className="flex-1 justify-start text-sm leading-none text-[#8C8C8C]">
-                      Recently interacted
+                      {m['pages.home.recentlyInteracted']()}
                     </div>
                   </div>
                   <div className="flex flex-col items-start justify-start gap-2 self-stretch p-2">
@@ -762,7 +775,7 @@ export default function HomeContent() {
                         <div className="absolute left-[10.2px] top-[4px] h-7 w-3 overflow-hidden">
                           <img
                             src="/stripe.svg"
-                            alt="Stripe"
+                            alt={m['pages.home.stripe']()}
                             width={12}
                             height={24}
                             className="w-18 absolute h-6"
@@ -774,17 +787,17 @@ export default function HomeContent() {
                           <div className="flex flex-1 items-center justify-start gap-3">
                             <div className="flex items-center justify-start gap-1">
                               <div className="text-base-gray-950 justify-start text-sm leading-none">
-                                Stripe
+                                {m['pages.home.stripe']()}
                               </div>
                             </div>
                           </div>
                           <div className="text-base-gray-500/50 justify-start text-sm font-normal leading-none">
-                            Mar 29
+                            {m['pages.home.mar29']()}
                           </div>
                         </div>
                         <div className="inline-flex items-center justify-start gap-2.5 self-stretch">
                           <div className="flex-1 justify-start text-sm font-normal leading-none text-[#8C8C8C]">
-                            Payment confirmation #1234
+                            {m['pages.home.paymentConfirmation']()}
                           </div>
                           <div className="flex items-start justify-start gap-1">
                             <div className="relative h-3.5 w-3.5 overflow-hidden" />
@@ -799,7 +812,7 @@ export default function HomeContent() {
                         <div className="absolute left-[11px] top-[4px] h-7 w-2.5">
                           <img
                             src="/netflix.svg"
-                            alt="Stripe"
+                            alt={m['pages.home.netflix']()}
                             width={12}
                             height={24}
                             className="w-18 absolute h-6"
@@ -811,17 +824,17 @@ export default function HomeContent() {
                           <div className="flex flex-1 items-center justify-start gap-3">
                             <div className="flex items-center justify-start gap-1">
                               <div className="text-base-gray-950 justify-start text-sm leading-none">
-                                Netflix
+                                {m['pages.home.netflix']()}
                               </div>
                             </div>
                           </div>
                           <div className="text-base-gray-500/50 justify-start text-sm font-normal leading-none">
-                            Mar 29
+                            {m['pages.home.mar29']()}
                           </div>
                         </div>
                         <div className="inline-flex items-center justify-start gap-2.5 self-stretch">
                           <div className="flex-1 justify-start text-sm font-normal leading-none text-[#8C8C8C]">
-                            New shows added to your list
+                            {m['pages.home.netflixUpdate']()}
                           </div>
                           <div className="flex items-start justify-start gap-1">
                             <div className="relative h-3.5 w-3.5 overflow-hidden" />
@@ -834,7 +847,7 @@ export default function HomeContent() {
                       <img
                         className="h-8 w-8 rounded-full"
                         src="/dudu.jpg"
-                        alt="Dudu"
+                        alt={m['pages.home.dudu']()}
                         width={32}
                         height={32}
                       />
@@ -843,7 +856,7 @@ export default function HomeContent() {
                           <div className="flex flex-1 items-center justify-start gap-3">
                             <div className="flex items-center justify-start gap-1">
                               <div className="text-base-gray-950 justify-start text-sm leading-none">
-                                Dudu
+                                {m['pages.home.dudu']()}
                               </div>
                               <div className="justify-start text-center text-sm leading-none text-[#8C8C8C]">
                                 [9]
@@ -851,12 +864,12 @@ export default function HomeContent() {
                             </div>
                           </div>
                           <div className="text-base-gray-500/50 justify-start text-sm font-normal leading-none">
-                            Mar 29
+                            {m['pages.home.mar29']()}
                           </div>
                         </div>
                         <div className="inline-flex items-center justify-start gap-2.5 self-stretch">
                           <div className="flex-1 justify-start text-sm font-normal leading-none text-[#8C8C8C]">
-                            New design review
+                            {m['pages.home.newDesignReview']()}
                           </div>
                           <div className="flex items-start justify-start gap-1">
                             <div className="relative h-3.5 w-3.5 overflow-hidden" />
@@ -877,7 +890,7 @@ export default function HomeContent() {
                           <div className="flex flex-1 items-center justify-start gap-3">
                             <div className="flex items-center justify-start gap-1">
                               <div className="text-base-gray-950 justify-start text-sm leading-none">
-                                Figma
+                                {m['pages.home.figma']()}
                               </div>
                               <div className="justify-start text-center text-sm leading-none text-[#8C8C8C]">
                                 [5]
@@ -885,12 +898,12 @@ export default function HomeContent() {
                             </div>
                           </div>
                           <div className="text-base-gray-500/50 justify-start text-sm font-normal leading-none">
-                            Mar 26
+                            {m['pages.home.mar26']()}
                           </div>
                         </div>
                         <div className="inline-flex items-center justify-start gap-2.5 self-stretch">
                           <div className="text-base-gray-500/50 flex-1 justify-start text-sm font-normal leading-none">
-                            Comments on &quot;Landing Page v2&quot;
+                            {m['pages.home.figmaComment']()}
                           </div>
                           <div className="flex items-start justify-start gap-1">
                             <div className="relative h-3.5 w-3.5 overflow-hidden" />
@@ -912,17 +925,17 @@ export default function HomeContent() {
                           <div className="flex flex-1 items-center justify-start gap-3">
                             <div className="flex items-center justify-start gap-1">
                               <div className="text-base-gray-950 justify-start text-sm leading-none">
-                                Asana
+                                {m['pages.home.asana']()}
                               </div>
                             </div>
                           </div>
                           <div className="text-base-gray-500/50 justify-start text-sm font-normal leading-none">
-                            Mar 25
+                            {m['pages.home.mar25']()}
                           </div>
                         </div>
                         <div className="inline-flex items-center justify-start gap-2.5 self-stretch">
                           <div className="text-base-gray-500/50 flex-1 justify-start text-sm font-normal leading-none">
-                            Weekly task summary
+                            {m['pages.home.weeklySummary']()}
                           </div>
                           <div className="flex items-start justify-start gap-1">
                             <div className="relative h-3.5 w-3.5 overflow-hidden" />
@@ -939,17 +952,17 @@ export default function HomeContent() {
                           <div className="flex flex-1 items-center justify-start gap-3">
                             <div className="flex items-center justify-start gap-1">
                               <div className="text-base-gray-950 justify-start text-sm leading-none">
-                                Nick
+                                {m['pages.home.nick']()}
                               </div>
                             </div>
                           </div>
                           <div className="text-base-gray-500/50 justify-start text-sm font-normal leading-none">
-                            Mar 28
+                            {m['pages.home.mar28']()}
                           </div>
                         </div>
                         <div className="inline-flex items-center justify-start gap-2.5 self-stretch">
                           <div className="text-base-gray-500/50 flex-1 justify-start text-sm font-normal leading-none">
-                            Coffee next week?
+                            {m['pages.home.coffeeNextWeek']()}
                           </div>
                           <div className="flex items-start justify-start gap-1">
                             <div className="relative h-3.5 w-3.5 overflow-hidden" />
@@ -965,7 +978,7 @@ export default function HomeContent() {
                       <div className="bg-base-gray-500/50 h-2 w-3" />
                     </div>
                     <div className="text-base-gray-500/50 justify-start text-sm leading-none">
-                      Open
+                      {m['pages.home.open']()}
                     </div>
                   </div>
                   <div className="border-tokens-stroke-light/5 flex h-12 flex-1 items-center justify-center gap-2 border-r-[0.50px]">
@@ -975,7 +988,7 @@ export default function HomeContent() {
                       </div>
                     </div>
                     <div className="text-base-gray-500/50 justify-start text-sm leading-none">
-                      Reply
+                      {m['pages.home.reply']()}
                     </div>
                   </div>
                   <div className="border-tokens-stroke-light/5 flex h-12 flex-1 items-center justify-center gap-2 border-r-[0.50px]">
@@ -985,7 +998,7 @@ export default function HomeContent() {
                       </div>
                     </div>
                     <div className="text-base-gray-500/50 justify-start text-sm leading-none">
-                      Archive
+                      {m['pages.home.archive']()}
                     </div>
                   </div>
                   <div className="border-tokens-stroke-light/5 flex h-12 flex-1 items-center justify-center gap-2 border-r-[0.50px]">
@@ -995,17 +1008,18 @@ export default function HomeContent() {
                       </div>
                     </div>
                     <div className="text-base-gray-500/50 justify-start text-sm leading-none">
-                      Mark read
+                      {m['pages.home.markRead']()}
                     </div>
                   </div>
                 </div>
               </div>
             </div>
             <div className="mt-4">
-              <h1 className="mb-2 text-lg font-medium leading-loose text-white">Local Search</h1>
+              <h1 className="mb-2 text-lg font-medium leading-loose text-white">
+                {m['pages.home.localSearchTitle']()}
+              </h1>
               <p className="max-w-sm text-sm font-light text-[#979797]">
-                Search synchronized messages and combine sender, subject, date, label, and
-                attachment filters.
+                {m['pages.home.localSearchDescription']()}
               </p>
             </div>
           </motion.div>

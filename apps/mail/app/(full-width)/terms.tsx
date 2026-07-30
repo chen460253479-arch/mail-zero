@@ -1,14 +1,13 @@
-import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
+import React from 'react';
 import { Github, ArrowLeft, Link2 } from 'lucide-react';
+
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
+import Footer from '@/components/home/footer';
 import { Navigation } from '@/components/navigation';
 import { Button } from '@/components/ui/button';
-import Footer from '@/components/home/footer';
 import { createSectionId } from '@/lib/utils';
-
-import React from 'react';
-
-const LAST_UPDATED = 'February 13, 2025';
+import { m } from '@/paraglide/messages';
 
 export default function TermsOfService() {
   const { copiedValue: copiedSection, copyToClipboard } = useCopyToClipboard();
@@ -22,7 +21,6 @@ export default function TermsOfService() {
     <div className="relative flex min-h-screen w-full flex-col overflow-auto bg-white dark:bg-[#111111]">
       <Navigation />
       <div className="relative z-10 flex grow flex-col">
-        {/* Back Button */}
         <div className="absolute right-4 top-6 md:left-8 md:right-auto md:top-8">
           <a href="/">
             <Button
@@ -31,7 +29,7 @@ export default function TermsOfService() {
               className="gap-2 text-gray-600 hover:text-gray-900 dark:text-white dark:hover:text-white/80"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back
+              {m['pages.terms.back']()}
             </Button>
           </a>
         </div>
@@ -41,11 +39,11 @@ export default function TermsOfService() {
             <CardHeader className="space-y-4 px-8 py-8">
               <div className="space-y-2 text-center">
                 <CardTitle className="text-3xl font-bold tracking-tight text-gray-900 md:text-4xl dark:text-white">
-                  Terms of Service
+                  {m['pages.terms.title']()}
                 </CardTitle>
                 <div className="flex items-center justify-center gap-2">
                   <p className="text-sm text-gray-500 dark:text-white/60">
-                    Last updated: {LAST_UPDATED}
+                    {m['pages.terms.lastUpdated']({ date: m['pages.terms.lastUpdatedDate']() })}
                   </p>
                 </div>
               </div>
@@ -63,7 +61,9 @@ export default function TermsOfService() {
                       <button
                         onClick={() => handleCopyLink(sectionId)}
                         className="text-gray-400 hover:text-gray-700 dark:text-white/60 dark:hover:text-white/80"
-                        aria-label={`Copy link to ${section.title} section`}
+                        aria-label={m['pages.terms.copySectionLink']({
+                          section: section.title,
+                        })}
                       >
                         <Link2
                           className={`h-4 w-4 ${copiedSection === sectionId ? 'text-green-500 dark:text-green-400' : ''}`}
@@ -76,8 +76,6 @@ export default function TermsOfService() {
                   </div>
                 );
               })}
-
-              <div className="mt-12 flex flex-wrap items-center justify-center gap-4"></div>
             </div>
           </Card>
         </div>
@@ -90,93 +88,90 @@ export default function TermsOfService() {
 
 const sections = [
   {
-    title: 'Overview',
-    content: (
-      <p>
-        0.email is an open-source email solution that enables users to self-host their email service
-        or integrate with external email providers. By using 0.email, you agree to these terms.
-      </p>
-    ),
+    title: m['pages.terms.overviewTitle'](),
+    content: <p>{m['pages.terms.overview']()}</p>,
   },
   {
-    title: 'Service Description',
+    title: m['pages.terms.serviceTitle'](),
     content: (
       <div className="space-y-8">
         <div>
-          <h3 className="text-card-foreground mb-3 text-xl font-medium">Self-Hosted Service</h3>
+          <h3 className="text-card-foreground mb-3 text-xl font-medium">
+            {m['pages.terms.selfHostedTitle']()}
+          </h3>
           <ul className="ml-4 list-disc space-y-2">
-            <li>0.email provides software that users can deploy on their own infrastructure</li>
-            <li>Users are responsible for their own hosting, maintenance, and compliance</li>
-            <li>The software is provided &quot;as is&quot; under the MIT License</li>
+            <li>{m['pages.terms.selfHostedDeploy']()}</li>
+            <li>{m['pages.terms.selfHostedResponsibility']()}</li>
+            <li>{m['pages.terms.selfHostedLicense']()}</li>
           </ul>
         </div>
         <div>
           <h3 className="text-card-foreground mb-3 text-xl font-medium">
-            External Email Integration
+            {m['pages.terms.externalIntegrationTitle']()}
           </h3>
           <ul className="ml-4 list-disc space-y-2">
-            <li>0.email can integrate with third-party email providers</li>
-            <li>Users must comply with third-party providers&apos; terms of service</li>
-            <li>We are not responsible for third-party service disruptions</li>
+            <li>{m['pages.terms.externalIntegrationProviders']()}</li>
+            <li>{m['pages.terms.externalIntegrationTerms']()}</li>
+            <li>{m['pages.terms.externalIntegrationDisruptions']()}</li>
           </ul>
         </div>
       </div>
     ),
   },
   {
-    title: 'User Responsibilities',
+    title: m['pages.terms.responsibilitiesTitle'](),
     content: (
       <div className="text-muted-foreground mt-4 space-y-3">
-        <p>Users agree to:</p>
+        <p>{m['pages.terms.responsibilitiesIntro']()}</p>
         <ul className="ml-4 list-disc space-y-2">
-          <li>Comply with all applicable laws and regulations</li>
-          <li>Maintain the security of their instance</li>
-          <li>Not use the service for spam or malicious purposes</li>
-          <li>Respect intellectual property rights</li>
-          <li>Report security vulnerabilities responsibly</li>
+          <li>{m['pages.terms.responsibilityLaws']()}</li>
+          <li>{m['pages.terms.responsibilitySecurity']()}</li>
+          <li>{m['pages.terms.responsibilityNoSpam']()}</li>
+          <li>{m['pages.terms.responsibilityIntellectualProperty']()}</li>
+          <li>{m['pages.terms.responsibilityReportSecurity']()}</li>
         </ul>
       </div>
     ),
   },
   {
-    title: 'Software License',
+    title: m['pages.terms.licenseTitle'](),
     content: (
       <div className="text-muted-foreground mt-4 space-y-3">
-        <p>0.email is licensed under the MIT License:</p>
+        <p>{m['pages.terms.licenseIntro']()}</p>
         <ul className="ml-4 list-disc space-y-2">
-          <li>Users can freely use, modify, and distribute the software</li>
-          <li>The software comes with no warranties</li>
-          <li>Users must include the original license and copyright notice</li>
+          <li>{m['pages.terms.licenseUse']()}</li>
+          <li>{m['pages.terms.licenseWarranty']()}</li>
+          <li>{m['pages.terms.licenseNotice']()}</li>
         </ul>
       </div>
     ),
   },
   {
-    title: 'Community Guidelines',
+    title: m['pages.terms.communityTitle'](),
     content: (
       <div className="text-muted-foreground mt-4 space-y-3">
-        <p>Users participating in our community agree to:</p>
+        <p>{m['pages.terms.communityIntro']()}</p>
         <ul className="ml-4 list-disc space-y-2">
-          <li>Follow our code of conduct</li>
-          <li>Contribute constructively to discussions</li>
-          <li>Respect other community members</li>
-          <li>Report inappropriate behavior</li>
+          <li>{m['pages.terms.communityConduct']()}</li>
+          <li>{m['pages.terms.communityConstructive']()}</li>
+          <li>{m['pages.terms.communityRespect']()}</li>
+          <li>{m['pages.terms.communityReport']()}</li>
         </ul>
       </div>
     ),
   },
   {
-    title: 'Contact Information',
+    title: m['pages.terms.contactTitle'](),
     content: (
       <div className="text-muted-foreground mt-4 space-y-3">
-        <p>For questions about these terms:</p>
+        <p>{m['pages.terms.contactIntro']()}</p>
         <div className="flex flex-col space-y-2">
           <a
             href="https://github.com/Mail-0/Zero"
             className="inline-flex items-center text-blue-600 hover:text-blue-800"
           >
             <Github className="mr-2 h-4 w-4" />
-            Open an issue on GitHub
+            {m['pages.terms.openGithubIssue']()}
           </a>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Cookie } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { m } from '@/paraglide/messages';
 
 interface CookieTriggerProps {
   variant?: 'link' | 'button' | 'prominent' | 'icon';
@@ -36,7 +37,7 @@ export function CookieTrigger({
           ) : (
             <>
               <Cookie className="mr-2 h-4 w-4" />
-              Cookie Settings
+              {m['common.actions.cookieSettings']()}
             </>
           )}
         </>

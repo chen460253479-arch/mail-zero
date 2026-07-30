@@ -4,6 +4,7 @@ import { enterMailboxAfterLogin } from '@/modules/auth/login-navigation';
 import { resolveLoginMethod } from '@/modules/auth/login-method';
 import { Button } from '@/components/ui/button';
 import { signIn } from '@/lib/auth-client';
+import { m } from '@/paraglide/messages';
 
 export function LoginClient() {
   const [account, setAccount] = useState('');
@@ -32,13 +33,13 @@ export function LoginClient() {
             });
 
       if (result.error) {
-        setError(result.error.message || 'Invalid account or password');
+        setError(result.error.message || m['pages.auth.invalidCredentials']());
         return;
       }
 
       enterMailboxAfterLogin();
     } catch {
-      setError('Unable to reach the Zero server');
+      setError(m['pages.auth.serverUnavailable']());
     } finally {
       setIsSubmitting(false);
     }
@@ -48,16 +49,18 @@ export function LoginClient() {
     <main className="flex min-h-screen w-full items-center justify-center bg-[#111111] px-4">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.04] p-8 shadow-2xl">
         <div className="mb-8 text-center">
-          <img src="/white-icon.svg" alt="Zero" className="mx-auto mb-5 h-10 w-10" />
-          <h1 className="text-3xl font-semibold text-white">Sign in to Zero</h1>
-          <p className="mt-2 text-sm text-white/55">
-            Use an administrator email or managed Username
-          </p>
+          <img
+            src="/white-icon.svg"
+            alt={m['navigation.public.zeroEmailLogo']()}
+            className="mx-auto mb-5 h-10 w-10"
+          />
+          <h1 className="text-3xl font-semibold text-white">{m['pages.auth.signInTitle']()}</h1>
+          <p className="mt-2 text-sm text-white/55">{m['pages.auth.signInDescription']()}</p>
         </div>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-white/80">Account</span>
+            <span className="text-sm font-medium text-white/80">{m['pages.auth.account']()}</span>
             <input
               autoComplete="username"
               autoFocus
@@ -70,7 +73,7 @@ export function LoginClient() {
           </label>
 
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-white/80">Password</span>
+            <span className="text-sm font-medium text-white/80">{m['pages.auth.password']()}</span>
             <input
               autoComplete="current-password"
               type="password"
@@ -95,12 +98,12 @@ export function LoginClient() {
             disabled={isSubmitting}
             className="h-11 w-full bg-[#006FFE] text-white hover:bg-[#005ed8]"
           >
-            {isSubmitting ? 'Signing in…' : 'Sign in'}
+            {isSubmitting ? m['pages.auth.signingIn']() : m['pages.auth.signIn']()}
           </Button>
         </form>
 
         <p className="mt-6 text-center text-xs leading-5 text-white/40">
-          Public registration remains disabled for this private instance.
+          {m['pages.auth.registrationDisabled']()}
         </p>
       </div>
     </main>

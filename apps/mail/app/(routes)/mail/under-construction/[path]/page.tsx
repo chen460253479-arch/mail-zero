@@ -2,6 +2,7 @@ import { SidebarToggle } from '@/components/ui/sidebar-toggle';
 import { Construction } from 'lucide-react';
 import BackButton from './back-button';
 import { use } from 'react';
+import { m } from '@/paraglide/messages';
 
 interface UnderConstructionProps {
   params: Promise<{
@@ -23,10 +24,12 @@ export default function UnderConstruction({ params }: UnderConstructionProps) {
         <div className="flex flex-col items-center text-center">
           <Construction className="text-muted-foreground h-16 w-16 animate-pulse" />
           <div className="mt-6 space-y-2">
-            <h2 className="text-2xl font-semibold">Under Construction</h2>
+            <h2 className="text-2xl font-semibold">{m['pages.underConstruction.title']()}</h2>
             <p className="text-muted-foreground">
-              <span className="block">The {decodedPath} page is currently under construction.</span>
-              <span className="block">Check back soon!</span>
+              <span className="block">
+                {m['pages.underConstruction.description']({ path: decodedPath })}
+              </span>
+              <span className="block">{m['pages.underConstruction.checkBack']()}</span>
             </p>
           </div>
           <div className="mt-2 flex gap-2">

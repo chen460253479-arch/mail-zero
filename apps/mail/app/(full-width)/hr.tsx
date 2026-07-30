@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
+import { m } from '@/paraglide/messages';
 
 interface Employee {
   id: string;
@@ -227,17 +228,17 @@ export default function HRPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
-            Employee Timezone & Working Hours Manager
+            {m['pages.hr.title']()}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
-              <label className="text-sm font-medium">Base Timezone</label>
+              <label className="text-sm font-medium">{m['pages.hr.baseTimezone']()}</label>
               <Input value={userTimezone} disabled className="mt-1" />
             </div>
             <div>
-              <label className="text-sm font-medium">Base Start Time</label>
+              <label className="text-sm font-medium">{m['pages.hr.baseStartTime']()}</label>
               <Input
                 type="time"
                 value={userWorkingHours.startTime}
@@ -248,7 +249,7 @@ export default function HRPage() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium">Base End Time</label>
+              <label className="text-sm font-medium">{m['pages.hr.baseEndTime']()}</label>
               <Input
                 type="time"
                 value={userWorkingHours.endTime}
@@ -261,10 +262,10 @@ export default function HRPage() {
           </div>
 
           <div className="border-t pt-4">
-            <h3 className="mb-4 text-lg font-medium">Add Employee</h3>
+            <h3 className="mb-4 text-lg font-medium">{m['pages.hr.addEmployee']()}</h3>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
               <Input
-                placeholder="Employee Name"
+                placeholder={m['pages.hr.employeeName']()}
                 value={newEmployee.name}
                 onChange={(e) => setNewEmployee((prev) => ({ ...prev, name: e.target.value }))}
               />
@@ -273,7 +274,7 @@ export default function HRPage() {
                 onValueChange={(value) => setNewEmployee((prev) => ({ ...prev, timezone: value }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select timezone" />
+                  <SelectValue placeholder={m['pages.hr.selectTimezone']()} />
                 </SelectTrigger>
                 <SelectContent>
                   {COMMON_TIMEZONES.map((tz) => (
@@ -295,7 +296,7 @@ export default function HRPage() {
               />
               <Button onClick={addEmployee} disabled={!newEmployee.name || !newEmployee.timezone}>
                 <Plus className="mr-2 h-4 w-4" />
-                Add
+                {m['pages.hr.add']()}
               </Button>
             </div>
           </div>
@@ -305,13 +306,14 @@ export default function HRPage() {
       {teamOverlap && (
         <Card className="border-green-200 bg-green-50">
           <CardHeader>
-            <CardTitle className="text-green-800">Team Overlap Window</CardTitle>
+            <CardTitle className="text-green-800">{m['pages.hr.overlapTitle']()}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-green-700">
-              All team members are available from{' '}
-              <span className="font-bold">{teamOverlap.start}</span> to{' '}
-              <span className="font-bold">{teamOverlap.end}</span> in the base timezone
+              {m['pages.hr.overlapDescription']({
+                start: teamOverlap.start,
+                end: teamOverlap.end,
+              })}
             </p>
           </CardContent>
         </Card>
@@ -354,7 +356,7 @@ export default function HRPage() {
                     </SelectContent>
                   </Select>
                   <div className="text-center">
-                    <div className="text-sm text-gray-500">Current Time</div>
+                    <div className="text-sm text-gray-500">{m['pages.hr.currentTime']()}</div>
                     <div className="font-mono text-lg">{employeeCurrentTime}</div>
                   </div>
                   <Input
@@ -370,13 +372,13 @@ export default function HRPage() {
                   <div className="text-center">
                     {overlap ? (
                       <div>
-                        <div className="text-sm text-green-600">Overlap</div>
+                        <div className="text-sm text-green-600">{m['pages.hr.overlap']()}</div>
                         <div className="font-mono text-sm">
                           {overlap.start}-{overlap.end}
                         </div>
                       </div>
                     ) : (
-                      <div className="text-sm text-red-600">No overlap</div>
+                      <div className="text-sm text-red-600">{m['pages.hr.noOverlap']()}</div>
                     )}
                   </div>
                   <Button
@@ -397,8 +399,7 @@ export default function HRPage() {
       {employees.length === 0 && (
         <Card>
           <CardContent className="pt-6 text-center text-gray-500">
-            No employees added yet. Add employees to see timezone comparisons and working hour
-            overlaps.
+            {m['pages.hr.empty']()}
           </CardContent>
         </Card>
       )}

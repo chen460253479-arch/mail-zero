@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { useTRPC } from '@/providers/query-provider';
 import { Button } from '@/components/ui/button';
+import { m } from '@/paraglide/messages';
 
 type PasswordChangeInput = {
   currentPassword: string;
@@ -43,15 +44,15 @@ export function ForcedPasswordChangeDialog() {
     event.preventDefault();
     setError(undefined);
     if (newPassword.length < 12) {
-      setError('The new password must contain at least 12 characters');
+      setError(m['pages.auth.changePassword.minimumLength']({ count: 12 }));
       return;
     }
     if (newPassword !== confirmation) {
-      setError('The new passwords do not match');
+      setError(m['pages.auth.changePassword.mismatch']());
       return;
     }
     if (newPassword === currentPassword) {
-      setError('The new password must be different');
+      setError(m['pages.auth.changePassword.mustDiffer']());
       return;
     }
     try {
@@ -63,7 +64,7 @@ export function ForcedPasswordChangeDialog() {
         },
       );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to change the password');
+      setError(cause instanceof Error ? cause.message : m['pages.auth.changePassword.failed']());
     }
   };
 
@@ -78,15 +79,15 @@ export function ForcedPasswordChangeDialog() {
         onInteractOutside={(event) => event.preventDefault()}
       >
         <DialogHeader className="mb-6">
-          <DialogTitle className="text-2xl">Set a new password</DialogTitle>
-          <DialogDescription>
-            Change the initial password before using your mailbox.
-          </DialogDescription>
+          <DialogTitle className="text-2xl">{m['pages.auth.changePassword.title']()}</DialogTitle>
+          <DialogDescription>{m['pages.auth.changePassword.description']()}</DialogDescription>
         </DialogHeader>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
           <label className="block space-y-2">
-            <span className="text-sm font-medium">Current password</span>
+            <span className="text-sm font-medium">
+              {m['pages.auth.changePassword.currentPassword']()}
+            </span>
             <input
               autoComplete="current-password"
               type="password"
@@ -98,7 +99,9 @@ export function ForcedPasswordChangeDialog() {
           </label>
 
           <label className="block space-y-2">
-            <span className="text-sm font-medium">New password</span>
+            <span className="text-sm font-medium">
+              {m['pages.auth.changePassword.newPassword']()}
+            </span>
             <input
               autoComplete="new-password"
               type="password"
@@ -111,7 +114,9 @@ export function ForcedPasswordChangeDialog() {
           </label>
 
           <label className="block space-y-2">
-            <span className="text-sm font-medium">Confirm new password</span>
+            <span className="text-sm font-medium">
+              {m['pages.auth.changePassword.confirmPassword']()}
+            </span>
             <input
               autoComplete="new-password"
               type="password"
@@ -137,7 +142,9 @@ export function ForcedPasswordChangeDialog() {
             disabled={changePassword.isPending}
             className="h-11 w-full bg-[#006FFE] text-white hover:bg-[#005ed8]"
           >
-            {changePassword.isPending ? 'Updating…' : 'Change password'}
+            {changePassword.isPending
+              ? m['pages.auth.changePassword.saving']()
+              : m['pages.auth.changePassword.save']()}
           </Button>
         </form>
       </DialogContent>

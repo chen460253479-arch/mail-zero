@@ -6,10 +6,11 @@ import { useForm } from 'react-hook-form';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import { m } from '@/paraglide/messages';
 
 const formSchema = z.object({
-  email: z.string().email({ message: 'Please enter a valid email address' }),
-  password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
+  email: z.string().email({ message: m['pages.auth.validEmail']() }),
+  password: z.string().min(6, { message: m['pages.auth.minimumPassword']({ count: 6 }) }),
 });
 
 export default function LoginZero() {
@@ -23,8 +24,8 @@ export default function LoginZero() {
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     // Use the correct sonner toast API
-    toast.success(`Trying to log in with ${values.email}`, {
-      description: 'Login attempt',
+    toast.success(m['pages.auth.loginAttempt']({ email: values.email }), {
+      description: m['pages.auth.loginAttemptDescription'](),
     });
 
     // Here you would typically handle authentication
@@ -34,10 +35,8 @@ export default function LoginZero() {
     <div className="flex h-full min-h-screen w-full items-center justify-center bg-black">
       <div className="animate-in slide-in-from-bottom-4 w-full max-w-md px-6 py-8 duration-500">
         <div className="mb-4 text-center">
-          <h1 className="mb-2 text-4xl font-bold text-white">Login with Zero</h1>
-          <p className="text-muted-foreground">
-            Enter your Zero email below to login to your account
-          </p>
+          <h1 className="mb-2 text-4xl font-bold text-white">{m['pages.auth.loginTitle']()}</h1>
+          <p className="text-muted-foreground">{m['pages.auth.loginDescription']()}</p>
         </div>
 
         <Form {...form}>
@@ -47,10 +46,10 @@ export default function LoginZero() {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground">Email</FormLabel>
+                  <FormLabel className="text-muted-foreground">{m['pages.auth.email']()}</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="nizzy@0.email"
+                      placeholder={m['pages.auth.emailPlaceholder']()}
                       {...field}
                       className="bg-black text-sm text-white placeholder:text-sm"
                     />
@@ -65,12 +64,14 @@ export default function LoginZero() {
               render={({ field }) => (
                 <FormItem>
                   <div className="flex items-center justify-between">
-                    <FormLabel className="text-muted-foreground">Password</FormLabel>
+                    <FormLabel className="text-muted-foreground">
+                      {m['pages.auth.password']()}
+                    </FormLabel>
                     <Link
                       to="/forgot-password"
                       className="text-muted-foreground text-xs hover:text-white"
                     >
-                      Forgot your password?
+                      {m['pages.auth.forgotPassword']()}
                     </Link>
                   </div>
                   <FormControl>
@@ -86,14 +87,14 @@ export default function LoginZero() {
             />
 
             <Button type="submit" className="w-full">
-              Login
+              {m['pages.auth.login']()}
             </Button>
 
             <div className="mt-6 text-center text-sm">
               <p className="text-muted-foreground">
-                Don't have an account?{' '}
+                {m['pages.auth.noAccount']()}{' '}
                 <a href="/zero/signup" className="text-white underline hover:text-white/80">
-                  Sign up
+                  {m['pages.auth.signUp']()}
                 </a>
               </p>
             </div>
@@ -107,7 +108,7 @@ export default function LoginZero() {
             href="/terms"
             className="text-[10px] text-gray-500 transition-colors hover:text-gray-300"
           >
-            Terms of Service
+            {m['pages.auth.terms']()}
           </a>
         </div>
       </footer>

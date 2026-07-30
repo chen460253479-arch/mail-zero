@@ -2,65 +2,66 @@ import { Github, Book, Users, Terminal, Code2, Webhook, ArrowRight, ArrowLeft } 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router';
+import { m } from '@/paraglide/messages';
 
 const developerResources = [
   {
-    title: 'API Documentation',
-    description: 'Comprehensive API references and guides',
-    details: 'Explore our REST APIs, WebSocket endpoints, and integration guides.',
+    title: m['pages.developer.apiTitle'](),
+    description: m['pages.developer.apiDescription'](),
+    details: m['pages.developer.apiDetails'](),
     icon: Book,
     href: '/docs',
-    linkText: 'View Documentation',
+    linkText: m['pages.developer.viewDocumentation'](),
     color: 'text-blue-500',
     bgColor: 'bg-blue-500/10',
   },
   {
-    title: 'GitHub',
-    description: 'Open source repositories',
-    details: 'Access our source code, contribute, and track issues.',
+    title: m['pages.developer.githubTitle'](),
+    description: m['pages.developer.githubDescription'](),
+    details: m['pages.developer.githubDetails'](),
     icon: Github,
     href: 'https://github.com',
-    linkText: 'View Repository',
+    linkText: m['pages.developer.viewRepository'](),
     color: 'text-purple-500',
     bgColor: 'bg-purple-500/10',
   },
   {
-    title: 'Contributing',
-    description: 'Join our community',
-    details: 'Learn how to contribute to our open source projects.',
+    title: m['pages.developer.contributingTitle'](),
+    description: m['pages.developer.contributingDescription'](),
+    details: m['pages.developer.contributingDetails'](),
     icon: Users,
     href: '/contributing',
-    linkText: 'Contribute',
+    linkText: m['pages.developer.contribute'](),
     color: 'text-green-500',
     bgColor: 'bg-green-500/10',
   },
   {
-    title: 'CLI Tools',
-    description: 'Command line utilities',
-    details: 'Download and install our command line tools.',
+    title: m['pages.developer.cliTitle'](),
+    description: m['pages.developer.cliDescription'](),
+    details: m['pages.developer.cliDetails'](),
     icon: Terminal,
     href: '/cli',
-    linkText: 'View CLI Docs',
+    linkText: m['pages.developer.viewCliDocs'](),
     color: 'text-yellow-500',
     bgColor: 'bg-yellow-500/10',
   },
   {
-    title: 'SDKs',
-    description: 'Development kits',
-    details: 'Find SDKs for your preferred programming language.',
+    title: m['pages.developer.sdksTitle'](),
+    description: m['pages.developer.sdksDescription'](),
+    details: m['pages.developer.sdksDetails'](),
     icon: Code2,
     href: '/sdks',
-    linkText: 'View SDKs',
+    linkText: m['pages.developer.viewSdks'](),
     color: 'text-red-500',
     bgColor: 'bg-red-500/10',
   },
   {
-    title: 'Webhooks',
-    description: 'Event notifications',
-    details: 'Set up and manage webhook integrations.',
+    title: m['pages.developer.webhooksTitle'](),
+    description: m['pages.developer.webhooksDescription'](),
+    details: m['pages.developer.webhooksDetails'](),
     icon: Webhook,
     href: '/webhooks',
-    linkText: 'Configure',
+    linkText: m['pages.developer.configure'](),
     color: 'text-orange-500',
     bgColor: 'bg-orange-500/10',
   },
@@ -81,13 +82,13 @@ export default function DeveloperPage() {
               className="text-muted-foreground hover:text-foreground mb-6 gap-2"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back
+              {m['pages.developer.back']()}
             </Button>
 
             <div className="space-y-4">
-              <h1 className="text-2xl font-bold sm:text-3xl">Developer Resources</h1>
+              <h1 className="text-2xl font-bold sm:text-3xl">{m['pages.developer.title']()}</h1>
               <p className="text-muted-foreground text-base sm:text-lg">
-                Everything you need to build with 0.email&apos;s APIs and tools.
+                {m['pages.developer.heroDescription']()}
               </p>
             </div>
           </div>
@@ -128,14 +129,15 @@ export default function DeveloperPage() {
           <div className="bg-card mt-8 rounded-lg border p-4 sm:mt-12 sm:p-6">
             <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
               <div className="flex-1 space-y-1">
-                <h3 className="text-lg font-semibold sm:text-xl">Need Help?</h3>
+                <h3 className="text-lg font-semibold sm:text-xl">
+                  {m['pages.developer.needHelp']()}
+                </h3>
                 <p className="text-muted-foreground text-sm">
-                  Can&apos;t find what you&apos;re looking for? Get in touch with our developer
-                  support team.
+                  {m['pages.developer.needHelpDescription']()}
                 </p>
               </div>
               <Button asChild variant="default" className="w-full sm:w-auto">
-                <a href="/support">Contact Support</a>
+                <a href="/support">{m['pages.developer.contactSupport']()}</a>
               </Button>
             </div>
           </div>

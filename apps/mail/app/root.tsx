@@ -76,8 +76,10 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
       <div className="flex-col items-center justify-center md:flex dark:text-gray-100">
         {/* Message */}
         <div className="space-y-2">
-          <h2 className="text-2xl font-semibold tracking-tight">Something went wrong!</h2>
-          <p className="text-muted-foreground">See the console for more information.</p>
+          <h2 className="text-2xl font-semibold tracking-tight">
+            {m['pages.root.unexpectedError']()}
+          </h2>
+          <p className="text-muted-foreground">{m['pages.root.consoleDetails']()}</p>
           <pre className="text-muted-foreground">{JSON.stringify(error, null, 2)}</pre>
         </div>
 
@@ -87,7 +89,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
             onClick={() => window.location.reload()}
             className="text-muted-foreground gap-2"
           >
-            Refresh
+            {m['common.actions.refresh']()}
           </Button>
           <Button
             variant="outline"
@@ -97,7 +99,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
             }}
             className="text-muted-foreground gap-2"
           >
-            Log Out and Refresh
+            {m['common.actions.logoutAndRefresh']()}
           </Button>
         </div>
       </div>

@@ -6,6 +6,7 @@
 import { keyboardLayoutMapper, type LayoutDetectionResult } from '@/utils/keyboard-layout-map';
 import { KeyboardIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { m } from '@/paraglide/messages';
 
 export function KeyboardLayoutIndicator() {
   const layoutInfo = useKeyboardLayout();
@@ -16,11 +17,11 @@ export function KeyboardLayoutIndicator() {
 
   const getLayoutDisplayName = (layout: string) => {
     const names = {
-      qwerty: 'QWERTY',
-      dvorak: 'Dvorak',
-      colemak: 'Colemak',
-      azerty: 'AZERTY',
-      qwertz: 'QWERTZ',
+      qwerty: m['common.keyboardLayouts.qwerty'](),
+      dvorak: m['common.keyboardLayouts.dvorak'](),
+      colemak: m['common.keyboardLayouts.colemak'](),
+      azerty: m['common.keyboardLayouts.azerty'](),
+      qwertz: m['common.keyboardLayouts.qwertz'](),
     };
     return names[layout as keyof typeof names] || layout.toUpperCase();
   };

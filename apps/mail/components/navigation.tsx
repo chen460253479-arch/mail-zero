@@ -15,44 +15,45 @@ import { useSession } from '@/lib/auth-client';
 import { Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
+import { m } from '@/paraglide/messages';
 
 const resources = [
   {
-    title: 'GitHub',
+    title: m['navigation.public.github'](),
     href: 'https://github.com/Mail-0/Zero',
-    description: 'Check out our open-source projects and contributions.',
+    description: m['navigation.public.githubDescription'](),
     platform: 'github' as const,
   },
   {
-    title: 'Twitter',
+    title: m['navigation.public.twitter'](),
     href: 'https://x.com/mail0dotcom',
-    description: 'Follow us for the latest updates and announcements.',
+    description: m['navigation.public.twitterDescription'](),
     platform: 'twitter' as const,
   },
   {
-    title: 'LinkedIn',
+    title: m['navigation.public.linkedin'](),
     href: 'https://www.linkedin.com/company/mail0/',
-    description: 'Connect with us professionally and stay updated.',
+    description: m['navigation.public.linkedinDescription'](),
     platform: 'linkedin' as const,
   },
   {
-    title: 'Discord',
+    title: m['navigation.public.discord'](),
     href: 'https://discord.gg/mail0',
-    description: 'Join our community and chat with the team.',
+    description: m['navigation.public.discordDescription'](),
     platform: 'discord' as const,
   },
 ];
 
 const aboutLinks = [
   {
-    title: 'About',
+    title: m['navigation.public.about'](),
     href: '/about',
-    description: 'Learn more about Zero and our mission.',
+    description: m['navigation.public.aboutDescription'](),
   },
   {
-    title: 'Terms of Service',
+    title: m['navigation.public.terms'](),
     href: '/terms',
-    description: 'Review our terms of service and usage guidelines.',
+    description: m['navigation.public.termsDescription'](),
   },
 ];
 
@@ -75,16 +76,21 @@ export function Navigation() {
         <nav className="border-input/50 flex w-full max-w-4xl items-center justify-between gap-2 rounded-xl border-t bg-[#1E1E1E] p-3 px-6">
           <div className="flex items-center gap-6">
             <Link to="/" className="relative bottom-1 cursor-pointer">
-              <img src="white-icon.svg" alt="Zero Email" width={22} height={22} />
+              <img
+                src="white-icon.svg"
+                alt={m['navigation.public.zeroEmailLogo']()}
+                width={22}
+                height={22}
+              />
               <span className="text-muted-foreground absolute -right-[-0.5px] text-[10px]">
-                beta
+                {m['navigation.public.beta']()}
               </span>
             </Link>
             <NavigationMenu>
               <NavigationMenuList className="gap-1">
                 <NavigationMenuItem>
                   <NavigationMenuTrigger className="cursor-pointer bg-transparent text-white">
-                    Company
+                    {m['navigation.public.company']()}
                   </NavigationMenuTrigger>
                   <NavigationMenuContent>
                     <ul className="grid w-[300px] gap-3 p-4 md:w-[300px] md:grid-cols-1 lg:w-[400px]">
@@ -98,7 +104,7 @@ export function Navigation() {
                 </NavigationMenuItem>
                 <NavigationMenuItem>
                   <NavigationMenuTrigger className="cursor-pointer bg-transparent text-white">
-                    Resources
+                    {m['navigation.public.resources']()}
                   </NavigationMenuTrigger>
                   <NavigationMenuContent>
                     <ul className="grid w-[400px] gap-3 p-4 md:w-[500px] md:grid-cols-2 lg:w-[600px]">
@@ -129,8 +135,8 @@ export function Navigation() {
             >
               <div className="flex items-center text-white">
                 <GitHub className="mr-1 size-4 fill-white" />
-                <span className="ml-1 lg:hidden">Star</span>
-                <span className="ml-1 hidden lg:inline">GitHub</span>
+                <span className="ml-1 lg:hidden">{m['navigation.public.star']()}</span>
+                <span className="ml-1 hidden lg:inline">{m['navigation.public.github']()}</span>
               </div>
             </a>
             <Button
@@ -143,7 +149,7 @@ export function Navigation() {
                 }
               }}
             >
-              Get Started
+              {m['navigation.public.getStarted']()}
             </Button>
           </div>
         </nav>
@@ -163,14 +169,14 @@ export function Navigation() {
                 <Link to="/" onClick={() => setOpen(false)}>
                   <img
                     src="white-icon.svg"
-                    alt="Zero Email"
+                    alt={m['navigation.public.zeroEmailLogo']()}
                     className="hidden object-contain dark:block"
                     width={22}
                     height={22}
                   />
                   <img
                     src="/black-icon.svg"
-                    alt="0.email Logo"
+                    alt={m['navigation.public.zeroEmailLogo']()}
                     className="object-contain dark:hidden"
                     width={22}
                     height={22}
@@ -181,7 +187,7 @@ export function Navigation() {
             <div className="mt-8 flex flex-col space-y-3">
               <div className="flex flex-col space-y-3">
                 <Link to="/" onClick={() => setOpen(false)}>
-                  Home
+                  {m['navigation.public.home']()}
                 </Link>
                 {aboutLinks.map((link) => (
                   <a key={link.title} href={link.href} className="block font-medium">
@@ -195,7 +201,7 @@ export function Navigation() {
                 href="https://cal.com/team/0/chat"
                 className="font-medium"
               >
-                Contact Us
+                {m['navigation.public.contactUs']()}
               </a>
             </div>
             <Separator className="mt-8" />

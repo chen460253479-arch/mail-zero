@@ -5,11 +5,12 @@ import { Input } from '@/components/ui/input';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import { m } from '@/paraglide/messages';
 
 const formSchema = z.object({
-  name: z.string().min(1, { message: 'Name must be at least 1 character' }),
-  email: z.string().min(1, { message: 'Username must be at least 1 character' }),
-  password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
+  name: z.string().min(1, { message: m['pages.auth.minimumName']({ count: 1 }) }),
+  email: z.string().min(1, { message: m['pages.auth.minimumUsername']({ count: 1 }) }),
+  password: z.string().min(6, { message: m['pages.auth.minimumPassword']({ count: 6 }) }),
 });
 
 export default function SignupZero() {
@@ -26,8 +27,8 @@ export default function SignupZero() {
     const fullEmail = `${values.email}@0.email`;
 
     // Use the correct sonner toast API
-    toast.success(`Trying to signup with ${fullEmail}`, {
-      description: 'Signup attempt',
+    toast.success(m['pages.auth.signupAttempt']({ email: fullEmail }), {
+      description: m['pages.auth.signupAttemptDescription'](),
     });
 
     // Here you would typically handle authentication with the full email
@@ -37,8 +38,8 @@ export default function SignupZero() {
     <div className="flex h-full min-h-screen w-full items-center justify-center bg-black">
       <div className="animate-in slide-in-from-bottom-4 w-full max-w-md px-6 py-8 duration-500">
         <div className="mb-4 text-center">
-          <h1 className="mb-2 text-4xl font-bold text-white">Signup with Zero</h1>
-          <p className="text-muted-foreground">Enter your email below to signup to your account</p>
+          <h1 className="mb-2 text-4xl font-bold text-white">{m['pages.auth.signupTitle']()}</h1>
+          <p className="text-muted-foreground">{m['pages.auth.signupDescription']()}</p>
         </div>
 
         <Form {...form}>
@@ -48,10 +49,10 @@ export default function SignupZero() {
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground">Name</FormLabel>
+                  <FormLabel className="text-muted-foreground">{m['pages.auth.name']()}</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="Luke"
+                      placeholder={m['pages.auth.namePlaceholder']()}
                       {...field}
                       className="bg-black text-sm text-white placeholder:text-sm"
                     />
@@ -65,11 +66,11 @@ export default function SignupZero() {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground">Email</FormLabel>
+                  <FormLabel className="text-muted-foreground">{m['pages.auth.email']()}</FormLabel>
                   <FormControl>
                     <div className="relative w-full rounded-md">
                       <Input
-                        placeholder="adam"
+                        placeholder={m['pages.auth.usernamePlaceholder']()}
                         {...field}
                         className="w-full bg-black pr-16 text-sm text-white placeholder:text-sm"
                       />
@@ -88,7 +89,9 @@ export default function SignupZero() {
               render={({ field }) => (
                 <FormItem>
                   <div className="flex items-center justify-between">
-                    <FormLabel className="text-muted-foreground">Password</FormLabel>
+                    <FormLabel className="text-muted-foreground">
+                      {m['pages.auth.password']()}
+                    </FormLabel>
                   </div>
                   <FormControl>
                     <Input
@@ -103,14 +106,14 @@ export default function SignupZero() {
             />
 
             <Button type="submit" className="w-full">
-              Signup
+              {m['pages.auth.signup']()}
             </Button>
 
             <div className="mt-6 text-center text-sm">
               <p className="text-muted-foreground">
-                Don't have an account?{' '}
+                {m['pages.auth.haveAccount']()}{' '}
                 <a href="/zero/login" className="text-white underline hover:text-white/80">
-                  Login
+                  {m['pages.auth.login']()}
                 </a>
               </p>
             </div>
@@ -124,7 +127,7 @@ export default function SignupZero() {
             href="/terms"
             className="text-[10px] text-gray-500 transition-colors hover:text-gray-300"
           >
-            Terms of Service
+            {m['pages.auth.terms']()}
           </a>
         </div>
       </footer>

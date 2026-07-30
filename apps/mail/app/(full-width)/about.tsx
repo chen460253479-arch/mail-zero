@@ -1,8 +1,10 @@
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Github, Mail, ArrowLeft } from 'lucide-react';
+
+import Footer from '@/components/home/footer';
 import { Navigation } from '@/components/navigation';
 import { Button } from '@/components/ui/button';
-import Footer from '@/components/home/footer';
+import { m } from '@/paraglide/messages';
 
 export default function AboutPage() {
   return (
@@ -17,7 +19,7 @@ export default function AboutPage() {
               className="gap-2 text-gray-600 hover:text-gray-900 dark:text-white dark:hover:text-white/80"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back
+              {m['pages.about.back']()}
             </Button>
           </a>
         </div>
@@ -27,7 +29,7 @@ export default function AboutPage() {
             <CardHeader className="space-y-4 px-8 py-8">
               <div className="space-y-2 text-center">
                 <CardTitle className="text-3xl font-bold tracking-tight text-gray-900 md:text-4xl dark:text-white">
-                  About Us
+                  {m['pages.about.title']()}
                 </CardTitle>
               </div>
             </CardHeader>
@@ -55,83 +57,51 @@ export default function AboutPage() {
 
 const sections = [
   {
-    title: 'Our Mission',
-    content: (
-      <p>
-        Zero is a locally organized email service that keeps provider synchronization separate from
-        your mailbox data. We help busy professionals manage inboxes, folders, labels, threads, and
-        drafts from one consistent local model.
-      </p>
-    ),
+    title: m['pages.about.missionTitle'](),
+    content: <p>{m['pages.about.mission']()}</p>,
   },
   {
-    title: 'Why We Started',
-    content: (
-      <p>
-        We started Zero because provider-specific mailbox behavior makes it difficult to build a
-        consistent email workflow. Zero keeps synchronization and delivery behind provider plugins
-        while standard mailbox operations run against a local source of truth.
-      </p>
-    ),
+    title: m['pages.about.startedTitle'](),
+    content: <p>{m['pages.about.started']()}</p>,
   },
   {
-    title: 'Open Source',
+    title: m['pages.about.openSourceTitle'](),
     content: (
       <div className="space-y-4">
-        <p>
-          Zero is built on the principles of transparency and community collaboration. Our entire
-          codebase is open source, allowing anyone to:
-        </p>
+        <p>{m['pages.about.openSourceIntro']()}</p>
         <ul className="ml-4 list-disc space-y-2">
-          <li>Review our code for security and privacy</li>
-          <li>Contribute improvements and new features</li>
-          <li>Self-host their own instance of Zero</li>
-          <li>Learn from and build upon our work</li>
+          <li>{m['pages.about.openSourceReview']()}</li>
+          <li>{m['pages.about.openSourceContribute']()}</li>
+          <li>{m['pages.about.openSourceSelfHost']()}</li>
+          <li>{m['pages.about.openSourceLearn']()}</li>
         </ul>
-        <p>
-          We believe that email is too important to be controlled by a single entity. By being open
-          source, we ensure that Zero remains transparent, trustworthy, and accessible to everyone.
-        </p>
+        <p>{m['pages.about.openSourceConclusion']()}</p>
       </div>
     ),
   },
   {
-    title: 'Our Journey',
+    title: m['pages.about.journeyTitle'](),
     content: (
       <div className="space-y-4">
-        <p>
-          We launched our early access program and found that users want one dependable mailbox
-          across providers, with local folders, labels, threads, drafts, and search behaving
-          consistently.
-        </p>
-        <p>
-          The opportunity is massive: over 4 billion people use email daily, and most still manage
-          it manually. Zero is poised to fundamentally change the way the world deals with
-          communication and tasks — and we're just getting started.
-        </p>
+        <p>{m['pages.about.journeyEarlyAccess']()}</p>
+        <p>{m['pages.about.journeyOpportunity']()}</p>
       </div>
     ),
   },
   {
-    title: 'Our Founders',
+    title: m['pages.about.foundersTitle'](),
     content: (
       <div className="space-y-4">
-        <p>
-          Adam and Nizar, the cofounders of Zero, met through family friends. Coming from
-          backgrounds in product design and software engineering, we both felt the pain of drowning
-          in email firsthand while trying to build and grow companies.
-        </p>
-        <p>
-          We're driven by a shared belief that email should help you move faster, not slow you down.
-        </p>
+        <p>{m['pages.about.foundersBackground']()}</p>
+        <p>{m['pages.about.foundersBelief']()}</p>
       </div>
     ),
   },
   {
-    title: 'Contact',
+    title: m['pages.about.contactTitle'](),
     content: (
       <div className="space-y-3">
-        <p>Want to learn more about Zero? Get in touch:</p>
+        <p>{m['pages.about.contactIntro']()}</p>
         <div className="flex flex-col space-y-2">
           <a
             href="mailto:founders@0.email"
@@ -145,7 +115,7 @@ const sections = [
             className="inline-flex items-center text-blue-400 hover:text-blue-300"
           >
             <Github className="mr-2 h-4 w-4" />
-            Open an issue on GitHub
+            {m['pages.about.openGithubIssue']()}
           </a>
         </div>
       </div>
