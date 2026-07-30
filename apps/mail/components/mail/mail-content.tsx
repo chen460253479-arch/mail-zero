@@ -59,7 +59,7 @@ export function MailContent({ id, html, senderEmail }: MailContentProps) {
       refetch();
     },
     onError: () => {
-      toast.error('Failed to trust sender');
+      toast.error(m['common.mail.failedToTrustSender']());
     },
   });
 

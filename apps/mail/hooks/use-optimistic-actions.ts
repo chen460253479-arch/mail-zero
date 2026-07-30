@@ -126,7 +126,7 @@ export function useOptimisticActions() {
     optimisticActionsManager.pendingActions.set(pendingActionId, pendingAction as PendingAction);
 
     const itemCount = threadIds.length;
-    const bulkActionMessage = itemCount > 1 ? `${toastMessage} (${itemCount} items)` : toastMessage;
+    const bulkActionMessage = itemCount > 1 ? m['common.actions.bulkAction']({ message: toastMessage, count: itemCount }) : toastMessage;
 
     async function doAction() {
       try {
@@ -150,7 +150,7 @@ export function useOptimisticActions() {
         optimisticActionsManager.pendingActions.delete(pendingActionId);
         optimisticActionsManager.pendingActionsByType.get(type)?.delete(pendingActionId);
         await refreshData();
-        toast.error('Action failed');
+        toast.error(m['common.actions.actionFailed']());
       }
     }
 
@@ -163,7 +163,7 @@ export function useOptimisticActions() {
           doAction();
         },
         action: {
-          label: 'Undo',
+          label: m['common.actions.undo'](),
           onClick: () => {
             undo();
             optimisticActionsManager.pendingActions.delete(pendingActionId);
@@ -204,7 +204,7 @@ export function useOptimisticActions() {
         undo: () => {
           removeOptimisticAction(optimisticId);
         },
-        toastMessage: silent ? '' : 'Marked as read',
+        toastMessage: silent ? '' : m['common.mail.markedAsRead'](),
       });
     },
     [addOptimisticAction, removeOptimisticAction, setMail, updateKeyword],
@@ -234,7 +234,7 @@ export function useOptimisticActions() {
       undo: () => {
         removeOptimisticAction(optimisticId);
       },
-      toastMessage: 'Marked as unread',
+      toastMessage: m['common.mail.markedAsUnread'](),
     });
   }
 
@@ -421,7 +421,9 @@ export function useOptimisticActions() {
         undo: () => {
           removeOptimisticAction(optimisticId);
         },
-        toastMessage: isImportant ? 'Marked as important' : 'Unmarked as important',
+        toastMessage: isImportant
+          ? m['common.mail.markedAsImportant']()
+          : m['common.mail.markedAsUnimportant'](),
       });
     },
     [addOptimisticAction, removeOptimisticAction, setMail, updateKeyword],
@@ -466,8 +468,8 @@ export function useOptimisticActions() {
         removeOptimisticAction(optimisticId);
       },
       toastMessage: add
-        ? `Label added${threadIds.length > 1 ? ` to ${threadIds.length} threads` : ''}`
-        : `Label removed${threadIds.length > 1 ? ` from ${threadIds.length} threads` : ''}`,
+        ? m['common.mail.labelAdded']({ count: threadIds.length })
+        : m['common.mail.labelRemoved']({ count: threadIds.length }),
     });
   }
 
@@ -501,7 +503,7 @@ export function useOptimisticActions() {
       undo: () => {
         removeOptimisticAction(optimisticId);
       },
-      toastMessage: `Snoozed until ${wakeAt.toLocaleString()}`,
+      toastMessage: m['common.mail.snoozedUntil']({ date: wakeAt.toLocaleString() }),
       folders: [currentFolder, 'snoozed'],
     });
   }
@@ -530,7 +532,7 @@ export function useOptimisticActions() {
       undo: () => {
         removeOptimisticAction(optimisticId);
       },
-      toastMessage: 'Moved to Inbox',
+      toastMessage: m['common.actions.movedToInbox'](),
       folders: [currentFolder, 'inbox'],
     });
   }
@@ -563,7 +565,7 @@ export function useOptimisticActions() {
       undo: () => {
         removeOptimisticAction(optimisticId);
       },
-      toastMessage: 'Draft deleted',
+      toastMessage: m['common.mail.draftDeleted'](),
     });
   }
 

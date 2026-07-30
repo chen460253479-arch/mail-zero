@@ -14,6 +14,7 @@ import { useMailDelivery } from '@/modules/mail';
 import { useQueryState } from 'nuqs';
 import { X } from '../icons/icons';
 import { toast } from 'sonner';
+import { m } from '@/paraglide/messages';
 import './prosemirror.css';
 
 // Define the draft type to include CC and BCC fields
@@ -65,7 +66,7 @@ export function CreateEmail({
     if (draftError) {
       console.error('Error loading draft:', draftError);
       setIsDraftFailed(true);
-      toast.error('Failed to load draft');
+      toast.error(m['pages.createEmail.failedToLoadDraft']());
     }
   }, [draftError]);
 
@@ -161,7 +162,7 @@ export function CreateEmail({
             <div className="flex h-[600px] w-[750px] items-center justify-center rounded-2xl border">
               <div className="text-center">
                 <div className="mx-auto mb-4 h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"></div>
-                <p>Loading draft...</p>
+                <p>{m['pages.createEmail.loadingDraft']()}</p>
               </div>
             </div>
           ) : (

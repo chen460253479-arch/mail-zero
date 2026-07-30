@@ -144,7 +144,7 @@ function SortableNote({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 w-8 p-0 opacity-30 group-hover:opacity-100">
                 <MoreVertical className="h-4 w-4" />
-                <span className="sr-only">More</span>
+                <span className="sr-only">{m['common.mail.more']()}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent

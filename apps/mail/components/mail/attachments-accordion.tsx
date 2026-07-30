@@ -2,6 +2,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '..
 import { formatFileSize, getFileIcon } from '@/lib/utils';
 import type { Attachment } from '@/types';
 import { Paperclip } from 'lucide-react';
+import { m } from '@/paraglide/messages';
 
 type Props = {
   attachments: Attachment[];
@@ -21,7 +22,9 @@ const AttachmentsAccordion = ({ attachments, setSelectedAttachment }: Props) => 
           <AccordionTrigger className="px-2 py-3 hover:no-underline">
             <div className="flex items-center gap-2">
               <Paperclip className="text-muted-foreground h-4 w-4" />
-              <h3 className="text-sm font-medium">Attachments ({attachments.length})</h3>
+              <h3 className="text-sm font-medium">
+                {m['common.mail.attachmentsWithCount']({ count: attachments.length })}
+              </h3>
             </div>
           </AccordionTrigger>
           <AccordionContent>

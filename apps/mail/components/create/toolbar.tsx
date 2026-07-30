@@ -43,7 +43,7 @@ export const Toolbar = ({ editor }: { editor: Editor | null }) => {
                     <Undo2 className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Undo</TooltipContent>
+                <TooltipContent>{m['pages.createEmail.editor.menuBar.undo']()}</TooltipContent>
               </Tooltip>
 
               <Tooltip>
@@ -60,7 +60,7 @@ export const Toolbar = ({ editor }: { editor: Editor | null }) => {
                     <Redo2 className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Redo</TooltipContent>
+                <TooltipContent>{m['pages.createEmail.editor.menuBar.redo']()}</TooltipContent>
               </Tooltip>
             </div>
 
@@ -78,7 +78,7 @@ export const Toolbar = ({ editor }: { editor: Editor | null }) => {
                     <Heading1 className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>H1</TooltipContent>
+                <TooltipContent>{m['pages.createEmail.editor.menuBar.heading1']()}</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -93,7 +93,7 @@ export const Toolbar = ({ editor }: { editor: Editor | null }) => {
                     <Heading2 className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>H2</TooltipContent>
+                <TooltipContent>{m['pages.createEmail.editor.menuBar.heading2']()}</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -108,7 +108,7 @@ export const Toolbar = ({ editor }: { editor: Editor | null }) => {
                     <Heading3 className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>H3</TooltipContent>
+                <TooltipContent>{m['pages.createEmail.editor.menuBar.heading3']()}</TooltipContent>
               </Tooltip>
             </div>
             <Separator orientation="vertical" className="relative right-1 top-0.5 h-6" />
@@ -123,7 +123,7 @@ export const Toolbar = ({ editor }: { editor: Editor | null }) => {
                     onClick={() => editor.chain().focus().toggleBold().run()}
                     disabled={!editor.can().chain().focus().toggleBold().run()}
                     className={`h-auto w-auto rounded p-1.5 ${editor.isActive('bold') ? 'bg-muted font-medium' : 'bg-background'}`}
-                    title="Bold"
+                    title={m['pages.createEmail.editor.menuBar.bold']()}
                   >
                     <Bold className="h-4 w-4" />
                   </Button>
@@ -231,7 +231,7 @@ export const Toolbar = ({ editor }: { editor: Editor | null }) => {
                     <TextQuote className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Block Quote</TooltipContent>
+                <TooltipContent>{m['pages.createEmail.editor.menuBar.blockquote']()}</TooltipContent>
               </Tooltip>
             </div>
           </div>

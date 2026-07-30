@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
+import { m } from '@/paraglide/messages';
 
 const pad2 = (n: number) => n.toString().padStart(2, '0');
 const getLocalTimeFromDate = (d: Date) => `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
@@ -55,7 +56,7 @@ export const ScheduleSendPicker: React.FC<ScheduleSendPickerProps> = ({
     combinedDate.setHours(hours, minutes, 0, 0);
 
     if (validate && combinedDate.getTime() < Date.now()) {
-      toast.error('Scheduled time cannot be in the past');
+      toast.error(m['pages.createEmail.schedulePast']());
       onValidityChange?.(false);
       return;
     }
@@ -110,13 +111,13 @@ export const ScheduleSendPicker: React.FC<ScheduleSendPickerProps> = ({
   };
 
   const triggerLabel = (() => {
-    if (!selectedDate) return 'Send later';
+    if (!selectedDate) return m['pages.createEmail.sendLater']();
     try {
       const formattedTime = formatTime12Hour(time);
       const formattedDate = format(selectedDate, 'dd MMM yyyy');
       return `${formattedDate} ${formattedTime}`;
     } catch {
-      return 'Send later';
+      return m['pages.createEmail.sendLater']();
     }
   })();
 
@@ -134,7 +135,7 @@ export const ScheduleSendPicker: React.FC<ScheduleSendPickerProps> = ({
             >
               <CalendarIcon className="h-4 w-4" />
               <span>
-                {selectedDate ? format(selectedDate, 'dd MMM yyyy') : 'Select Date'}
+                {selectedDate ? format(selectedDate, 'dd MMM yyyy') : m['pages.createEmail.selectDate']()}
               </span>
             </button>
           </PopoverTrigger>
@@ -167,7 +168,7 @@ export const ScheduleSendPicker: React.FC<ScheduleSendPickerProps> = ({
           </PopoverTrigger>
           <PopoverContent className="z-[100] w-auto p-4" align="start" side="top" sideOffset={8}>
             <div className="space-y-4">
-              <h3 className="text-sm font-medium">Select Time</h3>
+              <h3 className="text-sm font-medium">{m['pages.createEmail.selectTime']()}</h3>
               <Input
                 type="time"
                 value={time}
@@ -186,7 +187,7 @@ export const ScheduleSendPicker: React.FC<ScheduleSendPickerProps> = ({
             className,
           )}
         >
-          <span>Cancel</span>
+          <span>{m['common.actions.cancel']()}</span>
         </button>
       </>
     );

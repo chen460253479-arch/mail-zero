@@ -226,7 +226,8 @@ const ThreadAttachments = ({ attachments }: { attachments: Attachment[] }) => {
     <div className="mt-2 w-full">
       <div className="flex items-center gap-2">
         <span className="text-sm font-medium">
-          Thread Attachments <span className="text-[#8D8D8D]">[{attachments.length}]</span>
+              {m['common.mail.threadAttachments']()}{' '}
+              <span className="text-[#8D8D8D]">[{attachments.length}]</span>
         </span>
       </div>
       <div className="mt-2 flex flex-wrap gap-2">
@@ -306,7 +307,7 @@ const downloadAttachment = async (attachment: {
     window.URL.revokeObjectURL(url);
   } catch (error) {
     console.error('Error downloading attachment:', error);
-    toast.error('Failed to download attachment');
+    toast.error(m['common.mail.failedToDownloadAttachment']());
   }
 };
 
@@ -396,7 +397,7 @@ const openAttachment = async (attachment: {
     }
   } catch (error) {
     console.error('Error opening attachment:', error);
-    toast.error('Failed to open attachment');
+    toast.error(m['common.mail.failedToOpenAttachment']());
   }
 };
 
@@ -520,7 +521,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
     if (!personEmail) return;
 
     await navigator.clipboard.writeText(personEmail || '');
-    toast.success('Email copied to clipboard');
+    toast.success(m['common.mail.emailCopied']());
   }, []);
 
   // email printing
@@ -744,7 +745,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
           <div class="email-container">
             <!-- Email Header -->
             <div class="email-header">
-              <h1 class="email-title">${emailData.subject || 'No Subject'}</h1>
+              <h1 class="email-title">${emailData.subject || m['common.mail.noSubject']()}</h1>
 
               ${
                 emailData?.tags && emailData.tags.length > 0
@@ -760,7 +761,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
 
               <div class="email-meta">
                 <div class="meta-row">
-                  <span class="meta-label">From:</span>
+                  <span class="meta-label">${m['common.mailDisplay.from']()}:</span>
                   <span class="meta-value">
                     ${cleanNameDisplay(emailData.sender?.name)}
                     ${emailData.sender?.email ? `&lt;${emailData.sender.email}&gt;` : ''}
@@ -771,7 +772,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                   emailData.to && emailData.to.length > 0
                     ? `
                   <div class="meta-row">
-                    <span class="meta-label">To:</span>
+                    <span class="meta-label">${m['common.mailDisplay.to']()}:</span>
                     <span class="meta-value">
                       ${emailData.to
                         .map(
@@ -789,7 +790,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                   emailData.cc && emailData.cc.length > 0
                     ? `
                   <div class="meta-row">
-                    <span class="meta-label">CC:</span>
+                    <span class="meta-label">${m['common.mailDisplay.cc']()}:</span>
                     <span class="meta-value">
                       ${emailData.cc
                         .map(
@@ -807,7 +808,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                   emailData.bcc && emailData.bcc.length > 0
                     ? `
                   <div class="meta-row">
-                    <span class="meta-label">BCC:</span>
+                    <span class="meta-label">${m['common.mailDisplay.bcc']()}:</span>
                     <span class="meta-value">
                       ${emailData.bcc
                         .map(
@@ -822,7 +823,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                 }
 
                 <div class="meta-row">
-                  <span class="meta-label">Date:</span>
+                  <span class="meta-label">${m['common.mailDisplay.date']()}:</span>
                   <span class="meta-value">${formatDate(emailData.receivedOn)}</span>
                 </div>
               </div>
@@ -899,7 +900,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
       }
     } catch (error) {
       console.error('Error printing email:', error);
-      toast.error('Failed to print email. Please try again.');
+      toast.error(m['common.mail.failedToPrintEmail']());
     }
   };
 
@@ -1245,7 +1246,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                                   }}
                                 >
                                   <HardDriveDownload className="fill-iconLight dark:text-iconDark dark:fill-iconLight mr-2 h-4 w-4" />
-                                  Download All Attachments
+                              {m['common.mail.downloadAllAttachments']()}
                                 </DropdownMenuItem>
                               )}
                             </DropdownMenuContent>
@@ -1265,7 +1266,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
 
                               // If you're the only recipient
                               if (allRecipients.length === 1 && folder !== 'sent') {
-                                return <span key="you">You</span>;
+                                return <span key="you">{m['common.mail.you']()}</span>;
                               }
 
                               // Show first 3 recipients + count of others
@@ -1290,7 +1291,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                           </p>
                           {(emailData?.bcc?.length || 0) > 0 && (
                             <p className="text-muted-foreground text-sm font-medium dark:text-[#8C8C8C]">
-                              Bcc:{' '}
+                            {m['common.mail.bcc']()}{' '}
                               {emailData?.bcc?.map((recipient, index) => (
                                 <span key={recipient.email}>
                                   {cleanNameDisplay(recipient.name) ||

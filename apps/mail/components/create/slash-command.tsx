@@ -7,11 +7,12 @@ import {
   Text,
   } from 'lucide-react';
 import { createSuggestionItems } from 'novel';
+import { m } from '@/paraglide/messages';
 
 export const suggestionItems = createSuggestionItems([
   {
-    title: 'Text',
-    description: 'Just start typing with plain text.',
+    title: m['pages.createEmail.slashCommand.text'](),
+    description: m['pages.createEmail.slashCommand.textDescription'](),
     searchTerms: ['p', 'paragraph'],
     icon: <Text size={18} />,
     command: ({ editor, range }) => {
@@ -20,8 +21,8 @@ export const suggestionItems = createSuggestionItems([
   },
 
   {
-    title: 'Heading 1',
-    description: 'Big section heading.',
+    title: m['pages.createEmail.editor.menuBar.heading1'](),
+    description: m['pages.createEmail.slashCommand.heading1Description'](),
     searchTerms: ['title', 'big', 'large'],
     icon: <Heading1 size={18} />,
     command: ({ editor, range }) => {
@@ -29,8 +30,8 @@ export const suggestionItems = createSuggestionItems([
     },
   },
   {
-    title: 'Heading 2',
-    description: 'Medium section heading.',
+    title: m['pages.createEmail.editor.menuBar.heading2'](),
+    description: m['pages.createEmail.slashCommand.heading2Description'](),
     searchTerms: ['subtitle', 'medium'],
     icon: <Heading2 size={18} />,
     command: ({ editor, range }) => {
@@ -38,8 +39,8 @@ export const suggestionItems = createSuggestionItems([
     },
   },
   {
-    title: 'Heading 3',
-    description: 'Small section heading.',
+    title: m['pages.createEmail.editor.menuBar.heading3'](),
+    description: m['pages.createEmail.slashCommand.heading3Description'](),
     searchTerms: ['subtitle', 'small'],
     icon: <Heading3 size={18} />,
     command: ({ editor, range }) => {
@@ -47,8 +48,8 @@ export const suggestionItems = createSuggestionItems([
     },
   },
   {
-    title: 'Bullet List',
-    description: 'Create a simple bullet list.',
+    title: m['pages.createEmail.editor.menuBar.bulletList'](),
+    description: m['pages.createEmail.slashCommand.bulletListDescription'](),
     searchTerms: ['unordered', 'point'],
     icon: <List size={18} />,
     command: ({ editor, range }) => {
@@ -56,8 +57,8 @@ export const suggestionItems = createSuggestionItems([
     },
   },
   {
-    title: 'Numbered List',
-    description: 'Create a list with numbering.',
+    title: m['pages.createEmail.slashCommand.numberedList'](),
+    description: m['pages.createEmail.slashCommand.numberedListDescription'](),
     searchTerms: ['ordered'],
     icon: <ListOrdered size={18} />,
     command: ({ editor, range }) => {

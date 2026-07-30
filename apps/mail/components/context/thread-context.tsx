@@ -265,7 +265,7 @@ export function ThreadContextMenu({
     } else if (!newReadState) {
       optimisticMarkAsUnread(targets);
     } else {
-      toast.error('Failed to mark as read');
+      toast.error(m['common.mail.failedToMarkAsRead']());
     }
 
     // Clear bulk selection after action
@@ -381,7 +381,7 @@ export function ThreadContextMenu({
       return [
         {
           id: 'unsnooze',
-          label: 'Unsnooze',
+        label: m['common.mail.unsnooze'](),
           icon: <Inbox className="mr-2.5 h-4 w-4 opacity-60" />,
           action: () => {
             const targets = mail.bulkSelected.length ? mail.bulkSelected : [threadId];
@@ -540,7 +540,7 @@ export function ThreadContextMenu({
       },
       {
         id: 'snooze',
-        label: 'Snooze',
+        label: m['common.mail.snooze'](),
         icon: <Clock className="mr-2.5 h-4 w-4 opacity-60" />,
         action: () => setSnoozeOpen(true),
         disabled: false,

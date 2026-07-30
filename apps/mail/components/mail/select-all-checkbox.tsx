@@ -10,6 +10,7 @@ import { useParams } from 'react-router';
 import { Check } from '../icons/icons';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { m } from '@/paraglide/messages';
 
 export default function SelectAllCheckbox({ className }: { className?: string }) {
   const [mail, setMail] = useMail();
@@ -61,7 +62,7 @@ export default function SelectAllCheckbox({ className }: { className?: string })
       }
     } catch (err: unknown) {
       console.error('Failed to fetch all thread IDs', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to select all emails');
+      toast.error(err instanceof Error ? err.message : m['common.mail.failedToSelectAllEmails']());
     }
 
     return ids;
@@ -77,11 +78,9 @@ export default function SelectAllCheckbox({ className }: { className?: string })
 
     setMail((prev) => ({ ...prev, bulkSelected: loadedIds }));
 
-    toast(
-      `${loadedIds.length} conversation${loadedIds.length !== 1 ? 's' : ''} on this page selected.`,
-      {
+    toast(m['common.mail.selectedPageConversations']({ count: loadedIds.length }), {
         action: {
-          label: 'Select all conversations',
+          label: m['common.mail.selectAllConversations'](),
           onClick: async () => {
             try {
               if (!allIdsCache.current) {
@@ -94,13 +93,12 @@ export default function SelectAllCheckbox({ className }: { className?: string })
             } catch (err) {
               console.error(err);
               setIsFetchingIds(false);
-              toast.error('Failed to select all conversations');
+              toast.error(m['common.mail.failedToSelectAllConversations']());
             }
           },
         },
         className: 'w-auto! whitespace-nowrap',
-      },
-    );
+    });
   }, [isFetchingIds, mail.bulkSelected.length, loadedIds, fetchAllMatchingThreadIds, setMail]);
 
   useEffect(() => {
@@ -138,7 +136,7 @@ export default function SelectAllCheckbox({ className }: { className?: string })
             })}
           />
         </span>
-        Select all
+        {m['common.mail.selectAll']()}
       </label>
     </div>
   );

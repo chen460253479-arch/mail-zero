@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { TRPCClientError } from '@trpc/client';
+import { m } from '@/paraglide/messages';
 
 type EmailTemplate = {
   id: string;
@@ -92,7 +93,7 @@ const TemplateButtonComponent: React.FC<TemplateButtonProps> = ({
   const handleSaveTemplate = async () => {
     if (!editor) return;
     if (!templateName.trim()) {
-      toast.error('Please provide a name');
+      toast.error(m['pages.createEmail.templates.nameRequired']());
       return;
     }
 
@@ -110,14 +111,14 @@ const TemplateButtonComponent: React.FC<TemplateButtonProps> = ({
       await queryClient.invalidateQueries({
         queryKey: trpc.templates.list.queryKey(),
       });
-      toast.success('Template saved');
+      toast.success(m['pages.createEmail.templates.saved']());
       setTemplateName('');
       setSaveDialogOpen(false);
     } catch (error) {
       if (error instanceof TRPCClientError) {
         toast.error(error.message);
       } else {
-        toast.error('Failed to save template');
+        toast.error(m['pages.createEmail.templates.saveFailed']());
       }
     } finally {
       setIsSaving(false);
@@ -145,12 +146,12 @@ const TemplateButtonComponent: React.FC<TemplateButtonProps> = ({
         await queryClient.invalidateQueries({
           queryKey: trpc.templates.list.queryKey(),
         });
-        toast.success('Template deleted');
+        toast.success(m['pages.createEmail.templates.deleted']());
       } catch (err) {
         if (err instanceof TRPCClientError) {
           toast.error(err.message);
         } else {
-          toast.error('Failed to delete template');
+          toast.error(m['pages.createEmail.templates.deleteFailed']());
         }
       }
     },
@@ -180,7 +181,7 @@ const TemplateButtonComponent: React.FC<TemplateButtonProps> = ({
       toast(`Delete template "${templateName}"?`, {
         duration: 10000,
         action: {
-          label: 'Delete',
+          label: m['pages.createEmail.templates.delete'](),
           onClick: () => handleDeleteTemplate(templateId),
         },
         className: 'pointer-events-auto',
@@ -218,7 +219,7 @@ const TemplateButtonComponent: React.FC<TemplateButtonProps> = ({
               <DropdownMenuSubContent className="z-99999 w-60">
                 <div className="p-2 border-b border-border sticky top-0 bg-background">
                   <Input
-                    placeholder="Search..."
+                    placeholder={m['pages.createEmail.templates.search']()}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="h-8 text-sm"
@@ -244,7 +245,7 @@ const TemplateButtonComponent: React.FC<TemplateButtonProps> = ({
                     </DropdownMenuItem>
                   ))}
                   {filteredTemplates.length === 0 && (
-                    <div className="p-2 text-xs text-muted-foreground">No templates</div>
+                    <div className="p-2 text-xs text-muted-foreground">{m['pages.createEmail.templates.empty']()}</div>
                   )}
                 </div>
               </DropdownMenuSubContent>
@@ -256,11 +257,11 @@ const TemplateButtonComponent: React.FC<TemplateButtonProps> = ({
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
         <DialogContent showOverlay>
           <DialogHeader>
-            <DialogTitle>Save as Template</DialogTitle>
+            <DialogTitle>{m['pages.createEmail.templates.saveAs']()}</DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-2">
             <Input
-              placeholder="Template name"
+              placeholder={m['pages.createEmail.templates.namePlaceholder']()}
               value={templateName}
               onChange={(e) => setTemplateName(e.target.value)}
               autoFocus
@@ -284,4 +285,4 @@ const TemplateButtonComponent: React.FC<TemplateButtonProps> = ({
   );
 };
 
-export const TemplateButton = React.memo(TemplateButtonComponent); 
+export const TemplateButton = React.memo(TemplateButtonComponent);

@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import type { UserSettings } from '@zero/server/schemas';
 import { isSendResult } from '@/lib/email-utils';
 import { useMailDelivery } from '@/modules/mail';
+import { m } from '@/paraglide/messages';
 
 export type EmailData = {
   to: string[];
@@ -38,15 +39,15 @@ export const useUndoSend = () => {
 
       if (timeRemaining > 5_000) {
         if (wasUserScheduled) {
-          toast.success('Email scheduled', {
+          toast.success(m['common.actions.emailScheduled'](), {
             action: {
-              label: 'Undo',
+              label: m['common.actions.undo'](),
               onClick: async () => {
                 try {
                   await cancelSubmission(messageId);
-                  toast.info('Schedule cancelled');
+                  toast.info(m['common.actions.scheduleCancelled']());
                 } catch {
-                  toast.error('Failed to cancel');
+                  toast.error(m['common.actions.failedToCancel']());
                 }
               },
             },
@@ -54,9 +55,9 @@ export const useUndoSend = () => {
             closeButton: true,
           });
         } else {
-          toast.success('Email sent', {
+          toast.success(m['pages.createEmail.emailSent'](), {
             action: {
-              label: 'Undo',
+              label: m['common.actions.undo'](),
               onClick: async () => {
                 try {
                   await cancelSubmission(messageId);
@@ -68,9 +69,9 @@ export const useUndoSend = () => {
                   url.searchParams.set('isComposeOpen', 'true');
                   window.history.replaceState({}, '', url.toString());
 
-                  toast.info('Send cancelled');
+                  toast.info(m['common.actions.sendCancelled']());
                 } catch {
-                  toast.error('Failed to cancel');
+                  toast.error(m['common.actions.failedToCancel']());
                 }
               },
             },

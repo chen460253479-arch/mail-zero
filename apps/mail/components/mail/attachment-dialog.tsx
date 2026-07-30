@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Download, ExternalLink } from 'lucide-react';
 import { Button } from '../ui/button';
+import { m } from '@/paraglide/messages';
 
 type Props = {
   selectedAttachment: null | {
@@ -38,13 +39,13 @@ const AttachmentDialog = ({ selectedAttachment, setSelectedAttachment }: Props) 
                   rel="noopener noreferrer"
                 >
                   <Download className="mr-1 h-4 w-4" />
-                  Download
+                  {m['common.mail.download']()}
                 </a>
               </Button>
               <Button variant="outline" size="sm" asChild>
                 <a href={selectedAttachment?.url} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="mr-1 h-4 w-4" />
-                  Open
+                  {m['common.mail.open']()}
                 </a>
               </Button>
             </div>
@@ -67,7 +68,7 @@ const AttachmentDialog = ({ selectedAttachment, setSelectedAttachment }: Props) 
                   !['pdf', 'excel', 'word', 'image'].includes(selectedAttachment.type) &&
                   '📎'}
               </div>
-              <p className="text-muted-foreground">Preview not available</p>
+              <p className="text-muted-foreground">{m['common.mail.previewNotAvailable']()}</p>
             </div>
           )}
         </div>

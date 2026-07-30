@@ -3,6 +3,7 @@ import { Check, ChevronDown } from 'lucide-react';
 
 import { PopoverTrigger, Popover, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
+import { m } from '@/paraglide/messages';
 export interface BubbleColorMenuItem {
   name: string;
   color: string;
@@ -10,78 +11,78 @@ export interface BubbleColorMenuItem {
 
 const TEXT_COLORS: BubbleColorMenuItem[] = [
   {
-    name: 'Default',
+    name: m['common.notes.colors.default'](),
     color: 'var(--novel-black)',
   },
   {
-    name: 'Purple',
+    name: m['common.notes.colors.purple'](),
     color: '#9333EA',
   },
   {
-    name: 'Red',
+    name: m['common.notes.colors.red'](),
     color: '#E00000',
   },
   {
-    name: 'Yellow',
+    name: m['common.notes.colors.yellow'](),
     color: '#EAB308',
   },
   {
-    name: 'Blue',
+    name: m['common.notes.colors.blue'](),
     color: '#2563EB',
   },
   {
-    name: 'Green',
+    name: m['common.notes.colors.green'](),
     color: '#008A00',
   },
   {
-    name: 'Orange',
+    name: m['common.notes.colors.orange'](),
     color: '#FFA500',
   },
   {
-    name: 'Pink',
+    name: m['common.notes.colors.pink'](),
     color: '#BA4081',
   },
   {
-    name: 'Gray',
+    name: m['common.notes.colors.gray'](),
     color: '#A8A29E',
   },
 ];
 
 const HIGHLIGHT_COLORS: BubbleColorMenuItem[] = [
   {
-    name: 'Default',
+    name: m['common.notes.colors.default'](),
     color: 'var(--novel-highlight-default)',
   },
   {
-    name: 'Purple',
+    name: m['common.notes.colors.purple'](),
     color: 'var(--novel-highlight-purple)',
   },
   {
-    name: 'Red',
+    name: m['common.notes.colors.red'](),
     color: 'var(--novel-highlight-red)',
   },
   {
-    name: 'Yellow',
+    name: m['common.notes.colors.yellow'](),
     color: 'var(--novel-highlight-yellow)',
   },
   {
-    name: 'Blue',
+    name: m['common.notes.colors.blue'](),
     color: 'var(--novel-highlight-blue)',
   },
   {
-    name: 'Green',
+    name: m['common.notes.colors.green'](),
     color: 'var(--novel-highlight-green)',
   },
   {
-    name: 'Orange',
+    name: m['common.notes.colors.orange'](),
     color: 'var(--novel-highlight-orange)',
   },
   {
-    name: 'Pink',
+    name: m['common.notes.colors.pink'](),
     color: 'var(--novel-highlight-pink)',
   },
   {
-    name: 'Gray',
+    name: m['common.notes.colors.gray'](),
     color: 'var(--novel-highlight-gray)',
   },
 ];
@@ -126,7 +127,9 @@ export const ColorSelector = ({ open, onOpenChange }: ColorSelectorProps) => {
         align="start"
       >
         <div className="flex flex-col">
-          <div className="text-muted-foreground my-1 px-2 text-sm font-semibold">Color</div>
+          <div className="text-muted-foreground my-1 px-2 text-sm font-semibold">
+            {m['pages.createEmail.editor.menuBar.color']()}
+          </div>
           {TEXT_COLORS.map(({ name, color }) => (
             <EditorBubbleItem
               key={name}
@@ -151,7 +154,9 @@ export const ColorSelector = ({ open, onOpenChange }: ColorSelectorProps) => {
           ))}
         </div>
         <div>
-          <div className="text-muted-foreground my-1 px-2 text-sm font-semibold">Background</div>
+          <div className="text-muted-foreground my-1 px-2 text-sm font-semibold">
+            {m['pages.createEmail.editor.menuBar.background']()}
+          </div>
           {HIGHLIGHT_COLORS.map(({ name, color }) => (
             <EditorBubbleItem
               key={name}

@@ -5,6 +5,7 @@ import { MailLayout } from '@/components/mail/mail';
 import { useLabels } from '@/hooks/use-labels';
 import { useEffect, useState } from 'react';
 import type { Route } from './+types/page';
+import { m } from '@/paraglide/messages';
 
 const ALLOWED_FOLDERS = new Set(['inbox', 'draft', 'sent', 'spam', 'bin', 'archive', 'snoozed']);
 
@@ -64,9 +65,9 @@ export default function MailPage() {
   if (!isLabelValid) {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center">
-        <h2 className="text-xl font-semibold">Folder not found</h2>
+        <h2 className="text-xl font-semibold">{m['common.mail.folderNotFound']()}</h2>
         <p className="text-muted-foreground mt-2">
-          The folder you're looking for doesn't exist. Redirecting to inbox...
+          {m['common.mail.folderRedirecting']()}
         </p>
       </div>
     );

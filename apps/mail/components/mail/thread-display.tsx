@@ -241,8 +241,8 @@ export function ThreadDisplay() {
           }),
       }),
       {
-        success: 'Unsubscribed successfully!',
-        error: 'Failed to unsubscribe',
+        success: m['common.mailDisplay.unsubscribed'](),
+        error: m['common.mailDisplay.failedToUnsubscribe'](),
       },
     );
   };
@@ -298,7 +298,9 @@ export function ThreadDisplay() {
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Print Thread - ${emailData?.latest?.subject || 'No Subject'}</title>
+          <title>${m['common.mailDisplay.printThreadTitle']({
+            subject: emailData?.latest?.subject || m['common.mail.noSubject'](),
+          })}</title>
           <style>
             * {
               margin: 0;
@@ -498,7 +500,7 @@ export function ThreadDisplay() {
               (message, index) => `
             <div class="email-container">
               <div class="email-header">
-                ${index === 0 ? `<h1 class="email-title">${message.subject || 'No Subject'}</h1>` : ''}
+                ${index === 0 ? `<h1 class="email-title">${message.subject || m['common.mail.noSubject']()}</h1>` : ''}
 
 
                 ${
@@ -516,7 +518,7 @@ export function ThreadDisplay() {
 
                 <div class="email-meta">
                   <div class="meta-row">
-                    <span class="meta-label">From:</span>
+                    <span class="meta-label">${m['common.mailDisplay.from']()}:</span>
                     <span class="meta-value">
                       ${cleanNameDisplay(message.sender?.name)}
                       ${message.sender?.email ? `<${message.sender.email}>` : ''}
@@ -528,7 +530,7 @@ export function ThreadDisplay() {
                     message.to && message.to.length > 0
                       ? `
                     <div class="meta-row">
-                      <span class="meta-label">To:</span>
+                      <span class="meta-label">${m['common.mailDisplay.to']()}:</span>
                       <span class="meta-value">
                         ${message.to
                           .map(
@@ -547,7 +549,7 @@ export function ThreadDisplay() {
                     message.cc && message.cc.length > 0
                       ? `
                     <div class="meta-row">
-                      <span class="meta-label">CC:</span>
+                      <span class="meta-label">${m['common.mailDisplay.cc']()}:</span>
                       <span class="meta-value">
                         ${message.cc
                           .map(
@@ -566,7 +568,7 @@ export function ThreadDisplay() {
                     message.bcc && message.bcc.length > 0
                       ? `
                     <div class="meta-row">
-                      <span class="meta-label">BCC:</span>
+                      <span class="meta-label">${m['common.mailDisplay.bcc']()}:</span>
                       <span class="meta-value">
                         ${message.bcc
                           .map(
@@ -582,7 +584,7 @@ export function ThreadDisplay() {
 
 
                   <div class="meta-row">
-                    <span class="meta-label">Date:</span>
+                    <span class="meta-label">${m['common.mailDisplay.date']()}:</span>
                     <span class="meta-value">${format(new Date(message.receivedOn), 'PPpp')}</span>
                   </div>
                 </div>
@@ -592,7 +594,10 @@ export function ThreadDisplay() {
 
               <div class="email-body">
                 <div class="email-content">
-                  ${cleanHtml(message.decodedBody ?? '<p><em>No email content available</em></p>')}
+                  ${cleanHtml(
+                    message.decodedBody ??
+                      `<p><em>${m['common.mail.noEmailContent']()}</em></p>`,
+                  )}
                 </div>
               </div>
 
@@ -601,7 +606,9 @@ export function ThreadDisplay() {
                 message.attachments && message.attachments.length > 0
                   ? `
                 <div class="attachments-section">
-                  <h2 class="attachments-title">Attachments (${message.attachments.length})</h2>
+                  <h2 class="attachments-title">${m['common.mail.attachmentsWithCount']({
+                    count: message.attachments.length,
+                  })}</h2>
                   ${message.attachments
                     .map(
                       (attachment) => `
@@ -659,7 +666,7 @@ export function ThreadDisplay() {
       };
     } catch (error) {
       console.error('Error printing thread:', error);
-      toast.error('Failed to print thread. Please try again.');
+      toast.error(m['common.mail.failedToPrintThread']());
     }
   };
 
@@ -734,9 +741,9 @@ export function ThreadDisplay() {
             <div className="flex flex-col items-center justify-center gap-2 text-center">
               <EmptyStateIcon width={200} height={200} />
               <div className="mt-4">
-                <p className="text-lg">It&apos;s empty here</p>
+                <p className="text-lg">{m['common.mail.empty']()}</p>
                 <p className="text-md text-muted-foreground dark:text-white/50">
-                  Choose an email to view details
+                  {m['common.mail.chooseEmail']()}
                 </p>
                 <div className="mt-4 grid grid-cols-1 gap-2 xl:grid-cols-2">
                   <button
@@ -746,7 +753,7 @@ export function ThreadDisplay() {
                     <Mail className="mr-1 h-3.5 w-3.5 fill-[#959595]" />
                     <div className="flex items-center justify-center gap-2.5 px-0.5">
                       <div className="dark:text-base-gray-950 justify-start text-sm leading-none">
-                        Send email
+                    {m['common.mail.sendEmail']()}
                       </div>
                     </div>
                   </button>
@@ -873,7 +880,7 @@ export function ThreadDisplay() {
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      aria-label="Thread actions"
+              aria-label={m['common.mail.threadActions']()}
                       aria-haspopup="menu"
                       className="focus:outline-hidden inline-flex h-7 w-7 cursor-pointer items-center justify-center gap-1 overflow-hidden rounded-lg bg-white transition-colors focus:ring-0 dark:bg-[#313131]"
                     >

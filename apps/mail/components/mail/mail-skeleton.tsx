@@ -3,6 +3,7 @@ import { Separator } from '../ui/separator';
 import { Skeleton } from '../ui/skeleton';
 import { Button } from '../ui/button';
 import { cn } from '@/lib/utils';
+import { m } from '@/paraglide/messages';
 
 export const MailDisplaySkeleton = ({ isFullscreen }: { isFullscreen?: boolean }) => {
   return (
@@ -139,32 +140,36 @@ export const MailHeaderSkeleton = ({ isFullscreen }: { isFullscreen?: boolean })
       <div className="flex flex-1 items-center gap-2">
         <Button variant="ghost" className="md:h-fit md:px-2" disabled={true}>
           <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
+          <span className="sr-only">{m['common.actions.close']()}</span>
         </Button>
         <Skeleton className="w-[150px] max-w-[300px] flex-1 truncate text-sm font-medium" />
       </div>
       <div className="flex items-center gap-2">
         <Button variant="ghost" className="md:h-fit md:px-2" disabled={true}>
           {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          <span className="sr-only">{isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}</span>
+          <span className="sr-only">
+            {isFullscreen
+              ? m['common.threadDisplay.exitFullscreen']()
+              : m['common.threadDisplay.enterFullscreen']()}
+          </span>
         </Button>
 
         <Button variant="ghost" className="md:h-fit md:px-2" disabled={true}>
           <Copy className="h-4 w-4" />
-          <span className="sr-only">Copy email data</span>
+          <span className="sr-only">{m['common.mail.copyEmailData']()}</span>
         </Button>
         <Button variant="ghost" className="md:h-fit md:px-2" disabled={true}>
           <Archive className="h-4 w-4" />
-          <span className="sr-only">Archive</span>
+          <span className="sr-only">{m['common.mail.archive']()}</span>
         </Button>
 
         <Button variant="ghost" className="md:h-fit md:px-2" disabled={true}>
           <Reply className="h-4 w-4" />
-          <span className="sr-only">Reply</span>
+          <span className="sr-only">{m['common.mail.reply']()}</span>
         </Button>
         <Button variant="ghost" className="md:h-fit md:px-2" disabled={true}>
           <MoreVertical className="h-4 w-4" />
-          <span className="sr-only">More</span>
+          <span className="sr-only">{m['common.mail.more']()}</span>
         </Button>
       </div>
     </div>

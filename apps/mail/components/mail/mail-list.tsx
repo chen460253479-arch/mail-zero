@@ -465,7 +465,9 @@ const Thread = memo(
                               <PencilCompose className="h-3 w-3 fill-blue-500 dark:fill-blue-400" />
                             </span>
                           </TooltipTrigger>
-                          <TooltipContent className="p-1 text-xs">Draft</TooltipContent>
+                          <TooltipContent className="p-1 text-xs">
+                            {m['common.mail.draft']()}
+                          </TooltipContent>
                         </Tooltip>
                       ) : null}
                       {/* {hasNotes ? (
@@ -665,7 +667,7 @@ const Draft = memo(function Draft({
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 hover:bg-[#FDE4E9] dark:hover:bg-[#411D23] [&_svg]:size-3.5"
-                aria-label="Delete draft"
+                          aria-label={m['common.mail.deleteDraft']()}
                 disabled={optimisticState.isRemoving}
                 onClick={handleDeleteDraft}
               >
@@ -992,15 +994,15 @@ export const MailList = memo(
                 <div className="flex flex-col items-center justify-center gap-2 text-center">
                   <EmptyStateIcon width={200} height={200} />
                   <div className="mt-5">
-                    <p className="text-lg">It&apos;s empty here</p>
+                    <p className="text-lg">{m['common.mail.empty']()}</p>
                     <p className="text-md text-muted-foreground dark:text-white/50">
-                      Search for another email or{' '}
+                      {m['common.mail.searchAnother']()}{' '}
                       <button
                         type="button"
                         className="cursor-pointer underline"
                         onClick={clearFilters}
                       >
-                        clear filters
+                        {m['common.mail.clearFilters']()}
                       </button>
                     </p>
                   </div>

@@ -186,7 +186,7 @@ export function MailLayout() {
                               className="h-6 rounded-md px-2 text-xs"
                               onClick={handleClearFilters}
                             >
-                              Clear
+                  {m['common.mail.clear']()}
                             </Button>
                           )}
                           <kbd className="bg-muted border-border/40 dark:bg-muted/40 pointer-events-none hidden h-6 select-none items-center gap-1 rounded border px-2 text-xs font-medium opacity-80 sm:flex">
@@ -205,7 +205,7 @@ export function MailLayout() {
                   ) : (
                     <div className="flex flex-1 items-center justify-between">
                       <div className="text-foreground text-sm font-medium">
-                        {mail.bulkSelected.length} selected
+                  {m['common.mail.selected']({ count: mail.bulkSelected.length })}
                       </div>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -253,24 +253,23 @@ export function MailLayout() {
                   <MailList />
                 ) : isConnectionPending ? (
                   <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-                    Loading…
+              {m['common.mail.loading']()}
                   </div>
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center px-8 text-center">
                     <div className="bg-primary/10 mb-4 flex h-12 w-12 items-center justify-center rounded-full">
                       <Mail className="h-5 w-5" />
                     </div>
-                    <h2 className="text-base font-semibold">Zero is ready</h2>
+                    <h2 className="text-base font-semibold">{m['common.mail.zeroReady']()}</h2>
                     <p className="text-muted-foreground mt-2 max-w-sm text-sm leading-6">
-                      Connect or select a mailbox when you are ready to sync, organize, and send
-                      email.
+                      {m['common.mail.zeroReadyDescription']()}
                     </p>
                     <Button
                       className="mt-5"
                       variant="outline"
                       onClick={() => navigate('/settings/connections')}
                     >
-                      Manage connections
+                        {m['common.mail.manageConnections']()}
                     </Button>
                   </div>
                 )}
@@ -496,7 +495,7 @@ function CategoryDropdown({ isMultiSelectMode }: CategoryDropdownProps) {
           className={cn(
             'text-muted-foreground border-border/40 bg-background/50 hover:bg-accent/30 dark:border-border/20 dark:bg-background/40 flex h-10 min-w-fit items-center gap-2 rounded-lg border px-3 backdrop-blur-sm transition-all',
           )}
-          aria-label="Filter by labels"
+            aria-label={m['common.mail.filterByLabels']()}
           aria-expanded={isOpen}
           aria-haspopup="menu"
         >
@@ -517,7 +516,7 @@ function CategoryDropdown({ isMultiSelectMode }: CategoryDropdownProps) {
         className="border-border/50 bg-muted w-48 rounded-xl border p-2 dark:bg-[#232323]"
         align="start"
         role="menu"
-        aria-label="Label filter options"
+                  aria-label={m['common.mail.labelFilterOptions']()}
       >
         {categorySettings.map((category) => (
           <DropdownMenuItem

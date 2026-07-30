@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { m } from '@/paraglide/messages';
 
 type SnoozeDialogProps = {
   trigger?: React.ReactElement;
@@ -51,7 +52,7 @@ export function SnoozeDialog({ trigger, onConfirm, open: controlledOpen, onOpenC
     }
 
     if (wakeDate.getTime() <= Date.now()) {
-      toast.error('Please choose a future date and time.');
+      toast.error(m['common.mail.snoozeFutureTime']());
       return;
     }
 
@@ -64,12 +65,12 @@ export function SnoozeDialog({ trigger, onConfirm, open: controlledOpen, onOpenC
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Snooze until…</DialogTitle>
-          <DialogDescription>Select date and time you'd like this email to return.</DialogDescription>
+          <DialogTitle>{m['common.mail.snoozeTitle']()}</DialogTitle>
+          <DialogDescription>{m['common.mail.snoozeDescription']()}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4 py-2">
           <label className="text-sm font-medium">
-            Date
+            {m['common.mail.date']()}
             <Input
               type="date"
               min={defaultDate}
@@ -78,7 +79,8 @@ export function SnoozeDialog({ trigger, onConfirm, open: controlledOpen, onOpenC
             />
           </label>
           <label className="text-sm font-medium">
-            Time <span className="text-xs font-normal text-muted-foreground">({timeZoneLabel})</span>
+            {m['common.mail.time']()}{' '}
+            <span className="text-xs font-normal text-muted-foreground">({timeZoneLabel})</span>
             <Input
               type="time"
               value={time}
@@ -88,11 +90,11 @@ export function SnoozeDialog({ trigger, onConfirm, open: controlledOpen, onOpenC
         </div>
         <DialogFooter className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => setOpen(false)}>
-            Cancel
+            {m['common.actions.cancel']()}
           </Button>
-          <Button onClick={handleSubmit}>Snooze</Button>
+          <Button onClick={handleSubmit}>{m['common.mail.snooze']()}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
-} 
+}

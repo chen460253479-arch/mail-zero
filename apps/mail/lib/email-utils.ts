@@ -3,6 +3,7 @@ import type { Sender } from '@/types';
 import DOMPurify from 'dompurify';
 import Color from 'color';
 import { z } from 'zod';
+import { m } from '@/paraglide/messages';
 
 export const fixNonReadableColors = (
   rootElement: HTMLElement,
@@ -212,13 +213,13 @@ export const wasSentWithTLS = (receivedHeaders: string[]) => {
 
 // cleans up html string for xss attacks and returns html
 export const cleanHtml = (html: string) => {
-  if (!html) return '<p><em>No email content available</em></p>';
+  if (!html) return `<p><em>${m['common.mail.noEmailContent']()}</em></p>`;
 
   try {
     return DOMPurify.sanitize(html);
   } catch (error) {
     console.warn('DOMPurify Failed or not Available, falling back to Default HTML ', error);
-    return '<p><em>No email content available</em></p>';
+    return `<p><em>${m['common.mail.noEmailContent']()}</em></p>`;
   }
 };
 

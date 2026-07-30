@@ -43,6 +43,7 @@ import { ImageCompressionSettings } from './image-compression-settings';
 import type { ImageQuality } from '@/lib/image-compression';
 import { compressImages } from '@/lib/image-compression';
 import { useMailDelivery } from '@/modules/mail';
+import { m } from '@/paraglide/messages';
 
 const shortcodeRegex = /:([a-zA-Z0-9_+-]+):/g;
 import { TemplateButton } from './template-button';
@@ -146,7 +147,7 @@ export function EmailComposer({
         setValue('attachments', filesToProcess, { shouldDirty: true });
         setHasUnsavedChanges(true);
         if (showToast) {
-          toast.error('Image compression failed, using original files');
+          toast.error(m['pages.createEmail.compressionFailed']());
         }
         return;
       }
@@ -174,7 +175,7 @@ export function EmailComposer({
               100
             ).toFixed(1);
             if (parseFloat(savings) > 0.1) {
-              toast.success(`Images compressed: ${savings}% smaller`);
+              toast.success(m['pages.createEmail.compressionSavings']({ savings }));
             }
           }
         }
@@ -184,7 +185,7 @@ export function EmailComposer({
       setValue('attachments', filesToProcess, { shouldDirty: true });
       setHasUnsavedChanges(true);
       if (showToast) {
-        toast.error('Image compression failed, using original files');
+        toast.error(m['pages.createEmail.compressionFailed']());
       }
     }
   };
@@ -318,12 +319,12 @@ export function EmailComposer({
 
       // Validate recipient field
       if (!values.to || values.to.length === 0) {
-        toast.error('Recipient is required');
+        toast.error(m['pages.createEmail.recipientRequired']());
         return;
       }
 
       if (!isScheduleValid) {
-        toast.error('Please choose a valid date & time for scheduling');
+        toast.error(m['pages.createEmail.invalidSchedule']());
         return;
       }
 
@@ -348,7 +349,7 @@ export function EmailComposer({
       setIsComposeOpen(null);
     } catch (error) {
       console.error('Error sending email:', error);
-      toast.error('Failed to send email');
+      toast.error(m['pages.createEmail.failedToSend']());
     } finally {
       setIsLoading(false);
     }
@@ -403,7 +404,7 @@ export function EmailComposer({
       return response;
     } catch (error) {
       console.error('Error saving draft:', error);
-      toast.error('Failed to save draft');
+      toast.error(m['pages.createEmail.failedToSaveDraft']());
       setIsSavingDraft(false);
       setHasUnsavedChanges(false);
       return undefined;
@@ -473,7 +474,7 @@ export function EmailComposer({
       if (pastedFiles.length > 0) {
         event.preventDefault();
         handleAttachment(pastedFiles);
-        toast.success(`${pluralize('file', pastedFiles.length, true)} attached`);
+        toast.success(m['pages.createEmail.filesAttached']({ count: pastedFiles.length }));
       }
     };
 
@@ -530,11 +531,11 @@ export function EmailComposer({
         <div className="shrink-0 overflow-visible border-b border-[#E7E7E7] pb-2 dark:border-[#252525]">
           <div className="flex justify-between px-3 pt-3">
             <div className="flex w-full items-center gap-2">
-              <p className="text-sm font-medium text-[#8C8C8C]">To:</p>
+              <p className="text-sm font-medium text-[#8C8C8C]">{m['pages.createEmail.to']()}</p>
               <RecipientAutosuggest
                 control={form.control}
                 name="to"
-                placeholder="Enter email address"
+                placeholder={m['pages.createEmail.enterEmail']()}
                 disabled={isLoading}
               />
             </div>
@@ -545,14 +546,14 @@ export function EmailComposer({
                 className="flex h-full cursor-pointer items-center gap-2 rounded-sm px-1 py-0.5 text-sm font-medium text-[#8C8C8C] transition-colors hover:bg-gray-50 hover:text-[#A8A8A8] dark:hover:bg-[#404040]"
                 onClick={() => setShowCc(!showCc)}
               >
-                <span>Cc</span>
+                <span>{m['pages.createEmail.cc']()}</span>
               </button>
               <button
                 tabIndex={-1}
                 className="flex h-full cursor-pointer items-center gap-2 rounded-sm px-1 py-0.5 text-sm font-medium text-[#8C8C8C] transition-colors hover:bg-gray-50 hover:text-[#A8A8A8] dark:hover:bg-[#404040]"
                 onClick={() => setShowBcc(!showBcc)}
               >
-                <span>Bcc</span>
+                <span>{m['pages.createEmail.bcc']()}</span>
               </button>
               {onClose && (
                 <button
@@ -570,11 +571,11 @@ export function EmailComposer({
             {/* CC Section */}
             {showCc && (
               <div className="flex items-center gap-2 px-3">
-                <p className="text-sm font-medium text-[#8C8C8C]">Cc:</p>
+                <p className="text-sm font-medium text-[#8C8C8C]">{m['pages.createEmail.ccWithColon']()}</p>
                 <RecipientAutosuggest
                   control={form.control}
                   name="cc"
-                  placeholder="Enter email for Cc"
+                  placeholder={m['pages.createEmail.enterCc']()}
                   disabled={isLoading}
                 />
               </div>
@@ -583,11 +584,11 @@ export function EmailComposer({
             {/* BCC Section */}
             {showBcc && (
               <div className="flex items-center gap-2 px-3">
-                <p className="text-sm font-medium text-[#8C8C8C]">Bcc:</p>
+                <p className="text-sm font-medium text-[#8C8C8C]">{m['pages.createEmail.bccWithColon']()}</p>
                 <RecipientAutosuggest
                   control={form.control}
                   name="bcc"
-                  placeholder="Enter email for Bcc"
+                  placeholder={m['pages.createEmail.enterBcc']()}
                   disabled={isLoading}
                 />
               </div>
@@ -598,10 +599,10 @@ export function EmailComposer({
         {/* Subject */}
         {!activeReplyId ? (
           <div className="flex items-center gap-2 border-b p-3">
-            <p className="text-sm font-medium text-[#8C8C8C]">Subject:</p>
+            <p className="text-sm font-medium text-[#8C8C8C]">{m['pages.createEmail.subject']()}</p>
             <input
               className="h-4 w-full bg-transparent text-sm font-normal leading-normal text-black placeholder:text-[#797979] focus:outline-none dark:text-white/90"
-              placeholder="Re: Design review feedback"
+              placeholder={m['pages.createEmail.subjectPlaceholder']()}
               value={subjectInput}
               onChange={(e) => {
                 const value = replaceEmojiShortcodes(e.target.value);
@@ -615,7 +616,7 @@ export function EmailComposer({
         {/* From */}
         {aliases && aliases.length > 1 ? (
           <div className="flex items-center gap-2 border-b p-3">
-            <p className="text-sm font-medium text-[#8C8C8C]">From:</p>
+            <p className="text-sm font-medium text-[#8C8C8C]">{m['pages.createEmail.from']()}</p>
             <Select
               value={fromEmail || ''}
               onValueChange={(value) => {
@@ -624,7 +625,7 @@ export function EmailComposer({
               }}
             >
               <SelectTrigger className="h-6 flex-1 border-0 bg-transparent p-0 text-sm font-normal text-black placeholder:text-[#797979] focus:outline-none focus:ring-0 dark:text-white/90">
-                <SelectValue placeholder="Select an email address" />
+                <SelectValue placeholder={m['pages.createEmail.selectEmail']()} />
               </SelectTrigger>
               <SelectContent className="z-99999">
                 {aliases.map((alias) => (
@@ -633,7 +634,7 @@ export function EmailComposer({
                       <span className="text-sm">
                         {alias.name ? `${alias.name} <${alias.email}>` : alias.email}
                       </span>
-                      {alias.primary && <span className="text-xs text-[#8C8C8C]">Primary</span>}
+                      {alias.primary && <span className="text-xs text-[#8C8C8C]">{m['pages.createEmail.primary']()}</span>}
                     </div>
                   </SelectItem>
                 ))}
@@ -670,7 +671,7 @@ export function EmailComposer({
             >
               <div className="flex items-center justify-center">
                 <div className="text-center text-sm leading-none text-white dark:text-black">
-                  <span>Send </span>
+                  <span>{m['common.replyCompose.send']()} </span>
                 </div>
               </div>
               <div className="flex h-5 items-center justify-center gap-1 rounded-sm bg-white/10 px-1 dark:bg-black/10">
@@ -690,7 +691,7 @@ export function EmailComposer({
               className="bg-background cursor-pointer border transition-colors hover:bg-gray-50 dark:hover:bg-[#404040]"
             >
               <Plus className="h-3 w-3 fill-[#9A9A9A]" />
-              <span className="hidden px-0.5 text-sm md:block">Add</span>
+              <span className="hidden px-0.5 text-sm md:block">{m['pages.createEmail.add']()}</span>
             </Button>
             <TemplateButton
               editor={editor}
@@ -721,7 +722,7 @@ export function EmailComposer({
                 <PopoverTrigger asChild>
                   <button
                     className="focus-visible:ring-ring flex cursor-pointer items-center gap-1.5 rounded-md border border-[#E7E7E7] bg-white/5 px-2 py-1 text-sm hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:border-[#2B2B2B]"
-                    aria-label={`View ${attachments.length} attached ${pluralize('file', attachments.length)}`}
+                    aria-label={m['pages.createEmail.viewAttachedFiles']({ count: attachments.length })}
                   >
                     <Paperclip className="h-3.5 w-3.5 text-[#9A9A9A]" />
                     <span className="font-medium">{attachments.length}</span>
@@ -735,10 +736,10 @@ export function EmailComposer({
                   <div className="flex flex-col">
                     <div className="border-b border-[#E7E7E7] p-3 dark:border-[#2B2B2B]">
                       <h4 className="text-sm font-semibold text-black dark:text-white/90">
-                        Attachments
+                        {m['pages.createEmail.attachmentsLabel']()}
                       </h4>
                       <p className="text-muted-foreground text-xs dark:text-[#9B9B9B]">
-                        {pluralize('file', attachments.length, true)}
+                        {m['pages.createEmail.filesAttached']({ count: attachments.length })}
                       </p>
                     </div>
 
@@ -815,11 +816,11 @@ export function EmailComposer({
                                   await removeAttachment(index);
                                 } catch (error) {
                                   console.error('Failed to remove attachment:', error);
-                                  toast.error('Failed to remove attachment');
+                                  toast.error(m['pages.createEmail.failedToRemoveAttachment']());
                                 }
                               }}
                               className="focus-visible:ring-ring ml-1 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full bg-transparent hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2"
-                              aria-label={`Remove ${file.name}`}
+                              aria-label={m['pages.createEmail.removeAttachment']({ name: file.name })}
                             >
                               <XIcon className="text-muted-foreground h-3.5 w-3.5 hover:text-black dark:text-[#9B9B9B] dark:hover:text-white" />
                             </button>
@@ -845,7 +846,7 @@ export function EmailComposer({
                     <Type className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Formatting options</TooltipContent>
+                <TooltipContent>{m['pages.createEmail.formattingOptions']()}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>
@@ -855,18 +856,17 @@ export function EmailComposer({
       <Dialog open={showLeaveConfirmation} onOpenChange={setShowLeaveConfirmation}>
         <DialogContent showOverlay className="z-99999 sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Discard message?</DialogTitle>
+            <DialogTitle>{m['pages.createEmail.discardTitle']()}</DialogTitle>
             <DialogDescription>
-              You have unsaved changes in your email. Are you sure you want to leave? Your changes
-              will be lost.
+              {m['pages.createEmail.discardDescription']()}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-2">
             <Button variant="outline" onClick={cancelLeave} className="cursor-pointer">
-              Stay
+              {m['pages.createEmail.stay']()}
             </Button>
             <Button variant="destructive" onClick={confirmLeave} className="cursor-pointer">
-              Leave
+              {m['pages.createEmail.leave']()}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -875,10 +875,9 @@ export function EmailComposer({
       <Dialog open={showAttachmentWarning} onOpenChange={setShowAttachmentWarning}>
         <DialogContent showOverlay className="z-99999 sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Attachment Warning</DialogTitle>
+            <DialogTitle>{m['pages.createEmail.attachmentWarningTitle']()}</DialogTitle>
             <DialogDescription>
-              Looks like you mentioned an attachment in your message, but there are no files
-              attached. Are you sure you want to send this email?
+              {m['pages.createEmail.attachmentWarningDescription']()}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-2">
@@ -889,7 +888,7 @@ export function EmailComposer({
               }}
               className="cursor-pointer"
             >
-              Recheck
+              {m['pages.createEmail.recheck']()}
             </Button>
             <Button
               onClick={() => {
@@ -898,7 +897,7 @@ export function EmailComposer({
               }}
               className="cursor-pointer"
             >
-              Send Anyway
+              {m['pages.createEmail.sendAnyway']()}
             </Button>
           </DialogFooter>
         </DialogContent>

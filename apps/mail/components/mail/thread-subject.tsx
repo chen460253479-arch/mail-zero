@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import { useRef } from 'react';
+import { m } from '@/paraglide/messages';
 
 interface ThreadSubjectProps {
   subject?: string;
@@ -7,7 +8,7 @@ interface ThreadSubjectProps {
 
 export default function ThreadSubject({ subject }: ThreadSubjectProps) {
   const textRef = useRef<HTMLSpanElement>(null);
-  const subjectContent = subject || '(no subject)';
+  const subjectContent = subject || m['common.mail.noSubject']();
 
   return (
     <div className="flex items-center gap-2">
