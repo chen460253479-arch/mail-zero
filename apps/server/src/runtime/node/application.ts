@@ -6,6 +6,7 @@ import { Hono } from 'hono';
 
 import { createExternalIntegrationRouter } from '../../modules/external-integration';
 import { finalizeRequestTrace, TraceContext } from '../../lib/trace-context';
+import { cookieDomainMatchesHostname } from '../../lib/cookie-domain';
 import { integrationOAuthRouter } from '../../routes/integrations';
 import { registerMailBlobRoutes } from '../../modules/mail-api';
 import type { RuntimeServices } from './services';
@@ -182,7 +183,7 @@ export const createNodeApplication = (services: RuntimeServices) => {
             return null;
           }
           const cookieDomain = services.config.cookieDomain;
-          return hostname === cookieDomain || hostname.endsWith(`.${cookieDomain}`) ? origin : null;
+          return cookieDomainMatchesHostname(hostname, cookieDomain) ? origin : null;
         },
         credentials: true,
         allowHeaders: ['Content-Type', 'Authorization'],

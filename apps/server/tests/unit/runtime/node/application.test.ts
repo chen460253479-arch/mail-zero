@@ -5,12 +5,14 @@ import type { RuntimeServices } from '../../../../src/runtime/node/services';
 
 const createServices = (
   readiness: Partial<RuntimeServices['readiness']['snapshot']> = {},
+  config: Partial<RuntimeServices['config']> = {},
 ): RuntimeServices =>
   ({
     config: {
       nodeEnv: 'local',
       publicAppUrl: 'http://mail.local:3000',
       cookieDomain: 'mail.local',
+      ...config,
     },
     database: {
       db: {},
@@ -73,6 +75,26 @@ describe('native Node application', () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('http://mail.local:3000');
+  });
+
+  it('allows a localhost subdomain when COOKIE_DOMAIN has a leading dot', async () => {
+    const origin = 'http://mail.localhost:3000';
+    const app = createNodeApplication(
+      createServices(
+        {},
+        {
+          publicAppUrl: origin,
+          cookieDomain: '.localhost',
+        },
+      ),
+    );
+
+    const response = await app.request('/health', {
+      headers: { origin },
+    });
+
+    expect(response.headers.get('access-control-allow-origin')).toBe(origin);
+    expect(response.headers.get('access-control-allow-credentials')).toBe('true');
   });
 
   it('keeps provider webhooks registered against injected runtime services', async () => {

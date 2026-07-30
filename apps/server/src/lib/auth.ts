@@ -12,6 +12,7 @@ import type { UserWorkspaceService } from '../modules/user-workspace/service';
 import type { MailInboundRuntimeResources } from '../runtime/mail/inbound';
 import { getBrowserTimezone, isValidTimezone } from './timezones';
 import type { RuntimeConfig } from '../runtime/node/config';
+import { isLocalCookieDomain } from './cookie-domain';
 import { defaultUserSettings } from './schemas';
 import { connection } from '../db/schema';
 import type { DB } from '../db';
@@ -35,10 +36,14 @@ const createAuthConfig = (dependencies: AuthRuntimeDependencies) =>
       },
       cookiePrefix:
         dependencies.config.nodeEnv === 'development' ? 'better-auth-dev' : 'better-auth',
-      crossSubDomainCookies: {
-        enabled: true,
-        domain: dependencies.config.cookieDomain,
-      },
+      ...(isLocalCookieDomain(dependencies.config.cookieDomain)
+        ? {}
+        : {
+            crossSubDomainCookies: {
+              enabled: true,
+              domain: dependencies.config.cookieDomain,
+            },
+          }),
     },
     baseURL: dependencies.config.publicBackendUrl,
     trustedOrigins: dependencies.config.betterAuthTrustedOrigins,
