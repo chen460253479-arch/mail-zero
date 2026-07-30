@@ -20,12 +20,14 @@
 ### Task 1: Refresh all mailbox resources after binding
 
 **Files:**
+
 - Create: `apps/mail/modules/mail-connections/refresh-mailbox-queries.test.ts`
 - Create: `apps/mail/modules/mail-connections/refresh-mailbox-queries.ts`
 - Modify: `apps/mail/components/connection/nango-connect-dialog.tsx`
 - Modify: `apps/mail/components/connection/imap-smtp-connect-dialog.tsx`
 
 **Interfaces:**
+
 - Consumes: `QueryClient` and three required TanStack `QueryKey` values.
 - Produces: `refreshMailboxConnectionQueries(queryClient, queryKeys): Promise<void>`.
 
@@ -69,8 +71,7 @@ Run:
 ```powershell
 pnpm --filter @zero/mail test --run modules/mail-connections/refresh-mailbox-queries.test.ts
 pnpm --filter @zero/mail test --run
-pnpm --filter @zero/mail typecheck
+pnpm --filter @zero/mail exec tsc --noEmit
 ```
 
 Expected: all commands exit successfully with zero failed tests and zero type errors.
-

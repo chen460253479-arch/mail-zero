@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { refreshMailboxConnectionQueries } from '@/modules/mail-connections/refresh-mailbox-queries';
 import { useTRPC } from '@/providers/query-provider';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
@@ -139,10 +140,11 @@ export function ImapSmtpConnectDialog({
           secure: form.smtpSecure,
         },
       });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: trpc.connections.list.queryKey() }),
-        queryClient.invalidateQueries({ queryKey: trpc.connections.getDefault.queryKey() }),
-      ]);
+      await refreshMailboxConnectionQueries(queryClient, {
+        connectionList: trpc.connections.list.queryKey(),
+        defaultConnection: trpc.connections.getDefault.queryKey(),
+        mailAccountList: trpc.mail.account.list.queryKey(),
+      });
       setForm(initialForm);
       onOpenChange(false);
       onConnected();
