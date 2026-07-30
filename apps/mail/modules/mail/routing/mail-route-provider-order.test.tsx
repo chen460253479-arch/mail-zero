@@ -2,7 +2,17 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { PropsWithChildren } from 'react';
 
-const routeState = vi.hoisted(() => ({ pathname: '/mail/inbox' }));
+const loaderState = vi.hoisted(() => ({
+  userId: 'user-1',
+  passwordChangeRequired: false,
+}));
+
+vi.mock('@tanstack/react-query', () => ({
+  useMutation: () => ({
+    isPending: false,
+    mutateAsync: vi.fn(),
+  }),
+}));
 
 const account = {
   id: 'account-a',
@@ -52,36 +62,47 @@ vi.mock('@/providers/query-provider', () => ({
   QueryProvider({ cacheSubject, children }: PropsWithChildren<{ cacheSubject: string | null }>) {
     return <div data-cache-subject={cacheSubject}>{children}</div>;
   },
+  useTRPC: () => ({
+    user: {
+      changePassword: {
+        mutationOptions: () => ({}),
+      },
+    },
+  }),
 }));
 
 vi.mock('@/providers/user-theme-sync', () => ({
-  UserThemeSync: () => null,
+  UserThemeSync: () => <span data-user-theme-sync="true" />,
 }));
 
 vi.mock('react-router', () => ({
   Outlet: () => <main>mail route</main>,
-  useLoaderData: () => ({ userId: 'user-1' }),
-  useLocation: () => routeState,
+  useLoaderData: () => loaderState,
+  useLocation: () => ({ pathname: '/mail/inbox' }),
 }));
 
 import MailRouteLayout from '../../../app/(routes)/layout';
 
 describe('mail route provider order', () => {
   it('makes the active mail account available to the command palette', () => {
-    routeState.pathname = '/mail/inbox';
+    loaderState.passwordChangeRequired = false;
     const html = renderToStaticMarkup(<MailRouteLayout />);
 
     expect(html).toContain('data-mail-account-status="ready"');
+    expect(html).toContain('data-user-theme-sync="true"');
     expect(html).toContain('data-cache-subject="user:user-1"');
     expect(html).toContain('mail route');
+    expect(html).not.toContain('data-password-change-required');
   });
 
-  it('does not start theme or mail account queries before the initial password is changed', () => {
-    routeState.pathname = '/change-password';
+  it('renders the password gate without starting private mailbox providers', () => {
+    loaderState.passwordChangeRequired = true;
     const html = renderToStaticMarkup(<MailRouteLayout />);
 
+    expect(html).toContain('data-password-change-required="true"');
     expect(html).not.toContain('data-mail-account-status');
+    expect(html).not.toContain('data-user-theme-sync');
     expect(html).toContain('data-cache-subject="user:user-1"');
-    expect(html).toContain('mail route');
+    expect(html).not.toContain('mail route');
   });
 });

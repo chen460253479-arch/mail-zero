@@ -1,3 +1,4 @@
+import { PasswordChangeRequiredView } from '@/modules/auth/password-change-required-view';
 import { HotkeyProviderWrapper } from '@/components/providers/hotkey-provider-wrapper';
 import { MailAccountBootstrapProvider } from '@/modules/mail/queries/use-mail-account';
 import { CommandPaletteProvider } from '@/components/context/command-palette-context';
@@ -7,7 +8,7 @@ import { QueryProvider } from '@/providers/query-provider';
 import { authProxy } from '@/lib/auth-proxy';
 import type { Route } from './+types/layout';
 
-import { Outlet, useLoaderData, useLocation } from 'react-router';
+import { Outlet, useLoaderData } from 'react-router';
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   return await loadProtectedRouteSession(request, {
@@ -16,13 +17,12 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 }
 
 export default function Layout() {
-  const { userId } = useLoaderData<typeof clientLoader>();
-  const { pathname } = useLocation();
+  const { userId, passwordChangeRequired } = useLoaderData<typeof clientLoader>();
 
   return (
     <QueryProvider cacheSubject={`user:${userId}`}>
-      {pathname === '/change-password' ? (
-        <Outlet />
+      {passwordChangeRequired ? (
+        <PasswordChangeRequiredView />
       ) : (
         <>
           <UserThemeSync />
