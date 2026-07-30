@@ -82,7 +82,8 @@
       "defaultModalDescription": "模态窗口内容",
       "navigationMenu": "导航菜单",
       "navigationSidebarDescription": "包含菜单项和操作的应用导航侧边栏",
-      "toggleSidebar": "切换侧边栏"
+      "toggleSidebar": "切换侧边栏",
+      "toggleTreeItem": "切换树状项目"
     },
     "navigation": {
       "connectProviderBeforeComposing": "请先连接邮件服务商再撰写邮件",
@@ -374,7 +375,41 @@
       "goToWebsite": "前往网站",
       "failedToUnsubscribe": "退订邮件列表失败",
       "print": "打印",
-      "printThreadTitle": "打印会话 - {subject}"
+      "printThreadTitle": "打印会话 - {subject}",
+      "printEmailTitle": "打印邮件 - {subject}",
+      "unknownPerson": "未知联系人",
+      "noEmail": "无邮箱地址",
+      "additionalPeople": [
+        {
+          "declarations": [
+            "input count",
+            "local countPlural = count: plural"
+          ],
+          "selectors": [
+            "countPlural"
+          ],
+          "match": {
+            "countPlural=one": "另有 {count} 人",
+            "countPlural=other": "另有 {count} 人"
+          }
+        }
+      ],
+      "remainingRecipients": [
+        {
+          "declarations": [
+            "input count",
+            "local countPlural = count: plural"
+          ],
+          "selectors": [
+            "countPlural"
+          ],
+          "match": {
+            "countPlural=0": "",
+            "countPlural=one": "，另有 {count} 人",
+            "countPlural=other": "，另有 {count} 人"
+          }
+        }
+      ]
     },
     "threadDisplay": {
       "exitFullscreen": "退出全屏",
@@ -423,8 +458,8 @@
           ],
           "match": {
             "countPlural=0": "添加备注",
-            "countPlural=one": "# 条备注",
-            "countPlural=other": "# 条备注"
+            "countPlural=one": "{count} 条备注",
+            "countPlural=other": "{count} 条备注"
           }
         }
       ],
@@ -540,8 +575,8 @@
           ],
           "match": {
             "countPlural=0": "条回复",
-            "countPlural=one": "# 条回复",
-            "countPlural=other": "# 条回复"
+            "countPlural=one": "{count} 条回复",
+            "countPlural=other": "{count} 条回复"
           }
         }
       ],
@@ -602,6 +637,38 @@
       "open": "打开",
       "previewNotAvailable": "无法预览",
       "attachmentsWithCount": "附件（{count}）",
+      "filterCount": [
+        {
+          "declarations": [
+            "input count",
+            "local countPlural = count: plural"
+          ],
+          "selectors": [
+            "countPlural"
+          ],
+          "match": {
+            "countPlural=0": "筛选条件",
+            "countPlural=one": "{count} 个筛选条件",
+            "countPlural=other": "{count} 个筛选条件"
+          }
+        }
+      ],
+      "viewCount": [
+        {
+          "declarations": [
+            "input count",
+            "local countPlural = count: plural"
+          ],
+          "selectors": [
+            "countPlural"
+          ],
+          "match": {
+            "countPlural=0": "视图",
+            "countPlural=one": "{count} 个视图",
+            "countPlural=other": "{count} 个视图"
+          }
+        }
+      ],
       "threadAttachments": "会话附件",
       "failedToDownloadAttachment": "下载附件失败",
       "failedToOpenAttachment": "打开附件失败",
@@ -643,11 +710,21 @@
       "sendEmail": "发送邮件",
       "threadActions": "会话操作"
       ,"noSubject": "无主题",
+      "noRecipient": "无收件人",
       "noEmailContent": "没有可用的邮件内容",
       "labelAdded": "已为 {count} 个会话添加标签",
       "labelRemoved": "已从 {count} 个会话移除标签",
       "snoozedUntil": "已稍后提醒至 {date}",
-      "draftDeleted": "草稿已删除"
+      "draftDeleted": "草稿已删除",
+      "quotedMessage": {
+        "unknownSender": "未知发件人",
+        "replyAttribution": "在 {date}，{sender} {recipients} 写道：",
+        "forwardedHeader": "---------- 转发的邮件 ----------",
+        "fromLine": "发件人：{sender} {email}",
+        "dateLine": "日期：{date}",
+        "subjectLine": "主题：{subject}",
+        "toLine": "收件人：{recipients}"
+      }
     },
     "units": {
       "mb": "{amount} MB"
@@ -663,6 +740,7 @@
       "deleteLabelConfirmDelete": "删除",
       "deleteLabelSuccess": "标签删除成功",
       "failedToDeleteLabel": "删除标签失败",
+      "other": "其他",
       "deletingLabel": "正在删除标签...",
       "editLabel": "编辑标签",
       "savingLabel": "正在保存标签...",
@@ -1391,6 +1469,7 @@
       "enterBcc": "输入密送邮箱",
       "subject": "主题：",
       "subjectPlaceholder": "回复：设计审查反馈",
+      "messagePlaceholder": "在此撰写邮件",
       "from": "发件人：",
       "selectEmail": "选择邮箱地址",
       "primary": "主要",
@@ -1472,7 +1551,9 @@
         "search": "搜索...",
         "empty": "没有模板",
         "saveAs": "另存为模板",
-        "namePlaceholder": "模板名称"
+        "namePlaceholder": "模板名称",
+        "unnamed": "此模板",
+        "deleteConfirm": "删除模板“{name}”？"
       },
       "imageCompression": {
         "title": "图片压缩",

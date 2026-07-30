@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { Spinner } from '@/components/ui/spinner';
+import { m } from '@/paraglide/messages';
 
 interface LoadingContextType {
   isLoading: boolean;
@@ -27,7 +28,7 @@ export function LoadingProvider({ children }: { children: ReactNode }) {
             <Spinner size={32} />
             <div className="text-center">
               <p className="text-sm font-medium text-black dark:text-white">
-                {loadingMessage || 'Loading...'}
+                {loadingMessage || m['common.actions.loading']()}
               </p>
             </div>
           </div>
@@ -43,4 +44,4 @@ export function useLoading() {
     throw new Error('useLoading must be used within a LoadingProvider');
   }
   return context;
-} 
+}

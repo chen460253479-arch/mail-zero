@@ -1,4 +1,6 @@
 import { useSettings } from '@/hooks/use-settings';
+import { m } from '@/paraglide/messages';
+import { getLocale } from '@/paraglide/runtime';
 import { useMemo } from 'react';
 
 export interface CategorySetting {
@@ -10,8 +12,25 @@ export interface CategorySetting {
   isDefault: boolean;
 }
 
+export function getCategoryDisplayName(category: Pick<CategorySetting, 'id' | 'name'>): string {
+  if (category.id === 'Important' && category.name === 'Important') {
+    return m['common.mailCategories.important']();
+  }
+
+  if (category.id === 'All Mail' && category.name === 'All Mail') {
+    return m['common.mailCategories.allMail']();
+  }
+
+  if (category.id === 'Unread' && category.name === 'Unread') {
+    return m['common.mailCategories.unread']();
+  }
+
+  return category.name;
+}
+
 export function useCategorySettings(): CategorySetting[] {
   const { data } = useSettings();
+  const locale = getLocale();
 
   const merged = useMemo(() => {
     const overrides = (data?.settings.categories as CategorySetting[] | undefined) ?? [];
@@ -23,14 +42,14 @@ export function useCategorySettings(): CategorySetting[] {
       return [
         {
           id: 'All Mail',
-          name: 'All Mail',
+          name: m['common.mailCategories.allMail'](),
           searchValue: '',
           order: 0,
           isDefault: true,
         },
         {
           id: 'Unread',
-          name: 'Unread',
+          name: m['common.mailCategories.unread'](),
           searchValue: 'UNREAD',
           order: 1,
           isDefault: false,
@@ -38,8 +57,11 @@ export function useCategorySettings(): CategorySetting[] {
       ];
     }
 
-    return sorted;
-  }, [data?.settings.categories]);
+    return sorted.map((category) => ({
+      ...category,
+      name: getCategoryDisplayName(category),
+    }));
+  }, [data?.settings.categories, locale]);
 
   return merged;
 }

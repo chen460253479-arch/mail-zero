@@ -135,7 +135,7 @@ export const ColorSelector = ({ open, onOpenChange }: ColorSelectorProps) => {
               key={name}
               onSelect={() => {
                 // editor.commands.unsetColor();
-                name !== 'Default' &&
+                color !== 'var(--novel-black)' &&
                   editor
                     .chain()
                     .focus()
@@ -162,7 +162,8 @@ export const ColorSelector = ({ open, onOpenChange }: ColorSelectorProps) => {
               key={name}
               onSelect={() => {
                 editor.commands.unsetHighlight();
-                name !== 'Default' && editor.commands.setHighlight({ color });
+                color !== 'var(--novel-highlight-default)' &&
+                  editor.commands.setHighlight({ color });
               }}
               className="hover:bg-accent flex cursor-pointer items-center justify-between px-2 py-1 text-sm"
             >

@@ -694,7 +694,9 @@ const Draft = memo(function Draft({
                     )}
                   >
                     <span className={cn('max-w-[25ch] truncate text-sm')}>
-                      {cleanNameDisplay(draft?.to?.[0] || 'No Recipient') || ''}
+                      {cleanNameDisplay(
+                        draft?.to?.[0] || m['common.mail.noRecipient'](),
+                      ) || ''}
                     </span>
                   </span>
                 </div>

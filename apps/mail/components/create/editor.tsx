@@ -20,6 +20,7 @@ import { useRef } from 'react';
 import { TextSelection } from 'prosemirror-state';
 
 import { cn } from '@/lib/utils';
+import { m } from '@/paraglide/messages';
 
 import { Markdown } from 'tiptap-markdown';
 
@@ -66,7 +67,7 @@ interface EditorProps {
 export default function Editor({
   initialValue,
   onChange,
-  placeholder = 'Start your email here',
+  placeholder = m['pages.createEmail.messagePlaceholder'](),
   onFocus,
   onBlur,
   className,
@@ -289,7 +290,7 @@ export default function Editor({
           >
             {/* Rest of the command palette */}
             <EditorCommandEmpty className="text-muted-foreground px-2">
-              No results
+              {m['pages.createEmail.editor.menuBar.noResults']()}
             </EditorCommandEmpty>
             <EditorCommandList>
               {suggestionItems.map((item) => (

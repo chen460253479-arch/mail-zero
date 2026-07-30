@@ -255,7 +255,7 @@ export function EmailComposer({
     onAttachmentsChange: async (files) => {
       await handleAttachment(files);
     },
-    placeholder: 'Start your email here',
+    placeholder: m['pages.createEmail.messagePlaceholder'](),
     autofocus,
   });
 

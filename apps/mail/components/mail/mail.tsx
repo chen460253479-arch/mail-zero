@@ -165,12 +165,12 @@ export function MailLayout() {
                         <span className="ml-3 hidden truncate pr-20 lg:inline-block">
                           {activeFilters.length > 0
                             ? activeFilters.map((f) => f.display).join(', ')
-                            : 'Search'}
+                            : m['common.searchBar.search']()}
                         </span>
                         <span className="ml-3 inline-block truncate pr-20 lg:hidden">
                           {activeFilters.length > 0
-                            ? `${activeFilters.length} filter${activeFilters.length > 1 ? 's' : ''}`
-                            : 'Search'}
+                            ? m['common.mail.filterCount']({ count: activeFilters.length })
+                            : m['common.searchBar.search']()}
                         </span>
 
                         <div className="absolute right-2 flex items-center gap-2">
@@ -501,7 +501,7 @@ function CategoryDropdown({ isMultiSelectMode }: CategoryDropdownProps) {
         >
           <span className="text-sm font-medium">
             {labels.length > 0
-              ? `${labels.length} View${labels.length > 1 ? 's' : ''}`
+              ? m['common.mail.viewCount']({ count: labels.length })
               : m['navigation.settings.categories']()}
           </span>
           <ChevronDown

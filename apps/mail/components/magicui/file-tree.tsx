@@ -15,6 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { FileIcon } from 'lucide-react';
 import { Accordion } from 'radix-ui';
+import { m } from '@/paraglide/messages';
 import { cn } from '@/lib/utils';
 
 type TreeViewElement = {
@@ -392,7 +393,7 @@ const CollapseButton = forwardRef<
       {...props}
     >
       {children}
-      <span className="sr-only">Toggle</span>
+      <span className="sr-only">{m['common.accessibility.toggleTreeItem']()}</span>
     </Button>
   );
 });

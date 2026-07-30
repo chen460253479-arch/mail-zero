@@ -714,11 +714,11 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
         items: searchCommands,
       },
       {
-        group: 'Mail',
+        group: m['common.commandPalette.groups.mail'](),
         items: mailCommands,
       },
       {
-        group: 'Settings',
+        group: m['common.commandPalette.groups.settings'](),
         items: settingsCommands,
       },
     ];

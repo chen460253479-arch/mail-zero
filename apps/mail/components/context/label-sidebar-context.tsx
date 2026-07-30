@@ -36,7 +36,7 @@ export function LabelSidebarContextMenu({ children, labelId, hide }: LabelSideba
   const handleDelete = () => {
     toast.promise(deleteLabel({ id: labelId }), {
       success: m['common.labels.deleteLabelSuccess'](),
-      error: 'Error deleting label',
+      error: m['common.labels.failedToDeleteLabel'](),
       finally: () => {
         refetch();
         setDeleteDialogOpen(false);

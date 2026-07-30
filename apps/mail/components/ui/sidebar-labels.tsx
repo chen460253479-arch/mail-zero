@@ -4,6 +4,7 @@ import { RecursiveFolder } from './recursive-folder';
 import { useStats } from '@/hooks/use-stats';
 import { Tree } from '../magicui/file-tree';
 import { useCallback } from 'react';
+import { m } from '@/paraglide/messages';
 
 type Props = {
   data: LabelType[];
@@ -124,7 +125,7 @@ const SidebarLabels = ({ data }: Props) => {
             if (groups.brackets.length > 0) {
               const bracketsFolder = {
                 id: 'group-other',
-                name: 'Other',
+                name: m['common.labels.other'](),
                 type: 'folder',
                 labels: groups.brackets.map((label) => ({
                   id: label.id,

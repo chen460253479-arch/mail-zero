@@ -547,7 +547,9 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Print Email - ${emailData.subject || 'No Subject'}</title>
+          <title>${m['common.mailDisplay.printEmailTitle']({
+            subject: emailData.subject || m['common.mail.noSubject'](),
+          })}</title>
           <style>
             * {
               margin: 0;
@@ -846,7 +848,9 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
               messageAttachments && messageAttachments.length > 0
                 ? `
               <div class="attachments-section">
-                <h2 class="attachments-title">Attachments (${messageAttachments.length})</h2>
+                <h2 class="attachments-title">${m['common.mail.attachmentsWithCount']({
+                  count: messageAttachments.length,
+                })}</h2>
                 ${messageAttachments
                   .map(
                     (attachment) => `
@@ -933,9 +937,11 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
               className="h-12 w-12"
             />
             <div>
-              <p className="font-medium">{person.name || 'Unknown'}</p>
+              <p className="font-medium">
+                {person.name || m['common.mailDisplay.unknownPerson']()}
+              </p>
               <div className="group flex items-center gap-2">
-                <p>{person.email || 'No email'}</p>
+                <p>{person.email || m['common.mailDisplay.noEmail']()}</p>
                 <span className="opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                   <CopyIcon
                     size={14}
@@ -1022,8 +1028,9 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <span className="text-sm">
-                                  +{people.length - 2}{' '}
-                                  {people.length - 2 === 1 ? 'other' : 'others'}
+                                  {m['common.mailDisplay.additionalPeople']({
+                                    count: people.length - 2,
+                                  })}
                                 </span>
                               </TooltipTrigger>
                               <TooltipContent className="flex flex-col gap-1">
@@ -1288,7 +1295,11 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                                     </span>
                                   ))}
                                   {remainingCount > 0 && (
-                                    <span key="others">{`, +${remainingCount} others`}</span>
+                                    <span key="others">
+                                      {m['common.mailDisplay.remainingRecipients']({
+                                        count: remainingCount,
+                                      })}
+                                    </span>
                                   )}
                                 </>
                               );

@@ -63,19 +63,19 @@ pnpm --dir apps/mail exec tsc --noEmit
 **Interfaces:**
 - Produces: 按文件分组的待迁移静态英文清单，仅用于当前实施过程，不写入仓库。
 
-- [ ] **Step 1: 检索 JSX 文本和 JSX 展示属性中的英文**
+- [x] **Step 1: 检索 JSX 文本和 JSX 展示属性中的英文**
 
 覆盖普通 JSX 文本以及 `alt`、`aria-label`、`aria-description`、`placeholder`、`title`、`label`。
 
-- [ ] **Step 2: 检索 Toast、确认框、错误提示和空状态中的英文**
+- [x] **Step 2: 检索 Toast、确认框、错误提示和空状态中的英文**
 
 覆盖 `toast.*`、直接展示的错误字符串、对话框标题/说明、加载和空状态。
 
-- [ ] **Step 3: 检索页面与导航展示配置中的英文**
+- [x] **Step 3: 检索页面与导航展示配置中的英文**
 
 覆盖 `label`、`title`、`description`、`subtitle`、`emptyText` 等配置字段，并人工排除内部技术值。
 
-- [ ] **Step 4: 将结果按后续任务分组**
+- [x] **Step 4: 将结果按后续任务分组**
 
 分为应用外壳与公共页面、邮箱与撰写、设置与集成、通用 UI 与无障碍四组。检索过程只读，不新增任何仓库文件。
 
@@ -100,11 +100,11 @@ pnpm --dir apps/mail exec tsc --noEmit
 - Modify: `apps/mail/config/navigation.ts`
 - Modify: `apps/mail/lib/site-config.ts`
 
-- [ ] **Step 1: 根据审查清单为静态文案增加语义化 `en`/`zh` 消息键**
-- [ ] **Step 2: 将 JSX、展示属性、Toast 和展示配置替换为 `m.*()`**
-- [ ] **Step 3: 重新只读检索本批文件并逐条确认真实英文硬编码已清零**
-- [ ] **Step 4: 运行消息目录测试和类型检查**
-- [ ] **Step 5: 使用明确文件路径提交本批改动**
+- [x] **Step 1: 根据审查清单为静态文案增加语义化 `en`/`zh` 消息键**
+- [x] **Step 2: 将 JSX、展示属性、Toast 和展示配置替换为 `m.*()`**
+- [x] **Step 3: 重新只读检索本批文件并逐条确认真实英文硬编码已清零**
+- [x] **Step 4: 运行消息目录测试和类型检查**
+- [x] **Step 5: 使用明确文件路径提交本批改动**
 
 ### Task 4: 迁移邮箱、邮件详情、撰写与搜索交互
 
@@ -128,11 +128,11 @@ pnpm --dir apps/mail exec tsc --noEmit
 - Modify: `apps/mail/lib/hotkeys/**/*.tsx`
 - Modify: `apps/mail/lib/optimistic-actions-manager.ts`
 
-- [ ] **Step 1: 按邮件领域增补双语消息键，动态内容使用参数**
-- [ ] **Step 2: 迁移邮箱、邮件详情、附件、撰写器、搜索和命令面板**
-- [ ] **Step 3: 保持邮件正文、主题、地址、附件名、路由和协议值不变**
-- [ ] **Step 4: 重新只读检索本批文件并运行目录测试、邮件测试和类型检查**
-- [ ] **Step 5: 使用明确文件路径提交本批改动**
+- [x] **Step 1: 按邮件领域增补双语消息键，动态内容使用参数**
+- [x] **Step 2: 迁移邮箱、邮件详情、附件、撰写器、搜索和命令面板**
+- [x] **Step 3: 保持邮件正文、主题、地址、附件名、路由和协议值不变**
+- [x] **Step 4: 重新只读检索本批文件并运行目录测试、邮件测试和类型检查**
+- [x] **Step 5: 使用明确文件路径提交本批改动**
 
 ### Task 5: 迁移设置、连接与集成界面
 
@@ -145,11 +145,11 @@ pnpm --dir apps/mail exec tsc --noEmit
 - Modify: `apps/mail/components/labels/**/*.tsx`
 - Modify: `apps/mail/components/settings/**/*.tsx`
 
-- [ ] **Step 1: 为设置、连接和集成静态文案增补双语消息键**
-- [ ] **Step 2: 迁移所有设置页面和连接对话框**
-- [ ] **Step 3: 保持渠道 ID、连接 ID、邮箱、主机、端口和外部数据不变**
-- [ ] **Step 4: 重新只读检索本批文件并运行目录测试、连接测试和类型检查**
-- [ ] **Step 5: 使用明确文件路径提交本批改动**
+- [x] **Step 1: 为设置、连接和集成静态文案增补双语消息键**
+- [x] **Step 2: 迁移所有设置页面和连接对话框**
+- [x] **Step 3: 保持渠道 ID、连接 ID、邮箱、主机、端口和外部数据不变**
+- [x] **Step 4: 重新只读检索本批文件并运行目录测试、连接测试和类型检查**
+- [x] **Step 5: 使用明确文件路径提交本批改动**
 
 ### Task 6: 迁移通用 UI、无障碍文本和剩余通知
 
@@ -163,11 +163,11 @@ pnpm --dir apps/mail exec tsc --noEmit
 - Modify: `apps/mail/hooks/use-notes.tsx`
 - Modify: `apps/mail/lib/notes-utils.ts`
 
-- [ ] **Step 1: 为真正面向用户的默认文本增加双语消息键**
-- [ ] **Step 2: 迁移屏幕阅读器标签、Tooltip、主题和 Notes 文案**
-- [ ] **Step 3: 保持调用方传入的动态展示值不变**
-- [ ] **Step 4: 重新只读检索本批文件并运行目录测试和类型检查**
-- [ ] **Step 5: 使用明确文件路径提交本批改动**
+- [x] **Step 1: 为真正面向用户的默认文本增加双语消息键**
+- [x] **Step 2: 迁移屏幕阅读器标签、Tooltip、主题和 Notes 文案**
+- [x] **Step 3: 保持调用方传入的动态展示值不变**
+- [x] **Step 4: 重新只读检索本批文件并运行目录测试和类型检查**
+- [x] **Step 5: 使用明确文件路径提交本批改动**
 
 ### Task 7: 本地化日期和相对时间
 
@@ -179,11 +179,11 @@ pnpm --dir apps/mail exec tsc --noEmit
 **Interfaces:**
 - Produces: `getDateLocale(locale?: string): Locale | undefined`；`zh` 返回 `date-fns/locale` 的 `zhCN`，`en` 保持默认行为。
 
-- [ ] **Step 1: 先写 `zh`/`en` locale 映射失败测试**
-- [ ] **Step 2: 实现最小 locale 映射**
-- [ ] **Step 3: 仅将用户可见日期格式化接入当前 locale**
-- [ ] **Step 4: 运行日期测试和类型检查**
-- [ ] **Step 5: 使用明确文件路径提交本批改动**
+- [x] **Step 1: 先写 `zh`/`en` locale 映射失败测试**
+- [x] **Step 2: 实现最小 locale 映射**
+- [x] **Step 3: 仅将用户可见日期格式化接入当前 locale**
+- [x] **Step 4: 运行日期测试和类型检查**
+- [x] **Step 5: 使用明确文件路径提交本批改动**
 
 ### Task 8: 全量人工复审与最终验证
 
@@ -196,12 +196,12 @@ pnpm --dir apps/mail exec tsc --noEmit
 - Verify: `apps/mail/messages/en.json`
 - Verify: `apps/mail/messages/zh.json`
 
-- [ ] **Step 1: 重新执行 JSX 文本、展示属性、Toast、错误提示和展示配置的只读检索**
-- [ ] **Step 2: 人工逐条分类，迁移真实静态文案并排除邮件内容、用户输入和技术值**
-- [ ] **Step 3: 对 `en`/`zh` 消息键、参数名和复数结构进行对等复核**
-- [ ] **Step 4: 运行全部 Vitest、TypeScript 类型检查和 `git diff --check`**
-- [ ] **Step 5: 确认仓库未新增审计器、扫描脚本或扫描结果文件**
-- [ ] **Step 6: 给出用户手动 Docker 验证命令，不代替用户执行**
+- [x] **Step 1: 重新执行 JSX 文本、展示属性、Toast、错误提示和展示配置的只读检索**
+- [x] **Step 2: 人工逐条分类，迁移真实静态文案并排除邮件内容、用户输入和技术值**
+- [x] **Step 3: 对 `en`/`zh` 消息键、参数名和复数结构进行对等复核**
+- [x] **Step 4: 运行全部 Vitest、TypeScript 类型检查和 `git diff --check`**
+- [x] **Step 5: 确认仓库未新增审计器、扫描脚本或扫描结果文件**
+- [x] **Step 6: 给出用户手动 Docker 验证命令，不代替用户执行**
 
 最终验证命令：
 

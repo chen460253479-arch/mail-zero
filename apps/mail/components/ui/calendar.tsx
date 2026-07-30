@@ -151,6 +151,7 @@ function Calendar({ className, classNames, showOutsideDays = true, captionLayout
         ),
       }}
       {...props}
+      locale={props.locale ?? dateLocale}
     />
   );
 }

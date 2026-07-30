@@ -1,4 +1,7 @@
 import { isToday, isThisMonth, differenceInCalendarMonths } from 'date-fns';
+import { getDateLocale } from '@/lib/i18n/date-locale';
+import { m } from '@/paraglide/messages';
+import { getLocale } from '@/paraglide/runtime';
 import { getBrowserTimezone } from './timezones';
 import { formatInTimeZone } from 'date-fns-tz';
 import { MAX_URL_LENGTH } from './constants';
@@ -127,13 +130,10 @@ export function formatDate(dateInput: string | Date | number): string {
 
   // Notes formatting logic (when date is a Date object)
   if (dateInput instanceof Date) {
-    const date = typeof dateInput === 'string' ? new Date(dateInput) : (dateInput as Date);
-    return date.toLocaleString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+    if (Number.isNaN(dateInput.getTime())) return '';
+
+    return formatInTimeZone(dateInput, getBrowserTimezone(), 'PPp', {
+      locale: getDateLocale(getLocale()),
     });
   }
 
@@ -145,11 +145,12 @@ export function formatDate(dateInput: string | Date | number): string {
 
   try {
     const timezone = getBrowserTimezone();
+    const locale = getDateLocale(getLocale());
     const now = new Date();
 
     // If it's today, always show the time
     if (isToday(dateObj)) {
-      return formatInTimeZone(dateObj, timezone, 'h:mm a');
+      return formatInTimeZone(dateObj, timezone, 'h:mm a', { locale });
     }
 
     // Calculate hours difference between now and the email date
@@ -157,16 +158,16 @@ export function formatDate(dateInput: string | Date | number): string {
 
     // If it's not today but within the last 12 hours, show the time
     if (hoursDifference <= 12) {
-      return formatInTimeZone(dateObj, timezone, 'h:mm a');
+      return formatInTimeZone(dateObj, timezone, 'h:mm a', { locale });
     }
 
     // If it's this month or last month, show the month and day
     if (isThisMonth(dateObj) || differenceInCalendarMonths(now, dateObj) === 1) {
-      return formatInTimeZone(dateObj, timezone, 'MMM dd');
+      return formatInTimeZone(dateObj, timezone, 'MMM dd', { locale });
     }
 
     // Otherwise show the date in MM/DD/YY format
-    return formatInTimeZone(dateObj, timezone, 'MM/dd/yy');
+    return formatInTimeZone(dateObj, timezone, 'MM/dd/yy', { locale });
   } catch (error) {
     console.error('Error formatting date', error);
     return '';
@@ -181,9 +182,10 @@ export const formatTime = (date: string) => {
 
   try {
     const timezone = getBrowserTimezone();
+    const locale = getDateLocale(getLocale());
 
     // Always return the time in h:mm a format
-    return formatInTimeZone(dateObj, timezone, 'h:mm a');
+    return formatInTimeZone(dateObj, timezone, 'h:mm a', { locale });
   } catch (error) {
     console.error('Error formatting time', error);
     return '';
@@ -347,8 +349,12 @@ export const constructReplyBody = (
   originalSender: Sender | undefined,
   otherRecipients: Sender[],
 ) => {
-  const senderName = originalSender?.name || originalSender?.email || 'Unknown Sender';
+  const senderName =
+    originalSender?.name ||
+    originalSender?.email ||
+    m['common.mail.quotedMessage.unknownSender']();
   const recipientEmails = otherRecipients.map((r) => r.email).join(', ');
+  const recipients = recipientEmails ? `&lt;${recipientEmails}&gt;` : '';
 
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
@@ -357,7 +363,11 @@ export const constructReplyBody = (
       </div>
       <div style="padding-left: 16px; border-left: 3px solid #e2e8f0; color: #64748b;">
         <div style="font-size: 12px;">
-          On ${originalDate}, ${senderName} ${recipientEmails ? `&lt;${recipientEmails}&gt;` : ''} wrote:
+          ${m['common.mail.quotedMessage.replyAttribution']({
+            date: originalDate,
+            sender: senderName,
+            recipients,
+          })}
         </div>
       </div>
     </div>
@@ -370,8 +380,14 @@ export const constructForwardBody = (
   originalSender: Sender | undefined,
   otherRecipients: Sender[],
 ) => {
-  const senderName = originalSender?.name || originalSender?.email || 'Unknown Sender';
+  const senderName =
+    originalSender?.name ||
+    originalSender?.email ||
+    m['common.mail.quotedMessage.unknownSender']();
   const recipientEmails = otherRecipients.map((r) => r.email).join(', ');
+  const senderEmail = originalSender?.email ? `&lt;${originalSender.email}&gt;` : '';
+  const subject = originalSender?.subject || m['common.mail.noSubject']();
+  const recipients = recipientEmails || m['common.mail.noRecipient']();
 
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
@@ -380,11 +396,11 @@ export const constructForwardBody = (
       </div>
       <div style="margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 20px;">
         <div style="font-size: 12px; color: #64748b; margin-bottom: 10px;">
-          ---------- Forwarded message ----------<br/>
-          From: ${senderName} ${originalSender?.email ? `&lt;${originalSender.email}&gt;` : ''}<br/>
-          Date: ${originalDate}<br/>
-          Subject: ${originalSender?.subject || 'No Subject'}<br/>
-          To: ${recipientEmails || 'No Recipients'}
+          ${m['common.mail.quotedMessage.forwardedHeader']()}<br/>
+          ${m['common.mail.quotedMessage.fromLine']({ sender: senderName, email: senderEmail })}<br/>
+          ${m['common.mail.quotedMessage.dateLine']({ date: originalDate })}<br/>
+          ${m['common.mail.quotedMessage.subjectLine']({ subject })}<br/>
+          ${m['common.mail.quotedMessage.toLine']({ recipients })}
         </div>
       </div>
     </div>

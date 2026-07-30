@@ -14,6 +14,8 @@ import { Input } from '@/components/ui/input';
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { m } from '@/paraglide/messages';
+import { getDateLocale } from '@/lib/i18n/date-locale';
+import { getLocale } from '@/paraglide/runtime';
 
 interface Employee {
   id: string;
@@ -321,7 +323,12 @@ export default function HRPage() {
 
       <div className="grid gap-4">
         {employees.map((employee) => {
-          const employeeCurrentTime = formatInTimeZone(currentTime, employee.timezone, 'HH:mm:ss');
+          const employeeCurrentTime = formatInTimeZone(
+            currentTime,
+            employee.timezone,
+            'HH:mm:ss',
+            { locale: getDateLocale(getLocale()) },
+          );
           const overlap = calculateOverlap(
             userWorkingHours.startTime,
             userWorkingHours.endTime,

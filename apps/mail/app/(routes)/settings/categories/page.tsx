@@ -21,7 +21,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { SettingsCard } from '@/components/settings/settings-card';
 import { Check, ChevronDown, Trash2, Plus } from 'lucide-react';
-import type { CategorySetting } from '@/hooks/use-categories';
+import { getCategoryDisplayName, type CategorySetting } from '@/hooks/use-categories';
 import { defaultMailCategories } from '@zero/server/schemas';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTRPC } from '@/providers/query-provider';
@@ -148,7 +148,11 @@ const SortableCategoryItem = React.memo(function SortableCategoryItem({
           <Label className="mb-1.5 block text-xs">
             {m['pages.settings.categories.displayName']()}
           </Label>
-          <Input className="h-8 text-sm" value={cat.name} onChange={handleNameChange} />
+          <Input
+            className="h-8 text-sm"
+            value={getCategoryDisplayName(cat)}
+            onChange={handleNameChange}
+          />
         </div>
 
         <div className="col-span-6">

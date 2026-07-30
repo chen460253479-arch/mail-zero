@@ -1,4 +1,4 @@
-import { constructReplyBody, constructForwardBody } from '@/lib/utils';
+import { constructReplyBody, constructForwardBody, formatDate } from '@/lib/utils';
 import { useActiveConnection } from '@/hooks/use-connections';
 import { useEmailAliases } from '@/hooks/use-email-aliases';
 import { EmailComposer } from '../create/email-composer';
@@ -165,14 +165,14 @@ export default function ReplyCompose({ messageId }: ReplyComposeProps) {
         mode === 'forward'
           ? constructForwardBody(
               data.message + zeroSignature,
-              new Date(replyToMessage.receivedOn || '').toLocaleString(),
+              formatDate(new Date(replyToMessage.receivedOn || '')),
               { ...replyToMessage.sender, subject: replyToMessage.subject },
               toRecipients,
               //   replyToMessage.decodedBody,
             )
           : constructReplyBody(
               data.message + zeroSignature,
-              new Date(replyToMessage.receivedOn || '').toLocaleString(),
+              formatDate(new Date(replyToMessage.receivedOn || '')),
               replyToMessage.sender,
               toRecipients,
               //   replyToMessage.decodedBody,

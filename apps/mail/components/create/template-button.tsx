@@ -177,8 +177,8 @@ const TemplateButtonComponent: React.FC<TemplateButtonProps> = ({
       const templateId = (e.currentTarget as HTMLButtonElement).dataset.templateId;
       if (!templateId) return;
       const template = templatesById.get(templateId);
-      const templateName = template?.name ?? 'this template';
-      toast(`Delete template "${templateName}"?`, {
+      const templateName = template?.name ?? m['pages.createEmail.templates.unnamed']();
+      toast(m['pages.createEmail.templates.deleteConfirm']({ name: templateName }), {
         duration: 10000,
         action: {
           label: m['pages.createEmail.templates.delete'](),
@@ -198,7 +198,7 @@ const TemplateButtonComponent: React.FC<TemplateButtonProps> = ({
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <Button type="button" size={'xs'} variant={'secondary'} className="bg-background border hover:bg-gray-50 dark:hover:bg-[#404040] transition-colors cursor-pointer" disabled={isSaving}>
-            Templates
+            {m['pages.createEmail.templates.title']()}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="z-99999 w-60" align="start" sideOffset={6}>
@@ -209,12 +209,14 @@ const TemplateButtonComponent: React.FC<TemplateButtonProps> = ({
             }}
             disabled={isSaving}
           >
-            <Save className="mr-2 h-3.5 w-3.5" /> Save current as template
+            <Save className="mr-2 h-3.5 w-3.5" />{' '}
+            {m['pages.createEmail.templates.saveCurrent']()}
           </DropdownMenuItem>
            {templates.length > 0 ? (
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
-                <FileText className="mr-2 h-3.5 w-3.5" /> Use template
+                <FileText className="mr-2 h-3.5 w-3.5" />{' '}
+                {m['pages.createEmail.templates.use']()}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="z-99999 w-60">
                 <div className="p-2 border-b border-border sticky top-0 bg-background">
@@ -273,10 +275,10 @@ const TemplateButtonComponent: React.FC<TemplateButtonProps> = ({
               size="sm"
               onClick={() => setSaveDialogOpen(false)}
             >
-              Cancel
+              {m['common.actions.cancel']()}
             </Button>
             <Button size="sm" onClick={handleSaveTemplate} disabled={isSaving}>
-              Save
+              {m['common.actions.save']()}
             </Button>
           </DialogFooter>
         </DialogContent>

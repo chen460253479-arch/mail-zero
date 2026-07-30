@@ -12,6 +12,7 @@ import type { ThreadDestination } from '@/lib/thread-actions';
 import { useTRPC } from '@/providers/query-provider';
 import { useMail } from '@/components/mail/use-mail';
 import { m } from '@/paraglide/messages';
+import { formatDate } from '@/lib/utils';
 import { useQueryState } from 'nuqs';
 import { useCallback } from 'react';
 import { useAtom } from 'jotai';
@@ -503,7 +504,7 @@ export function useOptimisticActions() {
       undo: () => {
         removeOptimisticAction(optimisticId);
       },
-      toastMessage: m['common.mail.snoozedUntil']({ date: wakeAt.toLocaleString() }),
+      toastMessage: m['common.mail.snoozedUntil']({ date: formatDate(wakeAt) }),
       folders: [currentFolder, 'snoozed'],
     });
   }
