@@ -52,4 +52,10 @@ describe('external mail integration contract', () => {
       /mailbox\.sync\.completed|initial-history|history-sync/iu,
     );
   });
+
+  it('uses no synthetic integration-principal mailbox owner', () => {
+    expect(integrationProductionSources()).not.toMatch(
+      /zero-external-integration|ensureExternalIntegrationPrincipal/iu,
+    );
+  });
 });

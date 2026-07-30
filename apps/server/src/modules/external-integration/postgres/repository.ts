@@ -22,10 +22,11 @@ import { externalAccessGrant } from './schema';
 import type { DB } from '../../../db';
 
 export const createPostgresExternalMessageRepository = (db: DB): ExternalMessageRepository => ({
-  findMessageScope: async ({ messageId, ownerUserId }) => {
+  findMessageScope: async ({ messageId }) => {
     const [row] = await db
       .select({
         mailAccountId: email.mailAccountId,
+        userId: mailAccount.userId,
         nangoConnectionId: authorizationBinding.nangoConnectionId,
         channelId: connection.channelId,
       })
@@ -36,12 +37,13 @@ export const createPostgresExternalMessageRepository = (db: DB): ExternalMessage
         and(eq(connection.id, mailAccount.connectionId), eq(connection.userId, mailAccount.userId)),
       )
       .innerJoin(authorizationBinding, eq(authorizationBinding.connectionId, connection.id))
+      .innerJoin(user, eq(user.id, mailAccount.userId))
       .where(
         and(
           eq(email.id, messageId),
           isNull(email.destroyedAt),
-          eq(mailAccount.userId, ownerUserId),
-          eq(connection.userId, ownerUserId),
+          eq(user.role, 'user'),
+          isNotNull(user.username),
           eq(authorizationBinding.authSource, 'nango'),
           isNotNull(authorizationBinding.nangoConnectionId),
         ),
@@ -51,12 +53,13 @@ export const createPostgresExternalMessageRepository = (db: DB): ExternalMessage
     if (row?.nangoConnectionId === null || row === undefined) return null;
     return {
       mailAccountId: row.mailAccountId,
+      userId: row.userId,
       nangoConnectionId: row.nangoConnectionId,
       channelId: row.channelId,
     } as ExternalMessageScope;
   },
 
-  findAttachmentScope: async ({ attachmentId, ownerUserId }) => {
+  findAttachmentScope: async ({ attachmentId }) => {
     const [row] = await db
       .select({
         mailAccountId: emailPart.mailAccountId,
@@ -77,14 +80,15 @@ export const createPostgresExternalMessageRepository = (db: DB): ExternalMessage
         and(eq(connection.id, mailAccount.connectionId), eq(connection.userId, mailAccount.userId)),
       )
       .innerJoin(authorizationBinding, eq(authorizationBinding.connectionId, connection.id))
+      .innerJoin(user, eq(user.id, mailAccount.userId))
       .where(
         and(
           eq(emailPart.id, attachmentId),
           inArray(emailPart.kind, ['inline', 'attachment']),
           isNotNull(emailPart.blobId),
           isNull(email.destroyedAt),
-          eq(mailAccount.userId, ownerUserId),
-          eq(connection.userId, ownerUserId),
+          eq(user.role, 'user'),
+          isNotNull(user.username),
           eq(authorizationBinding.authSource, 'nango'),
           isNotNull(authorizationBinding.nangoConnectionId),
         ),

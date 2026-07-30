@@ -2,12 +2,11 @@ import type { Context, Hono } from 'hono';
 
 import type { ExternalMessageReader } from '../application/read-message';
 import { safeDownloadHeaders } from '../../mail-api/http/download-blob';
-import type { IntegrationPrincipal } from '../principal';
 import { ExternalIntegrationError } from '../errors';
 
 type ExternalMailRouteDependencies = {
-  authorize(context: Context): Promise<IntegrationPrincipal | Response>;
-  createReader(ownerUserId: string): ExternalMessageReader;
+  authorize(context: Context): Promise<null | Response>;
+  createReader(): ExternalMessageReader;
 };
 
 const readJson = async (
@@ -18,7 +17,7 @@ const readJson = async (
   const authorization = await dependencies.authorize(context);
   if (authorization instanceof Response) return authorization;
   try {
-    return Response.json(await read(dependencies.createReader(authorization.userId)), {
+    return Response.json(await read(dependencies.createReader()), {
       status: 200,
     });
   } catch (error) {
@@ -49,7 +48,7 @@ export const registerExternalMailRoutes = (
     if (authorization instanceof Response) return authorization;
     try {
       const result = await dependencies
-        .createReader(authorization.userId)
+        .createReader()
         .getAttachmentContent(context.req.param('attachmentId'));
       return new Response(result.bytes as BodyInit, {
         headers: safeDownloadHeaders(

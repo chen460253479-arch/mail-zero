@@ -5,9 +5,7 @@ export type ExternalIntegrationErrorCode =
   | 'EXTERNAL_USER_INVALID'
   | 'EXTERNAL_USER_NOT_FOUND'
   | 'NANGO_CONNECTION_NOT_BOUND'
-  | 'LAUNCH_CODE_INVALID'
-  | 'EXTERNAL_SESSION_INVALID'
-  | 'EXTERNAL_SESSION_SCOPE_NOT_FOUND';
+  | 'LAUNCH_CODE_INVALID';
 
 export class ExternalIntegrationError extends Error {
   constructor(public readonly code: ExternalIntegrationErrorCode) {

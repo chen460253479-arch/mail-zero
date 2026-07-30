@@ -88,10 +88,11 @@ const email: EmailRecord = {
 };
 
 const repository: ExternalMessageRepository = {
-  findMessageScope: async ({ messageId, ownerUserId }) =>
-    messageId === email.id && ownerUserId === 'zero-external-integration'
+  findMessageScope: async ({ messageId }) =>
+    messageId === email.id
       ? {
           mailAccountId: accountId,
+          userId: 'managed-user-1',
           nangoConnectionId: 'connect-gmail-1',
           channelId: 'gmail',
         }
@@ -101,7 +102,6 @@ const repository: ExternalMessageRepository = {
 
 const createReader = () =>
   createExternalMessageReader({
-    ownerUserId: 'zero-external-integration',
     repository,
     core: {
       getEmail: async () => email,
@@ -157,8 +157,8 @@ describe('external message reader', () => {
     });
   });
 
-  it('hides messages outside the integration principal scope', async () => {
-    await expect(createReader().getSummary('normal-user-email')).rejects.toMatchObject({
+  it('returns not found only when the global message id does not exist', async () => {
+    await expect(createReader().getSummary('missing-email')).rejects.toMatchObject({
       code: 'MESSAGE_NOT_FOUND',
     });
   });

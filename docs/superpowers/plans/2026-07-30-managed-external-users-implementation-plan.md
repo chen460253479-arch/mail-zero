@@ -564,12 +564,16 @@ Router 7、React Query、Vitest。
 - Modify: `apps/server/src/modules/external-integration/postgres/repository.ts`
 - Delete: `apps/server/src/modules/external-integration/principal.ts`
 - Modify: `apps/server/src/modules/external-integration/errors.ts`
+- Modify: `apps/server/src/modules/mail-notifications/postgres/repository.ts`
 - Modify: `apps/server/tests/unit/modules/external-integration/application/read-message.test.ts`
+- Modify: `apps/server/tests/unit/modules/external-integration/http/mail.test.ts`
 - Modify: `apps/server/tests/integration/modules/external-integration/message-read.integration.test.ts`
+- Modify: `apps/server/tests/integration/modules/mail-notifications/outbox.integration.test.ts`
 - Modify: `apps/server/tests/integration/external-integration-flow.integration.test.ts`
-- Generate: `apps/server/src/db/migrations/0003_*.sql`
-- Generate: `apps/server/src/db/migrations/meta/0003_snapshot.json`
-- Modify: `apps/server/src/db/migrations/meta/_journal.json`
+- Delete: `apps/server/tests/integration/modules/external-integration/principal.integration.test.ts`
+- Verify: `apps/server/src/db/migrations/0003_glamorous_smiling_tiger.sql`
+- Verify: `apps/server/src/db/migrations/0004_melodic_wrecker.sql`
+- Verify: `apps/server/src/db/migrations/meta/_journal.json`
 - Modify: `docs/superpowers/specs/2026-07-30-managed-external-users-design.md`
 
 **Interfaces:**
@@ -578,32 +582,31 @@ Router 7、React Query、Vitest。
   `mailAccountId`, `userId`, Nango connection and channel.
 - Changes attachment lookup equivalently; no fixed integration-principal ownership filter.
 
-- [ ] **Step 1: Write failing cross-user service-read tests**
+- [x] **Step 1: Write failing cross-user service-read tests**
 
   Seed messages owned by two different managed users. With the fixed integration service Token,
   each message ID must resolve its own Mail Account and return only that message's summary/content.
   Unknown IDs remain `MESSAGE_NOT_FOUND`.
 
-- [ ] **Step 2: Run message tests and verify RED**
+- [x] **Step 2: Run message tests and verify RED**
 
   Run:
   `pnpm --dir apps/server exec vitest run tests/unit/modules/external-integration/application/read-message.test.ts tests/integration/modules/external-integration/message-read.integration.test.ts`
 
   Expected: FAIL because the repository still filters on `zero-external-integration`.
 
-- [ ] **Step 3: Implement global ID lookup behind the service Token**
+- [x] **Step 3: Implement global ID lookup behind the service Token**
 
   Remove `ownerUserId` from the reader and repository inputs. Resolve the real owner through
-  `email -> mail.account -> connection -> authorization_binding`, require Nango authorization, and
-  open blobs/content only with the resolved `mailAccountId`. Keep route authorization solely on
-  `INTEGRATION_API_TOKEN`.
+  `email -> mail.account -> connection -> authorization_binding -> user_account`, require a managed
+  ordinary user and Nango authorization, and open blobs/content only with the resolved
+  `mailAccountId`. Apply exactly the same predicate when enqueuing Webhook events, so every delivered
+  `messageId` is queryable while administrator, manual-authorized and internal-user mail never enters
+  the external integration. Keep route authorization solely on `INTEGRATION_API_TOKEN`.
 
-- [ ] **Step 4: Generate schema migration**
+- [x] **Step 4: Verify existing schema DDL**
 
-  Run:
-  `pnpm db:generate`
-
-  Inspect the generated DDL and require exactly these schema effects:
+  Inspect the already generated `0003` and `0004` DDL and require exactly these schema effects:
   - user Username/display Username columns and unique Username index;
   - `must_change_password` with default `false`;
   - Session `auth_method` with default `password`;
@@ -611,10 +614,11 @@ Router 7、React Query、Vitest。
   - Access Grant Scope removed and target `user_id` retained;
   - external Browser Session table dropped.
 
-  This is schema DDL only. Do not add data copy, backfill, compatibility tables or old-session
-  conversion.
+  Do not run another migration generator when the checked-in DDL already matches the schema. This
+  is structure validation only: do not add data copy, backfill, compatibility tables, old-session
+  conversion, or any existing-data migration.
 
-- [ ] **Step 5: Rewrite the end-to-end flow test**
+- [x] **Step 5: Rewrite the end-to-end flow test**
 
   The flow must:
   1. bind `{ externalUserId, channelId, connectionId }`;
@@ -628,14 +632,14 @@ Router 7、React Query、Vitest。
   9. verify password login for the same Username sees the same mailbox set;
   10. verify another ordinary user cannot access it.
 
-- [ ] **Step 6: Run targeted end-to-end and schema tests**
+- [x] **Step 6: Run targeted end-to-end and schema tests**
 
   Run:
   `pnpm --dir apps/server exec vitest run tests/integration/external-integration-flow.integration.test.ts tests/integration/modules/external-integration/access-session.integration.test.ts tests/integration/modules/external-integration/message-read.integration.test.ts tests/unit/mail-core/schema-definition.test.ts tests/unit/mail-core/schema-structure-parity.test.ts`
 
   Expected: PASS.
 
-- [ ] **Step 7: Run targeted formatting, type checks, tests and builds**
+- [x] **Step 7: Run targeted formatting, type checks, tests and builds**
 
   Format only changed files:
 
@@ -657,7 +661,7 @@ Router 7、React Query、Vitest。
 
   Expected: every command exits 0 with no test failures or type errors.
 
-- [ ] **Step 8: Commit final integration**
+- [x] **Step 8: Commit final integration**
 
   ```bash
   git add docs/superpowers/specs/2026-07-30-managed-external-users-design.md apps/server apps/mail

@@ -17,6 +17,7 @@ import { ExternalIntegrationError } from '../errors';
 
 export type ExternalMessageScope = {
   mailAccountId: MailAccountId;
+  userId: string;
   nangoConnectionId: string;
   channelId: MailChannelId;
 };
@@ -31,18 +32,11 @@ export type ExternalAttachmentScope = {
 };
 
 export interface ExternalMessageRepository {
-  findMessageScope(input: {
-    messageId: string;
-    ownerUserId: string;
-  }): Promise<ExternalMessageScope | null>;
-  findAttachmentScope(input: {
-    attachmentId: string;
-    ownerUserId: string;
-  }): Promise<ExternalAttachmentScope | null>;
+  findMessageScope(input: { messageId: string }): Promise<ExternalMessageScope | null>;
+  findAttachmentScope(input: { attachmentId: string }): Promise<ExternalAttachmentScope | null>;
 }
 
 type ExternalMessageReaderDependencies = {
-  ownerUserId: string;
   repository: ExternalMessageRepository;
   core: Pick<MailCore, 'getEmail' | 'getBlob' | 'readBlob'>;
 };
@@ -72,7 +66,6 @@ export const createExternalMessageReader = (dependencies: ExternalMessageReaderD
   }> => {
     const scope = await dependencies.repository.findMessageScope({
       messageId,
-      ownerUserId: dependencies.ownerUserId,
     });
     if (scope === null) {
       throw new ExternalIntegrationError('MESSAGE_NOT_FOUND');
@@ -155,7 +148,6 @@ export const createExternalMessageReader = (dependencies: ExternalMessageReaderD
     }> {
       const scope = await dependencies.repository.findAttachmentScope({
         attachmentId,
-        ownerUserId: dependencies.ownerUserId,
       });
       if (scope === null) {
         throw new ExternalIntegrationError('ATTACHMENT_NOT_FOUND');

@@ -36,6 +36,7 @@ CRM 每次创建 Launch Grant 时提交 `allowedNangoConnectIds`，Zero 再据�
 - 本阶段不为普通用户新增细粒度页面或操作授权；普通用户继续使用当前完整菜单。
 - 不实现一个 Nango Connection 由多个用户共享。
 - 不新增首次历史邮件同步流程。
+- 当前处于开发阶段，不实现历史数据迁移、回填、旧邮箱认领或旧 Session 兼容。
 - 不移除 CRM Launch；Launch 仍负责浏览器免密码登录，但不再创建独立的外部受限身份。
 - 不将 `externalUserId` 或密码放入浏览器跳转 URL。
 - 不支持同一浏览器 Cookie 作用域内同时维持彼此独立的超管和普通用户登录态。
@@ -273,8 +274,10 @@ Webhook 契约保持：
 - `eventId` 仅用于投递去重。
 - `messageId` 是 CRM 回查邮件详情和状态的标识。
 - Webhook 不增加用户、租户、正文、附件或签名字段。
+- 仅“有 `externalUserId` 的普通用户 + Nango 授权邮箱”产生外部 Webhook；超管邮箱、手工授权邮箱和内部用户邮箱不进入外部投递队列。
 - CRM 使用固定服务 Token 调用详情接口。
-- Zero 详情接口必须根据 `messageId` 解析实际邮箱归属，不允许跨用户泄漏。
+- Zero 详情接口必须使用与 Webhook 完全相同的邮箱资格条件，根据 `messageId` 解析实际邮箱归属，只返回该 ID 对应的数据。
+- 固定服务 Token 只表示外部服务身份，不创建或依赖虚拟的邮箱所有者账号。
 
 ## 11. 错误契约
 

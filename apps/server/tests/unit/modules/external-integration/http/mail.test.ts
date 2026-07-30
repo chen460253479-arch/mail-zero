@@ -43,16 +43,18 @@ const createRouter = () =>
       },
     } as RuntimeServices,
     {
-      ensurePrincipal: vi.fn(async () => ({
-        userId: 'zero-external-integration' as const,
-      })),
       connect: vi.fn(),
       createMessageReader: vi.fn(() => ({
         getSummary: async (messageId: string) => {
-          if (messageId !== summary.messageId) {
+          if (![summary.messageId, 'managed-user-email'].includes(messageId)) {
             throw new ExternalIntegrationError('MESSAGE_NOT_FOUND');
           }
-          return summary;
+          return {
+            ...summary,
+            messageId,
+            mailAccountId:
+              messageId === 'managed-user-email' ? 'managed-user-account' : summary.mailAccountId,
+          };
         },
         getContent: async () => ({
           messageId: summary.messageId,
@@ -121,15 +123,16 @@ describe('external mail read HTTP contract', () => {
     ]);
   });
 
-  it('hides normal user messages as not found', async () => {
+  it('returns a managed users message by its global id', async () => {
     const response = await authorizedGet(
       createRouter(),
-      '/mail/messages/normal-user-email/summary',
+      '/mail/messages/managed-user-email/summary',
     );
 
-    expect(response.status).toBe(404);
-    await expect(response.json()).resolves.toEqual({
-      error: 'MESSAGE_NOT_FOUND',
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      messageId: 'managed-user-email',
+      mailAccountId: 'managed-user-account',
     });
   });
 

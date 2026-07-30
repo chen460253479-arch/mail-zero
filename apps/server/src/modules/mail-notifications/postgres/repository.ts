@@ -1,6 +1,5 @@
 import { and, asc, eq, inArray, lte, or, sql } from 'drizzle-orm';
 
-import { EXTERNAL_INTEGRATION_PRINCIPAL_USER_ID } from '../../external-integration/principal';
 import type { MailNotificationOutboxRepository } from '../domain/event';
 import { mailNotificationOutbox } from './schema';
 import type { DB } from '../../../db';
@@ -48,10 +47,20 @@ export const createPostgresMailNotificationRepository = (
       FROM mail.email AS candidate
       INNER JOIN mail.account AS account
         ON account.id = candidate.mail_account_id
+      INNER JOIN integration.connection AS mailbox_connection
+        ON mailbox_connection.id = account.connection_id
+        AND mailbox_connection.user_id = account.user_id
+      INNER JOIN integration.authorization_binding AS auth_binding
+        ON auth_binding.connection_id = mailbox_connection.id
+      INNER JOIN auth.user_account AS managed_user
+        ON managed_user.id = account.user_id
       WHERE candidate.id = ${input.messageId}
         AND candidate.mail_account_id = ${input.accountId}
         AND candidate.destroyed_at IS NULL
-        AND account.user_id = ${EXTERNAL_INTEGRATION_PRINCIPAL_USER_ID}
+        AND managed_user.role = 'user'
+        AND managed_user.username IS NOT NULL
+        AND auth_binding.auth_source = 'nango'
+        AND auth_binding.nango_connection_id IS NOT NULL
       ON CONFLICT (event_id) DO NOTHING
     `);
   },

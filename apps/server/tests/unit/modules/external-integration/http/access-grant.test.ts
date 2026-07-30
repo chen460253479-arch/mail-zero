@@ -19,9 +19,6 @@ const createRouter = () => {
   return {
     createAccessGrant,
     app: createExternalIntegrationRouter(services, {
-      ensurePrincipal: vi.fn(async () => ({
-        userId: 'zero-external-integration' as const,
-      })),
       createAccessGrant,
     }),
   };
@@ -42,11 +39,11 @@ const requestGrant = async (
   });
 
 describe('external access grant HTTP contract', () => {
-  it('accepts only allowedNangoConnectIds and returns only launchCode', async () => {
+  it('accepts only externalUserId and returns only launchCode', async () => {
     const { app, createAccessGrant } = createRouter();
 
     const response = await requestGrant(app, {
-      allowedNangoConnectIds: ['connect-gmail-1', 'connect-outlook-1'],
+      externalUserId: 'user_200',
     });
 
     expect(response.status).toBe(201);
@@ -55,10 +52,7 @@ describe('external access grant HTTP contract', () => {
     });
     expect(createAccessGrant).toHaveBeenCalledWith(
       {
-        allowedNangoConnectIds: ['connect-gmail-1', 'connect-outlook-1'],
-      },
-      {
-        userId: 'zero-external-integration',
+        externalUserId: 'user_200',
       },
       expect.anything(),
     );
@@ -68,7 +62,7 @@ describe('external access grant HTTP contract', () => {
     const { app, createAccessGrant } = createRouter();
 
     const response = await requestGrant(app, {
-      allowedNangoConnectIds: ['connect-gmail-1'],
+      externalUserId: 'user_200',
       returnUrl: 'https://crm.example.test/customer/1',
     });
 
@@ -82,7 +76,7 @@ describe('external access grant HTTP contract', () => {
     const response = await requestGrant(
       app,
       {
-        allowedNangoConnectIds: ['connect-gmail-1'],
+        externalUserId: 'user_200',
       },
       'wrong-token',
     );

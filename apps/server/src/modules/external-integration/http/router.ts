@@ -19,7 +19,6 @@ import {
   createExternalMessageReader,
   type ExternalMessageReader,
 } from '../application/read-message';
-import { ensureExternalIntegrationPrincipal, type IntegrationPrincipal } from '../principal';
 import { createPostgresManagedUserRepository } from '../postgres/managed-user-repository';
 import { NangoBindingError } from '../../mail-accounts/application/bind-nango-mailbox';
 import { accessGrantInputSchema, type AccessGrantInput } from '../contracts/access';
@@ -33,13 +32,12 @@ import { ExternalIntegrationError } from '../errors';
 import { registerExternalMailRoutes } from './mail';
 
 export type ExternalIntegrationRouterDependencies = {
-  ensurePrincipal(database: RuntimeServices['database']['db']): Promise<IntegrationPrincipal>;
   provisionManagedUser(
     input: { externalUserId: string },
     services: RuntimeServices,
   ): Promise<{ userId: string; created: boolean }>;
   connect(input: ConnectNangoMailboxInput, services: RuntimeServices): Promise<{ id: string }>;
-  createMessageReader(ownerUserId: string, services: RuntimeServices): ExternalMessageReader;
+  createMessageReader(services: RuntimeServices): ExternalMessageReader;
   createAccessGrant(
     input: AccessGrantInput,
     services: RuntimeServices,
@@ -48,7 +46,6 @@ export type ExternalIntegrationRouterDependencies = {
 };
 
 const defaultDependencies: ExternalIntegrationRouterDependencies = {
-  ensurePrincipal: ensureExternalIntegrationPrincipal,
   provisionManagedUser: async (input, services) => {
     const dependencies: ProvisionManagedUserDependencies = {
       repository: createPostgresManagedUserRepository(services.database.db),
@@ -59,9 +56,8 @@ const defaultDependencies: ExternalIntegrationRouterDependencies = {
     return await provisionManagedUser(input, dependencies);
   },
   connect: connectNangoMailbox,
-  createMessageReader: (ownerUserId, services) =>
+  createMessageReader: (services) =>
     createExternalMessageReader({
-      ownerUserId,
       repository: createPostgresExternalMessageRepository(services.database.db),
       core: createMailCoreForEnvironment(services.database.db, {
         blobStore: services.blobStore,
@@ -95,9 +91,7 @@ export const createExternalIntegrationRouter = (
     ...defaultDependencies,
     ...dependencyOverrides,
   };
-  const authorize = async (
-    authorizationHeader: string | undefined,
-  ): Promise<IntegrationPrincipal | Response> => {
+  const authorize = async (authorizationHeader: string | undefined): Promise<null | Response> => {
     try {
       requireIntegrationServiceToken(
         services.config.externalIntegration.apiToken,
@@ -106,7 +100,7 @@ export const createExternalIntegrationRouter = (
     } catch {
       return Response.json({ error: 'INTEGRATION_UNAUTHORIZED' }, { status: 401 });
     }
-    return await dependencies.ensurePrincipal(services.database.db);
+    return null;
   };
 
   const app = new Hono().post('/nango/connections/bind', async (context) => {
@@ -189,7 +183,7 @@ export const createExternalIntegrationRouter = (
 
   registerExternalMailRoutes(app, {
     authorize: async (context) => await authorize(context.req.header('Authorization')),
-    createReader: (ownerUserId) => dependencies.createMessageReader(ownerUserId, services),
+    createReader: () => dependencies.createMessageReader(services),
   });
   return app;
 };

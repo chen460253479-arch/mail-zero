@@ -1,34 +1,68 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  EXTERNAL_INTEGRATION_PRINCIPAL_USER_ID,
-  ensureExternalIntegrationPrincipal,
-} from '../../../../src/modules/external-integration/principal';
 import { createPostgresExternalMessageRepository } from '../../../../src/modules/external-integration/postgres/repository';
 import { withMailTestDatabase } from '../../../helpers/mail-core/database';
 
 describe('external message PostgreSQL scope', () => {
-  it('resolves only messages and attachments owned by the integration principal', async () => {
+  it('resolves messages and attachments globally by id for managed users', async () => {
     await withMailTestDatabase(async ({ db, sql }) => {
-      await ensureExternalIntegrationPrincipal(db);
       await sql`
         INSERT INTO auth.user_account (
-          id, name, email, email_verified, role, created_at, updated_at
-        ) VALUES (
-          'normal-user', 'Normal User', 'normal@example.test', true, 'user', now(), now()
-        )
+          id, name, email, email_verified, username, display_username,
+          role, created_at, updated_at
+        ) VALUES
+          (
+            'managed-user-a', 'Managed User A', 'managed-a@example.test', true,
+            'external-a', 'external-a', 'user', now(), now()
+          ),
+          (
+            'managed-user-b', 'Managed User B', 'managed-b@example.test', true,
+            'external-b', 'external-b', 'user', now(), now()
+          ),
+          (
+            'admin-user', 'Administrator', 'admin@example.test', true,
+            'admin', 'admin', 'admin', now(), now()
+          ),
+          (
+            'manual-user', 'Manual User', 'manual@example.test', true,
+            'manual-user', 'manual-user', 'user', now(), now()
+          ),
+          (
+            'internal-user', 'Internal User', 'internal@example.test', true,
+            NULL, NULL, 'user', now(), now()
+          )
       `;
 
       for (const owner of [
         {
-          userId: EXTERNAL_INTEGRATION_PRINCIPAL_USER_ID,
-          suffix: 'external',
+          userId: 'managed-user-a',
+          suffix: 'managed-a',
           nangoConnectionId: 'connect-gmail-1',
+          authSource: 'nango',
         },
         {
-          userId: 'normal-user',
-          suffix: 'normal',
+          userId: 'managed-user-b',
+          suffix: 'managed-b',
           nangoConnectionId: 'connect-gmail-2',
+          authSource: 'nango',
+        },
+        {
+          userId: 'admin-user',
+          suffix: 'admin',
+          nangoConnectionId: 'connect-admin',
+          authSource: 'nango',
+        },
+        {
+          userId: 'manual-user',
+          suffix: 'manual',
+          nangoConnectionId: null,
+          authSource: 'manual',
+        },
+        {
+          userId: 'internal-user',
+          suffix: 'internal',
+          nangoConnectionId: 'connect-internal',
+          authSource: 'nango',
         },
       ]) {
         await sql`
@@ -48,22 +82,41 @@ describe('external message PostgreSQL scope', () => {
             now()
           )
         `;
-        await sql`
-          INSERT INTO integration.authorization_binding (
-            id, connection_id, auth_source, credential_type,
-            nango_connection_id, nango_provider_config_key,
-            created_at, updated_at
-          ) VALUES (
-            ${`authorization-${owner.suffix}`},
-            ${`connection-${owner.suffix}`},
-            'nango',
-            'oauth2',
-            ${owner.nangoConnectionId},
-            'google-mail',
-            now(),
-            now()
-          )
-        `;
+        if (owner.authSource === 'nango') {
+          await sql`
+            INSERT INTO integration.authorization_binding (
+              id, connection_id, auth_source, credential_type,
+              nango_connection_id, nango_provider_config_key,
+              created_at, updated_at
+            ) VALUES (
+              ${`authorization-${owner.suffix}`},
+              ${`connection-${owner.suffix}`},
+              'nango',
+              'oauth2',
+              ${owner.nangoConnectionId},
+              'google-mail',
+              now(),
+              now()
+            )
+          `;
+        } else {
+          await sql`
+            INSERT INTO integration.authorization_binding (
+              id, connection_id, auth_source, credential_type,
+              encrypted_credential_snapshot, credential_fetched_at,
+              created_at, updated_at
+            ) VALUES (
+              ${`authorization-${owner.suffix}`},
+              ${`connection-${owner.suffix}`},
+              'manual',
+              'basic',
+              'encrypted-test-credential',
+              now(),
+              now(),
+              now()
+            )
+          `;
+        }
         await sql`
           INSERT INTO mail.account (id, connection_id, user_id)
           VALUES (
@@ -157,39 +210,62 @@ describe('external message PostgreSQL scope', () => {
 
       await expect(
         repository.findMessageScope({
-          messageId: 'email-external',
-          ownerUserId: EXTERNAL_INTEGRATION_PRINCIPAL_USER_ID,
+          messageId: 'email-managed-a',
         }),
       ).resolves.toEqual({
-        mailAccountId: 'account-external',
+        mailAccountId: 'account-managed-a',
+        userId: 'managed-user-a',
         nangoConnectionId: 'connect-gmail-1',
         channelId: 'gmail',
       });
       await expect(
         repository.findMessageScope({
-          messageId: 'email-normal',
-          ownerUserId: EXTERNAL_INTEGRATION_PRINCIPAL_USER_ID,
+          messageId: 'email-managed-b',
         }),
-      ).resolves.toBeNull();
+      ).resolves.toEqual({
+        mailAccountId: 'account-managed-b',
+        userId: 'managed-user-b',
+        nangoConnectionId: 'connect-gmail-2',
+        channelId: 'gmail',
+      });
       await expect(
         repository.findAttachmentScope({
-          attachmentId: 'part-external',
-          ownerUserId: EXTERNAL_INTEGRATION_PRINCIPAL_USER_ID,
+          attachmentId: 'part-managed-a',
         }),
       ).resolves.toMatchObject({
-        mailAccountId: 'account-external',
-        emailId: 'email-external',
-        blobId: 'blob-external',
+        mailAccountId: 'account-managed-a',
+        emailId: 'email-managed-a',
+        blobId: 'blob-managed-a',
         filename: 'invoice.pdf',
         contentType: 'application/pdf',
         sizeBytes: 4n,
       });
       await expect(
         repository.findAttachmentScope({
-          attachmentId: 'part-normal',
-          ownerUserId: EXTERNAL_INTEGRATION_PRINCIPAL_USER_ID,
+          attachmentId: 'part-managed-b',
+        }),
+      ).resolves.toMatchObject({
+        mailAccountId: 'account-managed-b',
+        emailId: 'email-managed-b',
+        blobId: 'blob-managed-b',
+      });
+      await expect(
+        repository.findMessageScope({
+          messageId: 'email-missing',
         }),
       ).resolves.toBeNull();
+      for (const suffix of ['admin', 'manual', 'internal']) {
+        await expect(
+          repository.findMessageScope({
+            messageId: `email-${suffix}`,
+          }),
+        ).resolves.toBeNull();
+        await expect(
+          repository.findAttachmentScope({
+            attachmentId: `part-${suffix}`,
+          }),
+        ).resolves.toBeNull();
+      }
     });
   });
 });
