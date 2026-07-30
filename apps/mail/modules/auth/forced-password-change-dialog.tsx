@@ -1,7 +1,13 @@
 import { useMutation } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router';
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useTRPC } from '@/providers/query-provider';
 import { Button } from '@/components/ui/button';
 
@@ -10,21 +16,22 @@ type PasswordChangeInput = {
   newPassword: string;
 };
 
-type PasswordChangeDependencies = {
+type ForcedPasswordChangeDependencies = {
   changePassword(input: PasswordChangeInput): Promise<unknown>;
-  navigate(path: string, options: { replace: boolean }): void;
+  reloadInbox(): void;
 };
 
-export const submitPasswordChange = async (
+export const submitForcedPasswordChange = async (
   input: PasswordChangeInput,
-  dependencies: PasswordChangeDependencies,
+  dependencies: ForcedPasswordChangeDependencies,
 ): Promise<void> => {
   await dependencies.changePassword(input);
-  dependencies.navigate('/mail/inbox', { replace: true });
+  dependencies.reloadInbox();
 };
 
-export function ChangePasswordClient() {
-  const navigate = useNavigate();
+const reloadInbox = () => window.location.assign('/mail/inbox');
+
+export function ForcedPasswordChangeDialog() {
   const trpc = useTRPC();
   const changePassword = useMutation(trpc.user.changePassword.mutationOptions());
   const [currentPassword, setCurrentPassword] = useState('');
@@ -48,11 +55,11 @@ export function ChangePasswordClient() {
       return;
     }
     try {
-      await submitPasswordChange(
+      await submitForcedPasswordChange(
         { currentPassword, newPassword },
         {
           changePassword: changePassword.mutateAsync,
-          navigate,
+          reloadInbox,
         },
       );
     } catch (cause) {
@@ -61,31 +68,37 @@ export function ChangePasswordClient() {
   };
 
   return (
-    <main className="flex min-h-screen w-full items-center justify-center bg-[#111111] px-4">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.04] p-8 shadow-2xl">
-        <div className="mb-8 text-center">
-          <img src="/white-icon.svg" alt="Zero" className="mx-auto mb-5 h-10 w-10" />
-          <h1 className="text-3xl font-semibold text-white">Set a new password</h1>
-          <p className="mt-2 text-sm text-white/55">
-            Change the initial password before opening your mailbox
-          </p>
-        </div>
+    <Dialog open>
+      <DialogContent
+        showOverlay
+        data-forced-password-dialog="true"
+        className="max-h-[90vh] max-w-md overflow-y-auto"
+        onEscapeKeyDown={(event) => event.preventDefault()}
+        onPointerDownOutside={(event) => event.preventDefault()}
+        onInteractOutside={(event) => event.preventDefault()}
+      >
+        <DialogHeader className="mb-6">
+          <DialogTitle className="text-2xl">Set a new password</DialogTitle>
+          <DialogDescription>
+            Change the initial password before using your mailbox.
+          </DialogDescription>
+        </DialogHeader>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-white/80">Current password</span>
+            <span className="text-sm font-medium">Current password</span>
             <input
               autoComplete="current-password"
               type="password"
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}
               required
-              className="h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              className="border-input bg-background h-11 w-full rounded-lg border px-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
             />
           </label>
 
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-white/80">New password</span>
+            <span className="text-sm font-medium">New password</span>
             <input
               autoComplete="new-password"
               type="password"
@@ -93,12 +106,12 @@ export function ChangePasswordClient() {
               onChange={(event) => setNewPassword(event.target.value)}
               required
               minLength={12}
-              className="h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              className="border-input bg-background h-11 w-full rounded-lg border px-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
             />
           </label>
 
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-white/80">Confirm new password</span>
+            <span className="text-sm font-medium">Confirm new password</span>
             <input
               autoComplete="new-password"
               type="password"
@@ -106,14 +119,14 @@ export function ChangePasswordClient() {
               onChange={(event) => setConfirmation(event.target.value)}
               required
               minLength={12}
-              className="h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              className="border-input bg-background h-11 w-full rounded-lg border px-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
             />
           </label>
 
           {error ? (
             <p
               role="alert"
-              className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-300"
+              className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-300"
             >
               {error}
             </p>
@@ -127,7 +140,7 @@ export function ChangePasswordClient() {
             {changePassword.isPending ? 'Updating…' : 'Change password'}
           </Button>
         </form>
-      </div>
-    </main>
+      </DialogContent>
+    </Dialog>
   );
 }
