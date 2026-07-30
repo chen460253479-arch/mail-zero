@@ -7,7 +7,7 @@ import { m } from '@/paraglide/messages';
 import { type ReactNode } from 'react';
 
 type ShortcutActionMessageKey = Extract<
-  keyof typeof m,
+  Exclude<keyof typeof m, 'pages.settings.shortcuts.actions.showCategory'>,
   `pages.settings.shortcuts.actions.${string}`
 >;
 
@@ -19,6 +19,23 @@ function getShortcutActionLabel(shortcut: Shortcut): string {
   }
 
   return m[key as ShortcutActionMessageKey]();
+}
+
+function getShortcutScopeLabel(scope: string): string {
+  switch (scope) {
+    case 'global':
+      return m['pages.settings.shortcuts.scopes.global']();
+    case 'navigation':
+      return m['pages.settings.shortcuts.scopes.navigation']();
+    case 'mail-list':
+      return m['pages.settings.shortcuts.scopes.mailList']();
+    case 'thread-display':
+      return m['pages.settings.shortcuts.scopes.threadDisplay']();
+    case 'compose':
+      return m['pages.settings.shortcuts.scopes.compose']();
+    default:
+      return scope;
+  }
 }
 
 export default function ShortcutsPage() {
@@ -64,7 +81,7 @@ export default function ShortcutsPage() {
           ).map(([scope, scopedShortcuts]) => (
             <div key={scope}>
               <h3 className="mb-4 text-lg font-semibold capitalize">
-                {scope.split('-').join(' ')}
+                {getShortcutScopeLabel(scope)}
               </h3>
               <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                 {scopedShortcuts.map((shortcut, index) => {
@@ -83,7 +100,7 @@ export default function ShortcutsPage() {
                     const idx = categoryActionIndex[shortcut.action];
                     const cat = categorySettings[idx];
                     label = cat
-                      ? `Show ${cat.name}`
+                      ? m['pages.settings.shortcuts.actions.showCategory']({ category: cat.name })
                       : getShortcutActionLabel(shortcut);
                   } else {
                     label = getShortcutActionLabel(shortcut);

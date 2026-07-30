@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { useForm } from 'react-hook-form';
 import { Bell } from 'lucide-react';
 import { useState } from 'react';
+import { m } from '@/paraglide/messages';
 import * as z from 'zod';
 
 const formSchema = z.object({
@@ -48,15 +49,15 @@ export default function NotificationsPage() {
   return (
     <div className="grid gap-6">
       <SettingsCard
-        title="Notifications"
-        description="Choose what notifications you want to receive."
+        title={m['pages.settings.notifications.title']()}
+        description={m['pages.settings.notifications.description']()}
         footer={
           <div className="flex justify-between">
             <Button type="button" variant="outline" onClick={() => form.reset()}>
-              Reset to Defaults
+              {m['common.actions.resetToDefaults']()}
             </Button>
             <Button type="submit" form="notifications-form" disabled={isSaving}>
-              {isSaving ? 'Saving...' : 'Save Changes'}
+              {isSaving ? m['common.actions.saving']() : m['common.actions.saveChanges']()}
             </Button>
           </div>
         }
@@ -72,22 +73,24 @@ export default function NotificationsPage() {
               name="newMailNotifications"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>New Mail Notifications</FormLabel>
+                  <FormLabel>{m['pages.settings.notifications.newMail']()}</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger className="w-[240px]">
                         <Bell className="mr-2 h-4 w-4" />
-                        <SelectValue placeholder="Select notification level" />
+                        <SelectValue placeholder={m['pages.settings.notifications.selectLevel']()} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      <SelectItem value="important">Important Only</SelectItem>
-                      <SelectItem value="all">All Messages</SelectItem>
+                      <SelectItem value="none">{m['pages.settings.notifications.none']()}</SelectItem>
+                      <SelectItem value="important">
+                        {m['pages.settings.notifications.importantOnly']()}
+                      </SelectItem>
+                      <SelectItem value="all">{m['pages.settings.notifications.allMessages']()}</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormDescription>
-                    Choose which messages you want to receive notifications for
+                    {m['pages.settings.notifications.newMailDescription']()}
                   </FormDescription>
                 </FormItem>
               )}
@@ -98,8 +101,12 @@ export default function NotificationsPage() {
               render={({ field }) => (
                 <FormItem className="flex items-center justify-between rounded-lg border p-4">
                   <div className="space-y-0.5">
-                    <FormLabel className="text-base">Marketing Communications</FormLabel>
-                    <FormDescription>Receive updates about new features</FormDescription>
+                    <FormLabel className="text-base">
+                      {m['pages.settings.notifications.marketing']()}
+                    </FormLabel>
+                    <FormDescription>
+                      {m['pages.settings.notifications.marketingDescription']()}
+                    </FormDescription>
                   </div>
                   <FormControl>
                     <Switch checked={field.value} onCheckedChange={field.onChange} />

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { m } from '@/paraglide/messages';
 
 export function ChannelCard({
   title,
@@ -35,7 +36,11 @@ export function ChannelCard({
           {icon}
         </div>
         <Badge variant={configured ? 'default' : 'outline'}>
-          {configured ? 'Configured' : available ? 'Not configured' : 'Coming soon'}
+          {configured
+            ? m['pages.settings.integrations.configured']()
+            : available
+              ? m['pages.settings.integrations.notConfigured']()
+              : m['pages.settings.integrations.comingSoon']()}
         </Badge>
       </div>
       <div className="mt-6 flex-1">
@@ -44,7 +49,7 @@ export function ChannelCard({
       </div>
       {available ? (
         <span className="mt-5 flex items-center gap-2 text-sm font-medium">
-          Configure
+          {m['pages.settings.integrations.configure']()}
           <ArrowRight className="size-4" />
         </span>
       ) : null}

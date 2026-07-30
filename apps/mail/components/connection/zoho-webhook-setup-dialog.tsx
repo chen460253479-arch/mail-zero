@@ -14,6 +14,7 @@ import {
 import { useTRPC } from '@/providers/query-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { m } from '@/paraglide/messages';
 
 export function ZohoWebhookSetupDialog({
   connectionId,
@@ -33,7 +34,7 @@ export function ZohoWebhookSetupDialog({
   const copy = async () => {
     if (!setup.data?.webhookUrl) return;
     await navigator.clipboard.writeText(setup.data.webhookUrl);
-    toast.success('Webhook URL copied');
+    toast.success(m['pages.settings.connections.zohoWebhook.copied']());
   };
 
   return (
@@ -42,16 +43,15 @@ export function ZohoWebhookSetupDialog({
         {children ?? (
           <Button variant="outline" size="sm">
             <Webhook className="size-4" />
-            Webhook
+            {m['pages.settings.connections.zohoWebhook.button']()}
           </Button>
         )}
       </DialogTrigger>
       <DialogContent showOverlay>
         <DialogHeader>
-          <DialogTitle>Zoho Inbox Watch</DialogTitle>
+          <DialogTitle>{m['pages.settings.connections.zohoWebhook.title']()}</DialogTitle>
           <DialogDescription>
-            Add this per-mailbox URL as an Outgoing Webhook in the Zoho Mail developer settings.
-            Zero treats the callback only as a sync signal and fetches the message from Zoho.
+            {m['pages.settings.connections.zohoWebhook.description']()}
           </DialogDescription>
         </DialogHeader>
 
@@ -68,15 +68,14 @@ export function ZohoWebhookSetupDialog({
               </Button>
             </div>
             <ol className="text-muted-foreground list-decimal space-y-2 pl-5 text-sm">
-              <li>Open the Zoho Mail Outgoing Webhook settings for this mailbox.</li>
-              <li>Create an HTTPS webhook using the URL above.</li>
-              <li>Choose incoming-message events, save it, and keep scheduled sync enabled.</li>
+              <li>{m['pages.settings.connections.zohoWebhook.stepOpenSettings']()}</li>
+              <li>{m['pages.settings.connections.zohoWebhook.stepCreate']()}</li>
+              <li>{m['pages.settings.connections.zohoWebhook.stepSave']()}</li>
             </ol>
           </div>
         ) : (
           <p className="text-muted-foreground py-6 text-sm">
-            Inbox Watch is disabled for the global Zoho Mail channel. Enable it in Integrations
-            before configuring this mailbox.
+            {m['pages.settings.connections.zohoWebhook.disabledDescription']()}
           </p>
         )}
       </DialogContent>

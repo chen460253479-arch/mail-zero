@@ -16,12 +16,19 @@ import { useTRPC } from '@/providers/query-provider';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { m } from '@/paraglide/messages';
 
-const channelLabels: Record<ConnectableMailChannelId, string> = {
-  gmail: 'Gmail',
-  outlook: 'Outlook',
-  zoho_mail: 'Zoho Mail',
-  imap_smtp: 'IMAP/SMTP',
+const channelLabel = (channelId: ConnectableMailChannelId) => {
+  switch (channelId) {
+    case 'gmail':
+      return m['common.brands.gmail']();
+    case 'outlook':
+      return m['common.brands.outlook']();
+    case 'zoho_mail':
+      return m['common.brands.zohoMail']();
+    case 'imap_smtp':
+      return m['common.brands.imapSmtp']();
+  }
 };
 
 export function NangoConnectDialog({
@@ -55,7 +62,11 @@ export function NangoConnectDialog({
         defaultConnection: trpc.connections.getDefault.queryKey(),
         mailAccountList: trpc.mail.account.list.queryKey(),
       });
-      toast.success(`${channelLabels[channelId]} mailbox connected`);
+      toast.success(
+        m['pages.settings.connections.nango.mailboxConnected']({
+          channel: channelLabel(channelId),
+        }),
+      );
       setSelectedConnectionId(null);
       onOpenChange(false);
       onConnected();
@@ -64,7 +75,11 @@ export function NangoConnectDialog({
         error instanceof Error &&
         (error.message.includes('MAILBOX_ALREADY_CONNECTED') ||
           error.message.includes('NANGO_CONNECTION_ALREADY_BOUND'));
-      toast.error(duplicate ? 'This mailbox is already connected' : 'Unable to connect mailbox');
+      toast.error(
+        duplicate
+          ? m['pages.settings.connections.mailboxAlreadyConnected']()
+          : m['pages.settings.connections.nango.connectError'](),
+      );
     }
   };
 
@@ -78,8 +93,14 @@ export function NangoConnectDialog({
     >
       <DialogContent showOverlay>
         <DialogHeader>
-          <DialogTitle>Connect {channelId ? channelLabels[channelId] : 'mailbox'}</DialogTitle>
-          <DialogDescription>Select an existing authorization stored by Nango.</DialogDescription>
+          <DialogTitle>
+            {m['pages.settings.connections.nango.title']({
+              channel: channelId
+                ? channelLabel(channelId)
+                : m['pages.settings.connections.nango.mailbox'](),
+            })}
+          </DialogTitle>
+          <DialogDescription>{m['pages.settings.connections.nango.description']()}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
@@ -116,21 +137,25 @@ export function NangoConnectDialog({
                         </span>
                       ) : null}
                     </span>
-                    {invalid ? <Badge variant="destructive">Needs attention</Badge> : null}
+                    {invalid ? (
+                      <Badge variant="destructive">
+                        {m['pages.settings.connections.nango.needsAttention']()}
+                      </Badge>
+                    ) : null}
                   </button>
                 );
               })}
             </div>
           ) : (
             <p className="text-muted-foreground py-8 text-center text-sm">
-              No authorized mailboxes are available for this channel.
+              {m['pages.settings.connections.nango.noAuthorizedMailboxes']()}
             </p>
           )}
 
           <div className="flex justify-end">
             <Button onClick={save} disabled={!selectedConnectionId || bind.isPending}>
               {bind.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-              Connect selected mailbox
+              {m['pages.settings.connections.nango.connectSelectedMailbox']()}
             </Button>
           </div>
         </div>

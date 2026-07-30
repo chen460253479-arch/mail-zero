@@ -116,7 +116,7 @@ export default function ConnectionsPage() {
                           connection.authSource === 'zero_oauth' ? (
                             <Badge variant="outline">
                               {connection.authSource === 'nango'
-                                ? 'Nango'
+                                ? m['common.brands.nango']()
                                 : m['pages.settings.connections.zeroOAuth']()}
                             </Badge>
                           ) : null}

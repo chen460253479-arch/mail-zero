@@ -255,7 +255,9 @@ export default function GeneralPage() {
                     {alias.name ? `${alias.name} <${alias.email}>` : alias.email}
                   </span>
                   {alias.primary && (
-                    <span className="text-muted-foreground text-xs">(Primary)</span>
+                    <span className="text-muted-foreground text-xs">
+                      ({m['pages.createEmail.primary']()})
+                    </span>
                   )}
                 </div>
               </SelectItem>

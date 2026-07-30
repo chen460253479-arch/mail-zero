@@ -100,8 +100,8 @@ export function LabelDialog({
           </DialogTitle>
           <DialogDescription>
             {editingLabel
-              ? 'Modify the label name and color to update this label.'
-              : 'Create a new label to organize your emails. Choose a name and color for easy identification.'}
+              ? m['common.labels.editDescription']()
+              : m['common.labels.createDescription']()}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -123,7 +123,7 @@ export function LabelDialog({
                   <FormItem>
                     <FormLabel>{m['common.labels.labelName']()}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter label name" {...field} autoFocus />
+                      <Input placeholder={m['common.labels.namePlaceholder']()} {...field} autoFocus />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

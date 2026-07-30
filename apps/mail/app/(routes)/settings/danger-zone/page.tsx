@@ -96,7 +96,12 @@ function DeleteAccountDialog() {
                 <FormItem>
                   <FormDescription>{m['pages.settings.dangerZone.confirmation']()}</FormDescription>
                   <FormControl>
-                    <Input placeholder="DELETE" {...field} />
+                    <Input
+                      placeholder={m['pages.settings.dangerZone.confirmationCode']({
+                        code: CONFIRMATION_TEXT,
+                      })}
+                      {...field}
+                    />
                   </FormControl>
                 </FormItem>
               )}

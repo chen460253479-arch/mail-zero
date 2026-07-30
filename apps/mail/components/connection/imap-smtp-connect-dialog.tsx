@@ -16,6 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { m } from '@/paraglide/messages';
 
 type ProtocolForm = {
   email: string;
@@ -64,7 +65,7 @@ const ProtocolEndpointFields = ({
     <legend className="px-1 text-sm font-semibold">{label}</legend>
     <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
       <div className="grid gap-2">
-        <Label htmlFor={`${prefix}-host`}>Host</Label>
+        <Label htmlFor={`${prefix}-host`}>{m['pages.settings.connections.imapSmtp.host']()}</Label>
         <Input
           id={`${prefix}-host`}
           value={host}
@@ -73,7 +74,7 @@ const ProtocolEndpointFields = ({
         />
       </div>
       <div className="grid gap-2">
-        <Label htmlFor={`${prefix}-port`}>Port</Label>
+        <Label htmlFor={`${prefix}-port`}>{m['pages.settings.connections.imapSmtp.port']()}</Label>
         <Input
           id={`${prefix}-port`}
           type="number"
@@ -86,9 +87,11 @@ const ProtocolEndpointFields = ({
     </div>
     <div className="flex items-center justify-between">
       <div>
-        <Label htmlFor={`${prefix}-secure`}>TLS from connection start</Label>
+        <Label htmlFor={`${prefix}-secure`}>
+          {m['pages.settings.connections.imapSmtp.tlsFromConnectionStart']()}
+        </Label>
         <p className="text-muted-foreground mt-1 text-xs">
-          Disable to require a STARTTLS upgrade; plaintext transport is never allowed.
+          {m['pages.settings.connections.imapSmtp.tlsDescription']()}
         </p>
       </div>
       <Switch id={`${prefix}-secure`} checked={secure} onCheckedChange={onSecureChange} />
@@ -148,14 +151,14 @@ export function ImapSmtpConnectDialog({
       setForm(initialForm);
       onOpenChange(false);
       onConnected();
-      toast.success('IMAP/SMTP mailbox connected');
+      toast.success(m['pages.settings.connections.imapSmtp.connected']());
     } catch (error) {
       const duplicate =
         error instanceof Error && error.message.includes('MAILBOX_ALREADY_CONNECTED');
       toast.error(
         duplicate
-          ? 'This mailbox is already connected'
-          : 'Unable to validate and connect the IMAP/SMTP mailbox',
+          ? m['pages.settings.connections.mailboxAlreadyConnected']()
+          : m['pages.settings.connections.imapSmtp.connectError'](),
       );
     }
   };
@@ -170,16 +173,18 @@ export function ImapSmtpConnectDialog({
     >
       <DialogContent showOverlay className="max-h-[92vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Connect IMAP/SMTP</DialogTitle>
+          <DialogTitle>{m['pages.settings.connections.imapSmtp.title']()}</DialogTitle>
           <DialogDescription>
-            Zero validates both endpoints before encrypting and storing these credentials locally.
+            {m['pages.settings.connections.imapSmtp.description']()}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5 pt-2">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label htmlFor="mailbox-email">Mailbox email</Label>
+              <Label htmlFor="mailbox-email">
+                {m['pages.settings.connections.imapSmtp.mailboxEmail']()}
+              </Label>
               <Input
                 id="mailbox-email"
                 type="email"
@@ -191,7 +196,9 @@ export function ImapSmtpConnectDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="mailbox-username">Username</Label>
+              <Label htmlFor="mailbox-username">
+                {m['pages.settings.connections.imapSmtp.username']()}
+              </Label>
               <Input
                 id="mailbox-username"
                 autoComplete="username"
@@ -203,7 +210,9 @@ export function ImapSmtpConnectDialog({
             </div>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="mailbox-password">Password or app password</Label>
+            <Label htmlFor="mailbox-password">
+              {m['pages.settings.connections.imapSmtp.password']()}
+            </Label>
             <Input
               id="mailbox-password"
               type="password"
@@ -217,7 +226,7 @@ export function ImapSmtpConnectDialog({
 
           <ProtocolEndpointFields
             prefix="imap"
-            label="Incoming mail (IMAP)"
+            label={m['pages.settings.connections.imapSmtp.incomingMail']()}
             host={form.imapHost}
             port={form.imapPort}
             secure={form.imapSecure}
@@ -227,7 +236,7 @@ export function ImapSmtpConnectDialog({
           />
           <ProtocolEndpointFields
             prefix="smtp"
-            label="Outgoing mail (SMTP)"
+            label={m['pages.settings.connections.imapSmtp.outgoingMail']()}
             host={form.smtpHost}
             port={form.smtpPort}
             secure={form.smtpSecure}
@@ -239,7 +248,7 @@ export function ImapSmtpConnectDialog({
           <div className="flex justify-end">
             <Button disabled={!valid || bind.isPending} onClick={save}>
               {bind.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-              Validate and connect
+              {m['pages.settings.connections.imapSmtp.validateAndConnect']()}
             </Button>
           </div>
         </div>

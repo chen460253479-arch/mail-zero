@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { m } from '@/paraglide/messages';
 
 type ManagedChannelId = 'outlook' | 'zoho_mail' | 'imap_smtp';
 type ManagedConfig = Outputs['integrations']['getChannelConfig'];
@@ -51,17 +52,17 @@ const defaults: FormState = {
   dataCenter: 'com',
 };
 
-const labels = {
-  outlook: 'Outlook',
-  zoho_mail: 'Zoho Mail',
-  imap_smtp: 'IMAP/SMTP',
-} as const;
+const channelLabel = (channelId: ManagedChannelId) =>
+  m[
+    channelId === 'outlook'
+      ? 'common.brands.outlook'
+      : channelId === 'zoho_mail'
+        ? 'common.brands.zohoMail'
+        : 'common.brands.imapSmtp'
+  ]();
 
-const nangoStateLabels = {
-  unconfigured: 'Not configured',
-  available: 'Available',
-  unavailable: 'Unavailable',
-} as const;
+const nangoStateLabel = (state: 'unconfigured' | 'available' | 'unavailable') =>
+  m[`pages.settings.integrations.nangoStates.${state}`]();
 
 const FormSection = ({
   title,
@@ -186,7 +187,7 @@ export function ManagedChannelSettingsDialog({
     if (channelId === 'imap_smtp') return;
     const popup = window.open('', '_blank', 'popup,width=640,height=760');
     if (!popup) {
-      toast.error('Allow pop-ups to validate OAuth');
+      toast.error(m['pages.settings.integrations.allowPopups']());
       return;
     }
     try {
@@ -195,16 +196,20 @@ export function ManagedChannelSettingsDialog({
         clientId: clientId.trim(),
         clientSecret: clientSecret.trim() || undefined,
       });
-      if (!result) throw new Error('OAuth validation did not start');
+      if (!result) throw new Error('OAUTH_VALIDATION_DID_NOT_START');
       popup.location.assign(result.authorizationUrl);
       const status = await waitForValidationPopup(popup);
       if (status !== 'success') throw new Error(status);
       await refresh();
       setClientSecret('');
-      toast.success(`${labels[channelId]} OAuth validated`);
+      toast.success(
+        m['pages.settings.integrations.oauthValidated']({ channel: channelLabel(channelId) }),
+      );
     } catch {
       popup.close();
-      toast.error(`Unable to validate ${labels[channelId]} OAuth`);
+      toast.error(
+        m['pages.settings.integrations.oauthValidationError']({ channel: channelLabel(channelId) }),
+      );
     }
   };
 
@@ -243,14 +248,16 @@ export function ManagedChannelSettingsDialog({
       await saveChannel.mutateAsync(input);
       setBaseline(form);
       await refresh();
-      toast.success(`${labels[channelId]} channel saved`);
+      toast.success(m['pages.settings.integrations.channelSaved']({ channel: channelLabel(channelId) }));
     } catch {
-      toast.error(`Unable to save ${labels[channelId]} channel`);
+      toast.error(
+        m['pages.settings.integrations.channelSaveError']({ channel: channelLabel(channelId) }),
+      );
     }
   };
 
   const requestClose = (nextOpen: boolean) => {
-    if (!nextOpen && dirty && !window.confirm('Discard unsaved channel changes?')) return;
+    if (!nextOpen && dirty && !window.confirm(m['pages.settings.integrations.discardChanges']())) return;
     onOpenChange(nextOpen);
   };
 
@@ -275,9 +282,9 @@ export function ManagedChannelSettingsDialog({
                 )}
               </div>
               <div>
-                <DialogTitle>{labels[channelId]}</DialogTitle>
+                <DialogTitle>{channelLabel(channelId)}</DialogTitle>
                 <DialogDescription>
-                  Configure one global provider channel and authorization source.
+                  {m['pages.settings.integrations.managed.description']()}
                 </DialogDescription>
               </div>
             </div>
@@ -295,8 +302,8 @@ export function ManagedChannelSettingsDialog({
           <>
             <div className="min-h-0 flex-1 space-y-7 overflow-y-auto px-6 py-6">
               <FormSection
-                title="Authorization source"
-                description="Only one source can be active globally. Disconnect existing bindings before switching."
+                title={m['pages.settings.integrations.authorizationSource']()}
+                description={m['pages.settings.integrations.managed.authorizationSourceDescription']()}
               >
                 <RadioGroup
                   value={form.authSource}
@@ -310,9 +317,11 @@ export function ManagedChannelSettingsDialog({
                     <Label className="flex cursor-pointer items-start gap-3 rounded-lg border p-4">
                       <RadioGroupItem value="zero_oauth" />
                       <span>
-                        <span className="block font-medium">Zero OAuth</span>
+                        <span className="block font-medium">
+                          {m['pages.settings.integrations.zeroOAuth']()}
+                        </span>
                         <span className="text-muted-foreground mt-1 block text-xs">
-                          Zero stores the provider OAuth application and encrypted mailbox tokens.
+                          {m['pages.settings.integrations.managed.zeroOAuthDescription']()}
                         </span>
                       </span>
                     </Label>
@@ -321,10 +330,11 @@ export function ManagedChannelSettingsDialog({
                     <Label className="flex cursor-pointer items-start gap-3 rounded-lg border p-4">
                       <RadioGroupItem value="manual" />
                       <span>
-                        <span className="block font-medium">Direct credentials</span>
+                        <span className="block font-medium">
+                          {m['pages.settings.integrations.managed.directCredentials']()}
+                        </span>
                         <span className="text-muted-foreground mt-1 block text-xs">
-                          Credentials are encrypted locally and used by the isolated protocol
-                          worker.
+                          {m['pages.settings.integrations.managed.directCredentialsDescription']()}
                         </span>
                       </span>
                     </Label>
@@ -335,9 +345,9 @@ export function ManagedChannelSettingsDialog({
                       disabled={data.authorizationSources.nango.state !== 'available'}
                     />
                     <span className="min-w-0">
-                      <span className="block font-medium">Nango</span>
+                      <span className="block font-medium">{m['common.brands.nango']()}</span>
                       <span className="text-muted-foreground mt-1 block text-xs">
-                        Nango stores credentials; Zero still runs all mailbox logic locally.
+                        {m['pages.settings.integrations.managed.nangoDescription']()}
                       </span>
                       <span className="mt-2 flex flex-wrap items-center gap-2">
                         <Badge
@@ -347,10 +357,12 @@ export function ManagedChannelSettingsDialog({
                               : 'outline'
                           }
                         >
-                          {nangoStateLabels[data.authorizationSources.nango.state]}
+                          {nangoStateLabel(data.authorizationSources.nango.state)}
                         </Badge>
                         <span className="text-muted-foreground text-xs">
-                          {data.authorizationSources.nango.bindingCount} mailbox bindings
+                          {m['pages.settings.integrations.managed.mailboxBindings']({
+                            count: data.authorizationSources.nango.bindingCount,
+                          })}
                         </span>
                         {data.authorizationSources.nango.errorCode ? (
                           <span className="text-muted-foreground break-all text-xs">
@@ -365,12 +377,14 @@ export function ManagedChannelSettingsDialog({
 
               {form.authSource === 'zero_oauth' && zeroOAuth ? (
                 <FormSection
-                  title="Zero-managed OAuth"
-                  description="Validate the global OAuth client before enabling mailbox connections."
+                  title={m['pages.settings.integrations.managed.zeroManagedOAuth']()}
+                  description={m['pages.settings.integrations.validateOAuthDescription']()}
                 >
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
-                      <Label htmlFor={`${channelId}-client-id`}>Client ID</Label>
+                      <Label htmlFor={`${channelId}-client-id`}>
+                        {m['pages.settings.integrations.clientId']()}
+                      </Label>
                       <Input
                         id={`${channelId}-client-id`}
                         value={clientId}
@@ -379,7 +393,9 @@ export function ManagedChannelSettingsDialog({
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor={`${channelId}-client-secret`}>Client Secret</Label>
+                      <Label htmlFor={`${channelId}-client-secret`}>
+                        {m['pages.settings.integrations.clientSecret']()}
+                      </Label>
                       <Input
                         id={`${channelId}-client-secret`}
                         type="password"
@@ -387,14 +403,14 @@ export function ManagedChannelSettingsDialog({
                         value={clientSecret}
                         disabled={zeroOAuth.bindingCount > 0}
                         placeholder={
-                          zeroOAuth.configured ? 'Leave blank to keep current secret' : ''
+                          zeroOAuth.configured ? m['pages.settings.integrations.leaveSecretBlank']() : ''
                         }
                         onChange={(event) => setClientSecret(event.target.value)}
                       />
                     </div>
                   </div>
                   <div className="grid gap-2">
-                    <Label>Authorized redirect URLs</Label>
+                    <Label>{m['pages.settings.integrations.authorizedRedirectUrls']()}</Label>
                     <Input readOnly value={zeroOAuth.redirectUris.validation} />
                     <Input readOnly value={zeroOAuth.redirectUris.mailbox} />
                   </div>
@@ -413,15 +429,19 @@ export function ManagedChannelSettingsDialog({
                       {startValidation.isPending ? (
                         <Loader2 className="size-4 animate-spin" />
                       ) : null}
-                      Test and enable
+                      {m['pages.settings.integrations.testAndEnable']()}
                     </Button>
                     <Badge variant={zeroOAuth.configured ? 'default' : 'outline'}>
-                      {zeroOAuth.configured ? 'Configured' : 'Not configured'}
+                      {zeroOAuth.configured
+                        ? m['pages.settings.integrations.configured']()
+                        : m['pages.settings.integrations.notConfigured']()}
                     </Badge>
                   </div>
                   <ConfirmIntegrationDelete
-                    title={`Delete ${labels[channelId]} OAuth configuration?`}
-                    description="Existing Zero OAuth bindings must be disconnected first."
+                    title={m['pages.settings.integrations.deleteOAuthTitle']({
+                      channel: channelLabel(channelId),
+                    })}
+                    description={m['pages.settings.integrations.deleteOAuthDescription']()}
                     disabled={!zeroOAuth.configured || zeroOAuth.bindingCount > 0}
                     pending={deleteOAuth.isPending}
                     onConfirm={async () => {
@@ -436,7 +456,7 @@ export function ManagedChannelSettingsDialog({
                       variant="destructive"
                       disabled={!zeroOAuth.configured || zeroOAuth.bindingCount > 0}
                     >
-                      Delete OAuth configuration
+                      {m['pages.settings.integrations.deleteOAuth']()}
                     </Button>
                   </ConfirmIntegrationDelete>
                 </FormSection>
@@ -444,8 +464,8 @@ export function ManagedChannelSettingsDialog({
 
               {channelId === 'outlook' ? (
                 <FormSection
-                  title="Microsoft tenant"
-                  description="Use common for multi-tenant accounts, or a tenant ID/domain to restrict sign-in."
+                  title={m['pages.settings.integrations.managed.microsoftTenant']()}
+                  description={m['pages.settings.integrations.managed.microsoftTenantDescription']()}
                 >
                   <Input
                     value={form.tenantId}
@@ -456,8 +476,8 @@ export function ManagedChannelSettingsDialog({
                 </FormSection>
               ) : channelId === 'zoho_mail' ? (
                 <FormSection
-                  title="Zoho data center"
-                  description="OAuth and Mail API calls stay inside this fixed Zoho data center."
+                  title={m['pages.settings.integrations.managed.zohoDataCenter']()}
+                  description={m['pages.settings.integrations.managed.zohoDataCenterDescription']()}
                 >
                   <Select
                     value={form.dataCenter}
@@ -487,18 +507,22 @@ export function ManagedChannelSettingsDialog({
                 <>
                   <Separator />
                   <FormSection
-                    title={`${labels[channelId]} Inbox Watch`}
+                    title={m['pages.settings.integrations.managed.inboxWatchTitle']({
+                      channel: channelLabel(channelId),
+                    })}
                     description={
                       channelId === 'outlook'
-                        ? 'Zero creates and renews a Microsoft Graph subscription using this fixed endpoint.'
-                        : 'Configure each connected mailbox Outgoing Webhook in Zoho using its tokenized Zero URL.'
+                        ? m['pages.settings.integrations.managed.outlookInboxWatchDescription']()
+                        : m['pages.settings.integrations.managed.zohoInboxWatchDescription']()
                     }
                   >
                     <div className="flex items-center justify-between rounded-lg border p-4">
                       <div>
-                        <p className="text-sm font-medium">Enable Inbox Watch</p>
+                        <p className="text-sm font-medium">
+                          {m['pages.settings.integrations.enableInboxWatch']()}
+                        </p>
                         <p className="text-muted-foreground mt-1 text-xs">
-                          Webhook and schedule feed the same idempotent incremental pipeline.
+                          {m['pages.settings.integrations.managed.inboxWatchHelp']()}
                         </p>
                       </div>
                       <Switch
@@ -513,12 +537,11 @@ export function ManagedChannelSettingsDialog({
                     </div>
                     {data.webhookUrl ? (
                       <div className="grid gap-2">
-                        <Label>Webhook endpoint</Label>
+                        <Label>{m['pages.settings.integrations.webhookEndpoint']()}</Label>
                         <Input readOnly value={data.webhookUrl} />
                         {channelId === 'zoho_mail' ? (
                           <p className="text-muted-foreground text-xs">
-                            The real per-mailbox URL replaces :endpointToken after the mailbox is
-                            connected.
+                            {m['pages.settings.integrations.managed.zohoWebhookHelp']()}
                           </p>
                         ) : null}
                       </div>
@@ -529,14 +552,16 @@ export function ManagedChannelSettingsDialog({
 
               <Separator />
               <FormSection
-                title="Scheduled incremental sync"
-                description="Periodic reconciliation imports only changes after the no-history binding baseline."
+                title={m['pages.settings.integrations.scheduledSyncTitle']()}
+                description={m['pages.settings.integrations.managed.scheduledSyncDescription']()}
               >
                 <div className="flex items-center justify-between rounded-lg border p-4">
                   <div>
-                    <p className="text-sm font-medium">Enable scheduled sync</p>
+                    <p className="text-sm font-medium">
+                      {m['pages.settings.integrations.enableScheduledSync']()}
+                    </p>
                     <p className="text-muted-foreground mt-1 text-xs">
-                      IMAP currently supports scheduled incremental synchronization only.
+                      {m['pages.settings.integrations.managed.scheduledSyncHelp']()}
                     </p>
                   </div>
                   <Switch
@@ -551,7 +576,9 @@ export function ManagedChannelSettingsDialog({
                 </div>
                 {form.scheduledSyncEnabled ? (
                   <div className="grid max-w-xs gap-2">
-                    <Label htmlFor={`${channelId}-sync-interval`}>Interval (minutes)</Label>
+                    <Label htmlFor={`${channelId}-sync-interval`}>
+                      {m['pages.settings.integrations.intervalMinutes']()}
+                    </Label>
                     <Input
                       id={`${channelId}-sync-interval`}
                       type="number"
@@ -573,7 +600,7 @@ export function ManagedChannelSettingsDialog({
 
             <div className="flex shrink-0 flex-col-reverse gap-3 border-t px-6 py-4 sm:flex-row sm:justify-end">
               <Button type="button" variant="outline" onClick={() => requestClose(false)}>
-                Cancel
+                {m['common.actions.cancel']()}
               </Button>
               <Button
                 type="button"
@@ -581,7 +608,7 @@ export function ManagedChannelSettingsDialog({
                 onClick={save}
               >
                 {saveChannel.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-                Save {labels[channelId]} channel
+                {m['pages.settings.integrations.saveChannel']({ channel: channelLabel(channelId) })}
               </Button>
             </div>
           </>

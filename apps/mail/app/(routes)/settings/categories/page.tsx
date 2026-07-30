@@ -110,7 +110,7 @@ const SortableCategoryItem = React.memo(function SortableCategoryItem({
             {...attributes}
             {...listeners}
             className="hover:bg-muted/50 cursor-grab rounded p-1 transition-colors active:cursor-grabbing"
-            aria-label="Drag to reorder"
+            aria-label={m['pages.settings.categories.dragToReorder']()}
           >
             <GripVertical className="text-muted-foreground h-4 w-4" />
           </button>
@@ -118,7 +118,9 @@ const SortableCategoryItem = React.memo(function SortableCategoryItem({
             {cat.id}
           </Badge>
           {cat.isDefault && (
-            <Badge className="border-blue-200 bg-blue-500/10 text-xs text-blue-500">Default</Badge>
+            <Badge className="border-blue-200 bg-blue-500/10 text-xs text-blue-500">
+              {m['pages.settings.categories.default']()}
+            </Badge>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -136,19 +138,23 @@ const SortableCategoryItem = React.memo(function SortableCategoryItem({
             onCheckedChange={handleToggleDefault}
           />
           <Label htmlFor={`default-${cat.id}`} className="cursor-pointer text-xs font-normal">
-            Set as Default
+            {m['pages.settings.categories.setAsDefault']()}
           </Label>
         </div>
       </div>
 
       <div className="grid grid-cols-12 items-start gap-4">
         <div className="col-span-12 sm:col-span-6">
-          <Label className="mb-1.5 block text-xs">Display Name</Label>
+          <Label className="mb-1.5 block text-xs">
+            {m['pages.settings.categories.displayName']()}
+          </Label>
           <Input className="h-8 text-sm" value={cat.name} onChange={handleNameChange} />
         </div>
 
         <div className="col-span-6">
-          <Label className="mb-1.5 block text-xs">Label Filters</Label>
+          <Label className="mb-1.5 block text-xs">
+            {m['pages.settings.categories.labelFilters']()}
+          </Label>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="h-8 w-full justify-between text-sm">
@@ -157,12 +163,15 @@ const SortableCategoryItem = React.memo(function SortableCategoryItem({
                     const selectedLabels = cat.searchValue
                       ? cat.searchValue.split(',').filter(Boolean)
                       : [];
-                    if (selectedLabels.length === 0) return 'Select labels...';
+                    if (selectedLabels.length === 0)
+                      return m['pages.settings.categories.selectLabels']();
                     if (selectedLabels.length === 1) {
                       const label = allLabels.find((l) => l.id === selectedLabels[0]);
-                      return label?.name || 'Unknown label';
+                      return label?.name || m['pages.settings.categories.unknownLabel']();
                     }
-                    return `${selectedLabels.length} labels selected`;
+                    return m['pages.settings.categories.labelsSelected']({
+                      count: selectedLabels.length,
+                    });
                   })()}
                 </span>
                 <ChevronDown className="h-4 w-4 opacity-50" />
@@ -275,16 +284,16 @@ export default function CategoriesSettingsPage() {
     try {
       const defaultCategoryCount = categories.filter((cat) => cat.isDefault).length;
       if (defaultCategoryCount !== 1) {
-        toast.error('Exactly one category must be set as default');
+        toast.error(m['pages.settings.categories.oneDefaultRequired']());
         return;
       }
       await saveUserSettings({ categories });
       queryClient.invalidateQueries({ queryKey: trpc.settings.get.queryKey() });
       setHasUnsavedChanges(false);
-      toast.success('Categories saved');
+      toast.success(m['pages.settings.categories.saved']());
     } catch (e) {
       console.error(e);
-      toast.error('Failed to save');
+      toast.error(m['pages.settings.categories.failedToSave']());
     }
   };
 
@@ -295,7 +304,7 @@ export default function CategoriesSettingsPage() {
       const remainingCategories = categories.filter((cat) => cat.id !== id);
 
       if (remainingCategories.length === 0) {
-        toast.error('Cannot delete the last remaining category');
+        toast.error(m['pages.settings.categories.cannotDeleteLast']());
         return;
       }
 
@@ -304,7 +313,7 @@ export default function CategoriesSettingsPage() {
       );
 
       setCategories(updatedCategories);
-      toast.success('Default category reassigned to the first remaining category');
+      toast.success(m['pages.settings.categories.defaultReassigned']());
     } else {
       const updatedCategories = categories.filter((cat) => cat.id !== id);
       setCategories(updatedCategories);
@@ -316,7 +325,7 @@ export default function CategoriesSettingsPage() {
   const handleAddCategory = () => {
     const newCategory: CategorySetting = {
       id: `custom-${crypto.randomUUID()}`,
-      name: 'New Category',
+      name: m['pages.settings.categories.newCategory'](),
       searchValue: '',
       order: categories.length,
       isDefault: false,
@@ -330,32 +339,34 @@ export default function CategoriesSettingsPage() {
       await saveUserSettings({ categories: defaultMailCategories });
       queryClient.invalidateQueries({ queryKey: trpc.settings.get.queryKey() });
       setHasUnsavedChanges(false);
-      toast.success('Reset to defaults');
+      toast.success(m['pages.settings.categories.resetSuccess']());
     } catch (e) {
       console.error(e);
-      toast.error('Failed to reset');
+      toast.error(m['pages.settings.categories.resetFailed']());
     }
   };
 
   if (!categories.length) {
-    return <div className="text-muted-foreground p-6">Loading...</div>;
+    return <div className="text-muted-foreground p-6">{m['common.actions.loading']()}</div>;
   }
 
   return (
     <SettingsCard
       title={m['navigation.settings.categories']()}
-      description="Customise how Zero shows the category tabs in your inbox. Drag and drop to reorder."
+      description={m['pages.settings.categories.description']()}
       footer={
         <div className="flex justify-between">
           <Button type="button" variant="outline" onClick={handleResetToDefaults}>
-            Reset to Defaults
+            {m['common.actions.resetToDefaults']()}
           </Button>
           <div className="flex gap-2">
             {hasUnsavedChanges && (
-              <span className="flex items-center text-sm text-amber-600">Unsaved changes</span>
+              <span className="flex items-center text-sm text-amber-600">
+                {m['pages.settings.categories.unsavedChanges']()}
+              </span>
             )}
             <Button type="button" onClick={handleSave} disabled={!hasUnsavedChanges}>
-              Save Changes
+              {m['common.actions.saveChanges']()}
             </Button>
           </div>
         </div>
@@ -365,7 +376,7 @@ export default function CategoriesSettingsPage() {
         <div className="flex justify-end">
           <Button onClick={handleAddCategory} className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
-            Add Category
+            {m['pages.settings.categories.addCategory']()}
           </Button>
         </div>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

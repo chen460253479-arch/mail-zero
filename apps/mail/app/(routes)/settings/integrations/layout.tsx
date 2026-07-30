@@ -9,6 +9,7 @@ import { useTRPC } from '@/providers/query-provider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { authProxy } from '@/lib/auth-proxy';
 import type { Route } from './+types/layout';
+import { m } from '@/paraglide/messages';
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const session = await authProxy.api.getSession({ headers: request.headers });
@@ -18,13 +19,6 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   return null;
 }
 
-const channelDescriptions = {
-  gmail: 'Gmail Inbox incremental sync and Gmail API sending.',
-  outlook: 'Microsoft Outlook and Microsoft 365 mailboxes.',
-  zoho_mail: 'Zoho Mail hosted accounts.',
-  imap_smtp: 'Provider-neutral IMAP receiving and SMTP sending.',
-} as const;
-
 export default function IntegrationsLayout() {
   const trpc = useTRPC();
   const navigate = useNavigate();
@@ -33,10 +27,9 @@ export default function IntegrationsLayout() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Email integrations</h1>
+        <h1 className="text-2xl font-semibold">{m['pages.settings.integrations.title']()}</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Configure each provider as one global mail channel. Authorization infrastructure stays
-          inside the selected channel.
+          {m['pages.settings.integrations.description']()}
         </p>
       </div>
 
@@ -51,8 +44,24 @@ export default function IntegrationsLayout() {
           {channels.data.map((channel) => (
             <ChannelCard
               key={channel.channelId}
-              title={channel.displayName}
-              description={channelDescriptions[channel.channelId]}
+              title={
+                channel.channelId === 'gmail'
+                  ? m['common.brands.gmail']()
+                  : channel.channelId === 'outlook'
+                    ? m['common.brands.outlook']()
+                    : channel.channelId === 'zoho_mail'
+                      ? m['common.brands.zohoMail']()
+                      : m['common.brands.imapSmtp']()
+              }
+              description={
+                channel.channelId === 'gmail'
+                  ? m['pages.settings.integrations.channels.gmail.description']()
+                  : channel.channelId === 'outlook'
+                    ? m['pages.settings.integrations.channels.outlook.description']()
+                    : channel.channelId === 'zoho_mail'
+                      ? m['pages.settings.integrations.channels.zohoMail.description']()
+                      : m['pages.settings.integrations.channels.imapSmtp.description']()
+              }
               available={channel.available}
               configured={channel.configured}
               icon={

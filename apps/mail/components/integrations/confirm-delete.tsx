@@ -10,6 +10,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { m } from '@/paraglide/messages';
 
 export function ConfirmIntegrationDelete({
   children,
@@ -40,7 +41,7 @@ export function ConfirmIntegrationDelete({
         </DialogHeader>
         <div className="flex justify-end gap-3 pt-4">
           <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="outline">{m['common.actions.cancel']()}</Button>
           </DialogClose>
           <Button
             variant="destructive"
@@ -50,7 +51,7 @@ export function ConfirmIntegrationDelete({
               setOpen(false);
             }}
           >
-            Delete
+            {m['common.actions.confirmDelete']()}
           </Button>
         </div>
       </DialogContent>

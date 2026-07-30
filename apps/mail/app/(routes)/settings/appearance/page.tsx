@@ -121,7 +121,7 @@ export default function AppearancePage() {
                             defaultValue={form.getValues().colorTheme}
                           >
                             <SelectTrigger>
-                              <SelectValue placeholder="Select theme">
+                              <SelectValue placeholder={m['pages.settings.appearance.selectTheme']()}>
                                 <div className="flex items-center gap-2 capitalize">
                                   {theme === 'dark' && <Moon className="h-4 w-4" />}
                                   {theme === 'light' && <Sun className="h-4 w-4" />}

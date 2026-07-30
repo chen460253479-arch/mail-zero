@@ -90,7 +90,10 @@
       "discord": "Discord",
       "github": "GitHub",
       "twitter": "X（Twitter）",
-      "youtube": "YouTube"
+      "youtube": "YouTube",
+      "nango": "Nango",
+      "zohoMail": "Zoho Mail",
+      "imapSmtp": "IMAP/SMTP"
     },
     "commandPalette": {
       "title": "命令面板",
@@ -573,7 +576,10 @@
       "editLabel": "编辑标签",
       "savingLabel": "正在保存标签...",
       "failedToSavingLabel": "保存标签失败",
-      "saveLabelSuccess": "标签保存成功"
+      "saveLabelSuccess": "标签保存成功",
+      "editDescription": "修改标签名称和颜色以更新此标签。",
+      "createDescription": "创建新标签来整理邮件。选择名称和颜色以便于识别。",
+      "namePlaceholder": "输入标签名称"
     }
   },
   "navigation": {
@@ -965,7 +971,45 @@
         "nangoConnectionSuccess": "Nango 邮箱连接成功",
         "nangoConnectionError": "连接 Nango 邮箱失败",
         "back": "返回",
-        "zeroOAuth": "Zero OAuth"
+        "zeroOAuth": "Zero OAuth",
+        "channelNotConfigured": "{channel} 尚未配置",
+        "loadChannelConfigurationError": "无法加载邮件渠道配置",
+        "imapSmtp": {
+          "title": "连接 IMAP/SMTP",
+          "description": "Zero 会验证两个端点，然后在本地加密并存储这些凭据。",
+          "host": "主机",
+          "port": "端口",
+          "tlsFromConnectionStart": "从连接开始使用 TLS",
+          "tlsDescription": "禁用后需使用 STARTTLS 升级；绝不允许明文传输。",
+          "connected": "IMAP/SMTP 邮箱已连接",
+          "connectError": "无法验证并连接 IMAP/SMTP 邮箱",
+          "mailboxEmail": "邮箱地址",
+          "username": "用户名",
+          "password": "密码或应用专用密码",
+          "incomingMail": "接收邮件 (IMAP)",
+          "outgoingMail": "发送邮件 (SMTP)",
+          "validateAndConnect": "验证并连接"
+        },
+        "nango": {
+          "mailboxConnected": "{channel} 邮箱已连接",
+          "connectError": "无法连接邮箱",
+          "title": "连接 {channel}",
+          "mailbox": "邮箱",
+          "description": "选择保存在 Nango 中的现有授权。",
+          "needsAttention": "需要处理",
+          "noAuthorizedMailboxes": "此渠道没有可用的已授权邮箱。",
+          "connectSelectedMailbox": "连接选定的邮箱"
+        },
+        "zohoWebhook": {
+          "copied": "Webhook URL 已复制",
+          "button": "Webhook",
+          "title": "Zoho 收件箱监控",
+          "description": "在 Zoho Mail 开发者设置中将这个每邮箱 URL 添加为出站 Webhook。Zero 仅将回调用作同步信号，并从 Zoho 获取邮件。",
+          "stepOpenSettings": "打开此邮箱的 Zoho Mail 出站 Webhook 设置。",
+          "stepCreate": "使用上方 URL 创建 HTTPS Webhook。",
+          "stepSave": "选择收件事件并保存，同时保持定时同步启用。",
+          "disabledDescription": "全局 Zoho Mail 渠道已禁用收件箱监控。请先在集成中启用它，再配置此邮箱。"
+        }
       },
       "security": {
         "title": "安全",
@@ -982,7 +1026,8 @@
         "title": "外观",
         "description": "自定义颜色、字体和视图选项。",
         "theme": "主题",
-        "inboxType": "收件箱类型"
+        "inboxType": "收件箱类型",
+        "selectTheme": "选择主题"
       },
       "signatures": {
         "title": "邮件签名",
@@ -1056,7 +1101,15 @@
           "bulkDelete": "批量删除",
           "bulkSelect": "批量选择",
           "bulkArchive": "批量归档",
-          "bulkStar": "批量加星标"
+          "bulkStar": "批量加星标",
+          "showCategory": "显示 {category}"
+        },
+        "scopes": {
+          "global": "全局",
+          "navigation": "导航",
+          "mailList": "邮件列表",
+          "threadDisplay": "会话显示",
+          "compose": "撰写"
         }
       },
       "labels": {
@@ -1068,6 +1121,7 @@
         "description": "永久删除账号及所有相关数据。",
         "warning": "此操作无法撤销。",
         "confirmation": "请输入 DELETE 以确认删除账号",
+        "confirmationCode": "输入 {code}",
         "deleteAccount": "删除账号",
         "deleting": "正在删除...",
         "deleted": "账号删除成功",
@@ -1080,6 +1134,137 @@
         "externalImagesDescription": "允许邮件显示来自外部来源的图片。",
         "trustedSenders": "受信任的发件人",
         "trustedSendersDescription": "始终显示这些发件人的图片。"
+      },
+      "categories": {
+        "description": "自定义 Zero 在收件箱中显示分类标签的方式。拖放即可重新排序。",
+        "dragToReorder": "拖动以重新排序",
+        "default": "默认",
+        "setAsDefault": "设为默认",
+        "displayName": "显示名称",
+        "labelFilters": "标签筛选器",
+        "selectLabels": "选择标签...",
+        "unknownLabel": "未知标签",
+        "labelsSelected": "已选择 {count} 个标签",
+        "oneDefaultRequired": "必须恰好将一个分类设为默认",
+        "saved": "分类已保存",
+        "failedToSave": "保存分类失败",
+        "cannotDeleteLast": "无法删除最后一个分类",
+        "defaultReassigned": "已将默认分类重新分配为第一个剩余分类",
+        "newCategory": "新分类",
+        "resetSuccess": "已恢复默认设置",
+        "resetFailed": "恢复默认分类失败",
+        "unsavedChanges": "未保存的更改",
+        "addCategory": "添加分类"
+      },
+      "notifications": {
+        "title": "通知",
+        "description": "选择你想接收的通知。",
+        "newMail": "新邮件通知",
+        "selectLevel": "选择通知级别",
+        "none": "无",
+        "importantOnly": "仅重要邮件",
+        "allMessages": "所有邮件",
+        "newMailDescription": "选择你希望接收哪些邮件的通知。",
+        "marketing": "营销通讯",
+        "marketingDescription": "接收有关新功能的更新。"
+      },
+      "integrations": {
+        "title": "邮件集成",
+        "description": "将每个服务商配置为一个全局邮件渠道。授权基础设施保留在所选渠道内。",
+        "configured": "已配置",
+        "notConfigured": "未配置",
+        "comingSoon": "即将推出",
+        "configure": "配置",
+        "tryAgain": "重试",
+        "authorizationSource": "授权来源",
+        "zeroOAuth": "Zero OAuth",
+        "clientId": "客户端 ID",
+        "clientSecret": "客户端密钥",
+        "leaveSecretBlank": "留空以保留已配置的密钥",
+        "authorizedRedirectUrls": "已授权的重定向 URL",
+        "testAndEnable": "测试并启用",
+        "validateOAuthDescription": "在为邮箱连接启用前验证全局 OAuth 客户端。",
+        "deleteOAuthDescription": "必须先断开现有的 Zero OAuth 绑定。",
+        "deleteOAuthTitle": "删除 {channel} OAuth 配置？",
+        "deleteOAuth": "删除 OAuth 配置",
+        "enableInboxWatch": "启用收件箱监控",
+        "webhookEndpoint": "Webhook 端点",
+        "scheduledSyncTitle": "定时增量同步",
+        "enableScheduledSync": "启用定时同步",
+        "intervalMinutes": "间隔（分钟）",
+        "allowPopups": "允许弹出窗口以验证 OAuth",
+        "discardChanges": "放弃未保存的渠道更改？",
+        "oauthValidated": "{channel} OAuth 已验证",
+        "oauthValidationError": "无法验证 {channel} OAuth",
+        "channelSaved": "{channel} 渠道已保存",
+        "channelSaveError": "无法保存 {channel} 渠道",
+        "saveChannel": "保存 {channel} 渠道",
+        "nangoStates": {
+          "unconfigured": "未配置",
+          "available": "可用",
+          "unavailable": "不可用"
+        },
+        "channels": {
+          "gmail": { "description": "Gmail 收件箱增量同步和 Gmail API 发信。" },
+          "outlook": { "description": "Microsoft Outlook 和 Microsoft 365 邮箱。" },
+          "zohoMail": { "description": "Zoho Mail 托管账户。" },
+          "imapSmtp": { "description": "服务商无关的 IMAP 收件和 SMTP 发信。" }
+        },
+        "gmail": {
+          "title": "Gmail 渠道",
+          "description": "配置一个全局授权来源和收件箱同步策略。",
+          "closeSettings": "关闭 Gmail 设置",
+          "loadError": "无法加载 Gmail 渠道配置。",
+          "discardChanges": "放弃未保存的 Gmail 渠道更改？",
+          "reviewConfiguration": "检查 Gmail 渠道配置",
+          "saved": "Gmail 渠道配置已保存",
+          "saveError": "无法保存 Gmail 渠道配置",
+          "configureAuthorizationSource": "请先配置所选授权来源再保存",
+          "allowPopups": "允许弹出窗口以验证 Gmail OAuth",
+          "oauthValidated": "Gmail OAuth 配置已验证",
+          "validationClosed": "Gmail 验证窗口已关闭",
+          "validationTimedOut": "Gmail 验证超时",
+          "validationFailed": "Gmail 验证失败",
+          "validationStartError": "无法启动 Gmail OAuth 验证",
+          "authorizationSourceDescription": "每个 Gmail 邮箱都使用此处选择的单一来源。",
+          "zeroOAuthDescription": "Zero 拥有 Gmail OAuth 客户端配置。",
+          "nangoTitle": "Nango Gmail",
+          "nangoDescription": "使用已配置的 Nango Gmail 集成。",
+          "authorizationSourceLocked": "此已配置 Gmail 渠道的授权来源已锁定。",
+          "zeroManagedOAuth": "Zero 管理的 Gmail OAuth",
+          "deleteOAuthTitle": "删除 Gmail OAuth 配置？",
+          "deleteOAuth": "删除 Gmail OAuth 配置",
+          "inboxWatchTitle": "Gmail 收件箱监控",
+          "inboxWatchDescription": "通过固定的 Zero Webhook 接收 Gmail Pub/Sub 通知。",
+          "inboxWatchHelp": "Zero 不会创建或管理 Google Cloud Pub/Sub 资源。",
+          "topicName": "主题名称",
+          "webhookHelp": "配置 Nginx 以通过公共 HTTPS 暴露此端点，然后将该 URL 用作 Google Pub/Sub 推送端点。",
+          "scheduledSyncDescription": "定期协调是同一增量流水线的备用触发器。",
+          "scheduledSyncHelp": "推送、定时和手动刷新共用同一生成与租约机制。",
+          "manualOnlyDescription": "Gmail 当前处于仅手动模式。只有请求手动增量同步时才会导入新邮件。",
+          "saveChannel": "保存 Gmail 渠道"
+        },
+        "managed": {
+          "description": "配置一个全局服务商渠道和授权来源。",
+          "authorizationSourceDescription": "全局只能启用一个来源。切换前请断开现有绑定。",
+          "zeroOAuthDescription": "Zero 存储服务商 OAuth 应用和加密的邮箱令牌。",
+          "directCredentials": "直接凭据",
+          "directCredentialsDescription": "凭据会在本地加密，并由隔离的协议工作器使用。",
+          "nangoDescription": "Nango 存储凭据；Zero 仍在本地运行所有邮箱逻辑。",
+          "mailboxBindings": "{count} 个邮箱绑定",
+          "zeroManagedOAuth": "Zero 管理的 OAuth",
+          "microsoftTenant": "Microsoft 租户",
+          "microsoftTenantDescription": "多租户账户请使用 common，或使用租户 ID/域名限制登录。",
+          "zohoDataCenter": "Zoho 数据中心",
+          "zohoDataCenterDescription": "OAuth 和 Mail API 调用会保留在此固定的 Zoho 数据中心内。",
+          "inboxWatchTitle": "{channel} 收件箱监控",
+          "outlookInboxWatchDescription": "Zero 使用此固定端点创建和续订 Microsoft Graph 订阅。",
+          "zohoInboxWatchDescription": "使用已令牌化的 Zero URL，在 Zoho 中为每个已连接邮箱配置出站 Webhook。",
+          "inboxWatchHelp": "Webhook 和定时任务会进入同一幂等增量流水线。",
+          "zohoWebhookHelp": "邮箱连接后，真实的每邮箱 URL 会替换 :endpointToken。",
+          "scheduledSyncDescription": "定期协调只会导入无历史绑定基线之后的更改。",
+          "scheduledSyncHelp": "IMAP 当前仅支持定时增量同步。"
+        }
       }
     },
     "createEmail": {

@@ -27,14 +27,12 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { m } from '@/paraglide/messages';
 
 type GmailConfig = Outputs['integrations']['getGmailConfig'];
 
-const nangoStateLabels = {
-  unconfigured: 'Not configured',
-  available: 'Available',
-  unavailable: 'Unavailable',
-} as const;
+const nangoStateLabel = (state: 'unconfigured' | 'available' | 'unavailable') =>
+  m[`pages.settings.integrations.nangoStates.${state}`]();
 
 const toForm = (data: NonNullable<GmailConfig>): GmailConfigForm => ({
   authSource: data.authSource,
@@ -148,7 +146,7 @@ export function GmailSettingsDialog({
     if (
       !nextOpen &&
       dirtyRef.current &&
-      !window.confirm('Discard the unsaved Gmail channel changes?')
+      !window.confirm(m['pages.settings.integrations.gmail.discardChanges']())
     ) {
       return;
     }
@@ -157,7 +155,7 @@ export function GmailSettingsDialog({
 
   const save = async () => {
     if (Object.keys(errors).length > 0) {
-      toast.error('Review the Gmail channel configuration');
+      toast.error(m['pages.settings.integrations.gmail.reviewConfiguration']());
       return;
     }
     const common = {
@@ -188,13 +186,13 @@ export function GmailSettingsDialog({
       setBaseline(next);
       await refresh();
       dirtyRef.current = false;
-      toast.success('Gmail channel configuration saved');
+      toast.success(m['pages.settings.integrations.gmail.saved']());
       requestClose(false);
     } catch {
       toast.error(
         selectedSourceReady
-          ? 'Unable to save the Gmail channel configuration'
-          : 'Configure the selected authorization source before saving',
+          ? m['pages.settings.integrations.gmail.saveError']()
+          : m['pages.settings.integrations.gmail.configureAuthorizationSource'](),
       );
     }
   };
@@ -202,7 +200,7 @@ export function GmailSettingsDialog({
   const validateGmailOAuth = async () => {
     const popup = window.open('', 'gmail-oauth-validation', 'popup,width=620,height=760');
     if (!popup) {
-      toast.error('Allow popups to validate Gmail OAuth');
+      toast.error(m['pages.settings.integrations.gmail.allowPopups']());
       return;
     }
     try {
@@ -216,19 +214,19 @@ export function GmailSettingsDialog({
       await refresh();
       if (outcome === 'success') {
         setGmailClientSecret('');
-        toast.success('Gmail OAuth configuration validated');
+        toast.success(m['pages.settings.integrations.gmail.oauthValidated']());
       } else {
         toast.error(
           outcome === 'closed'
-            ? 'Gmail validation window was closed'
+            ? m['pages.settings.integrations.gmail.validationClosed']()
             : outcome === 'timeout'
-              ? 'Gmail validation timed out'
-              : 'Gmail validation failed',
+              ? m['pages.settings.integrations.gmail.validationTimedOut']()
+              : m['pages.settings.integrations.gmail.validationFailed'](),
         );
       }
     } catch {
       popup.close();
-      toast.error('Unable to start Gmail OAuth validation');
+      toast.error(m['pages.settings.integrations.gmail.validationStartError']());
     }
   };
 
@@ -247,9 +245,9 @@ export function GmailSettingsDialog({
                 <GmailColor className="size-7" />
               </div>
               <div>
-                <DialogTitle>Gmail channel</DialogTitle>
+                <DialogTitle>{m['pages.settings.integrations.gmail.title']()}</DialogTitle>
                 <DialogDescription>
-                  Configure one global authorization source and Inbox synchronization policy.
+                  {m['pages.settings.integrations.gmail.description']()}
                 </DialogDescription>
               </div>
             </div>
@@ -257,7 +255,7 @@ export function GmailSettingsDialog({
               type="button"
               variant="ghost"
               size="icon"
-              aria-label="Close Gmail settings"
+              aria-label={m['pages.settings.integrations.gmail.closeSettings']()}
               onClick={() => requestClose(false)}
             >
               <X className="size-4" />
@@ -267,9 +265,9 @@ export function GmailSettingsDialog({
 
         {config.isError ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-            <p className="font-medium">Unable to load the Gmail channel configuration.</p>
+            <p className="font-medium">{m['pages.settings.integrations.gmail.loadError']()}</p>
             <Button type="button" variant="outline" onClick={() => config.refetch()}>
-              Try again
+              {m['pages.settings.integrations.tryAgain']()}
             </Button>
           </div>
         ) : config.isLoading ||
@@ -283,8 +281,8 @@ export function GmailSettingsDialog({
           <>
             <div className="flex-1 space-y-7 overflow-y-auto px-5 py-6 sm:px-6">
               <FormSection
-                title="Authorization source"
-                description="Every Gmail mailbox uses the single source selected here."
+                title={m['pages.settings.integrations.authorizationSource']()}
+                description={m['pages.settings.integrations.gmail.authorizationSourceDescription']()}
               >
                 <RadioGroup
                   value={form.authSource}
@@ -300,13 +298,13 @@ export function GmailSettingsDialog({
                   {[
                     {
                       value: 'zero_oauth',
-                      title: 'Zero OAuth',
-                      description: 'Zero owns the Gmail OAuth client configuration.',
+                      title: m['pages.settings.integrations.zeroOAuth'](),
+                      description: m['pages.settings.integrations.gmail.zeroOAuthDescription'](),
                     },
                     {
                       value: 'nango',
-                      title: 'Nango Gmail',
-                      description: 'Use the configured Nango Gmail Integration.',
+                      title: m['pages.settings.integrations.gmail.nangoTitle'](),
+                      description: m['pages.settings.integrations.gmail.nangoDescription'](),
                     },
                   ].map((source) => (
                     <Label
@@ -337,7 +335,7 @@ export function GmailSettingsDialog({
                                   : 'outline'
                               }
                             >
-                              {nangoStateLabels[data.authorizationSources.nango.state]}
+                              {nangoStateLabel(data.authorizationSources.nango.state)}
                             </Badge>
                             {data.authorizationSources.nango.errorCode ? (
                               <span className="text-muted-foreground break-all text-xs">
@@ -352,7 +350,7 @@ export function GmailSettingsDialog({
                 </RadioGroup>
                 {data.authSourceLocked ? (
                   <p className="text-muted-foreground text-xs">
-                    The authorization source is fixed for this configured Gmail channel.
+                    {m['pages.settings.integrations.gmail.authorizationSourceLocked']()}
                   </p>
                 ) : null}
               </FormSection>
@@ -361,12 +359,12 @@ export function GmailSettingsDialog({
 
               {form.authSource === 'zero_oauth' ? (
                 <FormSection
-                  title="Zero-managed Gmail OAuth"
-                  description="Validate the global OAuth client before enabling it for mailbox connections."
+                  title={m['pages.settings.integrations.gmail.zeroManagedOAuth']()}
+                  description={m['pages.settings.integrations.validateOAuthDescription']()}
                 >
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
-                      <Label htmlFor="gmail-client-id">Client ID</Label>
+                      <Label htmlFor="gmail-client-id">{m['pages.settings.integrations.clientId']()}</Label>
                       <Input
                         id="gmail-client-id"
                         value={gmailClientId}
@@ -375,7 +373,9 @@ export function GmailSettingsDialog({
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="gmail-client-secret">Client Secret</Label>
+                      <Label htmlFor="gmail-client-secret">
+                        {m['pages.settings.integrations.clientSecret']()}
+                      </Label>
                       <Input
                         id="gmail-client-secret"
                         type="password"
@@ -384,7 +384,7 @@ export function GmailSettingsDialog({
                         disabled={data.authorizationSources.zero_oauth.bindingCount > 0}
                         placeholder={
                           data.authorizationSources.zero_oauth.configured
-                            ? 'Leave blank to keep the configured secret'
+                            ? m['pages.settings.integrations.leaveSecretBlank']()
                             : ''
                         }
                         onChange={(event) => setGmailClientSecret(event.target.value)}
@@ -392,7 +392,7 @@ export function GmailSettingsDialog({
                     </div>
                   </div>
                   <div className="grid gap-2">
-                    <Label>Authorized redirect URLs</Label>
+                    <Label>{m['pages.settings.integrations.authorizedRedirectUrls']()}</Label>
                     <Input
                       readOnly
                       value={data.authorizationSources.zero_oauth.redirectUris.validation}
@@ -418,7 +418,7 @@ export function GmailSettingsDialog({
                       {startGmailValidation.isPending ? (
                         <Loader2 className="size-4 animate-spin" />
                       ) : null}
-                      Test and enable
+                      {m['pages.settings.integrations.testAndEnable']()}
                     </Button>
                     <Badge
                       variant={
@@ -426,13 +426,13 @@ export function GmailSettingsDialog({
                       }
                     >
                       {data.authorizationSources.zero_oauth.configured
-                        ? 'Configured'
-                        : 'Not configured'}
+                        ? m['pages.settings.integrations.configured']()
+                        : m['pages.settings.integrations.notConfigured']()}
                     </Badge>
                   </div>
                   <ConfirmIntegrationDelete
-                    title="Delete Gmail OAuth configuration?"
-                    description="Existing Zero OAuth bindings must be disconnected first."
+                    title={m['pages.settings.integrations.gmail.deleteOAuthTitle']()}
+                    description={m['pages.settings.integrations.deleteOAuthDescription']()}
                     disabled={
                       !data.authorizationSources.zero_oauth.configured ||
                       data.authorizationSources.zero_oauth.bindingCount > 0
@@ -451,7 +451,7 @@ export function GmailSettingsDialog({
                         data.authorizationSources.zero_oauth.bindingCount > 0
                       }
                     >
-                      Delete Gmail OAuth configuration
+                      {m['pages.settings.integrations.gmail.deleteOAuth']()}
                     </Button>
                   </ConfirmIntegrationDelete>
                 </FormSection>
@@ -460,14 +460,16 @@ export function GmailSettingsDialog({
               <Separator />
 
               <FormSection
-                title="Gmail Inbox Watch"
-                description="Accept Gmail Pub/Sub notifications through the fixed Zero webhook."
+                title={m['pages.settings.integrations.gmail.inboxWatchTitle']()}
+                description={m['pages.settings.integrations.gmail.inboxWatchDescription']()}
               >
                 <div className="flex items-center justify-between rounded-lg border p-4">
                   <div>
-                    <p className="text-sm font-medium">Enable Inbox Watch</p>
+                    <p className="text-sm font-medium">
+                      {m['pages.settings.integrations.enableInboxWatch']()}
+                    </p>
                     <p className="text-muted-foreground mt-1 text-xs">
-                      Zero does not create or manage Google Cloud Pub/Sub resources.
+                      {m['pages.settings.integrations.gmail.inboxWatchHelp']()}
                     </p>
                   </div>
                   <Switch
@@ -480,7 +482,9 @@ export function GmailSettingsDialog({
                 {form.inboxWatchEnabled ? (
                   <div className="grid gap-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="gmail-topic-name">Topic name</Label>
+                      <Label htmlFor="gmail-topic-name">
+                        {m['pages.settings.integrations.gmail.topicName']()}
+                      </Label>
                       <Input
                         id="gmail-topic-name"
                         value={form.topicName}
@@ -497,11 +501,10 @@ export function GmailSettingsDialog({
                       ) : null}
                     </div>
                     <div className="grid gap-2">
-                      <Label>Webhook endpoint</Label>
+                      <Label>{m['pages.settings.integrations.webhookEndpoint']()}</Label>
                       <Input readOnly value={data.webhookUrl} />
                       <p className="text-muted-foreground text-xs">
-                        Configure Nginx to expose this endpoint over public HTTPS, then use that URL
-                        as the Google Pub/Sub push endpoint.
+                        {m['pages.settings.integrations.gmail.webhookHelp']()}
                       </p>
                     </div>
                   </div>
@@ -511,14 +514,16 @@ export function GmailSettingsDialog({
               <Separator />
 
               <FormSection
-                title="Scheduled incremental sync"
-                description="Periodic reconciliation is a fallback trigger for the same incremental pipeline."
+                title={m['pages.settings.integrations.scheduledSyncTitle']()}
+                description={m['pages.settings.integrations.gmail.scheduledSyncDescription']()}
               >
                 <div className="flex items-center justify-between rounded-lg border p-4">
                   <div>
-                    <p className="text-sm font-medium">Enable scheduled sync</p>
+                    <p className="text-sm font-medium">
+                      {m['pages.settings.integrations.enableScheduledSync']()}
+                    </p>
                     <p className="text-muted-foreground mt-1 text-xs">
-                      Push, schedule, and manual refresh share one generation and lease mechanism.
+                      {m['pages.settings.integrations.gmail.scheduledSyncHelp']()}
                     </p>
                   </div>
                   <Switch
@@ -530,7 +535,9 @@ export function GmailSettingsDialog({
                 </div>
                 {form.scheduledSyncEnabled ? (
                   <div className="grid max-w-xs gap-2">
-                    <Label htmlFor="gmail-sync-interval">Interval (minutes)</Label>
+                    <Label htmlFor="gmail-sync-interval">
+                      {m['pages.settings.integrations.intervalMinutes']()}
+                    </Label>
                     <Input
                       id="gmail-sync-interval"
                       type="number"
@@ -552,8 +559,7 @@ export function GmailSettingsDialog({
                 ) : null}
                 {isManualOnly(form) ? (
                   <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
-                    Gmail is in manual-only mode. New messages are imported only when a manual
-                    incremental sync is requested.
+                    {m['pages.settings.integrations.gmail.manualOnlyDescription']()}
                   </div>
                 ) : null}
               </FormSection>
@@ -561,7 +567,7 @@ export function GmailSettingsDialog({
 
             <div className="flex shrink-0 flex-col-reverse gap-3 border-t px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
               <Button type="button" variant="outline" onClick={() => requestClose(false)}>
-                Cancel
+                {m['common.actions.cancel']()}
               </Button>
               <Button
                 type="button"
@@ -571,7 +577,7 @@ export function GmailSettingsDialog({
                 onClick={save}
               >
                 {saveChannel.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-                Save Gmail channel
+                {m['pages.settings.integrations.gmail.saveChannel']()}
               </Button>
             </div>
           </>

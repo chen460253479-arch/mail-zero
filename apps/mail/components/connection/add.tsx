@@ -23,6 +23,19 @@ import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+const providerLabel = (channelId: ConnectableMailChannelId) => {
+  switch (channelId) {
+    case 'gmail':
+      return m['common.brands.gmail']();
+    case 'outlook':
+      return m['common.brands.outlook']();
+    case 'zoho_mail':
+      return m['common.brands.zohoMail']();
+    case 'imap_smtp':
+      return m['common.brands.imapSmtp']();
+  }
+};
+
 export const AddConnectionDialog = ({
   children,
   className,
@@ -68,11 +81,11 @@ export const AddConnectionDialog = ({
         setManualOpen(true);
         return;
       }
-      toast.error(
-        `${emailProviders.find((provider) => provider.channelId === channelId)?.name} is not configured`,
-      );
+      toast.error(m['pages.settings.connections.channelNotConfigured']({
+        channel: providerLabel(channelId),
+      }));
     } catch {
-      toast.error('Unable to load mail channel configuration');
+      toast.error(m['pages.settings.connections.loadChannelConfigurationError']());
     } finally {
       setPendingChannelId(null);
     }
@@ -134,7 +147,7 @@ export const AddConnectionDialog = ({
                     ) : (
                       <Icon className="size-6!" />
                     )}
-                    <span className="text-xs">{provider.name}</span>
+                    <span className="text-xs">{providerLabel(provider.channelId)}</span>
                   </Button>
                 </motion.div>
               );
