@@ -63,3 +63,7 @@ tools.json
 
 # local git worktrees
 .worktrees/
+
+# local Node.js caches
+/node-compile-cache/
+/update-check/
