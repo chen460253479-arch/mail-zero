@@ -23,8 +23,11 @@ export const createAccountRouter = (openRuntime: OpenMailSessionRuntime = openMa
       try {
         try {
           const access = ctx.mailAccess;
-          const result = await createAccountService(runtime.core).list({
+          const result = await createAccountService(runtime.core, {
+            listAllAccounts: runtime.listAllAccounts,
+          }).list({
             userId: access.userId,
+            isAdministrator: access.isAdministrator,
           });
           return result;
         } catch (error) {
@@ -37,7 +40,11 @@ export const createAccountRouter = (openRuntime: OpenMailSessionRuntime = openMa
     get: mailAccountProcedure
       .input(accountGetInputSchema)
       .output(accountGetResultSchema)
-      .query(({ ctx, input }) => createAccountService(ctx.mailApi.core).get(input)),
+      .query(({ ctx, input }) =>
+        createAccountService(ctx.mailApi.core, {
+          listAllAccounts: ctx.mailApi.listAllAccounts,
+        }).get(input),
+      ),
   });
 
 export const accountRouter = createAccountRouter();

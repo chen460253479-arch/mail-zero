@@ -211,9 +211,10 @@ export const connectionsRouter = router({
       }),
     )
     .query(async ({ ctx }) => {
-      const records = await createPostgresConnectionRepository(
-        ctx.c.var.services!.database.db,
-      ).listConnectionsWithAuthorization(ctx.mailAccess.userId);
+      const repository = createPostgresConnectionRepository(ctx.c.var.services!.database.db);
+      const records = ctx.mailAccess.isAdministrator
+        ? await repository.listAllConnectionsWithAuthorization()
+        : await repository.listConnectionsWithAuthorization(ctx.mailAccess.userId);
 
       const disconnectedIds = records
         .filter(({ connection }) => connection.status === 'disconnected')
@@ -325,10 +326,11 @@ export const connectionsRouter = router({
     .query(async ({ input, ctx }) => {
       const services = ctx.c.var.services!;
       const db = services.database.db;
-      const connectionRecord = await createPostgresConnectionRepository(db).findOwnedConnection(
-        ctx.sessionUser.id,
-        input.connectionId,
-      );
+      const repository = createPostgresConnectionRepository(db);
+      const connectionRecord =
+        ctx.sessionUser.role === 'admin'
+          ? await repository.findConnection(input.connectionId)
+          : await repository.findOwnedConnection(ctx.sessionUser.id, input.connectionId);
       if (!connectionRecord || connectionRecord.channelId !== 'zoho_mail') {
         throw new TRPCError({ code: 'NOT_FOUND' });
       }
@@ -352,10 +354,10 @@ export const connectionsRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { connectionId } = input;
       const db = ctx.c.var.services!.database.db;
-      const foundConnection = await createPostgresConnectionRepository(db).findOwnedConnection(
-        ctx.mailAccess.userId,
-        connectionId,
-      );
+      const repository = createPostgresConnectionRepository(db);
+      const foundConnection = ctx.mailAccess.isAdministrator
+        ? await repository.findConnection(connectionId)
+        : await repository.findOwnedConnection(ctx.mailAccess.userId, connectionId);
       if (!foundConnection) throw new TRPCError({ code: 'NOT_FOUND' });
       await db
         .update(userTable)
@@ -371,21 +373,24 @@ export const connectionsRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const services = ctx.c.var.services!;
+      const repository = createPostgresConnectionRepository(services.database.db);
+      const targetConnection =
+        ctx.sessionUser.role === 'admin'
+          ? await repository.findConnection(input.connectionId)
+          : await repository.findOwnedConnection(ctx.sessionUser.id, input.connectionId);
+      if (!targetConnection) throw new TRPCError({ code: 'NOT_FOUND' });
       const result = await createMailboxLifecycleForDatabase(
         services.database.db,
         services,
       ).disconnect({
         ...input,
-        userId: ctx.sessionUser.id,
+        userId: targetConnection.userId,
       });
       await services.database.db
         .update(userTable)
         .set({ defaultConnectionId: null, updatedAt: new Date() })
         .where(
-          and(
-            eq(userTable.id, ctx.sessionUser.id),
-            eq(userTable.defaultConnectionId, input.connectionId),
-          ),
+          eq(userTable.defaultConnectionId, input.connectionId),
         );
       return result;
     }),
@@ -393,12 +398,18 @@ export const connectionsRouter = router({
     .input(z.object({ connectionId: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       const services = ctx.c.var.services!;
+      const repository = createPostgresConnectionRepository(services.database.db);
+      const targetConnection =
+        ctx.sessionUser.role === 'admin'
+          ? await repository.findConnection(input.connectionId)
+          : await repository.findOwnedConnection(ctx.sessionUser.id, input.connectionId);
+      if (!targetConnection) throw new TRPCError({ code: 'NOT_FOUND' });
       return await createMailboxLifecycleForDatabase(
         services.database.db,
         services,
       ).deleteRetainedData({
         ...input,
-        userId: ctx.sessionUser.id,
+        userId: targetConnection.userId,
       });
     }),
   getDefault: publicProcedure.query(async ({ ctx }) => {
@@ -408,17 +419,26 @@ export const connectionsRouter = router({
     const foundUser = await db.query.user.findFirst({
       where: eq(userTable.id, ctx.sessionUser.id),
     });
+    const isAdministrator = ctx.sessionUser.role === 'admin';
     const selectedConnection = foundUser?.defaultConnectionId
-      ? ((await repository.findOwnedConnection(
-          ctx.sessionUser.id,
-          foundUser.defaultConnectionId,
-        )) ?? (await repository.findFirstOwnedConnection(ctx.sessionUser.id)))
-      : await repository.findFirstOwnedConnection(ctx.sessionUser.id);
+      ? ((await (isAdministrator
+          ? repository.findConnection(foundUser.defaultConnectionId)
+          : repository.findOwnedConnection(ctx.sessionUser.id, foundUser.defaultConnectionId))) ??
+        (isAdministrator
+          ? await repository.findFirstConnection()
+          : await repository.findFirstOwnedConnection(ctx.sessionUser.id)))
+      : isAdministrator
+        ? await repository.findFirstConnection()
+        : await repository.findFirstOwnedConnection(ctx.sessionUser.id);
     if (!selectedConnection) return null;
-    const record = await repository.findConnectionWithAuthorization(
-      ctx.sessionUser.id,
-      selectedConnection.id,
-    );
+    const record = isAdministrator
+      ? (await repository.listAllConnectionsWithAuthorization()).find(
+          ({ connection }) => connection.id === selectedConnection.id,
+        )
+      : await repository.findConnectionWithAuthorization(
+          ctx.sessionUser.id,
+          selectedConnection.id,
+        );
     if (!record) return null;
     const { connection, authorization } = record;
     return {

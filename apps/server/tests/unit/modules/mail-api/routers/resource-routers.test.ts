@@ -4,14 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryMailCoreDependencies } from '../../../../../../../packages/mail-core/src/testing/fakes';
 
 const runtimeMocks = vi.hoisted(() => ({
-  openOwned: vi.fn(),
+  openAccessible: vi.fn(),
   openSession: vi.fn(),
   close: vi.fn(async () => undefined),
 }));
 
 vi.mock('../../../../../src/modules/mail-api/runtime/create-mail-api', async (importOriginal) => ({
   ...(await importOriginal()),
-  openOwnedMailApiRuntime: runtimeMocks.openOwned,
+  openAccessibleMailApiRuntime: runtimeMocks.openAccessible,
   openMailApiRuntime: runtimeMocks.openSession,
 }));
 
@@ -34,14 +34,21 @@ describe('Mail API resource Routers', () => {
       timezone: 'UTC',
       storageQuotaBytes: null,
     });
+    const otherAccount = await createMailAccount(dependencies, {
+      userId: 'other-user',
+      connectionId: 'other-connection',
+      timezone: 'UTC',
+      storageQuotaBytes: null,
+    });
     const core = createMailCore(dependencies);
     const runtime = {
       account,
       core,
       db: {},
+      listAllAccounts: vi.fn(async () => [account, otherAccount]),
       close: runtimeMocks.close,
     };
-    runtimeMocks.openOwned.mockResolvedValue(runtime);
+    runtimeMocks.openAccessible.mockResolvedValue(runtime);
     runtimeMocks.openSession.mockResolvedValue(runtime);
     const caller = router({
       account: accountRouter,
@@ -50,7 +57,8 @@ describe('Mail API resource Routers', () => {
       identity: identityRouter,
     }).createCaller({
       c: { env: {}, var: {} } as never,
-      sessionUser: { id: 'router-user' } as never,
+      sessionUser: { id: 'router-user', role: 'user' } as never,
+      authSession: { authMethod: 'password' } as never,
       auth: {} as never,
     });
 
@@ -84,7 +92,21 @@ describe('Mail API resource Routers', () => {
       updated: [],
       destroyed: [],
     });
-    expect(runtimeMocks.openOwned).toHaveBeenCalledTimes(3);
+    expect(runtimeMocks.openAccessible).toHaveBeenCalledTimes(3);
     expect(runtimeMocks.close).toHaveBeenCalledTimes(4);
+
+    const administrator = router({
+      account: accountRouter,
+    }).createCaller({
+      c: { env: {}, var: {} } as never,
+      sessionUser: { id: 'admin-user', role: 'admin' } as never,
+      authSession: { authMethod: 'password' } as never,
+      auth: {} as never,
+    });
+
+    await expect(administrator.account.list()).resolves.toMatchObject({
+      accounts: [{ id: account.id }, { id: otherAccount.id }],
+    });
+    expect(runtime.listAllAccounts).toHaveBeenCalledOnce();
   });
 });

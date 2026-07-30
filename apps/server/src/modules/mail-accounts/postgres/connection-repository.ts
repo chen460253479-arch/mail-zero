@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 
 import { authorizationBinding, connection } from '../../../db/schema';
 import type { MailChannelId } from '../../../mail-channel/contracts';
@@ -77,13 +77,28 @@ export const createPostgresConnectionRepository = (db: DB, options: RepositoryOp
       where: and(eq(connection.id, connectionId), eq(connection.userId, userId)),
     })) ?? null;
 
+  const findConnection = async (connectionId: string) =>
+    (await db.query.connection.findFirst({
+      where: eq(connection.id, connectionId),
+    })) ?? null;
+
   return {
     findOwnedConnection,
+    findConnection,
 
     findFirstOwnedConnection: async (userId: string) =>
       (await db.query.connection.findFirst({
         where: eq(connection.userId, userId),
       })) ?? null,
+
+    findFirstConnection: async () => {
+      const [record] = await db
+        .select()
+        .from(connection)
+        .orderBy(asc(connection.createdAt), asc(connection.id))
+        .limit(1);
+      return record ?? null;
+    },
 
     listConnectionsWithAuthorization: async (userId: string) =>
       await db
@@ -91,6 +106,12 @@ export const createPostgresConnectionRepository = (db: DB, options: RepositoryOp
         .from(connection)
         .leftJoin(authorizationBinding, eq(authorizationBinding.connectionId, connection.id))
         .where(eq(connection.userId, userId)),
+
+    listAllConnectionsWithAuthorization: async () =>
+      await db
+        .select({ connection, authorization: authorizationBinding })
+        .from(connection)
+        .leftJoin(authorizationBinding, eq(authorizationBinding.connectionId, connection.id)),
 
     findMailboxByNormalizedEmail: async (
       userId: string,

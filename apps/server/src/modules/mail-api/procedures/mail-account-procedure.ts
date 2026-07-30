@@ -3,7 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import {
-  openOwnedMailApiRuntime,
+  openAccessibleMailApiRuntime,
   type MailApiEnvironment,
   type OwnedMailApiRuntime,
 } from '../runtime/create-mail-api';
@@ -15,8 +15,11 @@ import { MailApiError } from '../errors/mail-api-error';
 export type { OwnedMailApiRuntime } from '../runtime/create-mail-api';
 
 export type OpenOwnedMailApiRuntime = (
-  userId: string,
-  accountId: MailAccountId,
+  input: {
+    actorUserId: string;
+    isAdministrator: boolean;
+    accountId: MailAccountId;
+  },
   runtimeEnv: MailApiEnvironment,
 ) => Promise<OwnedMailApiRuntime>;
 
@@ -41,7 +44,7 @@ export const toMailApiTrpcError = (error: unknown): TRPCError => {
 };
 
 export const createMailAccountProcedure = (
-  openRuntime: OpenOwnedMailApiRuntime = openOwnedMailApiRuntime,
+  openRuntime: OpenOwnedMailApiRuntime = openAccessibleMailApiRuntime,
 ) =>
   mailSessionProcedure
     .input(z.object({ accountId: mailAccountIdSchema }).passthrough())
@@ -50,8 +53,11 @@ export const createMailAccountProcedure = (
       let runtime: OwnedMailApiRuntime;
       try {
         runtime = await openRuntime(
-          access.userId,
-          input.accountId as MailAccountId,
+          {
+            actorUserId: access.userId,
+            isAdministrator: access.isAdministrator,
+            accountId: input.accountId as MailAccountId,
+          },
           ctx.c.var.services!,
         );
       } catch (error) {

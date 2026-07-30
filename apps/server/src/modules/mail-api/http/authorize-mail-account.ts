@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 
-import { openOwnedMailApiRuntime } from '../runtime/create-mail-api';
+import { openAccessibleMailApiRuntime } from '../runtime/create-mail-api';
 import { mapMailCoreError } from '../errors/map-mail-core-error';
 import type { HonoContext } from '../../../ctx';
 
@@ -30,7 +30,14 @@ export async function authorizeMailAccount(c: Context<HonoContext>, accountId: s
   }
   try {
     return {
-      runtime: await openOwnedMailApiRuntime(user.id, accountId as never, c.var.services!),
+      runtime: await openAccessibleMailApiRuntime(
+        {
+          actorUserId: user.id,
+          isAdministrator: user.role === 'admin',
+          accountId: accountId as never,
+        },
+        c.var.services!,
+      ),
     } as const;
   } catch (error) {
     return { response: mailHttpErrorResponse(c, error) } as const;

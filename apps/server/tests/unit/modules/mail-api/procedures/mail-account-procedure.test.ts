@@ -34,6 +34,7 @@ describe('mailAccountProcedure', () => {
         snooze: {} as OwnedMailApiRuntime['snooze'],
         db: {} as OwnedMailApiRuntime['db'],
         cursorSigningKey: 'procedure-test-cursor-key',
+        listAllAccounts: vi.fn(async () => [account()]),
         close,
       }),
     );
@@ -50,13 +51,60 @@ describe('mailAccountProcedure', () => {
       testRouter
         .createCaller({
           c: { var: { services } } as never,
-          sessionUser: { id: 'user-1' } as never,
+          sessionUser: { id: 'user-1', role: 'user' } as never,
+          authSession: { authMethod: 'password' } as never,
           auth: {} as never,
         })
         .read({ accountId: 'account-1', value: 7 }),
     ).resolves.toEqual({ accountId: 'account-1', value: 7 });
-    expect(open).toHaveBeenCalledWith('user-1', 'account-1', services);
+    expect(open).toHaveBeenCalledWith(
+      {
+        actorUserId: 'user-1',
+        isAdministrator: false,
+        accountId: 'account-1',
+      },
+      services,
+    );
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('allows an administrator procedure to open another users account', async () => {
+    const close = vi.fn(async () => undefined);
+    const services = {};
+    const open = vi.fn(
+      async (): Promise<OwnedMailApiRuntime> => ({
+        account: account({ userId: 'user-2' }),
+        core: {} as MailCore,
+        outbound: {} as OwnedMailApiRuntime['outbound'],
+        snooze: {} as OwnedMailApiRuntime['snooze'],
+        db: {} as OwnedMailApiRuntime['db'],
+        cursorSigningKey: 'procedure-test-cursor-key',
+        listAllAccounts: vi.fn(async () => [account({ userId: 'user-2' })]),
+        close,
+      }),
+    );
+    const testRouter = router({
+      read: createMailAccountProcedure(open).query(({ ctx }) => ctx.mailApi.account.userId),
+    });
+
+    await expect(
+      testRouter
+        .createCaller({
+          c: { var: { services } } as never,
+          sessionUser: { id: 'admin-1', role: 'admin' } as never,
+          authSession: { authMethod: 'password' } as never,
+          auth: {} as never,
+        })
+        .read({ accountId: 'account-1' }),
+    ).resolves.toBe('user-2');
+    expect(open).toHaveBeenCalledWith(
+      {
+        actorUserId: 'admin-1',
+        isAdministrator: true,
+        accountId: 'account-1',
+      },
+      services,
+    );
   });
 
   it('does not open a runtime without an authenticated session', async () => {
@@ -70,6 +118,7 @@ describe('mailAccountProcedure', () => {
         .createCaller({
           c: { env: {}, var: {} } as never,
           sessionUser: undefined,
+          authSession: undefined,
           auth: {} as never,
         })
         .read({ accountId: 'account-1' }),
@@ -89,7 +138,8 @@ describe('mailAccountProcedure', () => {
       testRouter
         .createCaller({
           c: { var: { services: {} } } as never,
-          sessionUser: { id: 'user-1' } as never,
+          sessionUser: { id: 'user-1', role: 'user' } as never,
+          authSession: { authMethod: 'password' } as never,
           auth: {} as never,
         })
         .read({ accountId: 'other-users-account' }),

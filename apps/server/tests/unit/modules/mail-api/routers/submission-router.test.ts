@@ -2,13 +2,13 @@ import type { MailAccountRecord, MailCore, SubmissionRecord } from '@zero/mail-c
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const runtimeMocks = vi.hoisted(() => ({
-  openOwned: vi.fn(),
+  openAccessible: vi.fn(),
   close: vi.fn(async () => undefined),
 }));
 
 vi.mock('../../../../../src/modules/mail-api/runtime/create-mail-api', async (importOriginal) => ({
   ...(await importOriginal()),
-  openOwnedMailApiRuntime: runtimeMocks.openOwned,
+  openAccessibleMailApiRuntime: runtimeMocks.openAccessible,
 }));
 
 import { submissionRouter } from '../../../../../src/modules/mail-api/routers/submission';
@@ -37,7 +37,7 @@ describe('Submission Router', () => {
       providerMessageId: null,
       lastErrorMessage: null,
     } as SubmissionRecord;
-    runtimeMocks.openOwned.mockResolvedValue({
+    runtimeMocks.openAccessible.mockResolvedValue({
       account,
       core: {
         getState: vi.fn(async () => '2'),
@@ -49,7 +49,8 @@ describe('Submission Router', () => {
     });
     const caller = router({ submission: submissionRouter }).createCaller({
       c: { env: {}, var: {} } as never,
-      sessionUser: { id: account.userId } as never,
+      sessionUser: { id: account.userId, role: 'user' } as never,
+      authSession: { authMethod: 'password' } as never,
       auth: {} as never,
     });
 

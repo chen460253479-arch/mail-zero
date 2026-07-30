@@ -90,6 +90,7 @@ export const mailSessionProcedure = privateProcedure.use(async ({ ctx, next }) =
   const mailAccess: MailAccessSubject = {
     kind: 'user',
     userId: ctx.sessionUser.id,
+    isAdministrator: ctx.sessionUser.role === 'admin',
   };
   return await next({
     ctx: {

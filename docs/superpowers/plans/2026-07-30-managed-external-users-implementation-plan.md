@@ -508,7 +508,7 @@ Router 7、React Query、Vitest。
   `findFirstConnection()`.
 - Adds `openAccessibleMailApiRuntime({ actorUserId, isAdministrator, accountId }, services)`.
 
-- [ ] **Step 1: Write failing admin-scope tests**
+- [x] **Step 1: Write failing admin-scope tests**
 
   Seed two ordinary users with one mailbox each and one admin. Assert:
   - each ordinary user lists/opens only its own mailbox;
@@ -516,7 +516,7 @@ Router 7、React Query、Vitest。
   - admin can set either Connection active and open its account;
   - an ordinary user receives `NOT_FOUND` for the other account.
 
-- [ ] **Step 2: Run admin-scope tests and verify RED**
+- [x] **Step 2: Run admin-scope tests and verify RED**
 
   Run:
   `pnpm --dir apps/server exec vitest run tests/unit/modules/mail-api/procedures/mail-account-procedure.test.ts tests/unit/modules/mail-api/routers/resource-routers.test.ts tests/integration/mail-core/app-connection-scope.integration.test.ts`
@@ -524,7 +524,7 @@ Router 7、React Query、Vitest。
   Expected: FAIL because every authenticated subject is currently constrained to its own
   `userId`.
 
-- [ ] **Step 3: Implement role-aware access**
+- [x] **Step 3: Implement role-aware access**
 
   For `role = admin`, Connections list/getDefault/setDefault resolve across the instance. For
   `role = user`, retain the existing `connection.userId = sessionUser.id` predicates.
@@ -541,7 +541,7 @@ Router 7、React Query、Vitest。
   Connection owner for admins before calling the existing lifecycle; ordinary users continue to
   pass their own ID.
 
-- [ ] **Step 4: Run Task 5 tests and commit**
+- [x] **Step 4: Run Task 5 tests and commit**
 
   Repeat Step 2 command. Expected: PASS.
 

@@ -7,6 +7,7 @@ export type AuthSession = NonNullable<Awaited<ReturnType<Auth['api']['getSession
 export type MailAccessSubject = {
   kind: 'user';
   userId: string;
+  isAdministrator: boolean;
 };
 
 export type HonoVariables = {

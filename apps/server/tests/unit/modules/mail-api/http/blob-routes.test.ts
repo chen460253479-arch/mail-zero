@@ -3,13 +3,13 @@ import { MailCoreError } from '@zero/mail-core';
 import { Hono } from 'hono';
 
 const runtimeMocks = vi.hoisted(() => ({
-  openOwned: vi.fn(),
+  openAccessible: vi.fn(),
   close: vi.fn(async () => undefined),
 }));
 
 vi.mock('../../../../../src/modules/mail-api/runtime/create-mail-api', async (importOriginal) => ({
   ...(await importOriginal()),
-  openOwnedMailApiRuntime: runtimeMocks.openOwned,
+  openAccessibleMailApiRuntime: runtimeMocks.openAccessible,
 }));
 
 import { registerMailBlobRoutes } from '../../../../../src/modules/mail-api/http';
@@ -29,7 +29,7 @@ describe('Mail Blob HTTP routes', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('returns 404 when the account is not owned by the session user', async () => {
-    runtimeMocks.openOwned.mockRejectedValue(
+    runtimeMocks.openAccessible.mockRejectedValue(
       new MailCoreError('ACCOUNT_NOT_FOUND', { accountId: 'foreign' }),
     );
 
@@ -39,7 +39,7 @@ describe('Mail Blob HTTP routes', () => {
   });
 
   it('sets safe download headers and closes the account runtime', async () => {
-    runtimeMocks.openOwned.mockResolvedValue({
+    runtimeMocks.openAccessible.mockResolvedValue({
       core: {
         getBlob: vi.fn(async () => ({ contentType: 'application/pdf' })),
         readBlob: vi.fn(async () => new Uint8Array([1, 2, 3])),
@@ -67,11 +67,11 @@ describe('Mail Blob HTTP routes', () => {
     });
 
     expect(response.status).toBe(413);
-    expect(runtimeMocks.openOwned).not.toHaveBeenCalled();
+    expect(runtimeMocks.openAccessible).not.toHaveBeenCalled();
   });
 
   it('does not disguise infrastructure failures as missing resources', async () => {
-    runtimeMocks.openOwned.mockRejectedValue(new Error('database unavailable'));
+    runtimeMocks.openAccessible.mockRejectedValue(new Error('database unavailable'));
 
     const response = await createApp().request('/mail/accounts/account-1/blobs/blob-1/file.bin');
 

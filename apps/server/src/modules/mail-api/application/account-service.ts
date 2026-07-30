@@ -8,10 +8,15 @@ export const toAccountDto = (account: MailAccountRecord): AccountDto =>
     state: account.stateVersion,
   });
 
-export const createAccountService = (core: Pick<MailCore, 'getAccount' | 'listAccounts'>) => ({
-  async list(input: { userId: string }) {
+export const createAccountService = (
+  core: Pick<MailCore, 'getAccount' | 'listAccounts'>,
+  access: { listAllAccounts: () => Promise<MailAccountRecord[]> },
+) => ({
+  async list(input: { userId: string; isAdministrator: boolean }) {
     return {
-      accounts: (await core.listAccounts(input)).map(toAccountDto),
+      accounts: (
+        await (input.isAdministrator ? access.listAllAccounts() : core.listAccounts(input))
+      ).map(toAccountDto),
     };
   },
   async get(input: { accountId: string }) {

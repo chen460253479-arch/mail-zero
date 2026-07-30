@@ -2,13 +2,13 @@ import type { EmailRecord, MailAccountRecord, MailCore } from '@zero/mail-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const runtimeMocks = vi.hoisted(() => ({
-  openOwned: vi.fn(),
+  openAccessible: vi.fn(),
   close: vi.fn(async () => undefined),
 }));
 
 vi.mock('../../../../../src/modules/mail-api/runtime/create-mail-api', async (importOriginal) => ({
   ...(await importOriginal()),
-  openOwnedMailApiRuntime: runtimeMocks.openOwned,
+  openAccessibleMailApiRuntime: runtimeMocks.openAccessible,
 }));
 
 import { emailRouter } from '../../../../../src/modules/mail-api/routers/email';
@@ -48,7 +48,7 @@ describe('Email Router', () => {
       getEmail: vi.fn(async () => email),
       setEmails,
     } as unknown as MailCore;
-    runtimeMocks.openOwned.mockResolvedValue({
+    runtimeMocks.openAccessible.mockResolvedValue({
       account,
       core,
       db: {},
@@ -56,7 +56,8 @@ describe('Email Router', () => {
     });
     const caller = router({ email: emailRouter }).createCaller({
       c: { env: {}, var: {} } as never,
-      sessionUser: { id: account.userId } as never,
+      sessionUser: { id: account.userId, role: 'user' } as never,
+      authSession: { authMethod: 'password' } as never,
       auth: {} as never,
     });
 
