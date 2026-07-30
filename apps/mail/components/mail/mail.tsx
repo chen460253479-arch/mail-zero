@@ -8,7 +8,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Bell, Lightning, Mail, ScanEye, Tag, User, X, Search } from '../icons/icons';
 import { useCategorySettings, useDefaultCategoryId } from '@/hooks/use-categories';
 import { ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
-import { useAppAccess } from '@/modules/external-access/access-context';
 import { useCommandPalette } from '../context/command-palette-context';
 import { useHotkeys, useHotkeysContext } from 'react-hotkeys-hook';
 import { ThreadDisplay } from '@/components/mail/thread-display';
@@ -39,7 +38,6 @@ export function MailLayout() {
   const [, clearBulkSelection] = useAtom(clearBulkSelectionAtom);
   const isMobile = useIsMobile();
   const navigate = useNavigate();
-  const access = useAppAccess();
   const prevFolderRef = useRef(folder);
   const { enableScope, disableScope } = useHotkeysContext();
   const { data: activeConnection, isPending: isConnectionPending } = useActiveConnection();
@@ -52,12 +50,6 @@ export function MailLayout() {
     }
     prevFolderRef.current = folder;
   }, [folder, mail.bulkSelected.length, clearBulkSelection]);
-
-  useEffect(() => {
-    if (access.mode === 'anonymous') {
-      navigate('/login');
-    }
-  }, [access.mode, navigate]);
 
   const [{ isFetching, refetch: refetchThreads }] = useThreads({
     enabled: Boolean(activeConnection?.id),
@@ -268,23 +260,18 @@ export function MailLayout() {
                     <div className="bg-primary/10 mb-4 flex h-12 w-12 items-center justify-center rounded-full">
                       <Mail className="h-5 w-5" />
                     </div>
-                    <h2 className="text-base font-semibold">
-                      {access.mode === 'external' ? 'No mailboxes are available' : 'Zero is ready'}
-                    </h2>
+                    <h2 className="text-base font-semibold">Zero is ready</h2>
                     <p className="text-muted-foreground mt-2 max-w-sm text-sm leading-6">
-                      {access.mode === 'external'
-                        ? 'This mail window has no available mailbox in its granted scope.'
-                        : 'You are signed in as the instance administrator. Connect a mail provider when you are ready to sync, organize, and send email.'}
+                      Connect or select a mailbox when you are ready to sync, organize, and send
+                      email.
                     </p>
-                    {access.mode !== 'external' && (
-                      <Button
-                        className="mt-5"
-                        variant="outline"
-                        onClick={() => navigate('/settings/connections')}
-                      >
-                        Manage connections
-                      </Button>
-                    )}
+                    <Button
+                      className="mt-5"
+                      variant="outline"
+                      onClick={() => navigate('/settings/connections')}
+                    >
+                      Manage connections
+                    </Button>
                   </div>
                 )}
               </div>

@@ -12,9 +12,6 @@ import {
 import { loadAppAccess } from '@/modules/external-access/access-context';
 import { ServerProviders } from '@/providers/server-providers';
 import { ClientProviders } from '@/providers/client-providers';
-import { getServerBackendUrl } from '@/lib/server-backend-url';
-import { createTRPCClient, httpBatchLink } from '@trpc/client';
-import type { AppRouter } from '@zero/server/trpc';
 import { Button } from '@/components/ui/button';
 import { getLocale } from '@/paraglide/runtime';
 import { siteConfig } from '@/lib/site-config';
@@ -25,36 +22,15 @@ import type { Route } from './+types/root';
 import { AlertCircle } from 'lucide-react';
 import { m } from '@/paraglide/messages';
 import { ArrowLeft } from 'lucide-react';
-import superjson from 'superjson';
 import './globals.css';
-
-const getUrl = () => getServerBackendUrl() + '/api/trpc';
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await authProxy.api.getSession({ headers: request.headers });
   const userId = session?.user.id ?? null;
   return {
-    access: await loadAppAccess({
-      userId,
-      loadExternalSessionId: async () => {
-        const externalAccess = await getServerTrpc(request).externalAccess.current.query();
-        return externalAccess?.sessionId ?? null;
-      },
-    }),
+    access: await loadAppAccess({ userId }),
   };
 }
-
-export const getServerTrpc = (req: Request) =>
-  createTRPCClient<AppRouter>({
-    links: [
-      httpBatchLink({
-        maxItems: 1,
-        url: getUrl(),
-        transformer: superjson,
-        headers: req.headers,
-      }),
-    ],
-  });
 
 export const meta: MetaFunction = () => {
   return [

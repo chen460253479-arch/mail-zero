@@ -6,9 +6,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from '@/components/ui/sidebar';
-import { useAppAccess } from '@/modules/external-access/access-context';
 import { navigationConfig, bottomNavItems } from '@/config/navigation';
-import { ExternalAccountSwitcher } from './external-account-switcher';
 import { useActiveConnection } from '@/hooks/use-connections';
 import { isAdministrator } from '@/lib/administrator';
 import { useSidebar } from '@/components/ui/sidebar';
@@ -30,7 +28,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation();
   const { data: session } = useSession();
   const { data: activeConnection } = useActiveConnection();
-  const access = useAppAccess();
   const { currentSection, navItems } = useMemo(() => {
     // Find which section we're in based on the pathname
     const section = Object.entries(navigationConfig).find(([, config]) =>
@@ -77,7 +74,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarHeader
           className={`relative top-2.5 flex flex-col gap-2 ${state === 'collapsed' ? 'px-2' : 'md:px-4'}`}
         >
-          {access.mode === 'external' ? <ExternalAccountSwitcher /> : session && <NavUser />}
+          {session && <NavUser />}
 
           {showComposeButton && (
             <div className="flex gap-1">
@@ -95,11 +92,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </div>
         </SidebarContent>
 
-        {access.mode !== 'external' && (
-          <SidebarFooter className={`px-0 pb-0 ${state === 'collapsed' ? 'md:px-2' : 'md:px-4'}`}>
-            <NavMain items={bottomNavItems} />
-          </SidebarFooter>
-        )}
+        <SidebarFooter className={`px-0 pb-0 ${state === 'collapsed' ? 'md:px-2' : 'md:px-4'}`}>
+          <NavMain items={bottomNavItems} />
+        </SidebarFooter>
       </Sidebar>
     </div>
   );

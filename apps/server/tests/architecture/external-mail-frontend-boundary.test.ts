@@ -37,15 +37,16 @@ describe('external mail frontend boundary', () => {
     expect(externalAccess).not.toMatch(/localStorage|sessionStorage/u);
   });
 
-  it('keeps settings and connection management out of external mode', () => {
-    const sidebar = source('components/ui/app-sidebar.tsx');
-    const mail = source('components/mail/mail.tsx');
-    const settings = source('app/(routes)/settings/layout.tsx');
+  it('uses one standard application shell for password and Launch Sessions', () => {
+    const applicationShell = [
+      source('components/ui/app-sidebar.tsx'),
+      source('components/mail/mail.tsx'),
+      source('app/(routes)/settings/layout.tsx'),
+    ].join('\n');
 
-    expect(sidebar).toContain("access.mode === 'external'");
-    expect(sidebar).toContain("access.mode !== 'external'");
-    expect(mail).toContain("access.mode !== 'external'");
-    expect(settings).toContain("throw redirect('/mail/inbox')");
+    expect(applicationShell).not.toContain("mode === 'external'");
+    expect(applicationShell).not.toContain("mode !== 'external'");
+    expect(applicationShell).not.toContain('ExternalAccountSwitcher');
   });
 
   it('leaves mail route authentication to the external-aware parent boundary', () => {

@@ -448,14 +448,14 @@ Router 7、React Query、Vitest。
   `{ mode: 'anonymous'; cacheSubject: null } | { mode: 'user'; cacheSubject: `user:${string}` }`.
 - Reduces `MailAccessSubject` to authenticated user/admin subjects; no Scope or external session.
 
-- [ ] **Step 1: Rewrite architecture and access-context tests first**
+- [x] **Step 1: Rewrite architecture and access-context tests first**
 
   Assert that production source contains none of:
   `zero-external-session`, `externalBrowserSession`, `allowedNangoConnectIds`,
   `ExternalAccountSwitcher`, `mode === 'external'`, or `ctx.externalSession`.
   Assert password and Launch Sessions resolve to the same `user:<id>` cache subject.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
   Run:
   `pnpm --dir apps/server exec vitest run tests/architecture/external-mail-frontend-boundary.test.ts tests/architecture/external-session-permissions.test.ts`
@@ -465,14 +465,14 @@ Router 7、React Query、Vitest。
 
   Expected: FAIL while external UI/session branches remain.
 
-- [ ] **Step 3: Remove external UI and server branches**
+- [x] **Step 3: Remove external UI and server branches**
 
   Root loads only Better Auth Session identity. `AppSidebar` always renders `NavUser` for a Session
   and always renders the normal footer. Settings requires a standard Session but never checks a
   Launch mode. Connections and Mail API procedures operate only from the standard authenticated
   subject.
 
-- [ ] **Step 4: Run Task 4 tests and commit**
+- [x] **Step 4: Run Task 4 tests and commit**
 
   Repeat Step 2 commands. Expected: PASS.
 
