@@ -276,23 +276,7 @@ Webhook 契约保持：
 - CRM 使用固定服务 Token 调用详情接口。
 - Zero 详情接口必须根据 `messageId` 解析实际邮箱归属，不允许跨用户泄漏。
 
-## 11. 现有数据迁移
-
-当前开发实现可能已经存在由 `zero-external-integration` 持有的邮箱。
-
-由于旧数据没有稳定的 `externalUserId`，不能仅依靠数据库自动判断目标普通用户。迁移策略为：
-
-1. 新接口上线后，CRM 对每个现有 Nango Connection 使用对应 `externalUserId` 重新调用绑定接口。
-2. 如果 Connection 仍归属旧的系统集成用户，Zero 可以在事务中将该 Connection、Mail Account
-   及账号级邮件数据归属转移给目标普通用户，不重新拉取历史邮件。
-3. 同一旧 Connection 只能被一个普通用户认领。
-4. 已归属其他普通用户的 Connection 不允许通过该兼容逻辑转移。
-5. 旧 Access Grant、外部 Browser Session 和独立外部 Cookie 全部失效，CRM 重新创建基于
-   `externalUserId` 的 Launch；新 Launch 只建立标准普通用户 Session。
-
-`zero-external-integration` 可以继续作为渠道配置和服务操作的系统 Actor，但不再持有用户邮箱。
-
-## 12. 错误契约
+## 11. 错误契约
 
 外部接口使用稳定的通用错误码：
 
@@ -311,9 +295,9 @@ Webhook 契约保持：
 
 错误响应不得返回密码哈希、Nango 凭据、Session Token 或其他用户信息。
 
-## 13. 测试策略
+## 12. 测试策略
 
-### 13.1 用户与认证
+### 12.1 用户与认证
 
 - API 可以自动创建普通用户，公开注册仍被禁用。
 - `externalUserId` 唯一且只能创建 `role = user`。
@@ -324,7 +308,7 @@ Webhook 契约保持：
 - CRM Launch 与密码登录得到相同的标准普通用户身份、菜单和服务端操作权限。
 - 多个普通用户不影响唯一超管引导。
 
-### 13.2 邮箱归属
+### 12.2 邮箱归属
 
 - 首次绑定自动创建用户和邮箱。
 - 同一用户重复绑定安全。
@@ -332,7 +316,7 @@ Webhook 契约保持：
 - 普通用户只能列出和访问自己的邮箱。
 - 超管可以列出实例内全部邮箱。
 
-### 13.3 Launch 与会话
+### 12.3 Launch 与会话
 
 - Grant 只接收 `externalUserId`。
 - 生产代码不再包含 `allowedNangoConnectIds`。
@@ -341,7 +325,7 @@ Webhook 契约保持：
 - CRM Launch 和密码登录返回相同用户、角色、邮箱集合与接口访问结果。
 - 在同一 Cookie 作用域消费 Launch Code 后，浏览器现有登录态切换为目标普通用户。
 
-### 13.4 前端
+### 12.4 前端
 
 - 同一个账号切换组件覆盖超管、普通用户和 CRM Launch。
 - CRM Launch 与普通用户密码登录显示相同完整菜单、设置和连接管理入口。
@@ -350,13 +334,13 @@ Webhook 契约保持：
 - 多账号切换会刷新所有邮箱相关查询。
 - 首次密码登录只能进入修改密码页面。
 
-### 13.5 回归
+### 12.5 回归
 
 - 现有邮件收发、同步、详情接口、附件读取和 ID-only Webhook 全部通过。
 - PostgreSQL 端到端测试覆盖用户创建、绑定、双登录方式、邮箱切换和越权拒绝。
 - Server、Mail 和 Mail Core 类型检查、测试及生产构建通过。
 
-## 14. 验收标准
+## 13. 验收标准
 
 1. CRM 不再提交或保存 `allowedNangoConnectIds`。
 2. 首次绑定可以通过 `externalUserId` 自动创建普通用户。
