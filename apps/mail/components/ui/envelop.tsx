@@ -1,3 +1,5 @@
+import { m } from '@/paraglide/messages';
+
 export default function Envelop() {
   return (
     <div className="relative h-[303.33px] w-[455px]">
@@ -275,10 +277,10 @@ export default function Envelop() {
       </div>
       <div className="absolute left-[170px] top-[32px]">
         <div className="flex flex-col font-mono text-[9px] font-semibold leading-tight text-white/70">
-          <span>0 Email</span>
-          <span>123 Open Source Way</span>
-          <span>Freemail City, FS 98765</span>
-          <span>United States</span>
+          <span>{m['common.envelop.emailCount']()}</span>
+          <span>{m['common.envelop.streetAddress']()}</span>
+          <span>{m['common.envelop.cityAddress']()}</span>
+          <span>{m['common.envelop.country']()}</span>
         </div>
       </div>
     </div>

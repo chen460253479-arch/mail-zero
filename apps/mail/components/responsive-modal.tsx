@@ -8,6 +8,7 @@ import {
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { VisuallyHidden } from 'radix-ui';
 import { type ReactElement } from 'react';
+import { m } from '@/paraglide/messages';
 // import { useMedia } from 'react-use';
 
 type ResponsiveModalProps = {
@@ -28,8 +29,8 @@ export default function ResponsiveModal({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <VisuallyHidden.VisuallyHidden>
           <DialogHeader>
-            <DialogTitle>Title</DialogTitle>
-            <DialogDescription>Modal content</DialogDescription>
+            <DialogTitle>{m['common.accessibility.defaultModalTitle']()}</DialogTitle>
+            <DialogDescription>{m['common.accessibility.defaultModalDescription']()}</DialogDescription>
           </DialogHeader>
         </VisuallyHidden.VisuallyHidden>
         <DialogContent className="w-full overflow-y-auto border-none p-0 [-ms-overflow-style:none] [scrollbar-width:none] sm:max-w-lg [&::-webkit-scrollbar]:hidden">
@@ -44,7 +45,7 @@ export default function ResponsiveModal({
       <DrawerContent>
         <VisuallyHidden.VisuallyHidden>
           <DrawerHeader>
-            <DrawerTitle>Title</DrawerTitle>
+            <DrawerTitle>{m['common.accessibility.defaultModalTitle']()}</DrawerTitle>
           </DrawerHeader>
         </VisuallyHidden.VisuallyHidden>
         <div className="overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

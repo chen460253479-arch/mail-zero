@@ -9,6 +9,7 @@ import { Command as CommandPrimitive } from 'cmdk';
 import { Search } from '../icons/icons';
 import { cn } from '@/lib/utils';
 import * as React from 'react';
+import { m } from '@/paraglide/messages';
 
 const Command = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive>,
@@ -28,8 +29,10 @@ Command.displayName = CommandPrimitive.displayName;
 const CommandDialog = ({ children, ...props }: DialogProps) => {
   return (
     <Dialog {...props}>
-      <DialogTitle className="sr-only">Command</DialogTitle>
-      <DialogDescription className="sr-only">Command</DialogDescription>
+      <DialogTitle className="sr-only">{m['common.commandPalette.title']()}</DialogTitle>
+      <DialogDescription className="sr-only">
+        {m['common.commandPalette.description']()}
+      </DialogDescription>
       <DialogContent
         showOverlay={true}
         className="dark:bg-panelDark w-full overflow-hidden rounded-xl border-none bg-white p-0 sm:max-w-lg [&>button:last-child]:hidden"

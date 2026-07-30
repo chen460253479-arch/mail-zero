@@ -72,7 +72,36 @@
         "themes": {
             "dark": "Dark",
             "light": "Light",
-            "system": "System"
+            "system": "System",
+            "appTheme": "App Theme",
+            "selectTheme": "Select theme",
+            "toggleTheme": "Toggle theme"
+        },
+        "accessibility": {
+            "defaultModalTitle": "Modal",
+            "defaultModalDescription": "Modal content",
+            "navigationMenu": "Navigation menu",
+            "navigationSidebarDescription": "Application navigation sidebar containing menu items and actions",
+            "toggleSidebar": "Toggle sidebar"
+        },
+        "navigation": {
+            "connectProviderBeforeComposing": "Connect a mail provider before composing",
+            "creatingLabel": "Creating label...",
+            "labelCreated": "Label created successfully",
+            "failedToCreateLabel": "Failed to create label",
+            "labels": "Labels",
+            "folders": "Folders"
+        },
+        "recipientAutosuggest": {
+            "enterEmail": "Enter email",
+            "loadingSuggestions": "Loading suggestions...",
+            "noSuggestions": "No suggestions"
+        },
+        "envelop": {
+            "emailCount": "0 Email",
+            "streetAddress": "123 Open Source Way",
+            "cityAddress": "Freemail City, FS 98765",
+            "country": "United States"
         },
         "keyboardLayouts": {
             "qwerty": "QWERTY",
@@ -253,7 +282,21 @@
             "otherAccounts": "Other Accounts",
             "switchingAccounts": "Switching accounts...",
             "accountSwitched": "Account switched successfully",
-            "failedToSwitchAccount": "Failed to switch accounts. Please try again."
+            "failedToSwitchAccount": "Failed to switch accounts. Please try again.",
+            "syncingEmails": "Syncing emails...",
+            "synced": "Synced",
+            "syncedWithStorage": "Synced • {storage}",
+            "syncingFolders": "Syncing: {folders}",
+            "cacheCleared": "Cache cleared successfully",
+            "connectionIdCopied": "Connection ID copied to clipboard",
+            "localMailboxRefreshed": "Local mailbox refreshed",
+            "defaultUser": "User",
+            "debug": "Debug",
+            "copyConnectionId": "Copy Connection ID",
+            "clearLocalCache": "Clear Local Cache",
+            "refreshLocalMailbox": "Refresh local mailbox",
+            "shards": "Shards: {count}",
+            "terms": "Terms"
         },
         "mailCategories": {
             "primary": "Primary",
@@ -409,7 +452,7 @@
                 "noValidNotesToReorder": "No valid notes to reorder",
                 "failedToReorderNotes": "Failed to reorder notes"
             },
-            "colors": {
+              "colors": {
                 "default": "Default",
                 "red": "Red",
                 "orange": "Orange",
@@ -418,9 +461,57 @@
                 "blue": "Blue",
                 "purple": "Purple",
                 "pink": "Pink",
-                "gray": "Gray"
-            },
-            "actions": {
+                  "gray": "Gray"
+              },
+              "relativeTime": {
+                  "justNow": "just now",
+                  "minutesAgo": [
+                      {
+                          "declarations": [
+                              "input count",
+                              "local countPlural = count: plural"
+                          ],
+                          "selectors": [
+                              "countPlural"
+                          ],
+                          "match": {
+                              "countPlural=one": "{count} minute ago",
+                              "countPlural=other": "{count} minutes ago"
+                          }
+                      }
+                  ],
+                  "hoursAgo": [
+                      {
+                          "declarations": [
+                              "input count",
+                              "local countPlural = count: plural"
+                          ],
+                          "selectors": [
+                              "countPlural"
+                          ],
+                          "match": {
+                              "countPlural=one": "{count} hour ago",
+                              "countPlural=other": "{count} hours ago"
+                          }
+                      }
+                  ],
+                  "daysAgo": [
+                      {
+                          "declarations": [
+                              "input count",
+                              "local countPlural = count: plural"
+                          ],
+                          "selectors": [
+                              "countPlural"
+                          ],
+                          "match": {
+                              "countPlural=one": "{count} day ago",
+                              "countPlural=other": "{count} days ago"
+                          }
+                      }
+                  ]
+              },
+              "actions": {
                 "pin": "Pin note",
                 "unpin": "Unpin note",
                 "edit": "Edit note",

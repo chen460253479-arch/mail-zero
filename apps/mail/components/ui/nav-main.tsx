@@ -19,6 +19,7 @@ import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import * as React from 'react';
+import { m } from '@/paraglide/messages';
 
 interface IconProps extends React.SVGProps<SVGSVGElement> {
   ref?: React.Ref<SVGSVGElement>;
@@ -150,9 +151,9 @@ export function NavMain({ items }: NavMainProps) {
       });
 
       toast.promise(promise, {
-        loading: 'Creating label...',
-        success: 'Label created successfully',
-        error: 'Failed to create label',
+        loading: m['common.navigation.creatingLabel'](),
+        success: m['common.navigation.labelCreated'](),
+        error: m['common.navigation.failedToCreateLabel'](),
       });
 
       await promise;
@@ -200,7 +201,9 @@ export function NavMain({ items }: NavMainProps) {
             <SidebarMenuItem className="mb-4" style={{ height: 'auto' }}>
               <div className="mx-2 mb-4 flex items-center justify-between">
                 <span className="text-muted-foreground text-[13px] dark:text-[#898989]">
-                  {activeAccount?.capabilities.includes('labels') ? 'Labels' : 'Folders'}
+                  {activeAccount?.capabilities.includes('labels')
+                    ? m['common.navigation.labels']()
+                    : m['common.navigation.folders']()}
                 </span>
                 {activeAccount?.capabilities.includes('labels') ? (
                   <LabelDialog

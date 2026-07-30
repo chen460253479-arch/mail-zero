@@ -12,6 +12,7 @@ import { Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Slot } from 'radix-ui';
 import * as React from 'react';
+import { m } from '@/paraglide/messages';
 
 const Sidebar = React.forwardRef<
   HTMLDivElement,
@@ -64,9 +65,9 @@ const Sidebar = React.forwardRef<
             }
             side={side}
           >
-            <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+            <SheetTitle className="sr-only">{m['common.accessibility.navigationMenu']()}</SheetTitle>
             <SheetDescription className="sr-only">
-              Application navigation sidebar containing menu items and actions
+              {m['common.accessibility.navigationSidebarDescription']()}
             </SheetDescription>
             <div className="flex h-full w-full flex-col">{children}</div>
           </SheetContent>
@@ -141,7 +142,7 @@ const SidebarTrigger = React.forwardRef<
       {...props}
     >
       <Menu className="h-12" />
-      <span className="sr-only">Toggle Sidebar</span>
+      <span className="sr-only">{m['common.accessibility.toggleSidebar']()}</span>
     </Button>
   );
 });
@@ -155,10 +156,10 @@ const SidebarRail = React.forwardRef<HTMLButtonElement, React.ComponentProps<'bu
       <button
         ref={ref}
         data-sidebar="rail"
-        aria-label="Toggle Sidebar"
+        aria-label={m['common.accessibility.toggleSidebar']()}
         tabIndex={-1}
         onClick={toggleSidebar}
-        title="Toggle Sidebar"
+        title={m['common.accessibility.toggleSidebar']()}
         className={cn(
           'hover:after:bg-sidebar-border absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 ease-in-out after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] group-data-[side=left]:-right-4 group-data-[side=right]:left-0 sm:flex',
           'in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize',

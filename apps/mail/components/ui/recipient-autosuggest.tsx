@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback } from './avatar';
 import { useThreads } from '@/hooks/use-threads';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { m } from '@/paraglide/messages';
 
 interface RecipientSuggestion {
   email: string;
@@ -65,7 +66,7 @@ interface RecipientAutosuggestProps<TFieldValues extends FieldValues> {
 export function RecipientAutosuggest<TFieldValues extends FieldValues>({
   control,
   name,
-  placeholder = 'Enter email',
+  placeholder = m['common.recipientAutosuggest.enterEmail'](),
   className,
   disabled = false,
 }: RecipientAutosuggestProps<TFieldValues>) {
@@ -311,10 +312,14 @@ export function RecipientAutosuggest<TFieldValues extends FieldValues>({
           role="listbox"
         >
           {isLoading && (
-            <div className="text-muted-foreground px-2 py-1.5 text-sm">Loading suggestions...</div>
+            <div className="text-muted-foreground px-2 py-1.5 text-sm">
+              {m['common.recipientAutosuggest.loadingSuggestions']()}
+            </div>
           )}
           {!isLoading && filteredSuggestions.length === 0 && debouncedQuery.trim().length > 0 && (
-            <div className="text-muted-foreground px-2 py-1.5 text-sm">No suggestions</div>
+            <div className="text-muted-foreground px-2 py-1.5 text-sm">
+              {m['common.recipientAutosuggest.noSuggestions']()}
+            </div>
           )}
           {filteredSuggestions.map((suggestion: RecipientSuggestion, index: number) => (
             <button

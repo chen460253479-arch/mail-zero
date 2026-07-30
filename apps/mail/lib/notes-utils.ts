@@ -27,7 +27,7 @@ export const NOTE_COLORS = [
   },
   {
     value: 'yellow',
-    label: 'Yellow',
+    label: m['common.notes.colors.yellow'](),
     class: 'border-l-amber-500',
     bgClass: 'hover:bg-amber-50 dark:hover:bg-amber-950/20',
     style: { borderLeftColor: 'rgb(245, 158, 11)' },
@@ -93,16 +93,16 @@ export function formatRelativeTime(dateInput: string | Date): string {
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
   if (diffInSeconds < 60) {
-    return 'just now';
+    return m['common.notes.relativeTime.justNow']();
   } else if (diffInSeconds < 3600) {
     const minutes = Math.floor(diffInSeconds / 60);
-    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+    return m['common.notes.relativeTime.minutesAgo']({ count: minutes });
   } else if (diffInSeconds < 86400) {
     const hours = Math.floor(diffInSeconds / 3600);
-    return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+    return m['common.notes.relativeTime.hoursAgo']({ count: hours });
   } else if (diffInSeconds < 604800) {
     const days = Math.floor(diffInSeconds / 86400);
-    return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+    return m['common.notes.relativeTime.daysAgo']({ count: days });
   } else {
     return formatDate(date);
   }

@@ -3,6 +3,7 @@ import { useTheme } from 'next-themes';
 import { MoonIcon } from '../icons/animated/moon';
 import { SunIcon } from '../icons/animated/sun';
 import { useEffect, useState } from 'react';
+import { m } from '@/paraglide/messages';
 
 export function SidebarThemeSwitch() {
   const [isRendered, setIsRendered] = useState(false);
@@ -32,7 +33,7 @@ export function SidebarThemeSwitch() {
   return (
     <div onClick={handleThemeToggle} className="flex cursor-pointer items-center gap-2 text-[13px]">
       {theme === 'dark' ? <MoonIcon className="opacity-60" /> : <SunIcon className="opacity-60" />}
-      <p className="text-[13px] opacity-60">App Theme</p>
+      <p className="text-[13px] opacity-60">{m['common.themes.appTheme']()}</p>
     </div>
   );
 }

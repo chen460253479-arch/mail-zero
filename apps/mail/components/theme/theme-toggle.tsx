@@ -2,6 +2,7 @@ import { MoonIcon } from '@/components/icons/animated/moon';
 import { SunIcon } from '@/components/icons/animated/sun';
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
+import { m } from '@/paraglide/messages';
 
 interface ThemeToggleProps {
   className?: string;
@@ -36,10 +37,10 @@ export function ThemeToggle({ className = '', showLabel = false }: ThemeTogglePr
     <button
       onClick={handleThemeToggle}
       className={`flex items-center rounded-md p-2 text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white ${className}`}
-      aria-label="Toggle theme"
+      aria-label={m['common.themes.toggleTheme']()}
     >
       {theme === 'dark' ? <MoonIcon className="opacity-60" /> : <SunIcon className="opacity-60" />}
-      {showLabel && <span className="ml-2 text-sm">Toggle theme</span>}
+      {showLabel && <span className="ml-2 text-sm">{m['common.themes.toggleTheme']()}</span>}
     </button>
   );
 }

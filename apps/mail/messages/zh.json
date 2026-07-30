@@ -72,7 +72,36 @@
     "themes": {
       "dark": "深色",
       "light": "浅色",
-      "system": "跟随系统"
+      "system": "跟随系统",
+      "appTheme": "应用主题",
+      "selectTheme": "选择主题",
+      "toggleTheme": "切换主题"
+    },
+    "accessibility": {
+      "defaultModalTitle": "模态窗口",
+      "defaultModalDescription": "模态窗口内容",
+      "navigationMenu": "导航菜单",
+      "navigationSidebarDescription": "包含菜单项和操作的应用导航侧边栏",
+      "toggleSidebar": "切换侧边栏"
+    },
+    "navigation": {
+      "connectProviderBeforeComposing": "请先连接邮件服务商再撰写邮件",
+      "creatingLabel": "正在创建标签...",
+      "labelCreated": "标签创建成功",
+      "failedToCreateLabel": "创建标签失败",
+      "labels": "标签",
+      "folders": "文件夹"
+    },
+    "recipientAutosuggest": {
+      "enterEmail": "输入邮箱地址",
+      "loadingSuggestions": "正在加载建议...",
+      "noSuggestions": "没有建议"
+    },
+    "envelop": {
+      "emailCount": "0 封邮件",
+      "streetAddress": "开源路 123 号",
+      "cityAddress": "自由邮件城，FS 98765",
+      "country": "美国"
     },
     "keyboardLayouts": {
       "qwerty": "QWERTY",
@@ -253,7 +282,21 @@
       "otherAccounts": "其他账号",
       "switchingAccounts": "正在切换账号...",
       "accountSwitched": "账号切换成功",
-      "failedToSwitchAccount": "账号切换失败，请重试。"
+      "failedToSwitchAccount": "账号切换失败，请重试。",
+      "syncingEmails": "正在同步邮件...",
+      "synced": "已同步",
+      "syncedWithStorage": "已同步 • {storage}",
+      "syncingFolders": "正在同步：{folders}",
+      "cacheCleared": "缓存已清除",
+      "connectionIdCopied": "连接 ID 已复制到剪贴板",
+      "localMailboxRefreshed": "本地邮箱已刷新",
+      "defaultUser": "用户",
+      "debug": "调试",
+      "copyConnectionId": "复制连接 ID",
+      "clearLocalCache": "清除本地缓存",
+      "refreshLocalMailbox": "刷新本地邮箱",
+      "shards": "分片：{count}",
+      "terms": "条款"
     },
     "mailCategories": {
       "primary": "主要",
@@ -409,7 +452,7 @@
         "noValidNotesToReorder": "没有可重新排序的有效备注",
         "failedToReorderNotes": "重新排序备注失败"
       },
-      "colors": {
+        "colors": {
         "default": "默认",
         "red": "红色",
         "orange": "橙色",
@@ -418,9 +461,57 @@
         "blue": "蓝色",
         "purple": "紫色",
         "pink": "粉色",
-        "gray": "灰色"
-      },
-      "actions": {
+          "gray": "灰色"
+        },
+        "relativeTime": {
+          "justNow": "刚刚",
+          "minutesAgo": [
+            {
+              "declarations": [
+                "input count",
+                "local countPlural = count: plural"
+              ],
+              "selectors": [
+                "countPlural"
+              ],
+              "match": {
+                "countPlural=one": "{count} 分钟前",
+                "countPlural=other": "{count} 分钟前"
+              }
+            }
+          ],
+          "hoursAgo": [
+            {
+              "declarations": [
+                "input count",
+                "local countPlural = count: plural"
+              ],
+              "selectors": [
+                "countPlural"
+              ],
+              "match": {
+                "countPlural=one": "{count} 小时前",
+                "countPlural=other": "{count} 小时前"
+              }
+            }
+          ],
+          "daysAgo": [
+            {
+              "declarations": [
+                "input count",
+                "local countPlural = count: plural"
+              ],
+              "selectors": [
+                "countPlural"
+              ],
+              "match": {
+                "countPlural=one": "{count} 天前",
+                "countPlural=other": "{count} 天前"
+              }
+            }
+          ]
+        },
+        "actions": {
         "pin": "置顶备注",
         "unpin": "取消置顶",
         "edit": "编辑备注",

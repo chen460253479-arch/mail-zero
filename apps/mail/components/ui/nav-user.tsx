@@ -62,8 +62,10 @@ function SyncingStatusIndicator({
       </div>
       <p className="text-[13px] opacity-60">
         {isSyncing || storageSize === 0
-          ? 'Syncing emails...'
-          : `Synced${storageSize ? ` • ${bytesToMB(storageSize)} MB` : ''}`}
+          ? m['common.navUser.syncingEmails']()
+          : storageSize
+            ? m['common.navUser.syncedWithStorage']({ storage: `${bytesToMB(storageSize)} MB` })
+            : m['common.navUser.synced']()}
       </p>
     </div>
   );
@@ -75,7 +77,9 @@ function SyncingStatusIndicator({
           <DropdownMenuItem className="cursor-default">{statusContent}</DropdownMenuItem>
         </TooltipTrigger>
         <TooltipContent side="right" sideOffset={10} avoidCollisions={false}>
-          <p className="text-xs">Syncing: {syncingFolders.join(', ')}</p>
+          <p className="text-xs">
+            {m['common.navUser.syncingFolders']({ folders: syncingFolders.join(', ') })}
+          </p>
         </TooltipContent>
       </Tooltip>
     );
@@ -112,12 +116,12 @@ export function NavUser() {
   const handleClearCache = useCallback(async () => {
     queryClient.clear();
     await idbClear();
-    toast.success('Cache cleared successfully');
+    toast.success(m['common.navUser.cacheCleared']());
   }, [queryClient]);
 
   const handleCopyConnectionId = useCallback(async () => {
     await navigator.clipboard.writeText(activeConnection?.id || '');
-    toast.success('Connection ID copied to clipboard');
+    toast.success(m['common.navUser.connectionIdCopied']());
   }, [activeConnection]);
 
   const { data: activeAccount } = useActiveConnection();
@@ -157,14 +161,14 @@ export function NavUser() {
         queryKey: trpc.mail.mailbox.get.queryKey(),
       }),
     ]);
-    toast.success('Local mailbox refreshed');
+    toast.success(m['common.navUser.localMailboxRefreshed']());
   }, [queryClient, trpc.mail.mailbox.get, trpc.mail.view.threadDetail, trpc.mail.view.threadPage]);
 
   const handleLogout = async () => {
     toast.promise(signOut(), {
-      loading: 'Signing out...',
-      success: () => 'Signed out successfully!',
-      error: 'Error signing out',
+      loading: m['common.actions.signingOut'](),
+      success: () => m['common.actions.signedOutSuccess'](),
+      error: m['common.actions.signOutError'](),
       async finally() {
         // await handleClearCache();
         window.location.href = '/login';
@@ -183,6 +187,8 @@ export function NavUser() {
 
   if (!isRendered) return null;
   if (!session) return null;
+
+  const fallbackUserName = m['common.navUser.defaultUser']();
 
   return (
     <div className="flex flex-col gap-2">
@@ -228,11 +234,11 @@ export function NavUser() {
                             (activeAccount.picture ?? undefined) ||
                             (session.user.image ?? undefined)
                           }
-                          alt={activeAccount.name || session.user.name || 'User'}
+                          alt={activeAccount.name || session.user.name || fallbackUserName}
                         />
                         <AvatarFallback className="rounded-xl">
                           <span>
-                            {(activeAccount.name || session.user.name || 'User')
+                            {(activeAccount.name || session.user.name || fallbackUserName)
                               .split(' ')
                               .map((n) => n[0])
                               .join('')
@@ -243,7 +249,7 @@ export function NavUser() {
                       </Avatar>
                       <div className="w-full">
                         <div className="flex items-center justify-center gap-0.5 text-sm font-medium">
-                          {activeAccount.name || session.user.name || 'User'}
+                          {activeAccount.name || session.user.name || fallbackUserName}
                         </div>
                         <div className="text-muted-foreground text-xs">{activeAccount.email}</div>
                       </div>
@@ -308,23 +314,31 @@ export function NavUser() {
                 </div>
                 <>
                   <DropdownMenuSeparator className="mt-1" />
-                  <p className="text-muted-foreground px-2 py-1 text-[11px] font-medium">Debug</p>
+                  <p className="text-muted-foreground px-2 py-1 text-[11px] font-medium">
+                    {m['common.navUser.debug']()}
+                  </p>
                   <DropdownMenuItem onClick={handleCopyConnectionId}>
                     <div className="flex items-center gap-2">
                       <CopyCheckIcon size={16} className="opacity-60" />
-                      <p className="text-[13px] opacity-60">Copy Connection ID</p>
+                      <p className="text-[13px] opacity-60">
+                        {m['common.navUser.copyConnectionId']()}
+                      </p>
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleClearCache}>
                     <div className="flex items-center gap-2">
                       <Trash2 size={16} className="opacity-60" />
-                      <p className="text-[13px] opacity-60">Clear Local Cache</p>
+                      <p className="text-[13px] opacity-60">
+                        {m['common.navUser.clearLocalCache']()}
+                      </p>
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => void handleRefreshMailbox()}>
                     <div className="flex items-center gap-2">
                       <RefreshCcw size={16} className="opacity-60" />
-                      <p className="text-[13px] opacity-60">Refresh local mailbox</p>
+                      <p className="text-[13px] opacity-60">
+                        {m['common.navUser.refreshLocalMailbox']()}
+                      </p>
                     </div>
                   </DropdownMenuItem>
                   <SyncingStatusIndicator
@@ -334,7 +348,9 @@ export function NavUser() {
                   />
                   <DropdownMenuItem>
                     <div className="flex items-center gap-2">
-                      <p className="text-[13px] opacity-60">Shards: {shards}</p>
+                      <p className="text-[13px] opacity-60">
+                        {m['common.navUser.shards']({ count: shards })}
+                      </p>
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="mt-1" />
@@ -372,7 +388,7 @@ export function NavUser() {
                   <DropdownMenuSeparator className="mt-1" />
                   <div className="text-muted-foreground/60 flex items-center justify-center gap-1 px-2 pb-2 pt-1 text-[10px]">
                     <a href="/terms" className="hover:underline">
-                      Terms
+                      {m['common.navUser.terms']()}
                     </a>
                   </div>
                 </>
@@ -529,23 +545,31 @@ export function NavUser() {
                   side={'bottom'}
                   sideOffset={8}
                 >
-                  <p className="text-muted-foreground px-2 py-1 text-[11px] font-medium">Debug</p>
+                  <p className="text-muted-foreground px-2 py-1 text-[11px] font-medium">
+                    {m['common.navUser.debug']()}
+                  </p>
                   <DropdownMenuItem onClick={handleCopyConnectionId}>
                     <div className="flex items-center gap-2">
                       <CopyCheckIcon size={16} className="opacity-60" />
-                      <p className="text-[13px] opacity-60">Copy Connection ID</p>
+                      <p className="text-[13px] opacity-60">
+                        {m['common.navUser.copyConnectionId']()}
+                      </p>
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleClearCache}>
                     <div className="flex items-center gap-2">
                       <Trash2 size={16} className="opacity-60" />
-                      <p className="text-[13px] opacity-60">Clear Local Cache</p>
+                      <p className="text-[13px] opacity-60">
+                        {m['common.navUser.clearLocalCache']()}
+                      </p>
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => void handleRefreshMailbox()}>
                     <div className="flex items-center gap-2">
                       <RefreshCcw size={16} className="opacity-60" />
-                      <p className="text-[13px] opacity-60">Refresh local mailbox</p>
+                      <p className="text-[13px] opacity-60">
+                        {m['common.navUser.refreshLocalMailbox']()}
+                      </p>
                     </div>
                   </DropdownMenuItem>
                   <SyncingStatusIndicator
@@ -555,7 +579,9 @@ export function NavUser() {
                   />
                   <DropdownMenuItem>
                     <div className="flex items-center gap-2">
-                      <p className="text-[13px] opacity-60">Shards: {shards}</p>
+                      <p className="text-[13px] opacity-60">
+                        {m['common.navUser.shards']({ count: shards })}
+                      </p>
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="mt-1" />
@@ -593,7 +619,7 @@ export function NavUser() {
                   <DropdownMenuSeparator className="mt-1" />
                   <div className="text-muted-foreground/60 flex items-center justify-center gap-1 px-2 pb-2 pt-1 text-[10px]">
                     <a href="/terms" className="hover:underline">
-                      Terms
+                      {m['common.navUser.terms']()}
                     </a>
                   </div>
                 </DropdownMenuContent>
@@ -608,7 +634,7 @@ export function NavUser() {
           <div className="mt-[2px] flex flex-col items-start gap-1 space-y-1">
             <div className="flex items-center gap-1 text-[13px] leading-none text-black dark:text-white">
               <p className={cn('max-w-[14.5ch] truncate text-[13px]')}>
-                {activeAccount?.name || session.user.name || 'User'}
+                {activeAccount?.name || session.user.name || fallbackUserName}
               </p>
             </div>
             <div className="h-5 max-w-[200px] overflow-hidden truncate text-xs font-normal leading-none text-[#898989]">

@@ -130,7 +130,7 @@ function ComposeButton({ disabled = false }: { disabled?: boolean }) {
         <button
           type="button"
           disabled={disabled}
-          title={disabled ? 'Connect a mail provider before composing' : undefined}
+          title={disabled ? m['common.navigation.connectProviderBeforeComposing']() : undefined}
           className="relative mb-1.5 inline-flex h-8 w-full cursor-pointer items-center justify-center gap-1 self-stretch overflow-hidden rounded-lg border border-gray-200 bg-[#006FFE] text-black transition-colors hover:bg-[#0056CC] disabled:cursor-not-allowed disabled:opacity-45 dark:border-none dark:text-white dark:hover:bg-[#0056CC]"
         >
           {state === 'collapsed' && !isMobile ? (
