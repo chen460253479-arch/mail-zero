@@ -63,6 +63,7 @@ const createApi = (services: RuntimeServices) => {
       c.set('auth', auth);
       const session = await auth.api.getSession({ headers: c.req.raw.headers });
       c.set('sessionUser', session?.user);
+      c.set('authSession', session?.session);
 
       if (c.req.header('Authorization') && !session?.user) {
         const tokenSpan = TraceContext.startSpan(
@@ -123,6 +124,7 @@ const createApi = (services: RuntimeServices) => {
       } finally {
         finalizeRequestTrace(c, requestSpan.id, c.res.status, requestError);
         c.set('sessionUser', undefined);
+        c.set('authSession', undefined);
       }
     })
     .route('/public', publicRouter)
@@ -137,6 +139,7 @@ const createApi = (services: RuntimeServices) => {
           services,
           auth: c.var.auth,
           sessionUser: c.var.sessionUser,
+          authSession: c.var.authSession,
           traceId: c.var.traceId,
           requestId: c.var.requestId,
         }),

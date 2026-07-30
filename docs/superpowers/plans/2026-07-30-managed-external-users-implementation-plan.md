@@ -332,7 +332,7 @@ Router 7、React Query、Vitest。
 - Produces `user.changePassword({ currentPassword, newPassword })`.
 - Adds `signIn.username` to the browser auth client.
 
-- [ ] **Step 1: Write failing server password-gate tests**
+- [x] **Step 1: Write failing server password-gate tests**
 
   Test four literal cases: anonymous rejected, initial password Session rejected,
   Launch Session allowed, and changed-password Session allowed.
@@ -352,7 +352,7 @@ Router 7、React Query、Vitest。
   ).toBe(false);
   ```
 
-- [ ] **Step 2: Run server tests and verify RED**
+- [x] **Step 2: Run server tests and verify RED**
 
   Run:
   `pnpm --dir apps/server exec vitest run tests/unit/trpc/routes/user.test.ts tests/unit/runtime/node/application.test.ts`
@@ -360,7 +360,7 @@ Router 7、React Query、Vitest。
   Expected: FAIL because the request context stores only `sessionUser` and no password-change gate
   exists.
 
-- [ ] **Step 3: Implement server gate and password mutation**
+- [x] **Step 3: Implement server gate and password mutation**
 
   Store both `session.user` and `session.session` in Hono/tRPC context. Build
   `authenticatedProcedure` from the current authentication middleware, then layer
@@ -369,20 +369,20 @@ Router 7、React Query、Vitest。
   password different from `sessionUser.username`, call Better Auth `changePassword`, and only after
   success set `mustChangePassword = false`.
 
-- [ ] **Step 4: Write failing frontend login and redirect tests**
+- [x] **Step 4: Write failing frontend login and redirect tests**
 
   `resolveLoginMethod('admin@example.test')` must be `email`;
   `resolveLoginMethod('user_200')` must be `username`.
   The route guard must redirect only password Sessions requiring a change to `/change-password`.
 
-- [ ] **Step 5: Run frontend tests and verify RED**
+- [x] **Step 5: Run frontend tests and verify RED**
 
   Run:
   `pnpm --dir apps/mail exec vitest run modules/auth/login-method.test.ts app/(auth)/change-password/change-password-client.test.tsx`
 
   Expected: FAIL because username login selection and the change-password page do not exist.
 
-- [ ] **Step 6: Implement unified login and change-password UI**
+- [x] **Step 6: Implement unified login and change-password UI**
 
   Add `usernameClient()` to both browser and server auth clients. Replace the login email field with
   an Account field and call `signIn.email` only for email-shaped input; otherwise call
@@ -401,7 +401,7 @@ Router 7、React Query、Vitest。
   On success it redirects to `/mail/inbox`. The authenticated route layout redirects a required
   password Session to this page, while a Launch Session renders the normal application.
 
-- [ ] **Step 7: Run Task 3 tests and commit**
+- [x] **Step 7: Run Task 3 tests and commit**
 
   Run:
   `pnpm --dir apps/server exec vitest run tests/unit/trpc/routes/user.test.ts tests/unit/runtime/node/application.test.ts`

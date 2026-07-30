@@ -88,4 +88,61 @@ describe('native Node application', () => {
     expect(services.webhooks.outlook).toHaveBeenCalledOnce();
     expect(services.webhooks.zohoMail).toHaveBeenCalledWith(expect.any(Request), 'token-1');
   });
+
+  it('blocks an initial-password Session before a private procedure runs', async () => {
+    const services = createServices();
+    services.auth.api.getSession = vi.fn(async () => ({
+      user: {
+        id: 'managed-user-1',
+        role: 'user',
+        mustChangePassword: true,
+      },
+      session: {
+        id: 'session-1',
+        userId: 'managed-user-1',
+        authMethod: 'password',
+      },
+    })) as never;
+    const deleteUser = vi.fn();
+    services.auth.api.deleteUser = deleteUser as never;
+    const app = createNodeApplication(services);
+
+    const response = await app.request('/api/trpc/user.delete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ json: null }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toContain('PASSWORD_CHANGE_REQUIRED');
+    expect(deleteUser).not.toHaveBeenCalled();
+  });
+
+  it('lets a Launch Session use the same private procedures', async () => {
+    const services = createServices();
+    services.auth.api.getSession = vi.fn(async () => ({
+      user: {
+        id: 'managed-user-1',
+        role: 'user',
+        mustChangePassword: true,
+      },
+      session: {
+        id: 'session-1',
+        userId: 'managed-user-1',
+        authMethod: 'launch',
+      },
+    })) as never;
+    const deleteUser = vi.fn(async () => ({ success: true, message: 'ok' }));
+    services.auth.api.deleteUser = deleteUser as never;
+    const app = createNodeApplication(services);
+
+    const response = await app.request('/api/trpc/user.delete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ json: null }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(deleteUser).toHaveBeenCalledOnce();
+  });
 });

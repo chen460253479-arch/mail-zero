@@ -1,12 +1,14 @@
 import { getServerBackendUrl } from './server-backend-url';
+import { inferAdditionalFields, usernameClient } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/client';
+import type { Auth } from '@zero/server/auth';
 
 const authClient = createAuthClient({
   baseURL: getServerBackendUrl(),
   fetchOptions: {
     credentials: 'include',
   },
-  plugins: [],
+  plugins: [inferAdditionalFields<Auth>(), usernameClient()],
 });
 
 export const authProxy = {

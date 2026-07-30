@@ -13,6 +13,7 @@ export default defineConfig({
       'modules/**/*.test.tsx',
       'components/**/*.test.ts',
       'components/**/*.test.tsx',
+      'app/**/change-password/*.test.tsx',
     ],
   },
 });

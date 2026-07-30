@@ -2,11 +2,12 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 
 import { Button } from '@/components/ui/button';
+import { resolveLoginMethod } from '@/modules/auth/login-method';
 import { signIn } from '@/lib/auth-client';
 
 export function LoginClient() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string>();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -17,18 +18,26 @@ export function LoginClient() {
     setIsSubmitting(true);
 
     try {
-      const result = await signIn.email({
-        email: email.trim().toLowerCase(),
-        password,
-        rememberMe: true,
-      });
+      const normalizedAccount = account.trim();
+      const result =
+        resolveLoginMethod(normalizedAccount) === 'email'
+          ? await signIn.email({
+              email: normalizedAccount.toLowerCase(),
+              password,
+              rememberMe: true,
+            })
+          : await signIn.username({
+              username: normalizedAccount,
+              password,
+              rememberMe: true,
+            });
 
       if (result.error) {
-        setError(result.error.message || 'Invalid administrator email or password');
+        setError(result.error.message || 'Invalid account or password');
         return;
       }
 
-      navigate('/mail', { replace: true });
+      navigate('/mail/inbox', { replace: true });
     } catch {
       setError('Unable to reach the Zero server');
     } finally {
@@ -42,18 +51,20 @@ export function LoginClient() {
         <div className="mb-8 text-center">
           <img src="/white-icon.svg" alt="Zero" className="mx-auto mb-5 h-10 w-10" />
           <h1 className="text-3xl font-semibold text-white">Sign in to Zero</h1>
-          <p className="mt-2 text-sm text-white/55">Use the local instance administrator account</p>
+          <p className="mt-2 text-sm text-white/55">
+            Use an administrator email or managed Username
+          </p>
         </div>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-white/80">Email</span>
+            <span className="text-sm font-medium text-white/80">Account</span>
             <input
-              autoComplete="email"
+              autoComplete="username"
               autoFocus
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              type="text"
+              value={account}
+              onChange={(event) => setAccount(event.target.value)}
               required
               className="h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
             />
@@ -67,7 +78,6 @@ export function LoginClient() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               required
-              minLength={12}
               className="h-11 w-full rounded-lg border border-white/15 bg-black/30 px-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
             />
           </label>
@@ -88,7 +98,7 @@ export function LoginClient() {
         </form>
 
         <p className="mt-6 text-center text-xs leading-5 text-white/40">
-          Public registration and email verification are disabled for this private instance.
+          Public registration remains disabled for this private instance.
         </p>
       </div>
     </main>

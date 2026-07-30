@@ -18,7 +18,15 @@ const t = initTRPC.context<TrpcContext>().create({ transformer: superjson });
 export const router = t.router;
 export const publicProcedure = t.procedure;
 
-export const privateProcedure = publicProcedure.use(async ({ ctx, next }) => {
+export const requiresPasswordChange = (input: {
+  user: { role?: string | null; mustChangePassword?: boolean | null };
+  session: { authMethod?: string | null };
+}): boolean =>
+  input.user.role === 'user' &&
+  input.user.mustChangePassword === true &&
+  input.session.authMethod !== 'launch';
+
+export const authenticatedProcedure = publicProcedure.use(async ({ ctx, next }) => {
   const { addRequestSpan, completeRequestSpan } = await import('../lib/trace-context');
 
   // Start auth validation span
@@ -34,7 +42,7 @@ export const privateProcedure = publicProcedure.use(async ({ ctx, next }) => {
     },
   );
 
-  if (!ctx.sessionUser) {
+  if (!ctx.sessionUser || !ctx.authSession) {
     if (authSpan) {
       completeRequestSpan(
         ctx.c,
@@ -59,13 +67,26 @@ export const privateProcedure = publicProcedure.use(async ({ ctx, next }) => {
     });
   }
 
-  return next({ ctx: { ...ctx, sessionUser: ctx.sessionUser } });
+  return next({
+    ctx: {
+      ...ctx,
+      sessionUser: ctx.sessionUser,
+      authSession: ctx.authSession,
+    },
+  });
 });
 
-export const mailSessionProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  if (ctx.sessionUser === undefined) {
-    throw new TRPCError({ code: 'UNAUTHORIZED' });
+export const privateProcedure = authenticatedProcedure.use(async ({ ctx, next }) => {
+  if (requiresPasswordChange({ user: ctx.sessionUser, session: ctx.authSession })) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'PASSWORD_CHANGE_REQUIRED',
+    });
   }
+  return await next({ ctx });
+});
+
+export const mailSessionProcedure = privateProcedure.use(async ({ ctx, next }) => {
   const mailAccess: MailAccessSubject = {
     kind: 'user',
     userId: ctx.sessionUser.id,
