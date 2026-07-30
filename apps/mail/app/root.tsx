@@ -5,32 +5,20 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
-  useLoaderData,
   useNavigate,
   type MetaFunction,
 } from 'react-router';
-import { loadAppAccess } from '@/modules/external-access/access-context';
-import { ServerProviders } from '@/providers/server-providers';
 import { ClientProviders } from '@/providers/client-providers';
 import { Button } from '@/components/ui/button';
 import { getLocale } from '@/paraglide/runtime';
 import { siteConfig } from '@/lib/site-config';
 import type { PropsWithChildren } from 'react';
-import { authProxy } from '@/lib/auth-proxy';
 import { signOut } from '@/lib/auth-client';
 import type { Route } from './+types/root';
 import { AlertCircle } from 'lucide-react';
 import { m } from '@/paraglide/messages';
 import { ArrowLeft } from 'lucide-react';
 import './globals.css';
-
-export async function loader({ request }: Route.LoaderArgs) {
-  const session = await authProxy.api.getSession({ headers: request.headers });
-  const userId = session?.user.id ?? null;
-  return {
-    access: await loadAppAccess({ userId }),
-  };
-}
 
 export const meta: MetaFunction = () => {
   return [
@@ -46,8 +34,6 @@ export const meta: MetaFunction = () => {
 };
 
 export function Layout({ children }: PropsWithChildren) {
-  const { access } = useLoaderData<typeof loader>();
-
   return (
     <html lang={getLocale()} suppressHydrationWarning>
       <head>
@@ -60,9 +46,7 @@ export function Layout({ children }: PropsWithChildren) {
         <Links />
       </head>
       <body className="antialiased">
-        <ServerProviders access={access}>
-          <ClientProviders>{children}</ClientProviders>
-        </ServerProviders>
+        <ClientProviders>{children}</ClientProviders>
         <ScrollRestoration />
         <Scripts />
       </body>
