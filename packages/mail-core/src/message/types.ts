@@ -4,6 +4,15 @@ export type ParseRawEmailDependencies = {
   sanitizeHtml(html: string): string;
 };
 
+export type MimeTransferEncoding = '7bit' | '8bit' | 'binary' | 'base64' | 'quoted-printable';
+
+export type BlobSection = {
+  offsetStart: bigint;
+  encodedLength: bigint;
+  decodedLength: bigint;
+  transferEncoding: MimeTransferEncoding;
+};
+
 export type ParsedPart = {
   parentPath: string | null;
   partPath: string;
@@ -16,6 +25,7 @@ export type ParsedPart = {
   contentId: string | null;
   bytes: Uint8Array;
   sizeBytes: bigint;
+  section: BlobSection;
 };
 
 export type ParsedEmail = {

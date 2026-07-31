@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 
 type ComposeService = {
   build?: { args?: Record<string, string>; context?: string; dockerfile?: string };
@@ -18,6 +19,7 @@ type ComposeConfig = {
 
 const architectureRoot = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(architectureRoot, '../../../..');
+const mailDockerfile = readFileSync(resolve(repoRoot, 'docker/mail/Dockerfile'), 'utf8');
 
 const result = spawnSync(
   'docker',
@@ -64,6 +66,13 @@ describe('Docker Mail static runtime', () => {
     expect(buildArgs).not.toHaveProperty('NANGO_IMAP_SMTP_INTEGRATION_KEY');
   });
 
+  it('allows the Mail production build to use a 2 GiB V8 heap', () => {
+    expect(mailDockerfile).toContain(
+      'RUN NODE_OPTIONS=--max-old-space-size=2048 pnpm --filter @zero/mail build',
+    );
+    expect(mailDockerfile).not.toContain('ENV NODE_OPTIONS=');
+  });
+
   it('keeps Server on its isolated immutable runtime', () => {
     const server = compose.services.server;
     const volumeTargets = (server.volumes ?? []).map((volume) =>
@@ -75,7 +84,7 @@ describe('Docker Mail static runtime', () => {
     expect(server.image).toBe('zero-server');
     expect(server.build?.dockerfile).toBe('docker/server/Dockerfile');
     expect(server.command ?? null).toBeNull();
-    expect(volumeTargets).toEqual(['/var/lib/zero/mail-blobs']);
+    expect(volumeTargets).toEqual([]);
     expect(server.environment).not.toHaveProperty('CHOKIDAR_USEPOLLING');
   });
 });

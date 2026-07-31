@@ -392,7 +392,6 @@ describe('PostgreSQL outbound repository', () => {
           leaseToken: claimed!.delivery.leaseToken,
         }),
       );
-      const frozenRaw = submission.frozenBlobs.find(({ kind }) => kind === 'raw')!;
       const persistedReply = await unitOfWork.mailUnitOfWork.run((tx) =>
         tx.emails.findById(harness.accountId, reply.id),
       );
@@ -407,11 +406,11 @@ describe('PostgreSQL outbound repository', () => {
           bcc: ['bcc@example.test'],
         },
         raw: {
-          blobId: frozenRaw.blobId,
-          objectKey: frozenRaw.objectKey,
-          sha256: frozenRaw.sha256,
-          sizeBytes: frozenRaw.sizeBytes,
-          contentType: frozenRaw.contentType,
+          blobId: submission.rawBlobId,
+          objectKey: submission.rawObjectKey,
+          sha256: submission.rawSha256,
+          sizeBytes: submission.rawSizeBytes,
+          contentType: 'message/rfc822',
         },
         remoteThreadReferences: [{ provider: 'gmail', remoteThreadId: 'gmail-thread' }],
       });

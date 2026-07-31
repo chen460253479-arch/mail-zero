@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 const migrationRoot = resolve(import.meta.dirname, '../../../src/db/migrations');
 
 describe('development database baseline', () => {
-  it('keeps one schema baseline and ordered matching incremental migrations', () => {
+  it('keeps exactly one schema baseline generated from the current declarative model', () => {
     const sqlFiles = readdirSync(migrationRoot)
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
@@ -19,8 +19,9 @@ describe('development database baseline', () => {
       entries: { idx: number; tag: string }[];
     };
 
+    expect(sqlFiles).toHaveLength(1);
     expect(sqlFiles[0]).toMatch(/^0000_.+\.sql$/u);
-    expect(sqlFiles.filter((name) => name.startsWith('0000_'))).toHaveLength(1);
+    expect(snapshotFiles).toHaveLength(1);
     expect(snapshotFiles).toEqual(sqlFiles.map((name) => `${name.slice(0, 4)}_snapshot.json`));
     expect(journal.entries).toHaveLength(sqlFiles.length);
     expect(journal.entries.map(({ idx }) => idx)).toEqual(sqlFiles.map((_, index) => index));

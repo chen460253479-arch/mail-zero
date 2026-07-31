@@ -8,11 +8,12 @@ import {
   type RuntimeServices,
 } from './services';
 import { parseRuntimeConfig, type RuntimeConfig, type RuntimeEnvironmentSource } from './config';
+import { createAwsS3ObjectClient, S3BlobStore } from '../../modules/mail';
 import { createRuntimeDatabase, type RuntimeDatabase } from './database';
 import { createNodeApplication } from './application';
-import { LocalBlobStore } from '../../modules/mail';
+import type { BlobStore } from '@zero/mail-core';
 
-type BlobStoreLifecycle = LocalBlobStore & { initialize(): Promise<void> };
+type BlobStoreLifecycle = BlobStore & { initialize(): Promise<void>; close(): void };
 
 export type NodeHttpListener = {
   close(): Promise<void>;
@@ -58,6 +59,21 @@ const listen = async (
     server.once('error', reject);
   });
 
+export const createRuntimeBlobStore = (config: RuntimeConfig): S3BlobStore => {
+  const storage = config.mailBlobStore;
+  return new S3BlobStore({
+    client: createAwsS3ObjectClient({
+      region: storage.region,
+      endpoint: storage.endpoint ?? null,
+      forcePathStyle: storage.forcePathStyle,
+      accessKeyId: storage.accessKeyId ?? null,
+      secretAccessKey: storage.secretAccessKey ?? null,
+      bucket: storage.bucket,
+    }),
+    prefix: storage.prefix,
+  });
+};
+
 const defaultDependencies: NodeServerLifecycleDependencies = {
   parseConfig: parseRuntimeConfig,
   async createDatabase(config) {
@@ -70,7 +86,7 @@ const defaultDependencies: NodeServerLifecycleDependencies = {
       throw error;
     }
   },
-  createBlobStore: (config) => new LocalBlobStore(config.mailBlobRoot),
+  createBlobStore: createRuntimeBlobStore,
   createServices: createRuntimeServices,
   createApplication: createNodeApplication,
   listen,
@@ -98,6 +114,7 @@ export const startZeroServer = async (
 ): Promise<{ close(): Promise<void> }> => {
   const config = dependencies.parseConfig(source);
   let database: RuntimeDatabase | undefined;
+  let blobStore: BlobStoreLifecycle | undefined;
   let services: RuntimeServices | undefined;
   let listener: NodeHttpListener | undefined;
   let workerStarted = false;
@@ -116,6 +133,7 @@ export const startZeroServer = async (
       }
       if (workerStarted && services) await services.taskWorker.stop();
       if (services) await services.externalClients.close();
+      blobStore?.close();
       if (database) await database.close();
     })();
     return closePromise;
@@ -123,7 +141,7 @@ export const startZeroServer = async (
 
   try {
     database = await dependencies.createDatabase(config);
-    const blobStore = dependencies.createBlobStore(config);
+    blobStore = dependencies.createBlobStore(config);
     await blobStore.initialize();
     services = await dependencies.createServices({ config, database, blobStore });
     markReady(services, 'database');

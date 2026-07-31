@@ -49,8 +49,12 @@ const mapPart = (row: typeof emailPart.$inferSelect): EmailPartRecord => ({
   disposition: row.disposition,
   filename: row.filename,
   contentId: row.contentId,
-  blobId: row.blobId as EmailPartRecord['blobId'],
-  sizeBytes: row.sizeBytes,
+  rawBlobId: row.rawBlobId as EmailPartRecord['rawBlobId'],
+  offsetStart: row.offsetStart,
+  encodedLength: row.encodedLength,
+  decodedLength: row.decodedLength,
+  transferEncoding: row.transferEncoding,
+  sizeBytes: row.decodedLength,
   kind: row.kind,
 });
 
@@ -61,7 +65,7 @@ const baseEmail = (
   | 'bcc'
   | 'cc'
   | 'from'
-  | 'htmlBlobId'
+  | 'htmlBody'
   | 'keywords'
   | 'mailboxIds'
   | 'parseWarnings'
@@ -70,7 +74,7 @@ const baseEmail = (
   | 'replyTo'
   | 'restoreMailboxIds'
   | 'sender'
-  | 'textBlobId'
+  | 'textBody'
   | 'to'
 > => ({
   id: row.id as EmailRecord['id'],
@@ -151,8 +155,8 @@ const hydrateEmail = async (db: MailDatabase, row: EmailRow): Promise<EmailRecor
     to: ofKind('to'),
     cc: ofKind('cc'),
     bcc: ofKind('bcc'),
-    textBlobId: content.textBlobId as EmailRecord['textBlobId'],
-    htmlBlobId: content.htmlBlobId as EmailRecord['htmlBlobId'],
+    textBody: content.textBody,
+    htmlBody: content.htmlBody,
     parserVersion: content.parserVersion,
     parseWarnings: content.parseWarnings ?? [],
     parts: parts.map(mapPart),
@@ -221,8 +225,8 @@ const hydrateEmails = async (db: MailDatabase, rows: EmailRow[]): Promise<EmailR
       to: ofKind('to'),
       cc: ofKind('cc'),
       bcc: ofKind('bcc'),
-      textBlobId: content.textBlobId as EmailRecord['textBlobId'],
-      htmlBlobId: content.htmlBlobId as EmailRecord['htmlBlobId'],
+      textBody: content.textBody,
+      htmlBody: content.htmlBody,
       parserVersion: content.parserVersion,
       parseWarnings: content.parseWarnings ?? [],
       parts: parts.filter(({ emailId }) => emailId === row.id).map(mapPart),
@@ -266,7 +270,20 @@ const insertParts = async (
 ): Promise<void> => {
   for (const [position, part] of parts.entries()) {
     await db.insert(emailPart).values({
-      ...part,
+      id: part.id,
+      parentPartId: part.parentPartId,
+      partPath: part.partPath,
+      contentType: part.contentType,
+      charset: part.charset,
+      disposition: part.disposition,
+      filename: part.filename,
+      contentId: part.contentId,
+      rawBlobId: part.rawBlobId,
+      offsetStart: part.offsetStart,
+      encodedLength: part.encodedLength,
+      decodedLength: part.decodedLength,
+      transferEncoding: part.transferEncoding,
+      kind: part.kind,
       mailAccountId: record.accountId,
       emailId: record.id,
       position,
@@ -305,8 +322,8 @@ const insertRelations = async (db: MailDatabase, record: EmailRecord): Promise<v
     mailAccountId: record.accountId,
     emailId: record.id,
     parserVersion: record.parserVersion,
-    textBlobId: record.textBlobId,
-    htmlBlobId: record.htmlBlobId,
+    textBody: record.textBody,
+    htmlBody: record.htmlBody,
     preview: record.preview,
     parseWarnings: record.parseWarnings,
   });
@@ -390,6 +407,21 @@ export const createEmailRepository = (db: MailDatabase): EmailRepository => {
           const record = byId.get(id);
           return record === undefined ? [] : [record];
         });
+      }),
+    findPartById: (accountId, partId) =>
+      runAdapter(async () => {
+        const rows = await db
+          .select()
+          .from(emailPart)
+          .where(and(eq(emailPart.mailAccountId, accountId), eq(emailPart.id, partId)))
+          .limit(1);
+        const row = rows[0];
+        return row === undefined
+          ? null
+          : {
+              emailId: row.emailId as EmailId,
+              part: mapPart(row),
+            };
       }),
     existsOutsideAccount: (accountId, id) =>
       runAdapter(async () => {
@@ -549,7 +581,7 @@ export const createEmailRepository = (db: MailDatabase): EmailRepository => {
           }
         }
         if (
-          ['preview', 'textBlobId', 'htmlBlobId', 'parserVersion', 'parseWarnings'].some(
+          ['preview', 'textBody', 'htmlBody', 'parserVersion', 'parseWarnings'].some(
             (key) => key in patch,
           )
         ) {
@@ -557,8 +589,8 @@ export const createEmailRepository = (db: MailDatabase): EmailRepository => {
             .update(emailContent)
             .set({
               ...('preview' in patch ? { preview: patch.preview } : {}),
-              ...('textBlobId' in patch ? { textBlobId: patch.textBlobId } : {}),
-              ...('htmlBlobId' in patch ? { htmlBlobId: patch.htmlBlobId } : {}),
+              ...('textBody' in patch ? { textBody: patch.textBody } : {}),
+              ...('htmlBody' in patch ? { htmlBody: patch.htmlBody } : {}),
               ...('parserVersion' in patch ? { parserVersion: patch.parserVersion } : {}),
               ...('parseWarnings' in patch ? { parseWarnings: patch.parseWarnings } : {}),
             })

@@ -467,6 +467,15 @@ const createRepositories = (
         return record === null ? [] : [record];
       });
     },
+    async findPartById(accountId, partId) {
+      for (const email of listScoped(state.emails, accountId)) {
+        const part = email.parts.find(({ id }) => id === partId);
+        if (part !== undefined) {
+          return { emailId: email.id, part: copy(part) };
+        }
+      }
+      return null;
+    },
     async existsOutsideAccount(accountId, id) {
       return [...state.emails.values()].some(
         (candidate) => candidate.id === id && candidate.accountId !== accountId,
@@ -1317,8 +1326,8 @@ export const createMemoryMailInspector = (
         to: [],
         cc: [],
         bcc: [],
-        textBlobId: null,
-        htmlBlobId: null,
+        textBody: '',
+        htmlBody: '',
         parserVersion: 1,
         parseWarnings: [],
         parts: [],

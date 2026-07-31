@@ -57,16 +57,16 @@ Zero 采用“单后端进程、内部职责分层、PostgreSQL 持久化任务�
 
 ## 4. 当前 Cloudflare 能力及替代关系
 
-| 当前能力 | 实际职责 | Node.js 替代 |
-| --- | --- | --- |
-| Worker `fetch` | Hono HTTP、认证、tRPC、Webhook | `@hono/node-server` |
-| Hyperdrive | PostgreSQL 连接字符串 | 共享 PostgreSQL 连接池 |
-| Cloudflare Queue | 收件同步和投递命令 | PostgreSQL 持久化邮件任务 |
-| Cloudflare Cron | 扫描到期同步、投递和 Snooze | 进程内调度器 |
-| R2 | 邮件正文和附件 Blob | 本地文件 `BlobStore` 和 Docker 数据卷 |
-| Durable Object | 包装用户维度 PostgreSQL 查询 | 普通 Repository/Application Service |
-| `waitUntil()` | Nango 初始化和后台更新 | 启动生命周期和显式异步处理 |
-| Protocol Worker HTTP | IMAP/SMTP 跨容器调用 | 进程内 TypeScript 接口调用 |
+| 当前能力             | 实际职责                       | Node.js 替代                          |
+| -------------------- | ------------------------------ | ------------------------------------- |
+| Worker `fetch`       | Hono HTTP、认证、tRPC、Webhook | `@hono/node-server`                   |
+| Hyperdrive           | PostgreSQL 连接字符串          | 共享 PostgreSQL 连接池                |
+| Cloudflare Queue     | 收件同步和投递命令             | PostgreSQL 持久化邮件任务             |
+| Cloudflare Cron      | 扫描到期同步、投递和 Snooze    | 进程内调度器                          |
+| R2                   | 邮件正文和附件 Blob            | 本地文件 `BlobStore` 和 Docker 数据卷 |
+| Durable Object       | 包装用户维度 PostgreSQL 查询   | 普通 Repository/Application Service   |
+| `waitUntil()`        | Nango 初始化和后台更新         | 启动生命周期和显式异步处理            |
+| Protocol Worker HTTP | IMAP/SMTP 跨容器调用           | 进程内 TypeScript 接口调用            |
 
 Durable Object 当前不保存 Durable Object Storage 数据，只是把 PostgreSQL 查询包装成 RPC，因此删除该包装层不需要迁移业务数据。
 
@@ -247,7 +247,7 @@ Compose 为该目录挂载独立命名卷。数据库继续保存 Blob 元数据
 
 ### 9.3 后续扩展
 
-`BlobStore` 接口保持不变，以后可以增加 S3/MinIO 驱动。本阶段不新增 MinIO 容器，也不保留 R2 兼容层。
+`BlobStore` 接口保持不变，以后可以增加外部 S3 驱动。本阶段不新增内置对象存储容器，也不保留 R2 兼容层。
 
 ## 10. Durable Object 移除
 
@@ -486,7 +486,7 @@ Server 删除：
 
 - 把前端资源合并进 Server；
 - 改变现有前端 API 契约；
-- 新增 MinIO、S3 或其他对象存储服务；
+- 新增内置对象存储服务；
 - 新增 BullMQ；
 - 修改 Gmail、Outlook、Zoho 或 IMAP/SMTP 的业务能力边界；
 - 增加完整历史邮件同步；

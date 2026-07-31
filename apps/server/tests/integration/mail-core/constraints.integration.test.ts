@@ -50,8 +50,8 @@ const record = (
     to: [],
     cc: [],
     bcc: [],
-    textBlobId: null,
-    htmlBlobId: null,
+    textBody: '',
+    htmlBody: '',
     parserVersion: 1,
     parseWarnings: [],
     parts: [],
@@ -145,7 +145,11 @@ describe('PostgreSQL account-scoped constraints', () => {
                 disposition: 'attachment',
                 filename: null,
                 contentId: null,
-                blobId: foreignBlob,
+                rawBlobId: foreignBlob,
+                offsetStart: 0n,
+                encodedLength: 1n,
+                decodedLength: 1n,
+                transferEncoding: 'binary',
                 sizeBytes: 1n,
                 kind: 'attachment',
               },
@@ -161,7 +165,10 @@ describe('PostgreSQL account-scoped constraints', () => {
           sendAt: now,
           idempotencyKey: 'constraint-foreign-submission',
           draftRevision: 0,
-          frozenBlobs: [],
+          rawBlobId: foreignBlob,
+          rawSha256: `sha-${foreignBlob}`,
+          rawSizeBytes: 1n,
+          rawObjectKey: `constraint/${foreignBlob}`,
           providerMessageId: null,
           lastErrorCode: null,
           lastErrorMessage: null,
@@ -193,7 +200,11 @@ describe('PostgreSQL account-scoped constraints', () => {
         disposition: 'attachment',
         filename: null,
         contentId: null,
-        blobId: null,
+        rawBlobId: primaryBlob,
+        offsetStart: 0n,
+        encodedLength: 1n,
+        decodedLength: 1n,
+        transferEncoding: 'binary',
         sizeBytes: 1n,
         kind: 'attachment',
         ...overrides,
@@ -207,7 +218,10 @@ describe('PostgreSQL account-scoped constraints', () => {
         sendAt: now,
         idempotencyKey: `constraint-primary-${nextEmail}`,
         draftRevision: 0,
-        frozenBlobs: [],
+        rawBlobId: primaryBlob,
+        rawSha256: `sha-${primaryBlob}`,
+        rawSizeBytes: 1n,
+        rawObjectKey: `constraint/${primaryBlob}`,
         providerMessageId: null,
         lastErrorCode: null,
         lastErrorMessage: null,
@@ -229,17 +243,26 @@ describe('PostgreSQL account-scoped constraints', () => {
       await expectCrossAccount(probe({ replyToEmailId: foreignEmail }));
       await expectCrossAccount(probe({ mailboxIds: [foreign.inbox.id] }));
       await expectCrossAccount(probe({ restoreMailboxIds: [foreign.inbox.id] }));
-      await expectCrossAccount(probe({ textBlobId: foreignBlob }));
-      await expectCrossAccount(probe({ htmlBlobId: foreignBlob }));
-      await expectCrossAccount(probe({ parts: [part({ blobId: foreignBlob })] }));
+      await expectCrossAccount(probe({ parts: [part({ rawBlobId: foreignBlob })] }));
       await expectCrossAccount(
-        probe({ parts: [part({ parentPartId: foreignPart, blobId: primaryBlob })] }),
+        probe({ parts: [part({ parentPartId: foreignPart, rawBlobId: primaryBlob })] }),
       );
       await expectCrossAccount(
         unitOfWork.run((tx) => tx.submissions.insert(submission({ emailId: foreignEmail }))),
       );
       await expectCrossAccount(
         unitOfWork.run((tx) => tx.submissions.insert(submission({ identityId: foreignIdentity }))),
+      );
+      await expectCrossAccount(
+        unitOfWork.run((tx) =>
+          tx.submissions.insert(
+            submission({
+              rawBlobId: foreignBlob,
+              rawSha256: `sha-${foreignBlob}`,
+              rawObjectKey: `constraint/${foreignBlob}`,
+            }),
+          ),
+        ),
       );
       await expectCrossAccount(
         unitOfWork.run((tx) =>

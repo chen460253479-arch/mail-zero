@@ -1,10 +1,4 @@
-import type {
-  BlobRecord,
-  SubmissionBlobReference,
-  SubmissionRecord,
-  MailCoreDependencies,
-  MailTransaction,
-} from '../store';
+import type { BlobRecord, SubmissionRecord, MailCoreDependencies, MailTransaction } from '../store';
 import type { CreateSubmissionInput } from './types';
 import type { EmailSubmissionId } from '../types';
 import { MailCoreError } from '../types';
@@ -73,26 +67,20 @@ const requireFrozenBlob = async (
   tx: MailTransaction,
   accountId: CreateSubmissionInput['accountId'],
   blobId: NonNullable<Awaited<ReturnType<MailTransaction['emails']['findById']>>>['blobId'],
-  kind: SubmissionBlobReference['kind'],
-  position: number,
-  contentType?: string,
-): Promise<SubmissionBlobReference | null> => {
+): Promise<BlobRecord> => {
   if (blobId === null) {
-    return null;
+    throw new MailCoreError('BLOB_NOT_FOUND');
   }
   const blob: BlobRecord | null = await tx.blobs.findById(accountId, blobId);
-  if (blob === null || blob.status !== 'ready' || blob.deletedAt !== null) {
+  if (
+    blob === null ||
+    blob.status !== 'ready' ||
+    blob.deletedAt !== null ||
+    blob.contentType !== 'message/rfc822'
+  ) {
     throw new MailCoreError('BLOB_NOT_FOUND', { entityId: blobId });
   }
-  return {
-    blobId: blob.id,
-    kind,
-    position,
-    sha256: blob.sha256,
-    sizeBytes: blob.sizeBytes,
-    contentType: contentType ?? blob.contentType,
-    objectKey: blob.objectKey,
-  };
+  return blob;
 };
 
 export async function createSubmissionInTransaction(
@@ -141,34 +129,7 @@ export async function createSubmissionInTransaction(
   if (email.blobId === null) {
     throw new MailCoreError('BLOB_NOT_FOUND', { entityId: email.id });
   }
-  const frozenParts = email.parts.filter(
-    (part): part is typeof part & { blobId: NonNullable<typeof part.blobId> } =>
-      part.kind !== 'body' && part.blobId !== null,
-  );
-  const frozenBlobs = (
-    await Promise.all([
-      requireFrozenBlob(tx, input.accountId, email.blobId, 'raw', 0, 'message/rfc822'),
-      requireFrozenBlob(
-        tx,
-        input.accountId,
-        email.textBlobId,
-        'text',
-        0,
-        'text/plain; charset=utf-8',
-      ),
-      requireFrozenBlob(
-        tx,
-        input.accountId,
-        email.htmlBlobId,
-        'html',
-        0,
-        'text/html; charset=utf-8',
-      ),
-      ...frozenParts.map((part, position) =>
-        requireFrozenBlob(tx, input.accountId, part.blobId, 'part', position, part.contentType),
-      ),
-    ])
-  ).filter((blob): blob is SubmissionBlobReference => blob !== null);
+  const frozenRaw = await requireFrozenBlob(tx, input.accountId, email.blobId);
   if (email.to.length + email.cc.length + email.bcc.length === 0) {
     throw new MailCoreError('INVALID_EMAIL', { entityId: email.id });
   }
@@ -183,7 +144,10 @@ export async function createSubmissionInTransaction(
     sendAt,
     idempotencyKey: input.idempotencyKey,
     draftRevision: email.draftRevision,
-    frozenBlobs,
+    rawBlobId: frozenRaw.id,
+    rawSha256: frozenRaw.sha256,
+    rawSizeBytes: frozenRaw.sizeBytes,
+    rawObjectKey: frozenRaw.objectKey,
     providerMessageId: null,
     lastErrorCode: null,
     lastErrorMessage: null,

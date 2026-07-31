@@ -7,7 +7,7 @@ import {
   destroyDraft,
   garbageCollectBlobs,
   importEmail,
-  parseRawEmail,
+  uploadBlob,
   updateDraft,
   updateEmail,
   updateIdentity,
@@ -25,9 +25,9 @@ import {
   emailMailbox,
   emailPart,
   emailSearch,
+  emailSubmission,
   mailChange,
   mailIdentity,
-  submissionBlob,
 } from '../../../src/modules/mail/postgres/schema';
 import { createPostgresMailTestHarness } from '../../helpers/mail-core/harness';
 import { withMailTestDatabase } from '../../helpers/mail-core/database';
@@ -58,7 +58,7 @@ const startTogether = async <Result>(
 };
 
 describe('final review PostgreSQL invariants', () => {
-  it('freezes ordered Submission payloads through Draft destruction and GC', () =>
+  it('freezes one Raw MIME Submission payload through Draft destruction and GC', () =>
     withMailTestDatabase(async ({ db, unitOfWork }) => {
       const h = await createPostgresMailTestHarness(db, unitOfWork, 'frozen-payload');
       const identity = await createIdentity(h.dependencies, {
@@ -68,17 +68,10 @@ describe('final review PostgreSQL invariants', () => {
         replyTo: null,
         makeDefault: true,
       });
-      const source = await createDraft(h.dependencies, {
+      const attachment = await uploadBlob(h.dependencies, {
         accountId: h.accountId,
-        identityId: identity.id,
-        replyToEmailId: null,
-        to: [{ email: 'recipient@example.test' }],
-        cc: [],
-        bcc: [],
-        subject: 'Attachment source',
-        textBody: 'attachment bytes',
-        htmlBody: '',
-        attachmentBlobIds: [],
+        bytes: new TextEncoder().encode('attachment bytes'),
+        contentType: 'application/octet-stream',
       });
       const draft = await createDraft(h.dependencies, {
         accountId: h.accountId,
@@ -90,7 +83,7 @@ describe('final review PostgreSQL invariants', () => {
         subject: 'Frozen payload',
         textBody: 'original payload',
         htmlBody: '<p>original payload</p>',
-        attachmentBlobIds: [source.textBlobId!],
+        attachmentBlobIds: [attachment.blob.id],
       });
       const rawRecord = await unitOfWork.run((tx) => tx.blobs.findById(h.accountId, draft.blobId!));
       const rawBefore = await h.blobStore.get({
@@ -105,12 +98,12 @@ describe('final review PostgreSQL invariants', () => {
         sendAt: null,
       });
 
-      expect(submission.frozenBlobs.map(({ kind, position }) => [kind, position])).toEqual([
-        ['raw', 0],
-        ['text', 0],
-        ['html', 0],
-        ['part', 0],
-      ]);
+      expect(submission).toMatchObject({
+        rawBlobId: draft.blobId,
+        rawSha256: rawRecord!.sha256,
+        rawSizeBytes: rawRecord!.sizeBytes,
+        rawObjectKey: rawRecord!.objectKey,
+      });
       await updateDraft(h.dependencies, {
         accountId: h.accountId,
         emailId: draft.id,
@@ -137,9 +130,8 @@ describe('final review PostgreSQL invariants', () => {
       const loaded = await unitOfWork.run((tx) =>
         tx.submissions.findById(h.accountId, submission.id),
       );
-      const frozenRaw = loaded!.frozenBlobs.find(({ kind }) => kind === 'raw')!;
       const preserved = await unitOfWork.run((tx) =>
-        tx.blobs.findById(h.accountId, frozenRaw.blobId),
+        tx.blobs.findById(h.accountId, loaded!.rawBlobId),
       );
       expect(preserved).not.toBeNull();
       await expect(
@@ -169,18 +161,19 @@ describe('final review PostgreSQL invariants', () => {
         htmlBody: '',
         attachmentBlobIds: [],
       });
+      const foreignRawRecord = await unitOfWork.run((tx) =>
+        tx.blobs.findById(foreign.accountId, foreignDraft.blobId!),
+      );
       await expect(
-        db.insert(submissionBlob).values({
-          mailAccountId: h.accountId,
-          submissionId: submission.id,
-          blobId: foreignDraft.textBlobId!,
-          kind: 'part',
-          position: 99,
-          sha256: '0'.repeat(64),
-          sizeBytes: 1n,
-          contentType: 'application/octet-stream',
-          objectKey: 'mail/invalid',
-        }),
+        db
+          .update(emailSubmission)
+          .set({
+            rawBlobId: foreignDraft.blobId!,
+            rawSha256: foreignRawRecord!.sha256,
+            rawSizeBytes: foreignRawRecord!.sizeBytes,
+            rawObjectKey: foreignRawRecord!.objectKey,
+          })
+          .where(eq(emailSubmission.id, submission.id)),
       ).rejects.toBeInstanceOf(Error);
     }));
 
@@ -382,8 +375,8 @@ describe('final review PostgreSQL invariants', () => {
       ).toEqual([
         expect.objectContaining({
           preview: '',
-          textBlobId: null,
-          htmlBlobId: null,
+          textBody: '',
+          htmlBody: '',
           parseWarnings: [],
         }),
       ]);
@@ -443,9 +436,7 @@ describe('final review PostgreSQL invariants', () => {
           'new import body',
         ].join('\r\n'),
       );
-      const parsed = await parseRawEmail(raw, { sanitizeHtml: (html) => html });
-      const importOnlyQuota =
-        BigInt(raw.byteLength) + BigInt(new TextEncoder().encode(parsed.textBody).byteLength);
+      const importOnlyQuota = BigInt(raw.byteLength);
       await unitOfWork.run((tx) =>
         tx.accounts.update(h.accountId, {
           storageQuotaBytes: importOnlyQuota,
@@ -469,7 +460,7 @@ describe('final review PostgreSQL invariants', () => {
       expect(await unitOfWork.run((tx) => tx.emails.listByAccount(h.accountId))).toEqual(before);
     }));
 
-  it('stores one Blob metadata row for repeated identical Draft body bytes', () =>
+  it('stores one Blob metadata row for repeated identical Draft Raw MIME bytes', () =>
     withMailTestDatabase(async ({ db, unitOfWork }) => {
       const h = await createPostgresMailTestHarness(db, unitOfWork, 'blob-dedup');
       const identity = await createIdentity(h.dependencies, {
@@ -498,16 +489,16 @@ describe('final review PostgreSQL invariants', () => {
         expectedRevision: 1,
         content,
       });
-      expect(updated.textBlobId).toBe(draft.textBlobId);
-      const text = await unitOfWork.run((tx) => tx.blobs.findById(h.accountId, draft.textBlobId!));
+      expect(updated.blobId).toBe(draft.blobId);
+      const raw = await unitOfWork.run((tx) => tx.blobs.findById(h.accountId, draft.blobId!));
       const rows = await db
         .select()
         .from(blob)
         .where(
           and(
             eq(blob.mailAccountId, h.accountId),
-            eq(blob.sha256, text!.sha256),
-            eq(blob.sizeBytes, text!.sizeBytes),
+            eq(blob.sha256, raw!.sha256),
+            eq(blob.sizeBytes, raw!.sizeBytes),
           ),
         );
       expect(rows).toHaveLength(1);

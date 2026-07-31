@@ -59,6 +59,34 @@ describe('Mail Blob HTTP routes', () => {
     expect(runtimeMocks.close).toHaveBeenCalledOnce();
   });
 
+  it('serves an EmailPart virtual Blob from its Raw MIME section', async () => {
+    runtimeMocks.openAccessible.mockResolvedValue({
+      core: {
+        getBlob: vi.fn(async () => {
+          throw new MailCoreError('BLOB_NOT_FOUND');
+        }),
+        readBlob: vi.fn(),
+        readEmailPartById: vi.fn(async () => ({
+          bytes: new Uint8Array([4, 3, 2, 1]),
+          contentType: 'application/pdf',
+          disposition: 'attachment',
+          filename: 'invoice.pdf',
+          contentId: null,
+          sizeBytes: 4n,
+        })),
+      },
+      close: runtimeMocks.close,
+    });
+
+    const response = await createApp().request('/mail/accounts/account-1/blobs/part-1/invoice.pdf');
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-length')).toBe('4');
+    expect(response.headers.get('content-type')).toBe('application/pdf');
+    expect(response.headers.get('content-disposition')).toBe('attachment; filename="invoice.pdf"');
+    expect(runtimeMocks.close).toHaveBeenCalledOnce();
+  });
+
   it('rejects an oversized upload before buffering the request body', async () => {
     const response = await createApp().request('/mail/accounts/account-1/blobs', {
       method: 'POST',

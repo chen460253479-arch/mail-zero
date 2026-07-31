@@ -98,20 +98,6 @@ describe('local mail schema', () => {
       false,
     ],
     [
-      'Email text Blob FK',
-      schema.emailContent,
-      'email_content_text_blob_account_idx',
-      ['text_blob_id', 'mail_account_id'],
-      false,
-    ],
-    [
-      'Email HTML Blob FK',
-      schema.emailContent,
-      'email_content_html_blob_account_idx',
-      ['html_blob_id', 'mail_account_id'],
-      false,
-    ],
-    [
       'Email Part parent FK',
       schema.emailPart,
       'email_part_parent_email_account_idx',
@@ -119,10 +105,10 @@ describe('local mail schema', () => {
       false,
     ],
     [
-      'Email Part Blob FK',
+      'Email Part Raw Blob FK',
       schema.emailPart,
-      'email_part_blob_account_idx',
-      ['blob_id', 'mail_account_id'],
+      'email_part_raw_blob_account_idx',
+      ['raw_blob_id', 'mail_account_id'],
       false,
     ],
     [
@@ -144,6 +130,13 @@ describe('local mail schema', () => {
       schema.emailSubmission,
       'email_submission_identity_account_idx',
       ['identity_id', 'mail_account_id'],
+      false,
+    ],
+    [
+      'Submission Raw Blob FK',
+      schema.emailSubmission,
+      'email_submission_raw_blob_account_idx',
+      ['raw_blob_id', 'mail_account_id'],
       false,
     ],
   ] as const)(
@@ -269,7 +262,6 @@ describe('local mail schema', () => {
         'emailPart',
         'mailIdentity',
         'emailSubmission',
-        'submissionBlob',
         'outboundDelivery',
         'sendAttempt',
         'remoteEmail',
@@ -279,16 +271,10 @@ describe('local mail schema', () => {
     );
   });
 
-  it('freezes Submission Blob references with account-composite foreign keys', () => {
-    const config = getTableConfig(schema.submissionBlob);
-    expect(config.foreignKeys.map((foreignKey) => foreignKey.getName())).toEqual(
-      expect.arrayContaining([
-        'submission_blob_submission_account_fk',
-        'submission_blob_blob_account_fk',
-      ]),
-    );
-    expect(config.uniqueConstraints.map((constraint) => constraint.getName())).toContain(
-      'submission_blob_account_submission_kind_position_uidx',
+  it('freezes the Submission Raw MIME with an account-composite foreign key', () => {
+    const config = getTableConfig(schema.emailSubmission);
+    expect(config.foreignKeys.map((foreignKey) => foreignKey.getName())).toContain(
+      'email_submission_raw_blob_account_fk',
     );
   });
 
@@ -351,6 +337,31 @@ describe('local mail schema', () => {
     expect(schema.email.references.getSQLType()).toBe('text[]');
   });
 
+  it('stores one Raw MIME object with body projections and BlobSection metadata', () => {
+    const contentColumns = getTableConfig(schema.emailContent).columns.map(({ name }) => name);
+    const partColumns = getTableConfig(schema.emailPart).columns.map(({ name }) => name);
+    const submissionColumns = getTableConfig(schema.emailSubmission).columns.map(
+      ({ name }) => name,
+    );
+
+    expect(contentColumns).toEqual(expect.arrayContaining(['text_body', 'html_body']));
+    expect(contentColumns).not.toEqual(expect.arrayContaining(['text_blob_id', 'html_blob_id']));
+    expect(partColumns).toEqual(
+      expect.arrayContaining([
+        'raw_blob_id',
+        'offset_start',
+        'encoded_length',
+        'decoded_length',
+        'transfer_encoding',
+      ]),
+    );
+    expect(partColumns).not.toContain('blob_id');
+    expect(submissionColumns).toEqual(
+      expect.arrayContaining(['raw_blob_id', 'raw_sha256', 'raw_size_bytes', 'raw_object_key']),
+    );
+    expect(schema).not.toHaveProperty('submissionBlob');
+  });
+
   it('persists and indexes normalized Email query fields', () => {
     const emailConfig = getTableConfig(schema.email);
     const addressConfig = getTableConfig(schema.emailAddress);
@@ -406,7 +417,11 @@ describe('local mail schema', () => {
     [
       'Submission',
       schema.emailSubmission,
-      ['email_submission_status_check', 'email_submission_draft_revision_nonnegative_check'],
+      [
+        'email_submission_status_check',
+        'email_submission_draft_revision_nonnegative_check',
+        'email_submission_raw_size_nonnegative_check',
+      ],
     ],
     [
       'Attempt',

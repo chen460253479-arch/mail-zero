@@ -258,8 +258,8 @@ export const emailContent = createMailTable(
       .references(() => mailAccount.id, { onDelete: 'cascade' }),
     emailId: text('email_id').notNull(),
     parserVersion: integer('parser_version').notNull(),
-    textBlobId: text('text_blob_id'),
-    htmlBlobId: text('html_blob_id'),
+    textBody: text('text_body').notNull().default(''),
+    htmlBody: text('html_body').notNull().default(''),
     preview: text('preview'),
     parseWarnings: text('parse_warnings').array(),
     parsedAt: timestamp('parsed_at', { withTimezone: true }).notNull().defaultNow(),
@@ -275,18 +275,6 @@ export const emailContent = createMailTable(
       columns: [t.emailId, t.mailAccountId],
       foreignColumns: [email.id, email.mailAccountId],
     }).onDelete('cascade'),
-    foreignKey({
-      name: 'email_content_text_blob_account_fk',
-      columns: [t.textBlobId, t.mailAccountId],
-      foreignColumns: [blob.id, blob.mailAccountId],
-    }).onDelete('restrict'),
-    foreignKey({
-      name: 'email_content_html_blob_account_fk',
-      columns: [t.htmlBlobId, t.mailAccountId],
-      foreignColumns: [blob.id, blob.mailAccountId],
-    }).onDelete('restrict'),
-    index('email_content_text_blob_account_idx').on(t.textBlobId, t.mailAccountId),
-    index('email_content_html_blob_account_idx').on(t.htmlBlobId, t.mailAccountId),
   ],
 );
 
@@ -306,18 +294,30 @@ export const emailPart = createMailTable(
     disposition: text('disposition').$type<'inline' | 'attachment'>(),
     filename: text('filename'),
     contentId: text('content_id'),
-    blobId: text('blob_id'),
-    sizeBytes: bigint('size_bytes', { mode: 'bigint' }).notNull(),
+    rawBlobId: text('raw_blob_id').notNull(),
+    offsetStart: bigint('offset_start', { mode: 'bigint' }).notNull(),
+    encodedLength: bigint('encoded_length', { mode: 'bigint' }).notNull(),
+    decodedLength: bigint('decoded_length', { mode: 'bigint' }).notNull(),
+    transferEncoding: text('transfer_encoding')
+      .$type<'7bit' | '8bit' | 'binary' | 'base64' | 'quoted-printable'>()
+      .notNull(),
     kind: text('kind').$type<'body' | 'inline' | 'attachment'>().notNull(),
   },
   (t) => [
     check('email_part_position_nonnegative_check', sql`${t.position} >= 0`),
-    check('email_part_size_nonnegative_check', sql`${t.sizeBytes} >= 0`),
+    check(
+      'email_part_section_nonnegative_check',
+      sql`${t.offsetStart} >= 0 AND ${t.encodedLength} >= 0 AND ${t.decodedLength} >= 0`,
+    ),
     check(
       'email_part_disposition_check',
       sql`${t.disposition} IS NULL OR ${t.disposition} IN ('inline', 'attachment')`,
     ),
     check('email_part_kind_check', sql`${t.kind} IN ('body', 'inline', 'attachment')`),
+    check(
+      'email_part_transfer_encoding_check',
+      sql`${t.transferEncoding} IN ('7bit', '8bit', 'binary', 'base64', 'quoted-printable')`,
+    ),
     unique('email_part_id_account_uidx').on(t.id, t.mailAccountId),
     unique('email_part_id_email_account_uidx').on(t.id, t.emailId, t.mailAccountId),
     unique('email_part_account_email_path_uidx').on(t.mailAccountId, t.emailId, t.partPath),
@@ -333,12 +333,12 @@ export const emailPart = createMailTable(
       foreignColumns: [t.id, t.emailId, t.mailAccountId],
     }).onDelete('cascade'),
     foreignKey({
-      name: 'email_part_blob_account_fk',
-      columns: [t.blobId, t.mailAccountId],
+      name: 'email_part_raw_blob_account_fk',
+      columns: [t.rawBlobId, t.mailAccountId],
       foreignColumns: [blob.id, blob.mailAccountId],
     }).onDelete('restrict'),
     index('email_part_parent_email_account_idx').on(t.parentPartId, t.emailId, t.mailAccountId),
-    index('email_part_blob_account_idx').on(t.blobId, t.mailAccountId),
+    index('email_part_raw_blob_account_idx').on(t.rawBlobId, t.mailAccountId),
   ],
 );
 

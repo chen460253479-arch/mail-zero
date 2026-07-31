@@ -66,8 +66,8 @@ export async function destroyEmailInTransaction(
     to: [],
     cc: [],
     bcc: [],
-    textBlobId: null,
-    htmlBlobId: null,
+    textBody: '',
+    htmlBody: '',
     parseWarnings: [],
     parts: [],
   });

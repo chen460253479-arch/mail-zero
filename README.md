@@ -88,7 +88,8 @@ You can set up Zero in two ways:
    ```
 
    On PowerShell, use `Copy-Item .env.example .env`. Set at least
-   `CREDENTIAL_ENCRYPTION_KEY`, `BETTER_AUTH_SECRET`, and any API keys you need.
+   `CREDENTIAL_ENCRYPTION_KEY`, `BETTER_AUTH_SECRET`, every required `MAIL_BLOB_S3_*` value, and
+   any provider API keys you need. Prepare the private S3 bucket before starting Server.
 
 2. **Initialize the database**
 
@@ -102,22 +103,22 @@ You can set up Zero in two ways:
    Run `pnpm db:migrate` as part of deployment whenever the database schema changes.
    `pnpm db:push` is a development-only initialization command and refuses production databases.
 
-3. **Start the complete development stack**
+3. **Build and deploy application services independently**
 
    ```bash
-   pnpm docker:deploy
+   pnpm docker:deploy server
+   pnpm docker:deploy mail
    ```
 
    Docker runs Mail as a prebuilt Nginx static site and Server as an immutable native Node.js
-   backend image. The two images remain independently deployable. The deployment command builds
-   the images, starts the complete stack, waits for every service to become healthy, and prints
-   the final service status. It does not initialize, migrate, or clear application database
-   schemas.
+   backend image. Each command requires exactly one `mail` or `server` argument, builds and
+   restarts only that service, waits for it to become healthy, and prints its status. It does not
+   start dependencies, initialize, migrate, or clear application database schemas.
 
    Rebuild only Mail after changing frontend source or any `VITE_PUBLIC_*` value:
 
    ```bash
-   docker compose up --detach --build --no-deps mail
+   pnpm docker:deploy mail
    ```
 
    `docker compose restart mail` only restarts the existing frontend image.
@@ -125,11 +126,11 @@ You can set up Zero in two ways:
    Rebuild only Server after changing backend source:
 
    ```bash
-   docker compose up --detach --build --no-deps server
+   pnpm docker:deploy server
    ```
 
-   Rebuilding Server replaces only the backend container. Local mail blobs remain in the
-   `zero-mail-blobs` volume.
+   Rebuilding Server replaces only the backend container. Complete MIME objects remain in the
+   private S3-compatible object store configured through `MAIL_BLOB_S3_*`.
 
 4. **Manage the stack**
 
@@ -147,7 +148,8 @@ You can set up Zero in two ways:
    Rebuild after changing dependencies or the lockfile:
 
    ```bash
-   docker compose up --build --detach
+   pnpm docker:deploy server
+   pnpm docker:deploy mail
    ```
 
    </details>
@@ -237,8 +239,10 @@ You can set up Zero in two ways:
 
 For Docker development, copy `.env.example` to `.env` and edit the values before starting the
 stack. Docker Compose loads this file directly, so `pnpm nizzy sync` is not required.
-The `ZERO_*_PORT` variables control the self-hosted containers. `MAIL_BLOB_ROOT` points to the
-persistent local-mail blob directory inside Server.
+The `ZERO_*_PORT` variables control the self-hosted containers. `MAIL_BLOB_S3_*` configures the
+private S3-compatible object store used for immutable complete MIME objects. Zero does not bundle
+an object-storage service. Endpoint, region, bucket, prefix, access key, and secret key are required
+before Server can start.
 
 For manual host development, `pnpm nizzy env` creates `.env` and `pnpm nizzy sync` copies it to the
 individual applications.

@@ -9,6 +9,7 @@ import {
   createMailAccount,
   createSubmission,
   destroyDraft,
+  decodeMimeSection,
   importEmail,
   MailCoreError,
   parseRawEmail,
@@ -96,12 +97,12 @@ describe('importEmail', () => {
       raw,
     });
     const email = (await deps.core.inspect.email(result.emailId))!;
-    const bodyBlob = (await deps.core.inspect.blobs(deps.input.accountId)).find(
-      ({ id }) => id === email.textBlobId,
+    const rawBlob = (await deps.core.inspect.blobs(deps.input.accountId)).find(
+      ({ id }) => id === email.blobId,
     )!;
     await deps.core.blobStore.delete({
       accountId: deps.input.accountId,
-      objectKey: bodyBlob.objectKey,
+      objectKey: rawBlob.objectKey,
     });
 
     await expect(
@@ -136,11 +137,11 @@ describe('importEmail', () => {
     });
     expect(stored?.threadId).toBeTruthy();
     expect(stored).not.toHaveProperty('raw');
-    expect(stored).not.toHaveProperty('htmlBody');
+    expect(stored?.htmlBody).toContain('<p>Hello</p>');
     expect(await deps.core.inspect.rawBytes(result.emailId)).toEqual(multipartRaw);
 
     const blobs = await deps.core.inspect.blobs(deps.input.accountId);
-    expect(blobs).toHaveLength(3);
+    expect(blobs).toHaveLength(1);
     expect(blobs.every(({ status }) => status === 'ready')).toBe(true);
     expect(
       blobs.every(
@@ -163,8 +164,9 @@ describe('importEmail', () => {
     }
     expect(inlinePart.parentPartId).not.toBeNull();
     expect(attachmentPart.parentPartId).not.toBeNull();
-    expect(inlinePart.blobId).toBe(attachmentPart.blobId);
-    expect(htmlPart.blobId).toBe(stored.htmlBlobId);
+    expect(inlinePart.rawBlobId).toBe(stored.blobId);
+    expect(attachmentPart.rawBlobId).toBe(stored.blobId);
+    expect(htmlPart.rawBlobId).toBe(stored.blobId);
     const rebuilt = await parseRawEmail(multipartRaw, {
       sanitizeHtml: (html) => html,
     });
@@ -188,25 +190,22 @@ describe('importEmail', () => {
         kind,
       })),
     );
-    const attachmentBlob = blobs.find(({ id }) => id === inlinePart.blobId)!;
-    await expect(
-      deps.core.blobStore.get({
-        accountId: deps.input.accountId,
-        objectKey: attachmentBlob.objectKey,
-      }),
-    ).resolves.toEqual(new Uint8Array([1, 2, 3, 4]));
-    const htmlBlob = blobs.find(({ id }) => id === stored?.htmlBlobId)!;
+    const rawBlob = blobs.find(({ id }) => id === inlinePart.rawBlobId)!;
+    const inlineEncoded = await deps.core.blobStore.getRange({
+      accountId: deps.input.accountId,
+      objectKey: rawBlob.objectKey,
+      offset: Number(inlinePart.offsetStart),
+      length: Number(inlinePart.encodedLength),
+    });
+    expect(decodeMimeSection(inlineEncoded, inlinePart.transferEncoding)).toEqual(
+      new Uint8Array([1, 2, 3, 4]),
+    );
     const expectedHtml = (
       await parseRawEmail(multipartRaw, {
         sanitizeHtml: (html) => html,
       })
     ).htmlBody;
-    await expect(
-      deps.core.blobStore.get({
-        accountId: deps.input.accountId,
-        objectKey: htmlBlob.objectKey,
-      }),
-    ).resolves.toEqual(new TextEncoder().encode(expectedHtml));
+    expect(stored.htmlBody).toBe(expectedHtml);
 
     const importChanges = (await deps.core.inspect.changes(deps.input.accountId)).filter(
       ({ stateVersion }) => stateVersion === 2n,
@@ -229,7 +228,7 @@ describe('importEmail', () => {
     expect(await deps.core.inspect.stateVersion(deps.input.accountId)).toBe(2n);
   });
 
-  it('persists each body leaf with its own decoded bytes instead of the aggregate body Blob', async () => {
+  it('reads each body leaf from its own Raw MIME BlobSection', async () => {
     const deps = await createSeededImportDependencies();
     const raw = new TextEncoder().encode(
       [
@@ -262,19 +261,19 @@ describe('importEmail', () => {
       throw new Error('expected imported Email');
     }
     const blobs = await deps.core.inspect.blobs(deps.input.accountId);
+    const rawBlob = blobs.find(({ id }) => id === stored.blobId)!;
     const decoder = new TextDecoder();
     const bodyBytes = await Promise.all(
       stored.parts
         .filter(({ contentType }) => contentType === 'text/plain')
-        .map(async ({ blobId }) => {
-          const blob = blobs.find(({ id }) => id === blobId);
-          if (blob === undefined) {
-            throw new Error('expected body Blob');
-          }
-          return deps.core.blobStore.get({
+        .map(async (part) => {
+          const encoded = await deps.core.blobStore.getRange({
             accountId: deps.input.accountId,
-            objectKey: blob.objectKey,
+            objectKey: rawBlob.objectKey,
+            offset: Number(part.offsetStart),
+            length: Number(part.encodedLength),
           });
+          return decodeMimeSection(encoded, part.transferEncoding);
         }),
     );
 
@@ -389,12 +388,7 @@ describe('importEmail', () => {
   );
 
   it('counts only unique newly referenced bytes against quota and reuses ready content', async () => {
-    const parsed = await parseRawEmail(multipartRaw, {
-      sanitizeHtml: (html) => html,
-    });
-    const uniqueAttachmentSize = parsed.attachments[0]!.sizeBytes;
-    const htmlSize = BigInt(new TextEncoder().encode(parsed.htmlBody).byteLength);
-    const exactQuota = BigInt(multipartRaw.byteLength) + htmlSize + uniqueAttachmentSize;
+    const exactQuota = BigInt(multipartRaw.byteLength);
     const deps = await createSeededImportDependencies({
       storageQuotaBytes: exactQuota,
     });
@@ -407,7 +401,7 @@ describe('importEmail', () => {
 
     expect(first.created).toBe(true);
     expect(second.created).toBe(true);
-    expect(await deps.core.inspect.blobs(deps.input.accountId)).toHaveLength(3);
+    expect(await deps.core.inspect.blobs(deps.input.accountId)).toHaveLength(1);
     expect(await deps.core.inspect.emails(deps.input.accountId)).toHaveLength(2);
   });
 
@@ -463,11 +457,9 @@ describe('importEmail', () => {
       sendAt: null,
     });
     await destroyDraft(deps, { accountId: account.id, emailId: draft.id });
-    expect(submission.frozenBlobs.length).toBeGreaterThan(0);
+    expect(submission.rawBlobId).toBe(draft.blobId);
 
-    const parsed = await parseRawEmail(simpleRaw, { sanitizeHtml: (html) => html });
-    const importOnlyQuota =
-      BigInt(simpleRaw.byteLength) + BigInt(new TextEncoder().encode(parsed.textBody).byteLength);
+    const importOnlyQuota = BigInt(simpleRaw.byteLength);
     await deps.unitOfWork.run((tx) =>
       tx.accounts.update(account.id, {
         storageQuotaBytes: importOnlyQuota,
@@ -498,17 +490,14 @@ describe('importEmail', () => {
   });
 
   it('charges a reused ready Blob when the import makes previously orphaned content referenced', async () => {
-    const parsed = await parseRawEmail(multipartRaw, {
-      sanitizeHtml: (html) => html,
-    });
-    const orphanBytes = parsed.attachments[0]!.bytes;
+    const orphanBytes = multipartRaw;
     const deps = await createSeededImportDependencies({
-      storageQuotaBytes: BigInt(multipartRaw.byteLength),
+      storageQuotaBytes: BigInt(multipartRaw.byteLength - 1),
     });
     const orphan = await deps.core.blobStore.putTemporary({
       accountId: deps.input.accountId,
       bytes: orphanBytes,
-      contentType: 'image/png',
+      contentType: 'message/rfc822',
     });
     const objectKey = 'mail/orphan-attachment';
     await deps.core.blobStore.commitTemporary({
@@ -522,7 +511,7 @@ describe('importEmail', () => {
         accountId: deps.input.accountId,
         sha256: orphan.sha256,
         sizeBytes: orphan.size,
-        contentType: 'image/png',
+        contentType: 'message/rfc822',
         objectKey,
         status: 'ready',
         createdAt: deps.core.clock.now(),
@@ -551,14 +540,14 @@ describe('importEmail', () => {
     const [stored] = await deps.core.inspect.emails(deps.input.accountId);
     expect(stored).toBeDefined();
     expect(await deps.core.inspect.rawBytes(stored!.id)).toEqual(multipartRaw);
-    expect(deps.core.blobStore.snapshot().size).toBe(3);
+    expect(deps.core.blobStore.snapshot().size).toBe(1);
     await expect(importEmail(deps.core, deps.input)).resolves.toEqual({
       created: false,
       emailId: stored!.id,
     });
   });
 
-  it('persists normalized text and sanitized HTML as immutable UTF-8 content Blobs', async () => {
+  it('persists normalized text and sanitized HTML as PostgreSQL body projections', async () => {
     const raw = new TextEncoder().encode(
       [
         'From: Body Sender <body@example.test>',
@@ -589,23 +578,9 @@ describe('importEmail', () => {
       remoteEmailId: 'body-remote',
     });
     const stored = (await deps.core.inspect.email(result.emailId))!;
-    const textBlob = await deps.core.inspect.blob(stored.textBlobId!);
-    const htmlBlob = await deps.core.inspect.blob(stored.htmlBlobId!);
-
-    expect(textBlob).not.toBeNull();
-    expect(htmlBlob).not.toBeNull();
-    await expect(
-      deps.core.blobStore.get({
-        accountId: deps.input.accountId,
-        objectKey: textBlob!.objectKey,
-      }),
-    ).resolves.toEqual(new TextEncoder().encode('Plain body.'));
-    await expect(
-      deps.core.blobStore.get({
-        accountId: deps.input.accountId,
-        objectKey: htmlBlob!.objectKey,
-      }),
-    ).resolves.toEqual(new TextEncoder().encode('<p>HTML body</p>'));
+    expect(stored.textBody).toBe('Plain body.');
+    expect(stored.htmlBody).toBe('<p>HTML body</p>');
+    expect(await deps.core.inspect.blobs(deps.input.accountId)).toHaveLength(1);
   });
 
   it('does not delete a pre-existing destination object when conditional promotion rejects', async () => {
@@ -688,16 +663,13 @@ describe('importEmail', () => {
   it.each(['missing', 'corrupt'] as const)(
     'verifies a reused ready Blob object before publishing when it is %s',
     async (failure) => {
-      const parsed = await parseRawEmail(multipartRaw, {
-        sanitizeHtml: (html) => html,
-      });
-      const expectedBytes = parsed.attachments[0]!.bytes;
+      const expectedBytes = multipartRaw;
       const deps = await createSeededImportDependencies();
       const storedBytes = failure === 'missing' ? expectedBytes : new Uint8Array([4, 3, 2, 1]);
       const pending = await deps.core.blobStore.putTemporary({
         accountId: deps.input.accountId,
         bytes: storedBytes,
-        contentType: 'image/png',
+        contentType: 'message/rfc822',
       });
       const objectKey = `mail/reused-${failure}`;
       await deps.core.blobStore.commitTemporary({
@@ -726,7 +698,7 @@ describe('importEmail', () => {
           accountId: deps.input.accountId,
           sha256: expected.sha256,
           sizeBytes: expected.size,
-          contentType: 'image/png',
+          contentType: 'message/rfc822',
           objectKey,
           status: 'ready',
           createdAt: deps.core.clock.now(),

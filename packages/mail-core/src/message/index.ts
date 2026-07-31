@@ -15,6 +15,18 @@ export {
   type QueryEmailsInput,
 } from './query-emails';
 export { parseRawEmail } from './mime';
+export {
+  readEmailPart,
+  readEmailPartById,
+  type ReadEmailPartByIdInput,
+  type ReadEmailPartInput,
+  type ReadEmailPartResult,
+} from './read-email-part';
+export {
+  decodeMimeSection,
+  indexMimeSections,
+  type IndexedMimeSection,
+} from './mime-section-index';
 export { renderDraft } from './render-draft';
 export { updateDraft } from './update-draft';
 export {
@@ -50,4 +62,6 @@ export type {
   ParsedEmail,
   ParsedPart,
   ParseRawEmailDependencies,
+  BlobSection,
+  MimeTransferEncoding,
 } from './types';

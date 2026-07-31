@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { FrozenOutboundMessage } from '../../../../../src/mail-channel/contracts';
-import type { GmailApiClient } from '../../../../../src/mail-channel/gmail/shared/api-client';
 import { createGmailOutboundAdapter } from '../../../../../src/mail-channel/gmail/outbound/adapter';
+import type { GmailApiClient } from '../../../../../src/mail-channel/gmail/shared/api-client';
+import type { FrozenOutboundMessage } from '../../../../../src/mail-channel/contracts';
 
 const message: FrozenOutboundMessage = {
   accountId: 'account-1',
@@ -29,7 +29,7 @@ const client = (sendRawMessage: GmailApiClient['sendRawMessage']): GmailApiClien
 describe('Gmail outbound adapter', () => {
   it('maps Gmail acceptance without mutating raw bytes', async () => {
     const rawBefore = message.rawMime.slice();
-    const sendRawMessage = vi.fn(async () => ({
+    const sendRawMessage = vi.fn<GmailApiClient['sendRawMessage']>(async () => ({
       id: 'gmail-message',
       threadId: 'gmail-thread',
     }));
@@ -49,6 +49,29 @@ describe('Gmail outbound adapter', () => {
       remoteThreadId: 'thread-1',
     });
     expect(message.rawMime).toEqual(rawBefore);
+  });
+
+  it('adds private Bcc recipients only to the transient Gmail request MIME', async () => {
+    const rawMime = new TextEncoder().encode(
+      'From: sender@example.test\r\nTo: recipient@example.test\r\nMessage-ID: <stable@example.test>\r\n\r\nBody',
+    );
+    const sendRawMessage = vi.fn<GmailApiClient['sendRawMessage']>(async () => ({
+      id: 'gmail-message',
+      threadId: 'gmail-thread',
+    }));
+    const adapter = createGmailOutboundAdapter(client(sendRawMessage), {
+      now: () => new Date('2026-01-01T00:00:05.000Z'),
+    });
+
+    await adapter.send({
+      ...message,
+      envelope: { ...message.envelope, bcc: ['blind@example.test'] },
+      rawMime,
+    });
+
+    const dispatched = sendRawMessage.mock.calls[0]![0].raw;
+    expect(new TextDecoder().decode(dispatched)).toContain('\r\nBcc: blind@example.test\r\n\r\n');
+    expect(new TextDecoder().decode(rawMime)).not.toContain('Bcc:');
   });
 
   it('rejects a Gmail success response without a message ID', async () => {

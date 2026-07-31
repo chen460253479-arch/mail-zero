@@ -77,6 +77,8 @@ describe('mail runtime boundary', () => {
         'queryThreads',
         'readBlob',
         'readBlobRange',
+        'readEmailPart',
+        'readEmailPartById',
         'setEmails',
         'setIdentities',
         'setMailboxes',

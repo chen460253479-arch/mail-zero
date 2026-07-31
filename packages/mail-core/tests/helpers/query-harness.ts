@@ -70,8 +70,8 @@ const emailRecord = (
   cc: [],
   bcc: [],
   preview: '',
-  textBlobId: null,
-  htmlBlobId: null,
+  textBody: '',
+  htmlBody: '',
   parserVersion: 1,
   parseWarnings: [],
   parts: [],
@@ -309,7 +309,7 @@ export const createQueryHarness = async () => {
           emailRecord('email-body-search' as EmailId, threadA, at(7), {
             subject: 'ordinary subject',
             preview: 'short preview',
-            textBlobId: blobId,
+            textBody: 'body-only ultrasecretterm',
           }),
         );
         await tx.emails.publishSearchDocument(queryAccountId, 'email-body-search' as EmailId, {
@@ -338,7 +338,7 @@ export const createQueryHarness = async () => {
         await tx.emails.insert(
           emailRecord('email-foreign' as EmailId, 'thread-foreign' as ThreadId, at(7), {
             accountId: otherQueryAccountId,
-            textBlobId: blobId,
+            textBody: '',
           }),
         );
       }),

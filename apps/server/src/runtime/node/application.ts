@@ -132,6 +132,7 @@ const createApi = (services: RuntimeServices) => {
     .route('/api/integrations', integrationOAuthRouter)
     .on(['GET', 'POST', 'OPTIONS'], '/auth/*', (c) => c.var.auth.handler(c.req.raw))
     .use(
+      '/trpc/*',
       trpcServer({
         endpoint: '/api/trpc',
         router: appRouter,

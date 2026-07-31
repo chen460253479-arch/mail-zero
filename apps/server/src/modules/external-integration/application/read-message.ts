@@ -1,6 +1,5 @@
 import {
   MailCoreError,
-  type BlobId,
   type EmailId,
   type EmailRecord,
   type MailAccountId,
@@ -25,10 +24,7 @@ export type ExternalMessageScope = {
 export type ExternalAttachmentScope = {
   mailAccountId: MailAccountId;
   emailId: EmailId;
-  blobId: BlobId;
-  filename: string | null;
-  contentType: string;
-  sizeBytes: bigint;
+  partId: string;
 };
 
 export interface ExternalMessageRepository {
@@ -38,24 +34,17 @@ export interface ExternalMessageRepository {
 
 type ExternalMessageReaderDependencies = {
   repository: ExternalMessageRepository;
-  core: Pick<MailCore, 'getEmail' | 'getBlob' | 'readBlob'>;
+  core: Pick<MailCore, 'getEmail' | 'readEmailPart'>;
 };
 
 const attachmentParts = (email: EmailRecord) =>
   email.parts.filter(({ kind }) => kind === 'attachment' || kind === 'inline');
 
-const readUtf8Blob = async (
-  dependencies: ExternalMessageReaderDependencies,
-  accountId: MailAccountId,
-  blobId: BlobId | null,
-): Promise<string | null> => {
-  if (blobId === null) return null;
-  const bytes = await dependencies.core.readBlob({
-    accountId,
-    blobId,
-  });
-  return new TextDecoder().decode(bytes);
-};
+const hasBodyPart = (email: EmailRecord, contentType: string) =>
+  email.parts.some(
+    (part) =>
+      part.kind === 'body' && part.contentType.toLocaleLowerCase('und').startsWith(contentType),
+  );
 
 export const createExternalMessageReader = (dependencies: ExternalMessageReaderDependencies) => {
   const getScopedEmail = async (
@@ -117,15 +106,11 @@ export const createExternalMessageReader = (dependencies: ExternalMessageReaderD
     },
 
     async getContent(messageId: string): Promise<ExternalMessageContent> {
-      const { scope, email } = await getScopedEmail(messageId);
-      const [textBody, htmlBody] = await Promise.all([
-        readUtf8Blob(dependencies, scope.mailAccountId, email.textBlobId),
-        readUtf8Blob(dependencies, scope.mailAccountId, email.htmlBlobId),
-      ]);
+      const { email } = await getScopedEmail(messageId);
       return {
         messageId: email.id,
-        textBody,
-        htmlBody,
+        textBody: hasBodyPart(email, 'text/plain') ? email.textBody : null,
+        htmlBody: hasBodyPart(email, 'text/html') ? email.htmlBody : null,
       };
     },
 
@@ -153,19 +138,16 @@ export const createExternalMessageReader = (dependencies: ExternalMessageReaderD
         throw new ExternalIntegrationError('ATTACHMENT_NOT_FOUND');
       }
       try {
-        await dependencies.core.getBlob({
+        const part = await dependencies.core.readEmailPart({
           accountId: scope.mailAccountId,
-          blobId: scope.blobId,
-        });
-        const bytes = await dependencies.core.readBlob({
-          accountId: scope.mailAccountId,
-          blobId: scope.blobId,
+          emailId: scope.emailId,
+          partId: scope.partId,
         });
         return {
-          bytes,
-          filename: scope.filename,
-          contentType: scope.contentType,
-          size: scope.sizeBytes.toString(),
+          bytes: part.bytes,
+          filename: part.filename,
+          contentType: part.contentType,
+          size: part.sizeBytes.toString(),
         };
       } catch (error) {
         if (

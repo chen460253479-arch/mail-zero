@@ -49,7 +49,11 @@ describe('Nango frontend credential boundary', () => {
       schema.indexOf('export const systemIntegrationConfig'),
       schema.indexOf('export const channelConfig'),
     );
-    const migration = read('apps/server/src/db/migrations/0000_steady_silver_centurion.sql');
+    const migrationFiles = readdirSync(resolve(repoRoot, 'apps/server/src/db/migrations')).filter(
+      (name) => /^0000_.+\.sql$/u.test(name),
+    );
+    expect(migrationFiles).toHaveLength(1);
+    const migration = read(`apps/server/src/db/migrations/${migrationFiles[0]!}`);
     const migrationTable = migration.slice(
       migration.indexOf('CREATE TABLE "integration"."system_config"'),
       migration.indexOf(

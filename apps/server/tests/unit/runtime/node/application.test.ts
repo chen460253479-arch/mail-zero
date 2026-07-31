@@ -1,5 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
+const mailApiRuntimeMocks = vi.hoisted(() => ({
+  close: vi.fn(async () => undefined),
+  openAccessible: vi.fn(),
+}));
+
+vi.mock('../../../../src/modules/mail-api/runtime/create-mail-api', async (importOriginal) => ({
+  ...(await importOriginal()),
+  openAccessibleMailApiRuntime: mailApiRuntimeMocks.openAccessible,
+}));
+
 import { createNodeApplication } from '../../../../src/runtime/node/application';
 import type { RuntimeServices } from '../../../../src/runtime/node/services';
 
@@ -109,6 +119,36 @@ describe('native Node application', () => {
     expect(services.webhooks.gmail).toHaveBeenCalledOnce();
     expect(services.webhooks.outlook).toHaveBeenCalledOnce();
     expect(services.webhooks.zohoMail).toHaveBeenCalledWith(expect.any(Request), 'token-1');
+  });
+
+  it('routes mail blob HTTP requests without passing them to the tRPC handler', async () => {
+    const services = createServices();
+    services.auth.api.getSession = vi.fn(async () => ({
+      user: { id: 'user-1' },
+      session: { id: 'session-1', userId: 'user-1' },
+    })) as never;
+    mailApiRuntimeMocks.openAccessible.mockResolvedValue({
+      core: {
+        getBlob: vi.fn(async () => ({ contentType: 'message/rfc822' })),
+        readBlob: vi.fn(async () => new Uint8Array([1, 2, 3])),
+      },
+      close: mailApiRuntimeMocks.close,
+    });
+    const app = createNodeApplication(services);
+
+    const response = await app.request('/api/mail/accounts/account-1/blobs/blob-1/message.eml');
+
+    expect(response.status).toBe(200);
+    expect(await response.arrayBuffer()).toEqual(new Uint8Array([1, 2, 3]).buffer);
+    expect(mailApiRuntimeMocks.openAccessible).toHaveBeenCalledWith(
+      {
+        accountId: 'account-1',
+        actorUserId: 'user-1',
+        isAdministrator: false,
+      },
+      services,
+    );
+    expect(mailApiRuntimeMocks.close).toHaveBeenCalledOnce();
   });
 
   it('blocks an initial-password Session before a private procedure runs', async () => {

@@ -1,5 +1,3 @@
-import { isAbsolute } from 'node:path';
-
 import { z } from 'zod';
 
 const optionalString = z.preprocess(
@@ -26,12 +24,20 @@ const booleanFromEnvironment = (defaultValue: boolean) =>
     return value;
   }, z.boolean());
 
-const absolutePath = z
+const objectKeyPrefix = z
   .string()
+  .trim()
   .min(1)
+  .max(512)
   .refine(
-    (value) => isAbsolute(value) || /^\/(?!\/)/u.test(value),
-    'Expected an absolute filesystem path',
+    (value) =>
+      !value.startsWith('/') &&
+      !value.endsWith('/') &&
+      !/[\u0000-\u001f\u007f\\]/u.test(value) &&
+      value
+        .split('/')
+        .every((segment) => segment.length > 0 && segment !== '.' && segment !== '..'),
+    'Expected a safe S3 object key prefix',
   );
 
 const credentialEncryptionKey = z.string().refine((value) => {
@@ -49,7 +55,14 @@ const environmentSchema = z
     ZERO_SERVER_PORT: integerFromEnvironment(8787, 1, 65_535),
     ZERO_SHUTDOWN_GRACE_MS: integerFromEnvironment(30_000, 1_000, 300_000),
     DATABASE_URL: z.string().trim().min(1),
-    MAIL_BLOB_ROOT: absolutePath.default('/var/lib/zero/mail-blobs'),
+    MAIL_BLOB_STORE: z.literal('s3'),
+    MAIL_BLOB_S3_ENDPOINT: z.string().url(),
+    MAIL_BLOB_S3_REGION: z.string().trim().min(1),
+    MAIL_BLOB_S3_BUCKET: z.string().trim().min(1),
+    MAIL_BLOB_S3_PREFIX: objectKeyPrefix,
+    MAIL_BLOB_S3_FORCE_PATH_STYLE: booleanFromEnvironment(false),
+    MAIL_BLOB_S3_ACCESS_KEY_ID: z.string().trim().min(1),
+    MAIL_BLOB_S3_SECRET_ACCESS_KEY: z.string().trim().min(1),
     VITE_PUBLIC_APP_URL: z.string().url(),
     VITE_PUBLIC_BACKEND_URL: z.string().url(),
     BASE_URL: optionalUrl,
@@ -105,7 +118,16 @@ export type RuntimeConfig = {
   host: string;
   port: number;
   databaseUrl: string;
-  mailBlobRoot: string;
+  mailBlobStore: {
+    type: 's3';
+    endpoint: string;
+    region: string;
+    bucket: string;
+    prefix: string;
+    forcePathStyle: boolean;
+    accessKeyId: string;
+    secretAccessKey: string;
+  };
   shutdownGraceMs: number;
   publicAppUrl: string;
   publicBackendUrl: string;
@@ -162,7 +184,16 @@ export const parseRuntimeConfig = (source: RuntimeEnvironmentSource): RuntimeCon
     host: parsed.ZERO_SERVER_HOST,
     port: parsed.ZERO_SERVER_PORT,
     databaseUrl: parsed.DATABASE_URL,
-    mailBlobRoot: parsed.MAIL_BLOB_ROOT,
+    mailBlobStore: {
+      type: parsed.MAIL_BLOB_STORE,
+      endpoint: parsed.MAIL_BLOB_S3_ENDPOINT,
+      region: parsed.MAIL_BLOB_S3_REGION,
+      bucket: parsed.MAIL_BLOB_S3_BUCKET,
+      prefix: parsed.MAIL_BLOB_S3_PREFIX,
+      forcePathStyle: parsed.MAIL_BLOB_S3_FORCE_PATH_STYLE,
+      accessKeyId: parsed.MAIL_BLOB_S3_ACCESS_KEY_ID,
+      secretAccessKey: parsed.MAIL_BLOB_S3_SECRET_ACCESS_KEY,
+    },
     shutdownGraceMs: parsed.ZERO_SHUTDOWN_GRACE_MS,
     publicAppUrl: parsed.VITE_PUBLIC_APP_URL,
     publicBackendUrl: parsed.VITE_PUBLIC_BACKEND_URL,

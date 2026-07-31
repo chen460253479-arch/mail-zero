@@ -1,5 +1,6 @@
 import type { FrozenOutboundMessage, OutboundMailAdapter } from '../../contracts';
 import { classifyGmailOutboundError, GmailOutboundError } from './errors';
+import { addTransientBccHeader } from '../../shared/outbound-mime';
 import type { GmailApiClient } from '../shared/api-client';
 import { requireGmailMessageId } from './result-mapper';
 
@@ -29,7 +30,7 @@ export const createGmailOutboundAdapter = (
   send: async (input) => {
     requireOutboundMessage(input);
     const response = await client.sendRawMessage({
-      raw: input.rawMime,
+      raw: addTransientBccHeader(input.rawMime, input.envelope.bcc),
       remoteThreadId: input.remoteThreadId,
     });
     return {

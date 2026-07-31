@@ -1,7 +1,7 @@
 import type { Context, Hono } from 'hono';
 
 import type { ExternalMessageReader } from '../application/read-message';
-import { safeDownloadHeaders } from '../../mail-api/http/download-blob';
+import { safeDownloadHeaders } from '../../mail-api';
 import { ExternalIntegrationError } from '../errors';
 
 type ExternalMailRouteDependencies = {

@@ -34,13 +34,13 @@ describe('PostgreSQL Draft integration', () => {
         attachmentBlobIds: [],
       };
       const draft = await createDraft(harness.dependencies, content);
-      const initialTextBlob = await unitOfWork.run((tx) =>
-        tx.blobs.findById(harness.accountId, draft.textBlobId!),
+      const initialRawBlob = await unitOfWork.run((tx) =>
+        tx.blobs.findById(harness.accountId, draft.blobId!),
       );
-      expect(initialTextBlob).not.toBeNull();
-      const initialTextBytes = await harness.blobStore.get({
+      expect(initialRawBlob).not.toBeNull();
+      const initialRawBytes = await harness.blobStore.get({
         accountId: harness.accountId,
-        objectKey: initialTextBlob!.objectKey,
+        objectKey: initialRawBlob!.objectKey,
       });
       const submission = await createSubmission(harness.dependencies, {
         accountId: harness.accountId,
@@ -95,23 +95,23 @@ describe('PostgreSQL Draft integration', () => {
           identityId: identity.id,
           draftRevision: 2,
         });
-        expect(updatedDraft!.textBlobId).toBe(draft.textBlobId);
-        expect(await tx.blobs.findById(harness.accountId, draft.textBlobId!)).toEqual(
-          initialTextBlob,
-        );
-        expect(
-          await tx.blobs.findById(harness.accountId, updatedDraft!.textBlobId!),
-        ).not.toBeNull();
+        expect(updatedDraft!.blobId).not.toBe(draft.blobId);
+        expect(await tx.blobs.findById(harness.accountId, draft.blobId!)).toEqual(initialRawBlob);
+        expect(await tx.blobs.findById(harness.accountId, updatedDraft!.blobId!)).not.toBeNull();
         expect(await tx.submissions.findById(harness.accountId, submission.id)).toMatchObject({
           draftRevision: 1,
+          rawBlobId: draft.blobId,
+          rawSha256: initialRawBlob!.sha256,
+          rawSizeBytes: initialRawBlob!.sizeBytes,
+          rawObjectKey: initialRawBlob!.objectKey,
         });
       });
       expect(
         await harness.blobStore.get({
           accountId: harness.accountId,
-          objectKey: initialTextBlob!.objectKey,
+          objectKey: initialRawBlob!.objectKey,
         }),
-      ).toEqual(initialTextBytes);
+      ).toEqual(initialRawBytes);
     }));
 
   it('commits Email/set create, update, and destroy with one PostgreSQL state', () =>

@@ -12,6 +12,8 @@ import {
 } from '../../src';
 import { createSubmissionHarness } from '../helpers/submission-harness';
 
+const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
+
 describe('EmailSubmission creation', () => {
   it('defensively rejects a persisted Draft with an injected recipient address', async () => {
     const h = await createSubmissionHarness();
@@ -156,7 +158,7 @@ describe('EmailSubmission creation', () => {
     });
   });
 
-  it('keeps the exact frozen Raw and attachment Blob snapshot after Draft replacement and GC', async () => {
+  it('keeps the exact frozen Raw MIME snapshot after Draft replacement and GC', async () => {
     const h = await createSubmissionHarness();
     const attachment = await h.seedReadyBlob(
       new TextEncoder().encode('frozen attachment'),
@@ -176,12 +178,13 @@ describe('EmailSubmission creation', () => {
       sendAt: null,
     });
 
-    expect(submission.frozenBlobs).toEqual([
-      expect.objectContaining({ kind: 'raw', position: 0, blobId: draft.blobId }),
-      expect.objectContaining({ kind: 'text', position: 0, blobId: draft.textBlobId }),
-      expect.objectContaining({ kind: 'html', position: 0, blobId: draft.htmlBlobId }),
-      expect.objectContaining({ kind: 'part', position: 0, blobId: attachment.id }),
-    ]);
+    const rawRecordBefore = (await h.inspect.blob(draft.blobId!))!;
+    expect(submission).toMatchObject({
+      rawBlobId: draft.blobId,
+      rawSha256: rawRecordBefore.sha256,
+      rawSizeBytes: rawRecordBefore.sizeBytes,
+      rawObjectKey: rawRecordBefore.objectKey,
+    });
 
     await updateDraft(h.deps, {
       accountId: h.accountId,
@@ -197,9 +200,8 @@ describe('EmailSubmission creation', () => {
       limit: 100,
     });
 
-    const frozen = (await h.inspect.submission(submission.id))!.frozenBlobs;
-    const frozenRaw = frozen.find(({ kind }) => kind === 'raw')!;
-    const rawRecord = await h.inspect.blob(frozenRaw.blobId);
+    const frozen = (await h.inspect.submission(submission.id))!;
+    const rawRecord = await h.inspect.blob(frozen.rawBlobId);
     expect(rawRecord).not.toBeNull();
     await expect(
       h.deps.blobStore.get({
@@ -207,10 +209,10 @@ describe('EmailSubmission creation', () => {
         objectKey: rawRecord!.objectKey,
       }),
     ).resolves.toEqual(rawBefore);
-    expect(await h.inspect.blob(attachment.id)).not.toBeNull();
+    expect(await h.inspect.blob(attachment.id)).toBeNull();
   });
 
-  it('freezes every attachment occurrence with its EmailPart content type after Blob deduplication', async () => {
+  it('freezes one Raw MIME object containing every attachment occurrence', async () => {
     const h = await createSubmissionHarness();
     const attachment = await h.seedReadyBlob(
       new TextEncoder().encode('deduplicated attachment bytes'),
@@ -236,27 +238,15 @@ describe('EmailSubmission creation', () => {
       sendAt: null,
     });
 
-    expect(submission.frozenBlobs.filter(({ kind }) => kind === 'part')).toEqual([
-      expect.objectContaining({
-        blobId: attachment.id,
-        position: 0,
-        contentType: 'application/pdf',
+    expect(submission.rawBlobId).toBe(draft.blobId);
+    const rawRecord = (await h.inspect.blob(submission.rawBlobId))!;
+    const raw = decode(
+      await h.deps.blobStore.get({
+        accountId: h.accountId,
+        objectKey: rawRecord.objectKey,
       }),
-      expect.objectContaining({
-        blobId: attachment.id,
-        position: 1,
-        contentType: 'application/pdf',
-      }),
-    ]);
-    expect(submission.frozenBlobs.find(({ kind }) => kind === 'text')).toMatchObject({
-      blobId: draft.textBlobId,
-      contentType: 'text/plain; charset=utf-8',
-    });
-    expect(submission.frozenBlobs.find(({ kind }) => kind === 'html')).toMatchObject({
-      blobId: draft.htmlBlobId,
-      contentType: 'text/html; charset=utf-8',
-    });
-    expect(draft.htmlBlobId).toBe(draft.textBlobId);
+    );
+    expect(raw.match(/Content-Type: application\/pdf/giu)).toHaveLength(2);
   });
 
   it('requires the exact Identity retained by the frozen Draft revision', async () => {

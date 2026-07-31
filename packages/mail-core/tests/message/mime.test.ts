@@ -175,4 +175,37 @@ describe('parseRawEmail', () => {
         .map(({ bytes }) => decoder.decode(bytes)),
     ).toEqual(['First body.', 'Second body.']);
   });
+
+  it('maps every parsed MIME part to its immutable raw byte section', async () => {
+    const source = [
+      'From: sender@example.test',
+      'To: recipient@example.test',
+      'Subject: Section fixture',
+      'Content-Type: text/plain; charset=utf-8',
+      'Content-Transfer-Encoding: quoted-printable',
+      '',
+      'Hello=20section=21',
+    ].join('\r\n');
+    const raw = new TextEncoder().encode(source);
+
+    const parsed = await parseRawEmail(raw, {
+      sanitizeHtml: (html) => html,
+    });
+
+    const section = parsed.parts[0]?.section;
+    expect(section).toEqual({
+      offsetStart: BigInt(source.indexOf('Hello=20section=21')),
+      encodedLength: 18n,
+      decodedLength: 14n,
+      transferEncoding: 'quoted-printable',
+    });
+    expect(
+      new TextDecoder().decode(
+        raw.slice(
+          Number(section?.offsetStart),
+          Number((section?.offsetStart ?? 0n) + (section?.encodedLength ?? 0n)),
+        ),
+      ),
+    ).toBe('Hello=20section=21');
+  });
 });

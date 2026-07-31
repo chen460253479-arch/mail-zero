@@ -13,6 +13,7 @@ import type {
 } from '../types';
 import type { EmailAggregateProjection, ReconcileMailAggregatesResult } from '../mailbox';
 import type { ChangeCollection, MailChange } from '../changes/types';
+import type { MimeTransferEncoding } from '../message/types';
 import type { SubmissionStatus } from '../submission/types';
 
 export type AccountStatus = 'active' | 'suspended' | 'deleting';
@@ -106,15 +107,19 @@ export interface EmailPartRecord {
   disposition: 'inline' | 'attachment' | null;
   filename: string | null;
   contentId: string | null;
-  blobId: BlobId | null;
+  rawBlobId: BlobId;
+  offsetStart: bigint;
+  encodedLength: bigint;
+  decodedLength: bigint;
+  transferEncoding: MimeTransferEncoding;
   sizeBytes: bigint;
   kind: 'body' | 'inline' | 'attachment';
 }
 
 export interface EmailContentRecord {
   preview: string;
-  textBlobId: BlobId | null;
-  htmlBlobId: BlobId | null;
+  textBody: string;
+  htmlBody: string;
   parserVersion: number;
   parseWarnings: string[];
 }
@@ -179,18 +184,6 @@ export interface IdentityRecord {
   updatedAt: Date;
 }
 
-export type SubmissionBlobKind = 'raw' | 'text' | 'html' | 'part';
-
-export interface SubmissionBlobReference {
-  blobId: BlobId;
-  kind: SubmissionBlobKind;
-  position: number;
-  sha256: string;
-  sizeBytes: bigint;
-  contentType: string;
-  objectKey: string;
-}
-
 export interface SubmissionRecord {
   id: EmailSubmissionId;
   accountId: MailAccountId;
@@ -200,7 +193,10 @@ export interface SubmissionRecord {
   sendAt: Date;
   idempotencyKey: string;
   draftRevision: number;
-  frozenBlobs: SubmissionBlobReference[];
+  rawBlobId: BlobId;
+  rawSha256: string;
+  rawSizeBytes: bigint;
+  rawObjectKey: string;
   providerMessageId: string | null;
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
@@ -327,6 +323,10 @@ export interface FindRemoteEmailInput {
 export interface EmailRepository {
   findById(accountId: MailAccountId, id: EmailId): Promise<EmailRecord | null>;
   findByIds(accountId: MailAccountId, ids: EmailId[]): Promise<EmailRecord[]>;
+  findPartById(
+    accountId: MailAccountId,
+    partId: string,
+  ): Promise<{ emailId: EmailId; part: EmailPartRecord } | null>;
   existsOutsideAccount(accountId: MailAccountId, id: EmailId): Promise<boolean>;
   findByRemoteId(input: FindRemoteEmailInput): Promise<RemoteEmailRecord | null>;
   listByAccount(accountId: MailAccountId): Promise<EmailRecord[]>;
@@ -410,7 +410,10 @@ export interface SubmissionRepository {
       | 'identityId'
       | 'idempotencyKey'
       | 'draftRevision'
-      | 'frozenBlobs'
+      | 'rawBlobId'
+      | 'rawSha256'
+      | 'rawSizeBytes'
+      | 'rawObjectKey'
     >,
   ): Promise<SubmissionRecord>;
 }

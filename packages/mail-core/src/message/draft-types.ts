@@ -39,7 +39,8 @@ export type DestroyDraftResult = {
 };
 
 export type DraftAttachment = {
-  id: BlobId;
+  id: string;
+  filename: string;
   contentType: string;
   sizeBytes: bigint;
   bytes: Uint8Array;

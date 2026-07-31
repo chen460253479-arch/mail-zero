@@ -2,6 +2,7 @@ import PostalMime, { decodeWords, type Address, type Mailbox } from 'postal-mime
 
 import type { ParsedEmail, ParsedPart, ParseRawEmailDependencies } from './types';
 import { MailCoreError, type MailAddress } from '../types';
+import { indexMimeSections } from './mime-section-index';
 import { normalizeMessageId } from '../thread';
 
 const toMailAddress = (mailbox: Mailbox): MailAddress => ({
@@ -60,13 +61,18 @@ type MimeNodeView = {
   getTextContent(): string;
 };
 
-const extractParts = (root: MimeNodeView, sanitizeHtml: (html: string) => string): ParsedPart[] => {
+type SemanticParsedPart = Omit<ParsedPart, 'section'>;
+
+const extractParts = (
+  root: MimeNodeView,
+  sanitizeHtml: (html: string) => string,
+): SemanticParsedPart[] => {
   const walk = (
     node: MimeNodeView,
     partPath: string,
     parentPath: string | null,
     related: boolean,
-  ): ParsedPart[] => {
+  ): SemanticParsedPart[] => {
     const contentType = node.contentType.parsed.value.toLocaleLowerCase('und');
     const dispositionValue = node.contentDisposition?.parsed?.value;
     const disposition =
@@ -92,7 +98,7 @@ const extractParts = (root: MimeNodeView, sanitizeHtml: (html: string) => string
           : toBytes(node.content);
     const filenameValue =
       node.contentDisposition?.parsed?.params?.filename ?? node.contentType.parsed.params.name;
-    const part: ParsedPart = {
+    const part: SemanticParsedPart = {
       parentPath,
       partPath,
       contentType,
@@ -148,7 +154,35 @@ export async function parseRawEmail(
     // PostalMime intentionally keeps the parsed node tree internal. The adapter
     // is pinned to its runtime shape here so persistence can retain MIME paths
     // and parent relationships instead of flattening every part.
-    const parts = extractParts((parser as unknown as { root: MimeNodeView }).root, sanitizeHtml);
+    const semanticParts = extractParts(
+      (parser as unknown as { root: MimeNodeView }).root,
+      sanitizeHtml,
+    );
+    const sectionByPath = new Map(
+      indexMimeSections(raw).map((section) => [section.partPath, section]),
+    );
+    const parts = semanticParts.map((part): ParsedPart => {
+      const section = sectionByPath.get(part.partPath);
+      if (
+        section === undefined ||
+        section.parentPath !== part.parentPath ||
+        section.contentType !== part.contentType
+      ) {
+        throw new MailCoreError('MIME_PARSE_FAILED');
+      }
+      return {
+        ...part,
+        section: {
+          offsetStart: section.offsetStart,
+          encodedLength: section.encodedLength,
+          decodedLength: section.decodedLength,
+          transferEncoding: section.transferEncoding,
+        },
+      };
+    });
+    if (sectionByPath.size !== parts.length) {
+      throw new MailCoreError('MIME_PARSE_FAILED');
+    }
     const attachments = parts.filter(
       (part): part is ParsedPart & { kind: 'inline' | 'attachment' } => part.kind !== 'body',
     );

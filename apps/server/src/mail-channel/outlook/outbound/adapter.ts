@@ -1,5 +1,6 @@
 import type { FrozenOutboundMessage, OutboundMailAdapter } from '../../contracts';
 import { classifyOutlookOutboundError, OutlookApiError } from '../shared/errors';
+import { addTransientBccHeader } from '../../shared/outbound-mime';
 import type { MicrosoftGraphClient } from '../shared/graph-client';
 
 const validMessageId = (value: string): boolean =>
@@ -34,7 +35,9 @@ export const createOutlookOutboundAdapter = (
 
   send: async (input) => {
     validateMessage(input);
-    const draft = await client.createMimeDraft(input.rawMime);
+    const draft = await client.createMimeDraft(
+      addTransientBccHeader(input.rawMime, input.envelope.bcc),
+    );
     await client.sendDraft(draft.id);
     return {
       remoteMessageId: draft.id,

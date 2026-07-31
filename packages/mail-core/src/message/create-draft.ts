@@ -27,21 +27,34 @@ import {
 import type { CreateDraftInput, DraftAttachment, DraftContent, DraftResult } from './draft-types';
 import { applyEmailAggregateDelta } from './email-aggregates';
 import { createEmailSearchDocument } from './search-document';
+import { readEmailPart } from './read-email-part';
 import { renderDraft } from './render-draft';
 import { normalizeSubject } from '../thread';
 import { recordChanges } from '../changes';
+import type { ParsedEmail } from './types';
+import { parseRawEmail } from './mime';
 import { z } from 'zod';
 
 export type DraftReferences = {
   identity: IdentityRecord;
   reply: EmailRecord | null;
-  attachments: BlobRecord[];
+  attachments: DraftAttachmentReference[];
 };
+
+export type DraftAttachmentReference =
+  | {
+      source: 'blob';
+      blob: BlobRecord;
+    }
+  | {
+      source: 'part';
+      emailId: EmailId;
+      part: EmailPartRecord;
+      rawBlob: BlobRecord;
+    };
 
 export type PreparedDraftRevision = {
   raw: PreparedBlob;
-  text: PreparedBlob | null;
-  html: PreparedBlob | null;
   all: PreparedBlob[];
 };
 
@@ -53,20 +66,11 @@ export type DraftRevisionBlob = {
 
 export type DraftRevisionBlobs = {
   raw: DraftRevisionBlob;
-  text: DraftRevisionBlob | null;
-  html: DraftRevisionBlob | null;
   all: DraftRevisionBlob[];
 };
 
 const referencedBlobIds = (emails: EmailRecord[]): Set<BlobId> =>
-  new Set(
-    emails.flatMap((email) => [
-      ...(email.blobId === null ? [] : [email.blobId]),
-      ...(email.textBlobId === null ? [] : [email.textBlobId]),
-      ...(email.htmlBlobId === null ? [] : [email.htmlBlobId]),
-      ...email.parts.flatMap(({ blobId }) => (blobId === null ? [] : [blobId])),
-    ]),
-  );
+  new Set(emails.flatMap((email) => (email.blobId === null ? [] : [email.blobId])));
 
 const previewFrom = (content: Pick<DraftContent, 'htmlBody' | 'textBody'>): string => {
   const source =
@@ -104,17 +108,39 @@ const sameReply = (left: EmailRecord | null, right: EmailRecord | null): boolean
   left?.references.join('\u0000') === right?.references.join('\u0000') &&
   left?.destroyedAt?.getTime() === right?.destroyedAt?.getTime();
 
-const sameAttachments = (left: BlobRecord[], right: BlobRecord[]): boolean =>
+const sameBlob = (left: BlobRecord, right: BlobRecord): boolean =>
+  left.id === right.id &&
+  left.sha256 === right.sha256 &&
+  left.sizeBytes === right.sizeBytes &&
+  left.contentType === right.contentType &&
+  left.objectKey === right.objectKey &&
+  left.status === right.status;
+
+const sameAttachments = (
+  left: DraftAttachmentReference[],
+  right: DraftAttachmentReference[],
+): boolean =>
   left.length === right.length &&
-  left.every(
-    (blob, index) =>
-      blob.id === right[index]?.id &&
-      blob.sha256 === right[index]?.sha256 &&
-      blob.sizeBytes === right[index]?.sizeBytes &&
-      blob.contentType === right[index]?.contentType &&
-      blob.objectKey === right[index]?.objectKey &&
-      blob.status === right[index]?.status,
-  );
+  left.every((reference, index) => {
+    const compared = right[index];
+    if (compared === undefined || compared.source !== reference.source) return false;
+    if (reference.source === 'blob' && compared.source === 'blob') {
+      return sameBlob(reference.blob, compared.blob);
+    }
+    if (reference.source === 'part' && compared.source === 'part') {
+      return (
+        reference.emailId === compared.emailId &&
+        reference.part.id === compared.part.id &&
+        reference.part.rawBlobId === compared.part.rawBlobId &&
+        reference.part.offsetStart === compared.part.offsetStart &&
+        reference.part.encodedLength === compared.part.encodedLength &&
+        reference.part.decodedLength === compared.part.decodedLength &&
+        reference.part.transferEncoding === compared.part.transferEncoding &&
+        sameBlob(reference.rawBlob, compared.rawBlob)
+      );
+    }
+    return false;
+  });
 
 export async function requireDraftReferences(
   tx: MailTransaction,
@@ -138,16 +164,41 @@ export async function requireDraftReferences(
   ) {
     throw new MailCoreError('EMAIL_NOT_FOUND', { entityId: content.replyToEmailId });
   }
-  const attachments: BlobRecord[] = [];
-  for (const blobId of content.attachmentBlobIds) {
-    const blob = await tx.blobs.findById(accountId, blobId);
-    if (blob === null) {
-      throw new MailCoreError('BLOB_NOT_FOUND', { entityId: blobId });
+  const attachments: DraftAttachmentReference[] = [];
+  for (const attachmentId of content.attachmentBlobIds) {
+    const blob = await tx.blobs.findById(accountId, attachmentId);
+    if (blob !== null) {
+      if (blob.status !== 'ready' || blob.readyAt === null || blob.deletedAt !== null) {
+        throw new MailCoreError('BLOB_INTEGRITY', { entityId: attachmentId });
+      }
+      attachments.push({ source: 'blob', blob });
+      continue;
     }
-    if (blob.status !== 'ready' || blob.readyAt === null || blob.deletedAt !== null) {
-      throw new MailCoreError('BLOB_INTEGRITY', { entityId: blobId });
+    const located = await tx.emails.findPartById(accountId, attachmentId);
+    if (located === null) {
+      throw new MailCoreError('BLOB_NOT_FOUND', { entityId: attachmentId });
     }
-    attachments.push(blob);
+    const sourceEmail = await tx.emails.findById(accountId, located.emailId);
+    const rawBlob = await tx.blobs.findById(accountId, located.part.rawBlobId);
+    if (
+      sourceEmail === null ||
+      sourceEmail.destroyedAt !== null ||
+      sourceEmail.mailboxIds.length === 0 ||
+      sourceEmail.blobId !== located.part.rawBlobId ||
+      (located.part.kind !== 'attachment' && located.part.kind !== 'inline') ||
+      rawBlob === null ||
+      rawBlob.status !== 'ready' ||
+      rawBlob.readyAt === null ||
+      rawBlob.deletedAt !== null
+    ) {
+      throw new MailCoreError('BLOB_INTEGRITY', { entityId: attachmentId });
+    }
+    attachments.push({
+      source: 'part',
+      emailId: located.emailId,
+      part: located.part,
+      rawBlob,
+    });
   }
   return { identity, reply, attachments };
 }
@@ -164,25 +215,42 @@ export function requireStableReferences(before: DraftReferences, after: DraftRef
 
 export async function loadDraftAttachments(
   dependencies: MailCoreDependencies,
-  records: BlobRecord[],
+  references: DraftAttachmentReference[],
 ): Promise<DraftAttachment[]> {
   const attachments: DraftAttachment[] = [];
-  for (const record of records) {
-    const bytes = await verifyPreparedBlob(
-      dependencies.blobStore,
-      {
-        accountId: record.accountId,
-        sha256: record.sha256,
+  for (const reference of references) {
+    if (reference.source === 'blob') {
+      const record = reference.blob;
+      const bytes = await verifyPreparedBlob(
+        dependencies.blobStore,
+        {
+          accountId: record.accountId,
+          sha256: record.sha256,
+          sizeBytes: record.sizeBytes,
+        },
+        record.objectKey,
+        true,
+      );
+      attachments.push({
+        id: record.id,
+        filename: record.id,
+        contentType: record.contentType,
         sizeBytes: record.sizeBytes,
-      },
-      record.objectKey,
-      true,
-    );
+        bytes,
+      });
+      continue;
+    }
+    const part = await readEmailPart(dependencies, {
+      accountId: reference.rawBlob.accountId,
+      emailId: reference.emailId,
+      partId: reference.part.id,
+    });
     attachments.push({
-      id: record.id,
-      contentType: record.contentType,
-      sizeBytes: record.sizeBytes,
-      bytes,
+      id: reference.part.id,
+      filename: part.filename ?? reference.part.id,
+      contentType: part.contentType,
+      sizeBytes: part.sizeBytes,
+      bytes: part.bytes,
     });
   }
   return attachments;
@@ -193,7 +261,6 @@ export async function prepareDraftRevision(
   input: {
     accountId: MailAccountId;
     raw: Uint8Array;
-    content: Pick<DraftContent, 'htmlBody' | 'textBody'>;
   },
 ): Promise<PreparedDraftRevision> {
   const all: PreparedBlob[] = [];
@@ -204,29 +271,7 @@ export async function prepareDraftRevision(
       contentType: 'message/rfc822',
     });
     all.push(raw);
-    const text =
-      input.content.textBody.length === 0
-        ? null
-        : await prepareBlob(dependencies.blobStore, {
-            accountId: input.accountId,
-            bytes: new TextEncoder().encode(input.content.textBody),
-            contentType: 'text/plain; charset=utf-8',
-          });
-    if (text !== null) {
-      all.push(text);
-    }
-    const html =
-      input.content.htmlBody.length === 0
-        ? null
-        : await prepareBlob(dependencies.blobStore, {
-            accountId: input.accountId,
-            bytes: new TextEncoder().encode(input.content.htmlBody),
-            contentType: 'text/html; charset=utf-8',
-          });
-    if (html !== null) {
-      all.push(html);
-    }
-    return { raw, text, html, all };
+    return { raw, all };
   } catch (error) {
     await discardTemporaryBlobs(dependencies.blobStore, all);
     throw error;
@@ -278,12 +323,8 @@ export async function allocateDraftRevisionBlobs(
     return created;
   };
   const raw = await allocate(prepared.raw);
-  const text = prepared.text === null ? null : await allocate(prepared.text);
-  const html = prepared.html === null ? null : await allocate(prepared.html);
   return {
     raw,
-    text,
-    html,
     all: [...resolved.values()],
   };
 }
@@ -294,7 +335,6 @@ export async function requireDraftQuota(
     accountId: MailAccountId;
     excludeEmailId: EmailId | null;
     revisionBlobs: DraftRevisionBlobs;
-    attachments: BlobRecord[];
   },
 ): Promise<void> {
   const account = await tx.accounts.findById(input.accountId);
@@ -308,9 +348,8 @@ export async function requireDraftQuota(
     ({ id }) => id !== input.excludeEmailId,
   );
   const referenced = referencedBlobIds(emails);
-  input.attachments.forEach(({ id }) => referenced.add(id));
   for (const submission of await tx.submissions.listByAccount(input.accountId)) {
-    submission.frozenBlobs.forEach(({ blobId }) => referenced.add(blobId));
+    referenced.add(submission.rawBlobId);
   }
   input.revisionBlobs.all.forEach(({ record }) => referenced.add(record.id));
   const newRecords = new Map(
@@ -408,80 +447,29 @@ const normalizeDraftAddress = (address: DraftContent['to'][number]) => {
 
 export function buildDraftParts(
   dependencies: MailCoreDependencies,
-  attachments: BlobRecord[],
-  content: DraftContent,
-  revision: DraftRevisionBlobs,
+  parsed: ParsedEmail,
+  rawBlobId: BlobId,
 ): EmailPartRecord[] {
-  const parts: EmailPartRecord[] = [];
-  const addPart = (
-    parentPartId: string | null,
-    partPath: string,
-    part: Omit<EmailPartRecord, 'id' | 'parentPartId' | 'partPath'>,
-  ): string => {
-    const id = dependencies.idFactory.next<'EmailPart'>();
-    parts.push({ id, parentPartId, partPath, ...part });
-    return id;
-  };
-  const structural = (contentType: string) => ({
-    contentType,
-    charset: null,
-    disposition: null,
-    filename: null,
-    contentId: null,
-    blobId: null,
-    sizeBytes: 0n,
-    kind: 'body' as const,
-  });
-  const body = (
-    parentPartId: string | null,
-    partPath: string,
-    contentType: 'text/plain' | 'text/html',
-    blob: DraftRevisionBlob | null,
-  ) =>
-    addPart(parentPartId, partPath, {
-      contentType,
-      charset: 'utf-8',
-      disposition: null,
-      filename: null,
-      contentId: null,
-      blobId: blob?.record.id ?? null,
-      sizeBytes: blob?.record.sizeBytes ?? 0n,
-      kind: 'body',
-    });
-  const hasHtml = content.htmlBody.length > 0;
-  const hasAttachments = attachments.length > 0;
-  let attachmentParent: string | null = null;
-  let attachmentPrefix = '';
-  if (hasAttachments) {
-    attachmentParent = addPart(null, '1', structural('multipart/mixed'));
-    attachmentPrefix = '1.';
-  }
-  if (hasHtml) {
-    const alternativePath = hasAttachments ? '1.1' : '1';
-    const alternative = addPart(
-      hasAttachments ? attachmentParent : null,
-      alternativePath,
-      structural('multipart/alternative'),
-    );
-    body(alternative, `${alternativePath}.1`, 'text/plain', revision.text);
-    body(alternative, `${alternativePath}.2`, 'text/html', revision.html);
-  } else {
-    body(attachmentParent, hasAttachments ? '1.1' : '1', 'text/plain', revision.text);
-  }
-  attachments.forEach((attachment, index) => {
-    const position = 2 + index;
-    addPart(attachmentParent, `${attachmentPrefix}${position}`, {
-      contentType: attachment.contentType,
-      charset: null,
-      disposition: 'attachment',
-      filename: attachment.id,
-      contentId: null,
-      blobId: attachment.id,
-      sizeBytes: attachment.sizeBytes,
-      kind: 'attachment',
-    });
-  });
-  return parts;
+  const idByPath = new Map(
+    parsed.parts.map(({ partPath }) => [partPath, dependencies.idFactory.next<'EmailPart'>()]),
+  );
+  return parsed.parts.map((part) => ({
+    id: idByPath.get(part.partPath)!,
+    parentPartId: part.parentPath === null ? null : idByPath.get(part.parentPath)!,
+    partPath: part.partPath,
+    contentType: part.contentType,
+    charset: part.charset,
+    disposition: part.disposition,
+    filename: part.filename,
+    contentId: part.contentId,
+    rawBlobId,
+    offsetStart: part.section.offsetStart,
+    encodedLength: part.section.encodedLength,
+    decodedLength: part.section.decodedLength,
+    transferEncoding: part.section.transferEncoding,
+    sizeBytes: part.section.decodedLength,
+    kind: part.kind,
+  }));
 }
 
 export function draftEmailContent(
@@ -491,6 +479,7 @@ export function draftEmailContent(
     references: DraftReferences;
     revision: DraftRevisionBlobs;
     raw: Uint8Array;
+    parsed: ParsedEmail;
     draftRevision: number;
     messageId: string;
   },
@@ -502,7 +491,7 @@ export function draftEmailContent(
   | 'draftRevision'
   | 'from'
   | 'hasAttachment'
-  | 'htmlBlobId'
+  | 'htmlBody'
   | 'identityId'
   | 'inReplyTo'
   | 'messageId'
@@ -517,7 +506,7 @@ export function draftEmailContent(
   | 'sentAt'
   | 'sizeBytes'
   | 'subject'
-  | 'textBlobId'
+  | 'textBody'
   | 'to'
 > {
   const replyHeaders = draftReplyHeaders(input.references.reply);
@@ -530,8 +519,8 @@ export function draftEmailContent(
   return {
     identityId: input.references.identity.id,
     blobId: input.revision.raw.record.id,
-    textBlobId: input.revision.text?.record.id ?? null,
-    htmlBlobId: input.revision.html?.record.id ?? null,
+    textBody: input.content.textBody,
+    htmlBody: input.content.htmlBody,
     messageId: input.messageId,
     replyToEmailId: input.content.replyToEmailId,
     inReplyTo: replyHeaders.inReplyTo,
@@ -553,12 +542,7 @@ export function draftEmailContent(
     bcc: structuredClone(input.content.bcc),
     parserVersion: 1,
     parseWarnings: [],
-    parts: buildDraftParts(
-      dependencies,
-      input.references.attachments,
-      input.content,
-      input.revision,
-    ),
+    parts: buildDraftParts(dependencies, input.parsed, input.revision.raw.record.id),
   };
 }
 
@@ -590,6 +574,7 @@ export type PreparedDraftCreate = {
   messageId: string;
   preflight: DraftReferences;
   raw: Uint8Array;
+  parsed: ParsedEmail;
   prepared: PreparedDraftRevision;
 };
 
@@ -624,10 +609,12 @@ export async function prepareDraftCreate(
     ...replyHeaders,
     attachments,
   });
+  const parsed = await parseRawEmail(raw, {
+    sanitizeHtml: dependencies.sanitizeHtml,
+  });
   const prepared = await prepareDraftRevision(dependencies, {
     accountId: input.accountId,
     raw,
-    content,
   });
   return {
     accountId: input.accountId,
@@ -637,6 +624,7 @@ export async function prepareDraftCreate(
     messageId,
     preflight,
     raw,
+    parsed,
     prepared,
   };
 }
@@ -648,7 +636,7 @@ export async function createDraftInTransaction(
   committedObjectKeys: string[],
   validated?: ValidatedDraftCreate,
 ): Promise<DraftResult> {
-  const { accountId, content, now, emailId, messageId, raw } = preparedCreate;
+  const { accountId, content, now, emailId, messageId, raw, parsed } = preparedCreate;
   const checked =
     validated ?? (await validateDraftCreateInTransaction(dependencies, tx, preparedCreate));
   const { references, revision, newThread, threadId, draftsMailboxId } = checked;
@@ -662,6 +650,7 @@ export async function createDraftInTransaction(
     references,
     revision,
     raw,
+    parsed,
     draftRevision: 1,
     messageId,
   });
@@ -745,7 +734,6 @@ export async function validateDraftCreateInTransaction(
     accountId,
     excludeEmailId: null,
     revisionBlobs: revision,
-    attachments: references.attachments,
   });
   const newThread = references.reply === null;
   const threadId =

@@ -17,7 +17,7 @@
 - Keep all current public HTTP, tRPC, authentication, OAuth, Webhook, Mail API, synchronization, and outbound behavior unless this plan explicitly replaces its infrastructure.
 - Preserve the existing Mail Core and channel-plugin boundaries.
 - Do not put full message bodies or attachments in PostgreSQL.
-- Do not add BullMQ, MinIO, S3, or a second queue system.
+- Do not add BullMQ, an embedded object-storage service, or a second queue system.
 - Do not install or update dependencies automatically. After manifest edits, ask the user to run the exact frozen-lockfile update/install command.
 - Use the single development database initialization template; do not add a historical incremental migration series.
 - Preserve unrelated `node-compile-cache/` and `update-check/`.

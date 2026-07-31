@@ -25,7 +25,7 @@ ENV VITE_PUBLIC_APP_URL=${VITE_PUBLIC_APP_URL} \
     VITE_PUBLIC_IMAGE_API_URL=${VITE_PUBLIC_IMAGE_API_URL} \
     NODE_ENV=production
 
-RUN pnpm --filter @zero/mail build
+RUN NODE_OPTIONS=--max-old-space-size=2048 pnpm --filter @zero/mail build
 
 FROM nginx:1.28-alpine AS runtime
 

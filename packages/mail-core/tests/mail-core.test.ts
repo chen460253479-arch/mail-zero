@@ -39,6 +39,8 @@ describe('createMailCore', () => {
         'queryThreads',
         'readBlob',
         'readBlobRange',
+        'readEmailPart',
+        'readEmailPartById',
         'setEmails',
         'setIdentities',
         'setMailboxes',

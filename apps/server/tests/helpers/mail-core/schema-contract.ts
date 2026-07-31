@@ -38,7 +38,6 @@ export const expectedLocations = [
   ['mailboxThread', schema.mailboxThread, 'mail', 'mailbox_thread'],
   ['mailbox', schema.mailbox, 'mail', 'mailbox'],
   ['emailSubmission', schema.emailSubmission, 'mail', 'submission'],
-  ['submissionBlob', schema.submissionBlob, 'mail', 'submission_blob'],
   ['threadReference', schema.threadReference, 'mail', 'thread_reference'],
   ['thread', schema.thread, 'mail', 'thread'],
 ] as const;

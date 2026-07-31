@@ -38,9 +38,6 @@ export function renderDraft(input: RenderDraftInput): Uint8Array {
   if (input.content.cc.length > 0) {
     message.setCc(input.content.cc.map(mailbox));
   }
-  if (input.content.bcc.length > 0) {
-    message.setBcc(input.content.bcc.map(mailbox));
-  }
   message.setHeader('Date', dateHeader(input.date));
   message.setHeader('Message-ID', input.messageId);
   message.setSubject(input.content.subject);
@@ -72,7 +69,7 @@ export function renderDraft(input: RenderDraftInput): Uint8Array {
   }
   for (const attachment of input.attachments) {
     message.addAttachment({
-      filename: attachment.id,
+      filename: attachment.filename,
       contentType: attachment.contentType,
       data: Buffer.from(attachment.bytes).toString('base64'),
       encoding: 'base64',

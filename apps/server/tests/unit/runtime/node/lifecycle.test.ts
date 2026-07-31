@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  createRuntimeBlobStore,
   startZeroServer,
   type NodeServerLifecycleDependencies,
 } from '../../../../src/runtime/node/main';
+import { S3BlobStore } from '../../../../src/modules/mail';
 
 const environment = {
   DATABASE_URL: 'postgresql://localhost/zero',
@@ -21,6 +23,9 @@ const createHarness = () => {
   const blobStore = {
     initialize: vi.fn(async () => {
       events.push('blob');
+    }),
+    close: vi.fn(() => {
+      events.push('blob close');
     }),
   };
   const taskWorker = {
@@ -102,6 +107,23 @@ const createHarness = () => {
 };
 
 describe('native Node server lifecycle', () => {
+  it('constructs the production runtime with the S3 BlobStore only', () => {
+    expect(
+      createRuntimeBlobStore({
+        mailBlobStore: {
+          type: 's3',
+          endpoint: 'https://objects.example.test',
+          region: 'us-east-1',
+          bucket: 'zero-mail',
+          prefix: 'mail',
+          forcePathStyle: true,
+          accessKeyId: 'external-s3-access-key',
+          secretAccessKey: 'external-s3-secret-key',
+        },
+      } as never),
+    ).toBeInstanceOf(S3BlobStore);
+  });
+
   it('starts core services in readiness order and shuts down in reverse ownership order', async () => {
     const harness = createHarness();
 
@@ -124,6 +146,7 @@ describe('native Node server lifecycle', () => {
       'notification worker stop',
       'worker stop',
       'external clients close',
+      'blob close',
       'database close',
     ]);
     await server.close();
@@ -137,6 +160,7 @@ describe('native Node server lifecycle', () => {
     await expect(startZeroServer(environment, harness.dependencies)).rejects.toThrow(
       'blob unavailable',
     );
+    expect(harness.blobStore.close).toHaveBeenCalledOnce();
     expect(harness.database.close).toHaveBeenCalledOnce();
     expect(harness.dependencies.listen).not.toHaveBeenCalled();
   });

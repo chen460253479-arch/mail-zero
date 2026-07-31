@@ -37,7 +37,14 @@ services:
       ZERO_SERVER_PORT: '8787'
       ZERO_SHUTDOWN_GRACE_MS: ${ZERO_SHUTDOWN_GRACE_MS:-30000}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-zerodotemail}
-      MAIL_BLOB_ROOT: /var/lib/zero/mail-blobs
+      MAIL_BLOB_STORE: s3
+      MAIL_BLOB_S3_ENDPOINT: ${MAIL_BLOB_S3_ENDPOINT:-}
+      MAIL_BLOB_S3_REGION: ${MAIL_BLOB_S3_REGION:-}
+      MAIL_BLOB_S3_BUCKET: ${MAIL_BLOB_S3_BUCKET:-}
+      MAIL_BLOB_S3_PREFIX: ${MAIL_BLOB_S3_PREFIX:-}
+      MAIL_BLOB_S3_FORCE_PATH_STYLE: ${MAIL_BLOB_S3_FORCE_PATH_STYLE:-false}
+      MAIL_BLOB_S3_ACCESS_KEY_ID: ${MAIL_BLOB_S3_ACCESS_KEY_ID:-}
+      MAIL_BLOB_S3_SECRET_ACCESS_KEY: ${MAIL_BLOB_S3_SECRET_ACCESS_KEY:-}
       VITE_PUBLIC_APP_URL: ${VITE_PUBLIC_APP_URL:-http://localhost:3000}
       VITE_PUBLIC_BACKEND_URL: ${VITE_PUBLIC_BACKEND_URL:-http://localhost:8787}
       BASE_URL: ${BASE_URL:-}
@@ -67,8 +74,6 @@ services:
       ZERO_ADMIN_BOOTSTRAP_SECRET: ${ZERO_ADMIN_BOOTSTRAP_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
-    volumes:
-      - zero-mail-blobs:/var/lib/zero/mail-blobs
     restart: unless-stopped
     depends_on:
       db:
@@ -148,4 +153,3 @@ services:
 volumes:
   postgres-data:
   valkey-data:
-  zero-mail-blobs:

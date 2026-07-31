@@ -1,30 +1,20 @@
-import type { BlobId, MailAccountId, MailCore } from '@zero/mail-core';
-
 export type BodyValueDto = {
   value: string;
   isTruncated: boolean;
 };
 
-const decoder = new TextDecoder('utf-8', { fatal: false, ignoreBOM: false });
-
-export async function readBodyValue(
-  core: Pick<MailCore, 'readBlobRange'>,
-  accountId: MailAccountId,
-  blobId: BlobId,
-  maxBytes: number,
-): Promise<BodyValueDto> {
-  const { bytes, isTruncated } = await core.readBlobRange({ accountId, blobId, maxBytes });
-  return {
-    value: decoder.decode(bytes),
-    isTruncated,
-  };
-}
-
-export async function readBodyText(
-  core: Pick<MailCore, 'readBlob'>,
-  accountId: MailAccountId,
-  blobId: BlobId | null,
-): Promise<string> {
-  if (blobId === null) return '';
-  return decoder.decode(await core.readBlob({ accountId, blobId }));
+export function projectBodyValue(value: string, maxBytes: number): BodyValueDto {
+  const encoder = new TextEncoder();
+  if (encoder.encode(value).byteLength <= maxBytes) {
+    return { value, isTruncated: false };
+  }
+  let result = '';
+  let consumed = 0;
+  for (const character of value) {
+    const length = encoder.encode(character).byteLength;
+    if (consumed + length > maxBytes) break;
+    consumed += length;
+    result += character;
+  }
+  return { value: result, isTruncated: true };
 }

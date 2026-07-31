@@ -11,7 +11,14 @@ const validEnvironment = (): Record<string, string | undefined> => ({
   ZERO_SERVER_PORT: '8787',
   ZERO_SHUTDOWN_GRACE_MS: '45000',
   DATABASE_URL: 'postgresql://postgres:postgres@db:5432/zero',
-  MAIL_BLOB_ROOT: '/data/blobs',
+  MAIL_BLOB_STORE: 's3',
+  MAIL_BLOB_S3_ENDPOINT: 'https://objects.example.test',
+  MAIL_BLOB_S3_REGION: 'ap-southeast-1',
+  MAIL_BLOB_S3_BUCKET: 'zero-mail-production',
+  MAIL_BLOB_S3_PREFIX: 'mail',
+  MAIL_BLOB_S3_FORCE_PATH_STYLE: 'false',
+  MAIL_BLOB_S3_ACCESS_KEY_ID: 'external-s3-access-key',
+  MAIL_BLOB_S3_SECRET_ACCESS_KEY: 'external-s3-secret-key',
   BETTER_AUTH_SECRET: 'a'.repeat(32),
   BETTER_AUTH_URL: 'https://api.example.test',
   VITE_PUBLIC_APP_URL: 'https://mail.example.test',
@@ -67,7 +74,16 @@ describe('parseRuntimeConfig', () => {
       port: 8787,
       shutdownGraceMs: 45_000,
       databaseUrl: 'postgresql://postgres:postgres@db:5432/zero',
-      mailBlobRoot: '/data/blobs',
+      mailBlobStore: {
+        type: 's3',
+        endpoint: 'https://objects.example.test',
+        region: 'ap-southeast-1',
+        bucket: 'zero-mail-production',
+        prefix: 'mail',
+        forcePathStyle: false,
+        accessKeyId: 'external-s3-access-key',
+        secretAccessKey: 'external-s3-secret-key',
+      },
       publicAppUrl: 'https://mail.example.test',
       publicBackendUrl: 'https://api.example.test',
       betterAuthUrl: 'https://api.example.test',
@@ -91,13 +107,11 @@ describe('parseRuntimeConfig', () => {
     delete environment.ZERO_SERVER_HOST;
     delete environment.ZERO_SERVER_PORT;
     delete environment.ZERO_SHUTDOWN_GRACE_MS;
-    delete environment.MAIL_BLOB_ROOT;
 
     expect(parseRuntimeConfig(environment)).toMatchObject({
       host: '0.0.0.0',
       port: 8787,
       shutdownGraceMs: 30_000,
-      mailBlobRoot: '/var/lib/zero/mail-blobs',
     });
   });
 
@@ -117,11 +131,40 @@ describe('parseRuntimeConfig', () => {
     ).toThrow();
   });
 
-  it('rejects a relative Blob root', () => {
+  it('rejects any production Blob store other than S3', () => {
     expect(() =>
       parseRuntimeConfig({
         ...validEnvironment(),
-        MAIL_BLOB_ROOT: 'data/blobs',
+        MAIL_BLOB_STORE: 'local',
+      }),
+    ).toThrow();
+  });
+
+  it.each([
+    'MAIL_BLOB_STORE',
+    'MAIL_BLOB_S3_ENDPOINT',
+    'MAIL_BLOB_S3_REGION',
+    'MAIL_BLOB_S3_BUCKET',
+    'MAIL_BLOB_S3_PREFIX',
+    'MAIL_BLOB_S3_ACCESS_KEY_ID',
+    'MAIL_BLOB_S3_SECRET_ACCESS_KEY',
+  ] as const)('requires external object storage setting %s', (name) => {
+    const environment = validEnvironment();
+    delete environment[name];
+
+    expect(() => parseRuntimeConfig(environment)).toThrow();
+  });
+
+  it.each([
+    ['MAIL_BLOB_S3_REGION', ''],
+    ['MAIL_BLOB_S3_BUCKET', ''],
+    ['MAIL_BLOB_S3_PREFIX', '../mail'],
+    ['MAIL_BLOB_S3_FORCE_PATH_STYLE', 'yes'],
+  ] as const)('rejects invalid S3 setting %s', (name, value) => {
+    expect(() =>
+      parseRuntimeConfig({
+        ...validEnvironment(),
+        [name]: value,
       }),
     ).toThrow();
   });

@@ -23,7 +23,9 @@ import { createEmailSearchDocument } from './search-document';
 import { renderDraft } from './render-draft';
 import { normalizeSubject } from '../thread';
 import { recordChanges } from '../changes';
+import type { ParsedEmail } from './types';
 import { MailCoreError } from '../types';
+import { parseRawEmail } from './mime';
 
 const requireMutableDraft = async (
   tx: MailTransaction,
@@ -49,8 +51,8 @@ const changedDraftProperties = (before: EmailRecord, after: EmailRecord): string
   const properties: (keyof EmailRecord)[] = [
     'blobId',
     'identityId',
-    'textBlobId',
-    'htmlBlobId',
+    'textBody',
+    'htmlBody',
     'replyToEmailId',
     'inReplyTo',
     'references',
@@ -129,6 +131,7 @@ export type PreparedDraftUpdate = {
   messageId: string;
   nextRevision: number;
   raw: Uint8Array;
+  parsed: ParsedEmail;
   prepared: Awaited<ReturnType<typeof prepareDraftRevision>>;
   now: Date;
 };
@@ -167,10 +170,12 @@ export async function prepareDraftUpdate(
     ...replyHeaders,
     attachments,
   });
+  const parsed = await parseRawEmail(raw, {
+    sanitizeHtml: dependencies.sanitizeHtml,
+  });
   const prepared = await prepareDraftRevision(dependencies, {
     accountId: input.accountId,
     raw,
-    content,
   });
   const now = dependencies.clock.now();
   return {
@@ -180,6 +185,7 @@ export async function prepareDraftUpdate(
     messageId,
     nextRevision,
     raw,
+    parsed,
     prepared,
     now,
   };
@@ -192,7 +198,7 @@ export async function updateDraftInTransaction(
   committedObjectKeys: string[],
   validated?: ValidatedDraftUpdate,
 ): Promise<DraftResult> {
-  const { input, content, messageId, nextRevision, raw, now } = preparedUpdate;
+  const { input, content, messageId, nextRevision, raw, parsed, now } = preparedUpdate;
   const checked =
     validated ?? (await validateDraftUpdateInTransaction(dependencies, tx, preparedUpdate));
   const { current, references, revision } = checked;
@@ -202,6 +208,7 @@ export async function updateDraftInTransaction(
     references,
     revision,
     raw,
+    parsed,
     draftRevision: nextRevision,
     messageId,
   });
@@ -305,7 +312,6 @@ export async function validateDraftUpdateInTransaction(
     accountId: input.accountId,
     excludeEmailId: input.emailId,
     revisionBlobs: revision,
-    attachments: references.attachments,
   });
   return { current, references, revision };
 }

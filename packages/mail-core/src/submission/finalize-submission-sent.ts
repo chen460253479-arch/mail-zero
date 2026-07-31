@@ -108,10 +108,7 @@ export async function finalizeSubmissionSentInTransaction(
     throw new MailCoreError('INVALID_EMAIL', { entityId: email.id });
   }
 
-  const frozenRaw = submission.frozenBlobs.find(
-    ({ kind, position }) => kind === 'raw' && position === 0,
-  );
-  if (frozenRaw === undefined || frozenRaw.blobId !== email.blobId) {
+  if (submission.rawBlobId !== email.blobId) {
     throw new MailCoreError('BLOB_INTEGRITY', { entityId: email.id });
   }
   const remote = await tx.emails.findByRemoteId({
@@ -175,7 +172,7 @@ export async function finalizeSubmissionSentInTransaction(
     remoteEmailId: input.remoteMessageId,
     remoteThreadId: input.remoteThreadId,
     emailId: email.id,
-    contentFingerprint: frozenRaw.sha256,
+    contentFingerprint: submission.rawSha256,
     firstSeenAt: new Date(input.acceptedAt),
     lastSeenAt: new Date(input.acceptedAt),
   });

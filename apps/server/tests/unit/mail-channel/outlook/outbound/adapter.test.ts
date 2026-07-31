@@ -50,6 +50,24 @@ describe('Outlook outbound adapter', () => {
     expect(client.sendDraft).toHaveBeenCalledWith('immutable-draft-id');
   });
 
+  it('adds private Bcc recipients only to the transient Outlook request MIME', async () => {
+    const rawMime = new TextEncoder().encode(
+      'From: sender@example.test\r\nTo: recipient@example.test\r\nMessage-ID: <stable@example.test>\r\n\r\nBody',
+    );
+    const client = createClient();
+    const adapter = createOutlookOutboundAdapter(client);
+
+    await adapter.send({
+      ...message,
+      envelope: { ...message.envelope, bcc: ['blind@example.test'] },
+      rawMime,
+    });
+
+    const dispatched = vi.mocked(client.createMimeDraft).mock.calls[0]![0];
+    expect(new TextDecoder().decode(dispatched)).toContain('\r\nBcc: blind@example.test\r\n\r\n');
+    expect(new TextDecoder().decode(rawMime)).not.toContain('Bcc:');
+  });
+
   it('marks a server failure after dispatch as uncertain instead of blindly retrying', async () => {
     const adapter = createOutlookOutboundAdapter(
       createClient({

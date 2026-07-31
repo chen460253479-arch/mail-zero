@@ -20,17 +20,6 @@ const referencedBlobIds = (emails: EmailRecord[]): Set<BlobId> => {
     if (email.blobId !== null) {
       referenced.add(email.blobId);
     }
-    if (email.textBlobId !== null) {
-      referenced.add(email.textBlobId);
-    }
-    if (email.htmlBlobId !== null) {
-      referenced.add(email.htmlBlobId);
-    }
-    for (const part of email.parts) {
-      if (part.blobId !== null) {
-        referenced.add(part.blobId);
-      }
-    }
   }
   return referenced;
 };
@@ -52,9 +41,7 @@ export async function garbageCollectBlobs(
     await tx.lockAccount(input.accountId);
     const referenced = referencedBlobIds(await tx.emails.listByAccount(input.accountId));
     for (const submission of await tx.submissions.listByAccount(input.accountId)) {
-      for (const frozen of submission.frozenBlobs) {
-        referenced.add(frozen.blobId);
-      }
+      referenced.add(submission.rawBlobId);
     }
     const accountBlobs = await tx.blobs.listByAccount(input.accountId);
     const candidatesToMark: BlobRecord[] = accountBlobs

@@ -20,7 +20,6 @@ import {
   emailSetInputSchema,
 } from '../contracts/email';
 import { mapSetError, mapSetErrors } from './dto';
-import { readBodyText } from './body-values';
 import { toEmailDto } from './email-dto';
 
 type EmailGetInput = z.infer<typeof emailGetInputSchema>;
@@ -62,12 +61,10 @@ const toMailAddresses = (
 const hasDraftPatch = (patch: EmailSetInput['update'][string]) =>
   draftFields.some((field) => patch[field] !== undefined);
 
-async function mergeDraftContent(
-  core: Pick<MailCore, 'readBlob'>,
-  accountId: MailAccountId,
+function mergeDraftContent(
   current: EmailRecord,
   patch: EmailSetInput['update'][string],
-): Promise<DraftContent> {
+): DraftContent {
   if (current.lifecycle !== 'draft' || current.identityId === null) {
     throw new MailCoreError('EMAIL_CONTENT_IMMUTABLE', { entityId: current.id });
   }
@@ -80,13 +77,11 @@ async function mergeDraftContent(
     cc: patch.cc === undefined ? current.cc : toMailAddresses(patch.cc),
     bcc: patch.bcc === undefined ? current.bcc : toMailAddresses(patch.bcc),
     subject: patch.subject ?? current.subject,
-    textBody:
-      patch.textBody ?? (await readBodyText(core, accountId, current.textBlobId as BlobId | null)),
-    htmlBody:
-      patch.htmlBody ?? (await readBodyText(core, accountId, current.htmlBlobId as BlobId | null)),
+    textBody: patch.textBody ?? current.textBody,
+    htmlBody: patch.htmlBody ?? current.htmlBody,
     attachmentBlobIds: (patch.attachmentBlobIds ??
       current.parts.flatMap((part) =>
-        part.kind === 'attachment' && part.blobId !== null ? [part.blobId] : [],
+        part.kind === 'attachment' || part.kind === 'inline' ? [part.id as BlobId] : [],
       )) as BlobId[],
   };
 }
@@ -94,14 +89,7 @@ async function mergeDraftContent(
 export const createEmailService = (
   core: Pick<
     MailCore,
-    | 'getChanges'
-    | 'getEmail'
-    | 'getEmails'
-    | 'getState'
-    | 'queryEmails'
-    | 'readBlob'
-    | 'readBlobRange'
-    | 'setEmails'
+    'getChanges' | 'getEmail' | 'getEmails' | 'getState' | 'queryEmails' | 'setEmails'
   >,
 ) => ({
   async get(input: EmailGetInput) {
@@ -194,9 +182,7 @@ export const createEmailService = (
           ifDraftRevision: contentPatch
             ? (patch.ifDraftRevision ?? current!.draftRevision)
             : patch.ifDraftRevision,
-          content: contentPatch
-            ? await mergeDraftContent(core, accountId, current!, patch)
-            : undefined,
+          content: contentPatch ? mergeDraftContent(current!, patch) : undefined,
         };
       } catch (error) {
         if (!(error instanceof MailCoreError)) throw error;

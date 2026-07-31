@@ -7,15 +7,14 @@ import {
 } from '../../../../../src/modules/external-integration/application/read-message';
 
 const accountId = 'mail-account-1' as MailAccountId;
-const textBlobId = 'text-blob-1' as BlobId;
-const htmlBlobId = 'html-blob-1' as BlobId;
+const rawBlobId = 'raw-blob-1' as BlobId;
 
 const email: EmailRecord = {
   id: 'local-email-1' as EmailRecord['id'],
   accountId,
   identityId: null,
   threadId: 'thread-1' as EmailRecord['threadId'],
-  blobId: null,
+  blobId: rawBlobId,
   messageId: '<rfc-message-id@example.test>',
   replyToEmailId: null,
   inReplyTo: [],
@@ -37,6 +36,8 @@ const email: EmailRecord = {
   to: [{ name: 'Traveler', email: 'traveler@example.test' }],
   cc: [],
   bcc: [],
+  textBody: 'Plain body',
+  htmlBody: '<p>HTML body</p>',
   parts: [
     {
       id: 'text-part-1',
@@ -47,7 +48,11 @@ const email: EmailRecord = {
       disposition: null,
       filename: null,
       contentId: null,
-      blobId: textBlobId,
+      rawBlobId,
+      offsetStart: 100n,
+      encodedLength: 20n,
+      decodedLength: 20n,
+      transferEncoding: '8bit',
       sizeBytes: 20n,
       kind: 'body',
     },
@@ -60,7 +65,11 @@ const email: EmailRecord = {
       disposition: null,
       filename: null,
       contentId: null,
-      blobId: htmlBlobId,
+      rawBlobId,
+      offsetStart: 200n,
+      encodedLength: 27n,
+      decodedLength: 27n,
+      transferEncoding: '8bit',
       sizeBytes: 27n,
       kind: 'body',
     },
@@ -73,7 +82,11 @@ const email: EmailRecord = {
       disposition: 'attachment',
       filename: 'invoice.pdf',
       contentId: null,
-      blobId: 'attachment-blob-1' as BlobId,
+      rawBlobId,
+      offsetStart: 300n,
+      encodedLength: 1368n,
+      decodedLength: 1024n,
+      transferEncoding: 'base64',
       sizeBytes: 1024n,
       kind: 'attachment',
     },
@@ -81,8 +94,6 @@ const email: EmailRecord = {
   mailboxIds: ['inbox-1' as EmailRecord['mailboxIds'][number]],
   restoreMailboxIds: [],
   keywords: ['$seen' as EmailRecord['keywords'][number]],
-  textBlobId,
-  htmlBlobId,
   parserVersion: 1,
   parseWarnings: [],
 };
@@ -97,7 +108,14 @@ const repository: ExternalMessageRepository = {
           channelId: 'gmail',
         }
       : null,
-  findAttachmentScope: async () => null,
+  findAttachmentScope: async ({ attachmentId }) =>
+    attachmentId === 'part-1'
+      ? {
+          mailAccountId: accountId,
+          emailId: email.id,
+          partId: 'part-1',
+        }
+      : null,
 };
 
 const createReader = () =>
@@ -105,11 +123,14 @@ const createReader = () =>
     repository,
     core: {
       getEmail: async () => email,
-      getBlob: async () => {
-        throw new Error('not used');
-      },
-      readBlob: async ({ blobId }) =>
-        new TextEncoder().encode(blobId === textBlobId ? 'Plain body' : '<p>HTML body</p>'),
+      readEmailPart: async ({ partId }) => ({
+        bytes: new TextEncoder().encode(partId === 'part-1' ? 'attachment bytes' : ''),
+        contentType: 'application/pdf',
+        disposition: 'attachment',
+        filename: 'invoice.pdf',
+        contentId: null,
+        sizeBytes: 16n,
+      }),
     },
   });
 
@@ -154,6 +175,15 @@ describe('external message reader', () => {
       messageId: 'local-email-1',
       textBody: 'Plain body',
       htmlBody: '<p>HTML body</p>',
+    });
+  });
+
+  it('reads an attachment from its Raw MIME section', async () => {
+    await expect(createReader().getAttachmentContent('part-1')).resolves.toEqual({
+      bytes: new TextEncoder().encode('attachment bytes'),
+      filename: 'invoice.pdf',
+      contentType: 'application/pdf',
+      size: '16',
     });
   });
 

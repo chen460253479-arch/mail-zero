@@ -213,7 +213,9 @@ describe('setEmails', () => {
     const beforeState = await h.inspect.stateVersion();
     const beforeObjects = h.deps.blobStore.snapshot();
     const beforeChanges = await h.inspect.changes();
-    h.deps.blobStore.failCommitAfterPromotions(4);
+    // Each Draft now promotes exactly one Raw MIME object. Fail the second
+    // promotion so the first committed object must also be compensated.
+    h.deps.blobStore.failCommitAfterPromotions(2);
 
     await expect(
       h.core.setEmails({

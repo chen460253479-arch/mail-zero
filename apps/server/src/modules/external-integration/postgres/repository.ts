@@ -64,10 +64,7 @@ export const createPostgresExternalMessageRepository = (db: DB): ExternalMessage
       .select({
         mailAccountId: emailPart.mailAccountId,
         emailId: emailPart.emailId,
-        blobId: emailPart.blobId,
-        filename: emailPart.filename,
-        contentType: emailPart.contentType,
-        sizeBytes: emailPart.sizeBytes,
+        partId: emailPart.id,
       })
       .from(emailPart)
       .innerJoin(
@@ -85,7 +82,6 @@ export const createPostgresExternalMessageRepository = (db: DB): ExternalMessage
         and(
           eq(emailPart.id, attachmentId),
           inArray(emailPart.kind, ['inline', 'attachment']),
-          isNotNull(emailPart.blobId),
           isNull(email.destroyedAt),
           eq(user.role, 'user'),
           isNotNull(user.username),
@@ -95,11 +91,7 @@ export const createPostgresExternalMessageRepository = (db: DB): ExternalMessage
       )
       .limit(1);
 
-    if (row?.blobId === null || row === undefined) return null;
-    return {
-      ...row,
-      blobId: row.blobId,
-    } as ExternalAttachmentScope;
+    return row === undefined ? null : (row as ExternalAttachmentScope);
   },
 });
 

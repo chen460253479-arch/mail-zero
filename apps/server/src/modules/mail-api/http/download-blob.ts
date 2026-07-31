@@ -1,3 +1,4 @@
+import { MailCoreError } from '@zero/mail-core';
 import type { Context } from 'hono';
 
 import { authorizeMailAccount, mailHttpErrorResponse } from './authorize-mail-account';
@@ -23,17 +24,34 @@ export async function downloadMailBlob(c: Context<HonoContext>) {
   if ('response' in authorization) return authorization.response;
   try {
     const blobId = c.req.param('blobId') as never;
-    const blob = await authorization.runtime.core.getBlob({
-      accountId: accountId as never,
-      blobId,
-    });
-    const bytes = await authorization.runtime.core.readBlob({
-      accountId: accountId as never,
-      blobId,
-    });
-    return new Response(bytes as BodyInit, {
-      headers: safeDownloadHeaders(blob.contentType, bytes.byteLength, c.req.param('filename')),
-    });
+    try {
+      const blob = await authorization.runtime.core.getBlob({
+        accountId: accountId as never,
+        blobId,
+      });
+      const bytes = await authorization.runtime.core.readBlob({
+        accountId: accountId as never,
+        blobId,
+      });
+      return new Response(bytes as BodyInit, {
+        headers: safeDownloadHeaders(blob.contentType, bytes.byteLength, c.req.param('filename')),
+      });
+    } catch (error) {
+      if (!(error instanceof MailCoreError) || error.code !== 'BLOB_NOT_FOUND') {
+        throw error;
+      }
+      const part = await authorization.runtime.core.readEmailPartById({
+        accountId: accountId as never,
+        partId: c.req.param('blobId'),
+      });
+      return new Response(part.bytes as BodyInit, {
+        headers: safeDownloadHeaders(
+          part.contentType,
+          part.bytes.byteLength,
+          c.req.param('filename'),
+        ),
+      });
+    }
   } catch (error) {
     return mailHttpErrorResponse(c, error);
   } finally {

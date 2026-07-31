@@ -69,7 +69,7 @@ describe('self-hosted commercial billing removal', () => {
       'apps/mail/components/ui/nav-user.tsx',
       'apps/mail/components/mail/mail.tsx',
       'apps/mail/components/settings/settings-card.tsx',
-      'apps/mail/providers/server-providers.tsx',
+      'apps/mail/providers/client-providers.tsx',
     ];
 
     for (const path of paths) {

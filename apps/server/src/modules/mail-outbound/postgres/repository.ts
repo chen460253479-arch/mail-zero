@@ -13,9 +13,9 @@ import type {
   OutboundEnvelope,
   OutboundErrorClassification,
 } from '../../../mail-channel/contracts';
-import { emailSubmission, submissionBlob } from '../../mail/postgres/schema/submissions';
 import { email, emailAddress, remoteEmail } from '../../mail/postgres/schema/emails';
 import type { MailDatabase } from '../../mail/postgres/repositories/database';
+import { emailSubmission } from '../../mail/postgres/schema/submissions';
 import { mailAccount } from '../../mail/postgres/schema/accounts';
 import { outboundDelivery, sendAttempt } from './schema';
 import { MailOutboundError } from '../domain/errors';
@@ -505,24 +505,12 @@ export const createMailOutboundRepository = (
       if (submission === undefined) {
         return storageFailure(delivery.id);
       }
-      const [emails, rawRows, addressRows, connectionRows] = await Promise.all([
+      const [emails, addressRows, connectionRows] = await Promise.all([
         db
           .select()
           .from(email)
           .where(
             and(eq(email.id, submission.emailId), eq(email.mailAccountId, delivery.mailAccountId)),
-          )
-          .limit(1),
-        db
-          .select()
-          .from(submissionBlob)
-          .where(
-            and(
-              eq(submissionBlob.mailAccountId, delivery.mailAccountId),
-              eq(submissionBlob.submissionId, submission.id),
-              eq(submissionBlob.kind, 'raw'),
-              eq(submissionBlob.position, 0),
-            ),
           )
           .limit(1),
         db
@@ -542,14 +530,8 @@ export const createMailOutboundRepository = (
           .limit(1),
       ]);
       const message = emails[0];
-      const raw = rawRows[0];
       const channel = connectionRows[0];
-      if (
-        message === undefined ||
-        raw === undefined ||
-        channel === undefined ||
-        message.messageIdHeader === null
-      ) {
+      if (message === undefined || channel === undefined || message.messageIdHeader === null) {
         return storageFailure(delivery.id);
       }
       const from =
@@ -590,11 +572,11 @@ export const createMailOutboundRepository = (
         },
         messageId: message.messageIdHeader,
         raw: {
-          blobId: raw.blobId,
-          objectKey: raw.objectKey,
-          sha256: raw.sha256,
-          sizeBytes: raw.sizeBytes,
-          contentType: raw.contentType,
+          blobId: submission.rawBlobId,
+          objectKey: submission.rawObjectKey,
+          sha256: submission.rawSha256,
+          sizeBytes: submission.rawSizeBytes,
+          contentType: 'message/rfc822',
         },
         remoteThreadReferences: replyRows.flatMap((row) =>
           row.remoteThreadId === null

@@ -39,19 +39,24 @@ if (result.status !== 0) {
 const compose = JSON.parse(result.stdout) as ComposeConfig;
 
 describe('Docker Server immutable runtime', () => {
-  it('runs one native Node backend with only persistent mail blobs mounted', () => {
+  it('runs one native Node backend against S3 without a local Blob volume', () => {
     const server = compose.services.server;
 
     expect(server.image).toBe('zero-server');
     expect(server.build?.dockerfile).toBe('docker/server/Dockerfile');
     expect(server.command ?? null).toBeNull();
-    expect(server.volumes).toEqual([
-      expect.objectContaining({
-        type: 'volume',
-        source: 'zero-mail-blobs',
-        target: '/var/lib/zero/mail-blobs',
-      }),
-    ]);
+    expect(server.volumes ?? []).toHaveLength(0);
+    expect(server.environment).toHaveProperty('MAIL_BLOB_STORE', 's3');
+    for (const requiredSetting of [
+      'MAIL_BLOB_S3_ENDPOINT',
+      'MAIL_BLOB_S3_REGION',
+      'MAIL_BLOB_S3_BUCKET',
+      'MAIL_BLOB_S3_PREFIX',
+      'MAIL_BLOB_S3_ACCESS_KEY_ID',
+      'MAIL_BLOB_S3_SECRET_ACCESS_KEY',
+    ]) {
+      expect(server.environment).toHaveProperty(requiredSetting);
+    }
     for (const forbidden of [
       'CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE',
       'WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE',
@@ -85,7 +90,8 @@ describe('Docker Server immutable runtime', () => {
       'pnpm --filter @zero/server --prod deploy --legacy /app/server-runtime',
     );
     expect(dockerfile).toContain('FROM node:22-bookworm-slim AS runtime');
-    expect(dockerfile).toContain('/var/lib/zero/mail-blobs');
+    expect(dockerfile).not.toContain('/var/lib/zero/mail-blobs');
+    expect(dockerfile).not.toContain('MAIL_BLOB_ROOT');
     expect(dockerfile).not.toContain('wrangler');
     expect(dockerfile).not.toContain('workerd');
     expect(dockerfile).not.toMatch(/FROM node:22-bookworm-slim AS runtime[\s\S]*COPY \. \./);

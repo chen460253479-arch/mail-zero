@@ -20,13 +20,11 @@ FROM node:22-bookworm-slim AS runtime
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends ca-certificates \
-    && rm -rf /var/lib/apt/lists/* \
-    && install -d -o node -g node /var/lib/zero/mail-blobs
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-ENV NODE_ENV=production \
-    MAIL_BLOB_ROOT=/var/lib/zero/mail-blobs
+ENV NODE_ENV=production
 
 COPY --from=builder --chown=node:node /app/server-runtime/ /app/
 COPY docker/server/entrypoint.sh /usr/local/bin/zero-server-entrypoint

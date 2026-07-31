@@ -1,17 +1,10 @@
-import type {
-  SubmissionBlobReference,
-  SubmissionRecord,
-  SubmissionRepository,
-} from '@zero/mail-core';
+import type { SubmissionRecord, SubmissionRepository } from '@zero/mail-core';
 import { and, asc, eq, gt, ne, or } from 'drizzle-orm';
 
 import { requireRow, runAdapter, type MailDatabase } from './database';
-import { emailSubmission, submissionBlob } from '../schema';
+import { emailSubmission } from '../schema';
 
-const mapSubmission = (
-  row: typeof emailSubmission.$inferSelect,
-  frozenBlobs: SubmissionBlobReference[],
-): SubmissionRecord => ({
+const mapSubmission = (row: typeof emailSubmission.$inferSelect): SubmissionRecord => ({
   id: row.id as SubmissionRecord['id'],
   accountId: row.mailAccountId as SubmissionRecord['accountId'],
   emailId: row.emailId as SubmissionRecord['emailId'],
@@ -20,7 +13,10 @@ const mapSubmission = (
   sendAt: row.sendAt,
   idempotencyKey: row.idempotencyKey,
   draftRevision: row.draftRevision,
-  frozenBlobs,
+  rawBlobId: row.rawBlobId as SubmissionRecord['rawBlobId'],
+  rawSha256: row.rawSha256,
+  rawSizeBytes: row.rawSizeBytes,
+  rawObjectKey: row.rawObjectKey,
   providerMessageId: row.providerMessageId,
   lastErrorCode: row.lastErrorCode,
   lastErrorMessage: row.lastErrorMessage,
@@ -29,43 +25,8 @@ const mapSubmission = (
   sentAt: row.sentAt,
 });
 
-const blobKindOrder = { raw: 0, text: 1, html: 2, part: 3 } as const;
-
-const loadFrozenBlobs = async (
-  db: MailDatabase,
-  accountId: string,
-  submissionId: string,
-): Promise<SubmissionBlobReference[]> =>
-  (
-    await db
-      .select()
-      .from(submissionBlob)
-      .where(
-        and(
-          eq(submissionBlob.mailAccountId, accountId),
-          eq(submissionBlob.submissionId, submissionId),
-        ),
-      )
-  )
-    .map((row) => ({
-      blobId: row.blobId as SubmissionBlobReference['blobId'],
-      kind: row.kind,
-      position: row.position,
-      sha256: row.sha256,
-      sizeBytes: row.sizeBytes,
-      contentType: row.contentType,
-      objectKey: row.objectKey,
-    }))
-    .sort(
-      (left, right) =>
-        blobKindOrder[left.kind] - blobKindOrder[right.kind] || left.position - right.position,
-    );
-
-const hydrateSubmission = async (
-  db: MailDatabase,
-  row: typeof emailSubmission.$inferSelect,
-): Promise<SubmissionRecord> =>
-  mapSubmission(row, await loadFrozenBlobs(db, row.mailAccountId, row.id));
+const hydrateSubmission = (row: typeof emailSubmission.$inferSelect): SubmissionRecord =>
+  mapSubmission(row);
 
 export const createSubmissionRepository = (db: MailDatabase): SubmissionRepository => ({
   findById: (accountId, id) =>
@@ -75,7 +36,7 @@ export const createSubmissionRepository = (db: MailDatabase): SubmissionReposito
         .from(emailSubmission)
         .where(and(eq(emailSubmission.mailAccountId, accountId), eq(emailSubmission.id, id)))
         .limit(1);
-      return rows[0] === undefined ? null : hydrateSubmission(db, rows[0]);
+      return rows[0] === undefined ? null : hydrateSubmission(rows[0]);
     }),
   existsOutsideAccount: (accountId, id) =>
     runAdapter(async () => {
@@ -98,7 +59,7 @@ export const createSubmissionRepository = (db: MailDatabase): SubmissionReposito
           ),
         )
         .limit(1);
-      return rows[0] === undefined ? null : hydrateSubmission(db, rows[0]);
+      return rows[0] === undefined ? null : hydrateSubmission(rows[0]);
     }),
   listByIdentity: (accountId, identityId) =>
     runAdapter(async () =>
@@ -114,7 +75,7 @@ export const createSubmissionRepository = (db: MailDatabase): SubmissionReposito
               ),
             )
             .orderBy(asc(emailSubmission.createdAt), asc(emailSubmission.id))
-        ).map((row) => hydrateSubmission(db, row)),
+        ).map((row) => hydrateSubmission(row)),
       ),
     ),
   listByAccount: (accountId) =>
@@ -126,7 +87,7 @@ export const createSubmissionRepository = (db: MailDatabase): SubmissionReposito
             .from(emailSubmission)
             .where(eq(emailSubmission.mailAccountId, accountId))
             .orderBy(asc(emailSubmission.createdAt), asc(emailSubmission.id))
-        ).map((row) => hydrateSubmission(db, row)),
+        ).map((row) => hydrateSubmission(row)),
       ),
     ),
   queryPage: (input) =>
@@ -155,27 +116,18 @@ export const createSubmissionRepository = (db: MailDatabase): SubmissionReposito
             )
             .orderBy(asc(emailSubmission.createdAt), asc(emailSubmission.id))
             .limit(input.limit)
-        ).map((row) => hydrateSubmission(db, row)),
+        ).map((row) => hydrateSubmission(row)),
       );
     }),
   insert: (record) =>
     runAdapter(async () => {
-      const { frozenBlobs, accountId, ...submission } = record;
+      const { accountId, ...submission } = record;
       const rows = await db
         .insert(emailSubmission)
         .values({ ...submission, mailAccountId: accountId })
         .returning();
       const row = requireRow(rows, 'STORAGE_FAILURE');
-      if (frozenBlobs.length > 0) {
-        await db.insert(submissionBlob).values(
-          frozenBlobs.map((frozen) => ({
-            mailAccountId: accountId,
-            submissionId: record.id,
-            ...frozen,
-          })),
-        );
-      }
-      return hydrateSubmission(db, row);
+      return hydrateSubmission(row);
     }),
   update: (accountId, id, patch) =>
     runAdapter(async () => {
@@ -184,6 +136,6 @@ export const createSubmissionRepository = (db: MailDatabase): SubmissionReposito
         .set(patch)
         .where(and(eq(emailSubmission.mailAccountId, accountId), eq(emailSubmission.id, id)))
         .returning();
-      return hydrateSubmission(db, requireRow(rows, 'EMAIL_SUBMISSION_NOT_FOUND', id));
+      return hydrateSubmission(requireRow(rows, 'EMAIL_SUBMISSION_NOT_FOUND', id));
     }),
 });

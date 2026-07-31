@@ -98,14 +98,7 @@ const requireImportReferences = async (
 };
 
 const referencedBlobIds = (emails: EmailRecord[]): Set<BlobId> =>
-  new Set(
-    emails.flatMap((email) => [
-      ...(email.blobId === null ? [] : [email.blobId]),
-      ...(email.textBlobId === null ? [] : [email.textBlobId]),
-      ...(email.htmlBlobId === null ? [] : [email.htmlBlobId]),
-      ...email.parts.flatMap(({ blobId }) => (blobId === null ? [] : [blobId])),
-    ]),
-  );
+  new Set(emails.flatMap((email) => (email.blobId === null ? [] : [email.blobId])));
 
 const quotaReferencedBlobIds = async (
   tx: MailTransaction,
@@ -114,9 +107,7 @@ const quotaReferencedBlobIds = async (
 ): Promise<Set<BlobId>> => {
   const referenced = referencedBlobIds(emails);
   for (const submission of await tx.submissions.listByAccount(accountId)) {
-    for (const frozen of submission.frozenBlobs) {
-      referenced.add(frozen.blobId);
-    }
+    referenced.add(submission.rawBlobId);
   }
   return referenced;
 };
@@ -359,28 +350,28 @@ const decideThread = async (
 const buildEmailParts = (
   dependencies: MailCoreDependencies,
   parsed: ParsedEmail,
-  partBlobs: (PreparedBlob | null)[],
-  blobIdByDigest: Map<string, BlobId>,
+  rawBlobId: BlobId,
 ): EmailPartRecord[] => {
   const idByPath = new Map(
     parsed.parts.map((part) => [part.partPath, dependencies.idFactory.next<'EmailPart'>()]),
   );
-  return parsed.parts.map((part, index) => {
-    const prepared = partBlobs[index] ?? null;
-    return {
-      id: idByPath.get(part.partPath)!,
-      parentPartId: part.parentPath === null ? null : idByPath.get(part.parentPath)!,
-      partPath: part.partPath,
-      contentType: part.contentType,
-      charset: part.charset,
-      disposition: part.disposition,
-      filename: part.filename,
-      contentId: part.contentId,
-      blobId: prepared === null ? null : blobIdByDigest.get(digestKey(prepared))!,
-      sizeBytes: part.sizeBytes,
-      kind: part.kind,
-    };
-  });
+  return parsed.parts.map((part) => ({
+    id: idByPath.get(part.partPath)!,
+    parentPartId: part.parentPath === null ? null : idByPath.get(part.parentPath)!,
+    partPath: part.partPath,
+    contentType: part.contentType,
+    charset: part.charset,
+    disposition: part.disposition,
+    filename: part.filename,
+    contentId: part.contentId,
+    rawBlobId,
+    offsetStart: part.section.offsetStart,
+    encodedLength: part.section.encodedLength,
+    decodedLength: part.section.decodedLength,
+    transferEncoding: part.section.transferEncoding,
+    sizeBytes: part.section.decodedLength,
+    kind: part.kind,
+  }));
 };
 
 const recordImportChanges = async (
@@ -486,11 +477,8 @@ export async function importEmail(
     sanitizeHtml: dependencies.sanitizeHtml,
   });
   const prepared: PreparedBlob[] = [];
-  const partBlobs: (PreparedBlob | null)[] = [];
   const committedObjectKeys: string[] = [];
   let rawBlob: PreparedBlob | null = null;
-  let textBlob: PreparedBlob | null = null;
-  let htmlBlob: PreparedBlob | null = null;
   let importOperationCompleted = false;
   try {
     rawBlob = await prepareBlob(dependencies.blobStore, {
@@ -499,35 +487,6 @@ export async function importEmail(
       contentType: 'message/rfc822',
     });
     prepared.push(rawBlob);
-    if (parsed.textBody.length > 0) {
-      textBlob = await prepareBlob(dependencies.blobStore, {
-        accountId: input.accountId,
-        bytes: new TextEncoder().encode(parsed.textBody),
-        contentType: 'text/plain; charset=utf-8',
-      });
-      prepared.push(textBlob);
-    }
-    if (parsed.htmlBody.length > 0) {
-      htmlBlob = await prepareBlob(dependencies.blobStore, {
-        accountId: input.accountId,
-        bytes: new TextEncoder().encode(parsed.htmlBody),
-        contentType: 'text/html; charset=utf-8',
-      });
-      prepared.push(htmlBlob);
-    }
-    for (const part of parsed.parts) {
-      if (part.bytes.byteLength === 0) {
-        partBlobs.push(null);
-        continue;
-      }
-      const partBlob = await prepareBlob(dependencies.blobStore, {
-        accountId: input.accountId,
-        bytes: part.bytes,
-        contentType: part.contentType,
-      });
-      prepared.push(partBlob);
-      partBlobs.push(partBlob);
-    }
 
     const result = await dependencies.unitOfWork.run(async (tx): Promise<ImportEmailResult> => {
       await tx.lockAccount(input.accountId);
@@ -594,11 +553,11 @@ export async function importEmail(
         to: parsed.to,
         cc: parsed.cc,
         bcc: parsed.bcc,
-        textBlobId: textBlob === null ? null : blobIdByDigest.get(digestKey(textBlob))!,
-        htmlBlobId: htmlBlob === null ? null : blobIdByDigest.get(digestKey(htmlBlob))!,
+        textBody: parsed.textBody,
+        htmlBody: parsed.htmlBody,
         parserVersion: 1,
         parseWarnings: [],
-        parts: buildEmailParts(dependencies, parsed, partBlobs, blobIdByDigest),
+        parts: buildEmailParts(dependencies, parsed, rawBlobId),
         mailboxIds: validation.mailboxIds,
         restoreMailboxIds: [],
         keywords: validation.keywords,

@@ -48,9 +48,9 @@ import { handleZohoMailWebhookForEnvironment } from '../mail/zoho-inbound';
 import { defaultMailChannelRegistry } from '../../mail-channel/registry';
 import { handleGmailWebhookForEnvironment } from '../mail/gmail-inbound';
 import { configureUserWorkspaceService } from '../../lib/server-utils';
-import type { LocalBlobStore } from '../../modules/mail';
 import { createAuth, type Auth } from '../../lib/auth';
 import type { RuntimeDatabase } from './database';
+import type { BlobStore } from '@zero/mail-core';
 import type { RuntimeConfig } from './config';
 import type { ZeroEnv } from '../../env';
 
@@ -102,7 +102,7 @@ export type RuntimeServices = {
   config: RuntimeConfig;
   environment: ZeroEnv;
   database: RuntimeDatabase;
-  blobStore: LocalBlobStore;
+  blobStore: BlobStore;
   taskRepository: MailTaskRepository;
   taskQueue: MailTaskQueuePort;
   taskWorker: MailTaskWorker;
@@ -123,7 +123,7 @@ export type RuntimeServices = {
 export type CreateRuntimeServicesInput = {
   config: RuntimeConfig;
   database: RuntimeDatabase;
-  blobStore: LocalBlobStore;
+  blobStore: BlobStore;
 };
 
 const MAIL_NOTIFICATION_LEASE_FOR_MS = 5 * 60_000;

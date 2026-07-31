@@ -45,14 +45,12 @@ const errorForConstraint = (constraint: string | undefined): MailCoreErrorCode |
     case 'email_blob_account_fk':
     case 'email_address_email_account_fk':
     case 'email_content_email_account_fk':
-    case 'email_content_text_blob_account_fk':
-    case 'email_content_html_blob_account_fk':
     case 'email_keyword_email_account_fk':
     case 'email_mailbox_email_account_fk':
     case 'email_mailbox_mailbox_account_fk':
     case 'email_part_email_account_fk':
     case 'email_part_parent_account_fk':
-    case 'email_part_blob_account_fk':
+    case 'email_part_raw_blob_account_fk':
     case 'email_trash_restore_email_account_fk':
     case 'email_trash_restore_mailbox_account_fk':
     case 'remote_email_email_account_fk':
@@ -62,10 +60,9 @@ const errorForConstraint = (constraint: string | undefined): MailCoreErrorCode |
     case 'email_search_email_account_fk':
     case 'email_submission_email_account_fk':
     case 'email_submission_identity_account_fk':
+    case 'email_submission_raw_blob_account_fk':
     case 'thread_reference_email_account_fk':
     case 'thread_reference_thread_account_fk':
-    case 'submission_blob_submission_account_fk':
-    case 'submission_blob_blob_account_fk':
       return 'CROSS_ACCOUNT_REFERENCE';
     default:
       return null;

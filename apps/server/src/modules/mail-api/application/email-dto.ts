@@ -1,13 +1,7 @@
-import type {
-  BlobId,
-  EmailPartRecord,
-  EmailRecord,
-  MailAccountId,
-  MailCore,
-} from '@zero/mail-core';
+import type { EmailPartRecord, EmailRecord, MailAccountId } from '@zero/mail-core';
 
 import { emailSchema } from '../contracts/email';
-import { readBodyValue } from './body-values';
+import { projectBodyValue } from './body-values';
 
 export type EmailBodyProjection = {
   properties?: string[];
@@ -29,7 +23,7 @@ const toPartDto = (part: EmailPartRecord) => ({
   disposition: part.disposition,
   filename: part.filename,
   contentId: part.contentId,
-  blobId: part.blobId,
+  blobId: part.id,
   size: part.sizeBytes,
   kind: part.kind,
 });
@@ -41,23 +35,27 @@ const isHtmlBody = (part: EmailPartRecord) =>
   part.kind === 'body' && part.contentType.toLocaleLowerCase('und').startsWith('text/html');
 
 export async function toEmailDto(
-  core: Pick<MailCore, 'readBlob' | 'readBlobRange'>,
-  accountId: MailAccountId,
+  _core: unknown,
+  _accountId: MailAccountId,
   email: EmailRecord,
   projection: EmailBodyProjection = {},
 ) {
-  const textBody = email.parts.filter(isTextBody);
-  const htmlBody = email.parts.filter(isHtmlBody);
+  const textBody = email.parts.filter(isTextBody).slice(0, 1);
+  const htmlBody = email.parts.filter(isHtmlBody).slice(0, 1);
   const includesBodyValues =
     projection.properties === undefined || projection.properties.includes('bodyValues');
   const requestedParts = [
-    ...(includesBodyValues && projection.fetchTextBodyValues ? textBody : []),
-    ...(includesBodyValues && projection.fetchHTMLBodyValues ? htmlBody : []),
-  ].filter((part): part is EmailPartRecord & { blobId: BlobId } => part.blobId !== null);
+    ...(includesBodyValues && projection.fetchTextBodyValues
+      ? textBody.map((part) => ({ part, value: email.textBody }))
+      : []),
+    ...(includesBodyValues && projection.fetchHTMLBodyValues
+      ? htmlBody.map((part) => ({ part, value: email.htmlBody }))
+      : []),
+  ];
   const maxBytes = projection.maxBodyValueBytes ?? 256_000;
   const bodyValues = Object.fromEntries(
     await Promise.all(
-      requestedParts.map(async (part) => {
+      requestedParts.map(async ({ part, value }) => {
         const allowed =
           projection.bodyReadBudget === undefined
             ? maxBytes
@@ -67,9 +65,7 @@ export async function toEmailDto(
         }
         return [
           part.id,
-          allowed === 0
-            ? { value: '', isTruncated: true }
-            : await readBodyValue(core, accountId, part.blobId, allowed),
+          allowed === 0 ? { value: '', isTruncated: true } : projectBodyValue(value, allowed),
         ];
       }),
     ),

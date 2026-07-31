@@ -165,6 +165,7 @@ CREATE TABLE "auth"."session" (
 	"updated_at" timestamp NOT NULL,
 	"ip_address" text,
 	"user_agent" text,
+	"auth_method" text DEFAULT 'password' NOT NULL,
 	"user_id" text NOT NULL,
 	CONSTRAINT "session_token_unique" UNIQUE("token")
 );
@@ -189,12 +190,16 @@ CREATE TABLE "auth"."user_account" (
 	"name" text NOT NULL,
 	"email" text NOT NULL,
 	"email_verified" boolean NOT NULL,
-	"role" text DEFAULT 'admin' NOT NULL,
+	"username" text,
+	"display_username" text,
+	"role" text DEFAULT 'user' NOT NULL,
+	"must_change_password" boolean DEFAULT false NOT NULL,
 	"image" text,
 	"created_at" timestamp NOT NULL,
 	"updated_at" timestamp NOT NULL,
 	"default_connection_id" text,
-	CONSTRAINT "user_account_email_unique" UNIQUE("email")
+	CONSTRAINT "user_account_email_unique" UNIQUE("email"),
+	CONSTRAINT "user_account_username_unique" UNIQUE("username")
 );
 --> statement-breakpoint
 CREATE TABLE "app"."user_hotkeys" (
@@ -238,39 +243,6 @@ CREATE TABLE "mail"."account" (
 	CONSTRAINT "mail_account_state_nonnegative_check" CHECK ("mail"."account"."state_version" >= 0 AND "mail"."account"."oldest_retained_state" >= 0),
 	CONSTRAINT "mail_account_retention_floor_check" CHECK ("mail"."account"."oldest_retained_state" <= "mail"."account"."state_version"),
 	CONSTRAINT "mail_account_quota_nonnegative_check" CHECK ("mail"."account"."storage_quota_bytes" IS NULL OR "mail"."account"."storage_quota_bytes" >= 0)
-);
---> statement-breakpoint
-CREATE TABLE "mail"."task" (
-	"id" text PRIMARY KEY NOT NULL,
-	"queue" text NOT NULL,
-	"type" text NOT NULL,
-	"payload" jsonb NOT NULL,
-	"dedupe_key" text NOT NULL,
-	"status" text DEFAULT 'ready' NOT NULL,
-	"run_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"attempts" integer DEFAULT 0 NOT NULL,
-	"max_attempts" integer DEFAULT 5 NOT NULL,
-	"lease_owner" text,
-	"lease_expires_at" timestamp with time zone,
-	"last_error_code" text,
-	"last_error_message" text,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"completed_at" timestamp with time zone,
-	CONSTRAINT "mail_task_queue_chk" CHECK ("mail"."task"."queue" IN ('ingress', 'outbound')),
-	CONSTRAINT "mail_task_type_chk" CHECK (char_length("mail"."task"."type") > 0),
-	CONSTRAINT "mail_task_status_chk" CHECK ("mail"."task"."status" IN ('ready', 'running', 'retry', 'dead')),
-	CONSTRAINT "mail_task_attempts_chk" CHECK ("mail"."task"."attempts" >= 0),
-	CONSTRAINT "mail_task_max_attempts_chk" CHECK ("mail"."task"."max_attempts" >= 1),
-	CONSTRAINT "mail_task_lease_chk" CHECK ((
-        "mail"."task"."status" = 'running'
-        AND "mail"."task"."lease_owner" IS NOT NULL
-        AND "mail"."task"."lease_expires_at" IS NOT NULL
-      ) OR (
-        "mail"."task"."status" <> 'running'
-        AND "mail"."task"."lease_owner" IS NULL
-        AND "mail"."task"."lease_expires_at" IS NULL
-      ))
 );
 --> statement-breakpoint
 CREATE TABLE "mail"."identity" (
@@ -364,8 +336,8 @@ CREATE TABLE "mail"."email_content" (
 	"mail_account_id" text NOT NULL,
 	"email_id" text NOT NULL,
 	"parser_version" integer NOT NULL,
-	"text_blob_id" text,
-	"html_blob_id" text,
+	"text_body" text DEFAULT '' NOT NULL,
+	"html_body" text DEFAULT '' NOT NULL,
 	"preview" text,
 	"parse_warnings" text[],
 	"parsed_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -405,17 +377,21 @@ CREATE TABLE "mail"."email_part" (
 	"disposition" text,
 	"filename" text,
 	"content_id" text,
-	"blob_id" text,
-	"size_bytes" bigint NOT NULL,
+	"raw_blob_id" text NOT NULL,
+	"offset_start" bigint NOT NULL,
+	"encoded_length" bigint NOT NULL,
+	"decoded_length" bigint NOT NULL,
+	"transfer_encoding" text NOT NULL,
 	"kind" text NOT NULL,
 	CONSTRAINT "email_part_id_account_uidx" UNIQUE("id","mail_account_id"),
 	CONSTRAINT "email_part_id_email_account_uidx" UNIQUE("id","email_id","mail_account_id"),
 	CONSTRAINT "email_part_account_email_path_uidx" UNIQUE("mail_account_id","email_id","part_path"),
 	CONSTRAINT "email_part_account_email_position_uidx" UNIQUE("mail_account_id","email_id","position"),
 	CONSTRAINT "email_part_position_nonnegative_check" CHECK ("mail"."email_part"."position" >= 0),
-	CONSTRAINT "email_part_size_nonnegative_check" CHECK ("mail"."email_part"."size_bytes" >= 0),
+	CONSTRAINT "email_part_section_nonnegative_check" CHECK ("mail"."email_part"."offset_start" >= 0 AND "mail"."email_part"."encoded_length" >= 0 AND "mail"."email_part"."decoded_length" >= 0),
 	CONSTRAINT "email_part_disposition_check" CHECK ("mail"."email_part"."disposition" IS NULL OR "mail"."email_part"."disposition" IN ('inline', 'attachment')),
-	CONSTRAINT "email_part_kind_check" CHECK ("mail"."email_part"."kind" IN ('body', 'inline', 'attachment'))
+	CONSTRAINT "email_part_kind_check" CHECK ("mail"."email_part"."kind" IN ('body', 'inline', 'attachment')),
+	CONSTRAINT "email_part_transfer_encoding_check" CHECK ("mail"."email_part"."transfer_encoding" IN ('7bit', '8bit', 'binary', 'base64', 'quoted-printable'))
 );
 --> statement-breakpoint
 CREATE TABLE "mail"."email_search" (
@@ -496,6 +472,10 @@ CREATE TABLE "mail"."submission" (
 	"send_at" timestamp with time zone NOT NULL,
 	"idempotency_key" text NOT NULL,
 	"draft_revision" integer NOT NULL,
+	"raw_blob_id" text NOT NULL,
+	"raw_sha256" text NOT NULL,
+	"raw_size_bytes" bigint NOT NULL,
+	"raw_object_key" text NOT NULL,
 	"provider_message_id" text,
 	"last_error_code" text,
 	"last_error_message" text,
@@ -504,23 +484,8 @@ CREATE TABLE "mail"."submission" (
 	"sent_at" timestamp with time zone,
 	CONSTRAINT "email_submission_id_account_uidx" UNIQUE("id","mail_account_id"),
 	CONSTRAINT "email_submission_status_check" CHECK ("mail"."submission"."status" IN ('scheduled', 'queued', 'sent', 'failed', 'canceled')),
-	CONSTRAINT "email_submission_draft_revision_nonnegative_check" CHECK ("mail"."submission"."draft_revision" >= 0)
-);
---> statement-breakpoint
-CREATE TABLE "mail"."submission_blob" (
-	"mail_account_id" text NOT NULL,
-	"submission_id" text NOT NULL,
-	"blob_id" text NOT NULL,
-	"kind" text NOT NULL,
-	"position" integer NOT NULL,
-	"sha256" text NOT NULL,
-	"size_bytes" bigint NOT NULL,
-	"content_type" text NOT NULL,
-	"object_key" text NOT NULL,
-	CONSTRAINT "submission_blob_account_submission_kind_position_uidx" UNIQUE("mail_account_id","submission_id","kind","position"),
-	CONSTRAINT "submission_blob_kind_check" CHECK ("mail"."submission_blob"."kind" IN ('raw', 'text', 'html', 'part')),
-	CONSTRAINT "submission_blob_position_nonnegative_check" CHECK ("mail"."submission_blob"."position" >= 0),
-	CONSTRAINT "submission_blob_size_nonnegative_check" CHECK ("mail"."submission_blob"."size_bytes" >= 0)
+	CONSTRAINT "email_submission_draft_revision_nonnegative_check" CHECK ("mail"."submission"."draft_revision" >= 0),
+	CONSTRAINT "email_submission_raw_size_nonnegative_check" CHECK ("mail"."submission"."raw_size_bytes" >= 0)
 );
 --> statement-breakpoint
 CREATE TABLE "mail"."thread" (
@@ -722,6 +687,77 @@ CREATE TABLE "mail"."thread_snooze" (
         OR ("mail"."thread_snooze"."status" <> 'waking' AND "mail"."thread_snooze"."lease_owner" IS NULL AND "mail"."thread_snooze"."lease_expires_at" IS NULL))
 );
 --> statement-breakpoint
+CREATE TABLE "mail"."task" (
+	"id" text PRIMARY KEY NOT NULL,
+	"queue" text NOT NULL,
+	"type" text NOT NULL,
+	"payload" jsonb NOT NULL,
+	"dedupe_key" text NOT NULL,
+	"status" text DEFAULT 'ready' NOT NULL,
+	"run_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"attempts" integer DEFAULT 0 NOT NULL,
+	"max_attempts" integer DEFAULT 5 NOT NULL,
+	"lease_owner" text,
+	"lease_expires_at" timestamp with time zone,
+	"last_error_code" text,
+	"last_error_message" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"completed_at" timestamp with time zone,
+	CONSTRAINT "mail_task_queue_chk" CHECK ("mail"."task"."queue" IN ('ingress', 'outbound')),
+	CONSTRAINT "mail_task_type_chk" CHECK (char_length("mail"."task"."type") > 0),
+	CONSTRAINT "mail_task_status_chk" CHECK ("mail"."task"."status" IN ('ready', 'running', 'retry', 'dead')),
+	CONSTRAINT "mail_task_attempts_chk" CHECK ("mail"."task"."attempts" >= 0),
+	CONSTRAINT "mail_task_max_attempts_chk" CHECK ("mail"."task"."max_attempts" >= 1),
+	CONSTRAINT "mail_task_lease_chk" CHECK ((
+        "mail"."task"."status" = 'running'
+        AND "mail"."task"."lease_owner" IS NOT NULL
+        AND "mail"."task"."lease_expires_at" IS NOT NULL
+      ) OR (
+        "mail"."task"."status" <> 'running'
+        AND "mail"."task"."lease_owner" IS NULL
+        AND "mail"."task"."lease_expires_at" IS NULL
+      ))
+);
+--> statement-breakpoint
+CREATE TABLE "mail"."notification_outbox" (
+	"event_id" text PRIMARY KEY NOT NULL,
+	"message_id" text NOT NULL,
+	"mail_account_id" text NOT NULL,
+	"kind" text NOT NULL,
+	"status" text DEFAULT 'ready' NOT NULL,
+	"run_at" timestamp with time zone NOT NULL,
+	"attempts" integer DEFAULT 0 NOT NULL,
+	"max_attempts" integer DEFAULT 10 NOT NULL,
+	"lease_owner" text,
+	"lease_expires_at" timestamp with time zone,
+	"last_error_message" text,
+	"created_at" timestamp with time zone NOT NULL,
+	"updated_at" timestamp with time zone NOT NULL,
+	"completed_at" timestamp with time zone,
+	CONSTRAINT "mail_notification_kind_chk" CHECK ("mail"."notification_outbox"."kind" IN ('received', 'sent')),
+	CONSTRAINT "mail_notification_status_chk" CHECK ("mail"."notification_outbox"."status" IN ('ready', 'running', 'retry', 'dead')),
+	CONSTRAINT "mail_notification_attempts_chk" CHECK ("mail"."notification_outbox"."attempts" >= 0 AND "mail"."notification_outbox"."max_attempts" = 10),
+	CONSTRAINT "mail_notification_lease_chk" CHECK ((
+        "mail"."notification_outbox"."status" = 'running'
+        AND "mail"."notification_outbox"."lease_owner" IS NOT NULL
+        AND "mail"."notification_outbox"."lease_expires_at" IS NOT NULL
+      ) OR (
+        "mail"."notification_outbox"."status" <> 'running'
+        AND "mail"."notification_outbox"."lease_owner" IS NULL
+        AND "mail"."notification_outbox"."lease_expires_at" IS NULL
+      ))
+);
+--> statement-breakpoint
+CREATE TABLE "integration"."external_access_grant" (
+	"id" text PRIMARY KEY NOT NULL,
+	"user_id" text NOT NULL,
+	"code_digest" text NOT NULL,
+	"created_at" timestamp with time zone NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"consumed_at" timestamp with time zone
+);
+--> statement-breakpoint
 ALTER TABLE "auth"."account" ADD CONSTRAINT "account_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."authorization_binding" ADD CONSTRAINT "authorization_binding_connection_id_connection_id_fk" FOREIGN KEY ("connection_id") REFERENCES "integration"."connection"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."channel_config" ADD CONSTRAINT "channel_config_updated_by_user_account_id_fk" FOREIGN KEY ("updated_by") REFERENCES "auth"."user_account"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -748,8 +784,6 @@ ALTER TABLE "mail"."email_address" ADD CONSTRAINT "email_address_mail_account_id
 ALTER TABLE "mail"."email_address" ADD CONSTRAINT "email_address_email_account_fk" FOREIGN KEY ("email_id","mail_account_id") REFERENCES "mail"."email"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."email_content" ADD CONSTRAINT "email_content_mail_account_id_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."email_content" ADD CONSTRAINT "email_content_email_account_fk" FOREIGN KEY ("email_id","mail_account_id") REFERENCES "mail"."email"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "mail"."email_content" ADD CONSTRAINT "email_content_text_blob_account_fk" FOREIGN KEY ("text_blob_id","mail_account_id") REFERENCES "mail"."blob"("id","mail_account_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "mail"."email_content" ADD CONSTRAINT "email_content_html_blob_account_fk" FOREIGN KEY ("html_blob_id","mail_account_id") REFERENCES "mail"."blob"("id","mail_account_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."email_keyword" ADD CONSTRAINT "email_keyword_mail_account_id_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."email_keyword" ADD CONSTRAINT "email_keyword_email_account_fk" FOREIGN KEY ("email_id","mail_account_id") REFERENCES "mail"."email"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."email_mailbox" ADD CONSTRAINT "email_mailbox_mail_account_id_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -758,7 +792,7 @@ ALTER TABLE "mail"."email_mailbox" ADD CONSTRAINT "email_mailbox_mailbox_account
 ALTER TABLE "mail"."email_part" ADD CONSTRAINT "email_part_mail_account_id_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."email_part" ADD CONSTRAINT "email_part_email_account_fk" FOREIGN KEY ("email_id","mail_account_id") REFERENCES "mail"."email"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."email_part" ADD CONSTRAINT "email_part_parent_account_fk" FOREIGN KEY ("parent_part_id","email_id","mail_account_id") REFERENCES "mail"."email_part"("id","email_id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "mail"."email_part" ADD CONSTRAINT "email_part_blob_account_fk" FOREIGN KEY ("blob_id","mail_account_id") REFERENCES "mail"."blob"("id","mail_account_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mail"."email_part" ADD CONSTRAINT "email_part_raw_blob_account_fk" FOREIGN KEY ("raw_blob_id","mail_account_id") REFERENCES "mail"."blob"("id","mail_account_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."email_search" ADD CONSTRAINT "email_search_mail_account_id_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."email_search" ADD CONSTRAINT "email_search_email_account_fk" FOREIGN KEY ("email_id","mail_account_id") REFERENCES "mail"."email"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."email_trash_restore" ADD CONSTRAINT "email_trash_restore_mail_account_id_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -774,9 +808,7 @@ ALTER TABLE "mail"."mailbox_thread" ADD CONSTRAINT "mailbox_thread_thread_accoun
 ALTER TABLE "mail"."submission" ADD CONSTRAINT "submission_mail_account_id_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."submission" ADD CONSTRAINT "email_submission_email_account_fk" FOREIGN KEY ("email_id","mail_account_id") REFERENCES "mail"."email"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."submission" ADD CONSTRAINT "email_submission_identity_account_fk" FOREIGN KEY ("identity_id","mail_account_id") REFERENCES "mail"."identity"("id","mail_account_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "mail"."submission_blob" ADD CONSTRAINT "submission_blob_mail_account_id_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "mail"."submission_blob" ADD CONSTRAINT "submission_blob_submission_account_fk" FOREIGN KEY ("submission_id","mail_account_id") REFERENCES "mail"."submission"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "mail"."submission_blob" ADD CONSTRAINT "submission_blob_blob_account_fk" FOREIGN KEY ("blob_id","mail_account_id") REFERENCES "mail"."blob"("id","mail_account_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mail"."submission" ADD CONSTRAINT "email_submission_raw_blob_account_fk" FOREIGN KEY ("raw_blob_id","mail_account_id") REFERENCES "mail"."blob"("id","mail_account_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."thread" ADD CONSTRAINT "thread_mail_account_id_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."thread_reference" ADD CONSTRAINT "thread_reference_mail_account_id_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."thread_reference" ADD CONSTRAINT "thread_reference_email_account_fk" FOREIGN KEY ("email_id","mail_account_id") REFERENCES "mail"."email"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -790,6 +822,9 @@ ALTER TABLE "integration"."send_attempt" ADD CONSTRAINT "send_attempt_delivery_a
 ALTER TABLE "integration"."send_attempt" ADD CONSTRAINT "send_attempt_submission_account_fk" FOREIGN KEY ("submission_id","mail_account_id") REFERENCES "mail"."submission"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."thread_snooze" ADD CONSTRAINT "thread_snooze_account_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."thread_snooze" ADD CONSTRAINT "thread_snooze_thread_account_fk" FOREIGN KEY ("thread_id","mail_account_id") REFERENCES "mail"."thread"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mail"."notification_outbox" ADD CONSTRAINT "notification_outbox_mail_account_id_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mail"."notification_outbox" ADD CONSTRAINT "mail_notification_email_account_fk" FOREIGN KEY ("message_id","mail_account_id") REFERENCES "mail"."email"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "integration"."external_access_grant" ADD CONSTRAINT "external_access_grant_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "account_user_id_idx" ON "auth"."account" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "account_provider_user_id_idx" ON "auth"."account" USING btree ("provider_id","user_id");--> statement-breakpoint
 CREATE INDEX "account_expires_at_idx" ON "auth"."account" USING btree ("access_token_expires_at");--> statement-breakpoint
@@ -825,12 +860,10 @@ CREATE INDEX "email_identity_account_idx" ON "mail"."email" USING btree ("identi
 CREATE INDEX "email_reply_account_idx" ON "mail"."email" USING btree ("reply_to_email_id","mail_account_id");--> statement-breakpoint
 CREATE INDEX "email_account_thread_received_id_idx" ON "mail"."email" USING btree ("mail_account_id","thread_id","received_at","id");--> statement-breakpoint
 CREATE INDEX "email_address_account_normalized_kind_email_idx" ON "mail"."email_address" USING btree ("mail_account_id","normalized_email","kind","email_id");--> statement-breakpoint
-CREATE INDEX "email_content_text_blob_account_idx" ON "mail"."email_content" USING btree ("text_blob_id","mail_account_id");--> statement-breakpoint
-CREATE INDEX "email_content_html_blob_account_idx" ON "mail"."email_content" USING btree ("html_blob_id","mail_account_id");--> statement-breakpoint
 CREATE INDEX "email_keyword_account_keyword_email_idx" ON "mail"."email_keyword" USING btree ("mail_account_id","keyword","email_id");--> statement-breakpoint
 CREATE INDEX "email_mailbox_account_mailbox_email_idx" ON "mail"."email_mailbox" USING btree ("mail_account_id","mailbox_id","email_id");--> statement-breakpoint
 CREATE INDEX "email_part_parent_email_account_idx" ON "mail"."email_part" USING btree ("parent_part_id","email_id","mail_account_id");--> statement-breakpoint
-CREATE INDEX "email_part_blob_account_idx" ON "mail"."email_part" USING btree ("blob_id","mail_account_id");--> statement-breakpoint
+CREATE INDEX "email_part_raw_blob_account_idx" ON "mail"."email_part" USING btree ("raw_blob_id","mail_account_id");--> statement-breakpoint
 CREATE INDEX "email_search_document_gin_idx" ON "mail"."email_search" USING gin ("document");--> statement-breakpoint
 CREATE INDEX "email_trash_restore_account_email_mailbox_idx" ON "mail"."email_trash_restore" USING btree ("mail_account_id","email_id","mailbox_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "remote_email_account_provider_remote_uidx" ON "integration"."remote_email" USING btree ("mail_account_id","provider","remote_email_id");--> statement-breakpoint
@@ -845,8 +878,8 @@ CREATE INDEX "email_submission_account_created_id_idx" ON "mail"."submission" US
 CREATE INDEX "email_submission_account_identity_created_id_idx" ON "mail"."submission" USING btree ("mail_account_id","identity_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "email_submission_email_account_idx" ON "mail"."submission" USING btree ("email_id","mail_account_id");--> statement-breakpoint
 CREATE INDEX "email_submission_identity_account_idx" ON "mail"."submission" USING btree ("identity_id","mail_account_id");--> statement-breakpoint
+CREATE INDEX "email_submission_raw_blob_account_idx" ON "mail"."submission" USING btree ("raw_blob_id","mail_account_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "email_submission_account_idempotency_uidx" ON "mail"."submission" USING btree ("mail_account_id","idempotency_key");--> statement-breakpoint
-CREATE INDEX "submission_blob_account_blob_idx" ON "mail"."submission_blob" USING btree ("mail_account_id","blob_id");--> statement-breakpoint
 CREATE INDEX "thread_account_latest_id_idx" ON "mail"."thread" USING btree ("mail_account_id","latest_received_at" DESC NULLS LAST,"id");--> statement-breakpoint
 CREATE INDEX "thread_reference_account_thread_idx" ON "mail"."thread_reference" USING btree ("mail_account_id","thread_id");--> statement-breakpoint
 CREATE INDEX "thread_reference_account_email_idx" ON "mail"."thread_reference" USING btree ("mail_account_id","email_id");--> statement-breakpoint
@@ -866,9 +899,15 @@ CREATE INDEX "inbound_sync_item_lease_idx" ON "integration"."inbound_sync_item" 
 CREATE INDEX "outbound_delivery_due_idx" ON "integration"."outbound_delivery" USING btree ("status","available_at","id") WHERE "integration"."outbound_delivery"."status" IN ('scheduled', 'ready', 'retry_wait', 'uncertain');--> statement-breakpoint
 CREATE INDEX "outbound_delivery_expired_lease_idx" ON "integration"."outbound_delivery" USING btree ("lease_expires_at","id") WHERE "integration"."outbound_delivery"."status" = 'leased';--> statement-breakpoint
 CREATE UNIQUE INDEX "send_attempt_open_delivery_uidx" ON "integration"."send_attempt" USING btree ("mail_account_id","delivery_id") WHERE "integration"."send_attempt"."finished_at" IS NULL AND "integration"."send_attempt"."kind" = 'send';--> statement-breakpoint
+CREATE INDEX "thread_snooze_due_idx" ON "mail"."thread_snooze" USING btree ("status","wake_at","thread_id") WHERE "mail"."thread_snooze"."status" = 'scheduled';--> statement-breakpoint
+CREATE INDEX "thread_snooze_expired_lease_idx" ON "mail"."thread_snooze" USING btree ("lease_expires_at","thread_id") WHERE "mail"."thread_snooze"."status" = 'waking';--> statement-breakpoint
 CREATE UNIQUE INDEX "mail_task_live_dedupe_uidx" ON "mail"."task" USING btree ("queue","dedupe_key") WHERE "mail"."task"."status" IN ('ready', 'running', 'retry');--> statement-breakpoint
 CREATE INDEX "mail_task_due_idx" ON "mail"."task" USING btree ("queue","status","run_at","id") WHERE "mail"."task"."status" IN ('ready', 'retry');--> statement-breakpoint
 CREATE INDEX "mail_task_lease_expiry_idx" ON "mail"."task" USING btree ("lease_expires_at","id") WHERE "mail"."task"."status" = 'running';--> statement-breakpoint
 CREATE INDEX "mail_task_dead_idx" ON "mail"."task" USING btree ("completed_at","id") WHERE "mail"."task"."status" = 'dead';--> statement-breakpoint
-CREATE INDEX "thread_snooze_due_idx" ON "mail"."thread_snooze" USING btree ("status","wake_at","thread_id") WHERE "mail"."thread_snooze"."status" = 'scheduled';--> statement-breakpoint
-CREATE INDEX "thread_snooze_expired_lease_idx" ON "mail"."thread_snooze" USING btree ("lease_expires_at","thread_id") WHERE "mail"."thread_snooze"."status" = 'waking';
+CREATE INDEX "mail_notification_due_idx" ON "mail"."notification_outbox" USING btree ("status","run_at","event_id") WHERE "mail"."notification_outbox"."status" IN ('ready', 'retry');--> statement-breakpoint
+CREATE INDEX "mail_notification_lease_idx" ON "mail"."notification_outbox" USING btree ("lease_expires_at","event_id") WHERE "mail"."notification_outbox"."status" = 'running';--> statement-breakpoint
+CREATE INDEX "mail_notification_dead_idx" ON "mail"."notification_outbox" USING btree ("completed_at","event_id") WHERE "mail"."notification_outbox"."status" = 'dead';--> statement-breakpoint
+CREATE INDEX "mail_notification_message_idx" ON "mail"."notification_outbox" USING btree ("mail_account_id","message_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "external_access_grant_code_digest_uidx" ON "integration"."external_access_grant" USING btree ("code_digest");--> statement-breakpoint
+CREATE INDEX "external_access_grant_expires_idx" ON "integration"."external_access_grant" USING btree ("expires_at","id");

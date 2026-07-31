@@ -231,8 +231,8 @@ describe('Email Trash and destruction', () => {
       to: [],
       cc: [],
       bcc: [],
-      textBlobId: null,
-      htmlBlobId: null,
+      textBody: '',
+      htmlBody: '',
       parseWarnings: [],
       parts: [],
     });

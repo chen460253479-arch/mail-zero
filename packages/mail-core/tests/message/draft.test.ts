@@ -16,13 +16,7 @@ describe('Draft Email', () => {
       ...h.content,
       htmlBody: '<p>safe</p><script>alert(1)</script>',
     });
-    const htmlBlob = (await h.inspect.blob(draft.htmlBlobId!))!;
-    await expect(
-      h.deps.blobStore.get({
-        accountId: h.accountId,
-        objectKey: htmlBlob.objectKey,
-      }),
-    ).resolves.toEqual(new TextEncoder().encode('<p>safe</p>'));
+    expect(draft.htmlBody).toBe('<p>safe</p>');
     expect(decode(await h.inspect.rawBytes(draft.id))).not.toContain('<script');
 
     const objectsBefore = h.deps.blobStore.snapshot();
@@ -85,6 +79,31 @@ describe('Draft Email', () => {
     expect(attachmentReads).toBe(1);
   });
 
+  it('retains an existing Draft attachment through its virtual EmailPart Blob id', async () => {
+    const h = await createDraftHarness();
+    const uploaded = await h.seedReadyBlob(new Uint8Array([1, 2, 3, 4]), 'image/png');
+    const draft = await createDraft(h.deps, {
+      ...h.content,
+      attachmentBlobIds: [uploaded.id],
+    });
+    const attachment = draft.parts.find(({ kind }) => kind === 'attachment')!;
+
+    const updated = await updateDraft(h.deps, {
+      accountId: h.accountId,
+      emailId: draft.id,
+      expectedRevision: draft.draftRevision,
+      content: {
+        ...h.content,
+        subject: 'Retained attachment',
+        attachmentBlobIds: [attachment.id as never],
+      },
+    });
+
+    expect(updated.hasAttachment).toBe(true);
+    expect(updated.parts.filter(({ kind }) => kind === 'attachment')).toHaveLength(1);
+    expect(decode(await h.inspect.rawBytes(updated.id))).toContain('AQIDBA==');
+  });
+
   it('creates revision 1 in Drafts with one atomic Email, Thread, and Mailbox change', async () => {
     // Catches missing Draft lifecycle projection, counters, or split state allocation.
     const h = await createDraftHarness();
@@ -140,17 +159,24 @@ describe('Draft Email', () => {
     expect(changes.every(({ stateVersion }) => stateVersion === before + 1n)).toBe(true);
   });
 
-  it('creates immutable Raw and body Blob revisions while retaining one local Message-ID', async () => {
+  it('keeps Bcc recipients in private delivery metadata and omits the Bcc header from Raw MIME', async () => {
+    const h = await createDraftHarness();
+
+    const draft = await createDraft(h.deps, h.content);
+    const raw = decode(await h.inspect.rawBytes(draft.id));
+
+    expect(draft.bcc).toEqual(h.content.bcc);
+    expect(raw).not.toMatch(/^Bcc:/gimu);
+    expect(raw).not.toContain('blind@example.test');
+  });
+
+  it('creates immutable Raw MIME revisions while retaining one local Message-ID', async () => {
     // Catches in-place Blob overwrites, Message-ID regeneration, or a missing optimistic revision.
     const h = await createDraftHarness();
     const draft = await createDraft(h.deps, h.content);
     const storedRevision1 = (await h.inspect.email(draft.id))!;
     const raw1 = await h.inspect.rawBytes(draft.id);
-    const oldBlobIds = [
-      storedRevision1.blobId,
-      storedRevision1.textBlobId,
-      storedRevision1.htmlBlobId,
-    ];
+    const oldBlobId = storedRevision1.blobId;
 
     const updated = await updateDraft(h.deps, {
       accountId: h.accountId,
@@ -173,15 +199,13 @@ describe('Draft Email', () => {
     expect(raw2).not.toEqual(raw1);
     expect(decode(raw2)).toContain('Revised subject');
     expect(updated.blobId).not.toBe(storedRevision1.blobId);
-    expect(updated.textBlobId).not.toBe(storedRevision1.textBlobId);
-    expect(updated.htmlBlobId).not.toBe(storedRevision1.htmlBlobId);
-    for (const blobId of oldBlobIds) {
-      expect(blobId).not.toBeNull();
-      expect(await h.inspect.blob(blobId!)).toMatchObject({ status: 'ready' });
-    }
+    expect(updated.textBody).toBe('Revised plain body.');
+    expect(updated.htmlBody).toBe('<p>Revised HTML body.</p>');
+    expect(oldBlobId).not.toBeNull();
+    expect(await h.inspect.blob(oldBlobId!)).toMatchObject({ status: 'ready' });
   });
 
-  it('reuses identical Blob metadata across Draft revisions and charges quota once', async () => {
+  it('stores exactly one new Raw MIME Blob for each Draft revision', async () => {
     const h = await createDraftHarness();
     const draft = await createDraft(h.deps, h.content);
     const before = await h.inspect.blobs();
@@ -194,8 +218,8 @@ describe('Draft Email', () => {
     });
 
     expect(updated.blobId).not.toBe(draft.blobId);
-    expect(updated.textBlobId).toBe(draft.textBlobId);
-    expect(updated.htmlBlobId).toBe(draft.htmlBlobId);
+    expect(updated.textBody).toBe(draft.textBody);
+    expect(updated.htmlBody).toBe(draft.htmlBody);
     expect(await h.inspect.blobs()).toHaveLength(before.length + 1);
   });
 
@@ -507,9 +531,7 @@ describe('Draft Email', () => {
     // Catches incomplete projection cleanup, Blob metadata deletion, or split Changes states.
     const h = await createDraftHarness();
     const draft = await createDraft(h.deps, h.content);
-    const blobIds = [draft.blobId, draft.textBlobId, draft.htmlBlobId].filter(
-      (value) => value !== null,
-    );
+    const blobIds = [draft.blobId].filter((value) => value !== null);
     const before = await h.inspect.stateVersion();
 
     const destroyed = await destroyDraft(h.deps, {
@@ -530,8 +552,8 @@ describe('Draft Email', () => {
       messageId: null,
       inReplyTo: [],
       references: [],
-      textBlobId: null,
-      htmlBlobId: null,
+      textBody: '',
+      htmlBody: '',
       parts: [],
     });
     for (const blobId of blobIds) {

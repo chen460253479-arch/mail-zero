@@ -31,8 +31,8 @@ const email: EmailRecord = {
   cc: [],
   bcc: [],
   preview: 'Preview',
-  textBlobId: 'blob-text' as EmailRecord['textBlobId'],
-  htmlBlobId: null,
+  textBody: '0123456789',
+  htmlBody: '',
   parserVersion: 1,
   parseWarnings: [],
   parts: [
@@ -45,7 +45,11 @@ const email: EmailRecord = {
       disposition: null,
       filename: null,
       contentId: null,
-      blobId: 'blob-text' as NonNullable<EmailRecord['textBlobId']>,
+      rawBlobId: 'raw-blob' as NonNullable<EmailRecord['blobId']>,
+      offsetStart: 100n,
+      encodedLength: 11n,
+      decodedLength: 11n,
+      transferEncoding: '8bit',
       sizeBytes: 11n,
       kind: 'body',
     },
@@ -73,20 +77,20 @@ describe('Email DTO', () => {
     expect(dto).not.toHaveProperty('textBlobId');
   });
 
-  it('reads only requested parts and bounds returned bytes', async () => {
-    const readBlobRange = vi.fn(async () => ({
-      bytes: new TextEncoder().encode('0123'),
-      isTruncated: true,
-    }));
+  it('returns requested body values from the PostgreSQL projection and bounds UTF-8 bytes', async () => {
+    const readBlobRange = vi.fn();
     const dto = await toEmailDto({ readBlobRange } as never, accountId, email, {
       fetchTextBodyValues: true,
       maxBodyValueBytes: 4,
     });
 
-    expect(readBlobRange).toHaveBeenCalledOnce();
+    expect(readBlobRange).not.toHaveBeenCalled();
     expect(dto.bodyValues).toEqual({
       'part-text': { value: '0123', isTruncated: true },
     });
+    expect((dto as { textBody: Array<{ blobId: string | null }> }).textBody[0]?.blobId).toBe(
+      'part-text',
+    );
   });
 
   it('returns only requested properties and avoids an unselected body read', async () => {

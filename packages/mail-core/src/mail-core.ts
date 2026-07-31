@@ -1,4 +1,18 @@
 import {
+  createDraft,
+  destroyDraft,
+  destroyEmail,
+  getEmail,
+  getEmails,
+  importEmail,
+  queryEmails,
+  readEmailPart,
+  readEmailPartById,
+  setEmails,
+  updateDraft,
+  updateEmail,
+} from './message';
+import {
   createIdentity,
   createMailAccount,
   destroyIdentity,
@@ -8,18 +22,6 @@ import {
   setIdentities,
   updateIdentity,
 } from './account';
-import {
-  createDraft,
-  destroyDraft,
-  destroyEmail,
-  getEmail,
-  getEmails,
-  importEmail,
-  queryEmails,
-  setEmails,
-  updateDraft,
-  updateEmail,
-} from './message';
 import {
   cancelSubmission,
   createSubmission,
@@ -58,6 +60,8 @@ export type MailCore = {
   listMailboxes: BoundCommand<typeof listMailboxes>;
   setMailboxes: BoundCommand<typeof setMailboxes>;
   importEmail: BoundCommand<typeof importEmail>;
+  readEmailPart: BoundCommand<typeof readEmailPart>;
+  readEmailPartById: BoundCommand<typeof readEmailPartById>;
   getEmail: BoundCommand<typeof getEmail>;
   getEmails: BoundCommand<typeof getEmails>;
   queryEmails: BoundCommand<typeof queryEmails>;
@@ -98,6 +102,8 @@ export const createMailCore = (dependencies: MailCoreDependencies): MailCore => 
   listMailboxes: (input) => listMailboxes(dependencies, input),
   setMailboxes: (input) => setMailboxes(dependencies, input),
   importEmail: (input) => importEmail(dependencies, input),
+  readEmailPart: (input) => readEmailPart(dependencies, input),
+  readEmailPartById: (input) => readEmailPartById(dependencies, input),
   getEmail: (input) => getEmail(dependencies, input),
   getEmails: (input) => getEmails(dependencies, input),
   queryEmails: (input) => queryEmails(dependencies, input),
