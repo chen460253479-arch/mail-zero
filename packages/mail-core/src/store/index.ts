@@ -15,7 +15,14 @@ export type MailCoreDependencies = {
   cursorSigningKey: string;
 };
 
-export type { BlobCommitReceipt, BlobStore, BlobStoreEntry, BlobStoreListPage } from './blob-store';
+export type {
+  BlobCommitReceipt,
+  BlobKind,
+  BlobStore,
+  BlobStoreEntry,
+  BlobStoreListKind,
+  BlobStoreListPage,
+} from './blob-store';
 export * from './repositories';
 export type {
   SearchEmailFilter,

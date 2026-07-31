@@ -65,6 +65,15 @@ export const emailSchema = z.object({
   bodyValues: z.record(mailIdSchema, bodyValueSchema),
 });
 
+const draftAttachmentSchema = z.object({
+  blobId: mailIdSchema,
+  filename: z
+    .string()
+    .min(1)
+    .max(255)
+    .refine((filename) => filename.trim().length > 0 && !/[\u0000-\u001f\u007f]/u.test(filename)),
+});
+
 export const draftContentSchema = z.object({
   identityId: mailIdSchema,
   replyToEmailId: mailIdSchema.nullable(),
@@ -74,7 +83,7 @@ export const draftContentSchema = z.object({
   subject: z.string().max(998),
   textBody: z.string(),
   htmlBody: z.string(),
-  attachmentBlobIds: z.array(mailIdSchema).max(100),
+  attachments: z.array(draftAttachmentSchema).max(100),
 });
 
 export const emailPatchSchema = draftContentSchema.partial().extend({

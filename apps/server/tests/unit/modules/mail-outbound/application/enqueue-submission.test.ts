@@ -2,12 +2,12 @@ import { createDraft, createIdentity } from '@zero/mail-core';
 import { describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 
+import { PostgresMailOutboundUnitOfWork } from '../../../../../src/modules/mail-outbound/postgres/unit-of-work';
+import { setOutboundSubmissions } from '../../../../../src/modules/mail-outbound/application/set-submissions';
+import type { MailOutboundTransaction } from '../../../../../src/modules/mail-outbound/postgres/unit-of-work';
+import { enqueueSubmission } from '../../../../../src/modules/mail-outbound/application/enqueue-submission';
 import { createPostgresMailTestHarness } from '../../../../helpers/mail-core/harness';
 import { withMailTestDatabase } from '../../../../helpers/mail-core/database';
-import { PostgresMailOutboundUnitOfWork } from '../../../../../src/modules/mail-outbound/postgres/unit-of-work';
-import type { MailOutboundTransaction } from '../../../../../src/modules/mail-outbound/postgres/unit-of-work';
-import { setOutboundSubmissions } from '../../../../../src/modules/mail-outbound/application/set-submissions';
-import { enqueueSubmission } from '../../../../../src/modules/mail-outbound/application/enqueue-submission';
 import { connection } from '../../../../../src/db/schema';
 
 describe('enqueueSubmission', () => {
@@ -36,7 +36,7 @@ describe('enqueueSubmission', () => {
         subject: 'Enqueue',
         textBody: 'Enqueue body',
         htmlBody: '',
-        attachmentBlobIds: [],
+        attachments: [],
       });
       const wakeup = { enqueue: vi.fn() };
       const dependencies = {
@@ -81,6 +81,27 @@ describe('enqueueSubmission', () => {
           dependencies,
         ),
       ).rejects.toMatchObject({ code: 'ACCOUNT_NOT_ACTIVE' });
+      const messageBlobIdsBeforeSet = await unitOfWork.mailUnitOfWork.run(async (tx) =>
+        (await tx.blobs.listByAccount(harness.accountId))
+          .filter(({ kind }) => kind === 'message_mime')
+          .map(({ id }) => id),
+      );
+      const setResult = await setOutboundSubmissions(
+        {
+          accountId: harness.accountId,
+          create: {
+            blocked: {
+              emailId: draft.id,
+              identityId: identity.id,
+              idempotencyKey: 'set-while-disconnecting',
+              sendAt: null,
+            },
+          },
+          destroy: [],
+        },
+        dependencies,
+      );
+      expect(setResult.notCreated.blocked).toMatchObject({ code: 'ACCOUNT_NOT_ACTIVE' });
       await unitOfWork.run(async (tx) => {
         expect(
           await tx.mail.submissions.findByIdempotencyKey(
@@ -88,6 +109,17 @@ describe('enqueueSubmission', () => {
             'enqueue-while-disconnecting',
           ),
         ).toBeNull();
+        expect(
+          await tx.mail.submissions.findByIdempotencyKey(
+            harness.accountId,
+            'set-while-disconnecting',
+          ),
+        ).toBeNull();
+        expect(
+          (await tx.mail.blobs.listByAccount(harness.accountId))
+            .filter(({ kind }) => kind === 'message_mime')
+            .map(({ id }) => id),
+        ).toEqual(messageBlobIdsBeforeSet);
         expect(
           await tx.outbound.claimById({
             deliveryId: first.delivery.id,
@@ -129,7 +161,7 @@ describe('enqueueSubmission', () => {
         subject: 'Rollback',
         textBody: 'Rollback body',
         htmlBody: '',
-        attachmentBlobIds: [],
+        attachments: [],
       });
       const failingUnitOfWork = {
         run: <Result>(operation: (tx: MailOutboundTransaction) => Promise<Result>) =>
@@ -204,7 +236,7 @@ describe('enqueueSubmission', () => {
         subject: 'State',
         textBody: 'State body',
         htmlBody: '',
-        attachmentBlobIds: [],
+        attachments: [],
       });
       const currentState = await unitOfWork.mailUnitOfWork.run(async (tx) =>
         (await tx.accounts.findById(harness.accountId))!.stateVersion.toString(),

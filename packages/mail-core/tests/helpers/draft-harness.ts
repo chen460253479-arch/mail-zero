@@ -44,13 +44,17 @@ const seedBlob = async (
   contentType: string,
   status: 'pending' | 'ready',
 ): Promise<BlobRecord> => {
+  const account = await deps.inspect.account(accountId);
+  if (account === null) throw new Error('mail account fixture is missing');
   const pending = await deps.blobStore.putTemporary({
+    userId: account.userId,
     accountId,
+    kind: 'attachment',
     bytes,
     contentType,
   });
   const id = deps.idFactory.next<'Blob'>() as BlobId;
-  const objectKey = `mail/${accountId}/sha256/${pending.sha256.slice(0, 2)}/${pending.sha256}`;
+  const objectKey = `mail/users/${account.userId}/accounts/${accountId}/attachments/sha256/${pending.sha256.slice(0, 2)}/${pending.sha256}`;
   await deps.blobStore.commitTemporary({
     accountId,
     temporaryKey: pending.temporaryKey,
@@ -60,6 +64,7 @@ const seedBlob = async (
   const record: BlobRecord = {
     id,
     accountId,
+    kind: 'attachment',
     sha256: pending.sha256,
     sizeBytes: pending.size,
     contentType,
@@ -93,7 +98,7 @@ export async function createDraftHarness(
     subject: 'Original subject',
     textBody: 'Plain draft body.',
     htmlBody: '<p>HTML draft body.</p>',
-    attachmentBlobIds: [],
+    attachments: [],
   };
 
   return {

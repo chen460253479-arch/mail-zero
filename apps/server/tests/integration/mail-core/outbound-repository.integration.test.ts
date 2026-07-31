@@ -37,7 +37,7 @@ describe('PostgreSQL outbound repository', () => {
         subject: 'Outbound',
         textBody: 'Outbound body',
         htmlBody: '',
-        attachmentBlobIds: [],
+        attachments: [],
       });
       const submission = await createSubmission(harness.dependencies, {
         accountId: harness.accountId,
@@ -122,7 +122,7 @@ describe('PostgreSQL outbound repository', () => {
           subject: suffix,
           textBody: suffix,
           htmlBody: '',
-          attachmentBlobIds: [],
+          attachments: [],
         });
         return createSubmission(harness.dependencies, {
           accountId: harness.accountId,
@@ -332,7 +332,7 @@ describe('PostgreSQL outbound repository', () => {
         subject: 'Source',
         textBody: 'Source',
         htmlBody: '',
-        attachmentBlobIds: [],
+        attachments: [],
       });
       const now = harness.dependencies.clock.now();
       await unitOfWork.mailUnitOfWork.run((tx) =>
@@ -357,7 +357,7 @@ describe('PostgreSQL outbound repository', () => {
         subject: 'Reply',
         textBody: 'Reply body',
         htmlBody: '',
-        attachmentBlobIds: [],
+        attachments: [],
       });
       const submission = await createSubmission(harness.dependencies, {
         accountId: harness.accountId,

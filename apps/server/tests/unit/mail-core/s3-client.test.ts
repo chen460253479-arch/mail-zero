@@ -84,16 +84,18 @@ describe('AWS S3 object client adapter', () => {
     const client = new AwsS3ObjectClient({ sender, bucket: 'zero-mail' });
     const bytes = new TextEncoder().encode('raw mime');
     const sha256 = 'a'.repeat(64);
+    const temporaryKey = 'mail/users/user-1/accounts/account-1/temporary/message_mime/upload-id';
+    const objectKey = `mail/users/user-1/accounts/account-1/messages/sha256/aa/${sha256}`;
 
     await client.headBucket();
     await client.putObject({
-      key: 'mail/account/temporary/id',
+      key: temporaryKey,
       bytes,
       contentType: 'message/rfc822',
       sha256,
     });
-    await client.copyObject('mail/account/temporary/id', 'mail/account/sha256/aa/target');
-    await client.deleteObject('mail/account/temporary/id');
+    await client.copyObject(temporaryKey, objectKey);
+    await client.deleteObject(temporaryKey);
 
     expect(sender.commands[0]).toBeInstanceOf(HeadBucketCommand);
     expect((sender.commands[0] as HeadBucketCommand).input).toEqual({
@@ -102,7 +104,7 @@ describe('AWS S3 object client adapter', () => {
     expect(sender.commands[1]).toBeInstanceOf(PutObjectCommand);
     expect((sender.commands[1] as PutObjectCommand).input).toMatchObject({
       Bucket: 'zero-mail',
-      Key: 'mail/account/temporary/id',
+      Key: temporaryKey,
       Body: bytes,
       ContentLength: bytes.byteLength,
       ContentType: 'message/rfc822',
@@ -113,8 +115,8 @@ describe('AWS S3 object client adapter', () => {
     expect(sender.commands[2]).toBeInstanceOf(CopyObjectCommand);
     expect((sender.commands[2] as CopyObjectCommand).input).toMatchObject({
       Bucket: 'zero-mail',
-      Key: 'mail/account/sha256/aa/target',
-      CopySource: 'zero-mail/mail/account/temporary/id',
+      Key: objectKey,
+      CopySource: `zero-mail/${temporaryKey}`,
       MetadataDirective: 'COPY',
       ChecksumAlgorithm: 'SHA256',
     });
@@ -122,6 +124,8 @@ describe('AWS S3 object client adapter', () => {
   });
 
   it('reads metadata, full objects, exact ranges, and list pages', async () => {
+    const objectKey = `mail/users/user-1/accounts/account-1/messages/sha256/bb/${'b'.repeat(64)}`;
+    const objectPrefix = 'mail/users/user-1/accounts/account-1/messages/sha256/';
     const sender = new FakeCommandSender();
     sender.results.push(
       {
@@ -142,7 +146,7 @@ describe('AWS S3 object client adapter', () => {
       {
         Contents: [
           {
-            Key: 'mail/account/sha256/bb/object',
+            Key: objectKey,
             LastModified: new Date('2026-01-02T00:00:00.000Z'),
             Size: 8,
           },
@@ -152,27 +156,25 @@ describe('AWS S3 object client adapter', () => {
     );
     const client = new AwsS3ObjectClient({ sender, bucket: 'zero-mail' });
 
-    await expect(client.headObject('mail/account/sha256/bb/object')).resolves.toEqual({
+    await expect(client.headObject(objectKey)).resolves.toEqual({
       sha256: 'b'.repeat(64),
       sizeBytes: 8n,
       uploadedAt: new Date('2026-01-01T00:00:00.000Z'),
     });
-    await expect(client.getObject('mail/account/sha256/bb/object')).resolves.toEqual(
-      Uint8Array.from([1, 2, 3, 4]),
+    await expect(client.getObject(objectKey)).resolves.toEqual(Uint8Array.from([1, 2, 3, 4]));
+    await expect(client.getObject(objectKey, { offset: 1, length: 2 })).resolves.toEqual(
+      Uint8Array.from([2, 3]),
     );
     await expect(
-      client.getObject('mail/account/sha256/bb/object', { offset: 1, length: 2 }),
-    ).resolves.toEqual(Uint8Array.from([2, 3]));
-    await expect(
       client.listObjects({
-        prefix: 'mail/account/sha256/',
+        prefix: objectPrefix,
         continuationToken: 'current-page',
         limit: 25,
       }),
     ).resolves.toEqual({
       entries: [
         {
-          key: 'mail/account/sha256/bb/object',
+          key: objectKey,
           uploadedAt: new Date('2026-01-02T00:00:00.000Z'),
           sizeBytes: 8n,
         },
@@ -186,7 +188,7 @@ describe('AWS S3 object client adapter', () => {
     expect(sender.commands[3]).toBeInstanceOf(ListObjectsV2Command);
     expect((sender.commands[3] as ListObjectsV2Command).input).toMatchObject({
       Bucket: 'zero-mail',
-      Prefix: 'mail/account/sha256/',
+      Prefix: objectPrefix,
       ContinuationToken: 'current-page',
       MaxKeys: 25,
     });
@@ -199,9 +201,7 @@ describe('AWS S3 object client adapter', () => {
 
     await expect(client.headObject('missing')).resolves.toBeNull();
     await expect(client.getObject('missing')).rejects.toBeInstanceOf(S3ObjectNotFoundError);
-    await expect(client.deleteObject('mail/account/object')).rejects.toThrow(
-      'network unavailable',
-    );
+    await expect(client.deleteObject('mail/account/object')).rejects.toThrow('network unavailable');
   });
 
   it('rejects malformed SDK responses instead of returning partial metadata', async () => {

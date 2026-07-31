@@ -174,6 +174,7 @@ export async function prepareDraftUpdate(
     sanitizeHtml: dependencies.sanitizeHtml,
   });
   const prepared = await prepareDraftRevision(dependencies, {
+    userId: preflight.references.account.userId,
     accountId: input.accountId,
     raw,
   });

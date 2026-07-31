@@ -15,33 +15,31 @@ import {
 } from '@/components/ui/select';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { Command, Paperclip, Plus, Type, X as XIcon } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEmailAliases } from '@/hooks/use-email-aliases';
 import { ScheduleSendPicker } from './schedule-send-picker';
 import useComposeEditor from '@/hooks/use-compose-editor';
-import { CurvedArrow, X } from '../icons/icons';
+import { Command, Paperclip, Type } from 'lucide-react';
 import { gitHubEmojis } from '@tiptap/extension-emoji';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { CurvedArrow, X } from '../icons/icons';
 
 import { useSettings } from '@/hooks/use-settings';
 
 import { useForm, type Resolver } from 'react-hook-form';
-import { cn, formatFileSize } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { EditorContent } from '@tiptap/react';
 import { Button } from '../ui/button';
 import { useQueryState } from 'nuqs';
 import { Toolbar } from './toolbar';
-import pluralize from 'pluralize';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
 import { RecipientAutosuggest } from '@/components/ui/recipient-autosuggest';
-import { ImageCompressionSettings } from './image-compression-settings';
-import type { ImageQuality } from '@/lib/image-compression';
-import { compressImages } from '@/lib/image-compression';
+import { attachmentUploadsBlockSend } from './attachment-upload-state';
+import { useAttachmentUploads } from './use-attachment-uploads';
+import { AttachmentUploadList } from './attachment-upload-list';
 import { useMailDelivery } from '@/modules/mail';
 import { m } from '@/paraglide/messages';
 
@@ -78,7 +76,6 @@ const schema = z.object({
   to: z.array(z.string().email()).min(1),
   subject: z.string().min(1),
   message: z.string().min(1),
-  attachments: z.array(z.any()).optional(),
   headers: z.any().optional(),
   cc: z.array(z.string().email()).optional(),
   bcc: z.array(z.string().email()).optional(),
@@ -116,79 +113,8 @@ export function EmailComposer({
   const [scheduleAt, setScheduleAt] = useState<string>();
   const [isScheduleValid, setIsScheduleValid] = useState<boolean>(true);
   const [showAttachmentWarning, setShowAttachmentWarning] = useState(false);
-  const [originalAttachments, setOriginalAttachments] = useState<File[]>(initialAttachments);
-  const [imageQuality, setImageQuality] = useState<ImageQuality>(
-    settings?.settings?.imageCompression || 'medium',
-  );
   const [activeReplyId] = useQueryState('activeReplyId');
   const [toggleToolbar, setToggleToolbar] = useState(false);
-  const processAndSetAttachments = async (
-    filesToProcess: File[],
-    quality: ImageQuality,
-    showToast: boolean = false,
-  ) => {
-    if (filesToProcess.length === 0) {
-      setValue('attachments', [], { shouldDirty: true });
-      return;
-    }
-
-    try {
-      const compressedFiles = await compressImages(filesToProcess, {
-        quality,
-        maxWidth: 1920,
-        maxHeight: 1080,
-      });
-
-      if (compressedFiles.length !== filesToProcess.length) {
-        console.warn('Compressed files array length mismatch:', {
-          original: filesToProcess.length,
-          compressed: compressedFiles.length,
-        });
-        setValue('attachments', filesToProcess, { shouldDirty: true });
-        setHasUnsavedChanges(true);
-        if (showToast) {
-          toast.error(m['pages.createEmail.compressionFailed']());
-        }
-        return;
-      }
-
-      setValue('attachments', compressedFiles, { shouldDirty: true });
-      setHasUnsavedChanges(true);
-
-      if (showToast && quality !== 'original') {
-        let totalOriginalSize = 0;
-        let totalCompressedSize = 0;
-
-        const imageFilesExist = filesToProcess.some((f) => f.type.startsWith('image/'));
-
-        if (imageFilesExist) {
-          filesToProcess.forEach((originalFile, index) => {
-            if (originalFile.type.startsWith('image/') && compressedFiles[index]) {
-              totalOriginalSize += originalFile.size;
-              totalCompressedSize += compressedFiles[index].size;
-            }
-          });
-
-          if (totalOriginalSize > totalCompressedSize) {
-            const savings = (
-              ((totalOriginalSize - totalCompressedSize) / totalOriginalSize) *
-              100
-            ).toFixed(1);
-            if (parseFloat(savings) > 0.1) {
-              toast.success(m['pages.createEmail.compressionSavings']({ savings }));
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error compressing images:', error);
-      setValue('attachments', filesToProcess, { shouldDirty: true });
-      setHasUnsavedChanges(true);
-      if (showToast) {
-        toast.error(m['pages.createEmail.compressionFailed']());
-      }
-    }
-  };
 
   const attachmentKeywords = [
     'attachment',
@@ -199,6 +125,21 @@ export function EmailComposer({
   ];
 
   const { saveDraft: saveLocalDraft } = useMailDelivery();
+  const onAttachmentsChanged = useCallback(() => {
+    setHasUnsavedChanges(true);
+  }, []);
+  const {
+    items: attachmentItems,
+    uploadedFiles,
+    hasUploadingAttachments,
+    addAttachments,
+    removeAttachment,
+    retryAttachment,
+  } = useAttachmentUploads({
+    initialAttachments,
+    onAttachmentsChanged,
+  });
+  const hasBlockingAttachments = attachmentUploadsBlockSend(attachmentItems);
 
   const form = useForm<EmailComposerForm>({
     // @hookform/resolvers and the workspace Zod version expose structurally
@@ -210,7 +151,6 @@ export function EmailComposer({
       bcc: initialBcc,
       subject: initialSubject,
       message: initialMessage,
-      attachments: initialAttachments,
       fromEmail:
         settings?.settings?.defaultEmailAlias ||
         aliases?.find((alias) => alias.primary)?.email ||
@@ -224,23 +164,14 @@ export function EmailComposer({
   const ccEmails = watch('cc');
   const bccEmails = watch('bcc');
   const subjectInput = watch('subject');
-  const attachments = watch('attachments');
   const fromEmail = watch('fromEmail');
 
-  const handleAttachment = async (newFiles: File[]) => {
-    if (newFiles && newFiles.length > 0) {
-      const newOriginals = [...originalAttachments, ...newFiles];
-      setOriginalAttachments(newOriginals);
-      await processAndSetAttachments(newOriginals, imageQuality, true);
-    }
-  };
-
-  const removeAttachment = async (index: number) => {
-    const newOriginals = originalAttachments.filter((_, i) => i !== index);
-    setOriginalAttachments(newOriginals);
-    await processAndSetAttachments(newOriginals, imageQuality);
-    setHasUnsavedChanges(true);
-  };
+  const handleAttachment = useCallback(
+    (newFiles: File[]) => {
+      addAttachments(newFiles);
+    },
+    [addAttachments],
+  );
 
   const editor = useComposeEditor({
     initialValue: initialMessage,
@@ -315,6 +246,11 @@ export function EmailComposer({
     try {
       if (isLoading || isSavingDraft) return;
 
+      if (hasBlockingAttachments) {
+        toast.error(m['pages.createEmail.attachmentsNotReady']());
+        return;
+      }
+
       const values = getValues();
 
       // Validate recipient field
@@ -338,7 +274,7 @@ export function EmailComposer({
         bcc: showBcc ? values.bcc : undefined,
         subject: values.subject,
         message: editor.getHTML(),
-        attachments: values.attachments || [],
+        attachments: uploadedFiles,
         fromEmail: values.fromEmail,
         scheduleAt,
         draftId: savedDraft?.id ?? draftId ?? undefined,
@@ -356,14 +292,13 @@ export function EmailComposer({
   };
 
   const handleSend = async () => {
-    const values = getValues();
     const messageText = editor.getText().toLowerCase();
     const hasAttachmentKeywords = attachmentKeywords.some((keyword) => {
       const regex = new RegExp(`\\b${keyword.replace(/\s+/g, '\\s+')}\\b`, 'i');
       return regex.test(messageText);
     });
 
-    if (hasAttachmentKeywords && (!values.attachments || values.attachments.length === 0)) {
+    if (hasAttachmentKeywords && attachmentItems.length === 0) {
       setShowAttachmentWarning(true);
       return;
     }
@@ -377,8 +312,6 @@ export function EmailComposer({
     if (!hasUnsavedChanges) return draftId ? { id: draftId } : undefined;
     const messageText = editor.getText();
 
-    if (messageText.trim() === initialMessage.trim()) return draftId ? { id: draftId } : undefined;
-    if (editor.getHTML() === initialMessage.trim()) return draftId ? { id: draftId } : undefined;
     if (!values.to.length || !values.subject.length || !messageText.length) {
       return draftId ? { id: draftId } : undefined;
     }
@@ -390,7 +323,7 @@ export function EmailComposer({
         bcc: values.bcc,
         subject: values.subject,
         htmlBody: editor.getHTML(),
-        attachments: values.attachments ?? [],
+        attachments: uploadedFiles,
         draftId,
         replyToEmailId: activeReplyId,
         fromEmail: values.fromEmail,
@@ -418,9 +351,9 @@ export function EmailComposer({
     editor,
     getValues,
     hasUnsavedChanges,
-    initialMessage,
     saveLocalDraft,
     setDraftId,
+    uploadedFiles,
   ]);
 
   const handleClose = () => {
@@ -455,7 +388,7 @@ export function EmailComposer({
   }, [editor, showLeaveConfirmation]);
 
   useEffect(() => {
-    if (!hasUnsavedChanges) return;
+    if (!hasUnsavedChanges || hasUploadingAttachments) return;
 
     const autoSaveTimer = setTimeout(() => {
       console.log('timeout set');
@@ -463,7 +396,7 @@ export function EmailComposer({
     }, 3000);
 
     return () => clearTimeout(autoSaveTimer);
-  }, [hasUnsavedChanges, saveDraft]);
+  }, [hasUnsavedChanges, hasUploadingAttachments, saveDraft]);
 
   useEffect(() => {
     const handlePasteFiles = (event: ClipboardEvent) => {
@@ -495,11 +428,6 @@ export function EmailComposer({
       setValue('fromEmail', preferred, { shouldDirty: false });
     }
   }, [settings?.settings?.defaultEmailAlias, aliases, getValues, setValue]);
-
-  const handleQualityChange = async (newQuality: ImageQuality) => {
-    setImageQuality(newQuality);
-    await processAndSetAttachments(originalAttachments, newQuality, true);
-  };
 
   const handleScheduleChange = useCallback((value?: string) => {
     setScheduleAt(value);
@@ -571,7 +499,9 @@ export function EmailComposer({
             {/* CC Section */}
             {showCc && (
               <div className="flex items-center gap-2 px-3">
-                <p className="text-sm font-medium text-[#8C8C8C]">{m['pages.createEmail.ccWithColon']()}</p>
+                <p className="text-sm font-medium text-[#8C8C8C]">
+                  {m['pages.createEmail.ccWithColon']()}
+                </p>
                 <RecipientAutosuggest
                   control={form.control}
                   name="cc"
@@ -584,7 +514,9 @@ export function EmailComposer({
             {/* BCC Section */}
             {showBcc && (
               <div className="flex items-center gap-2 px-3">
-                <p className="text-sm font-medium text-[#8C8C8C]">{m['pages.createEmail.bccWithColon']()}</p>
+                <p className="text-sm font-medium text-[#8C8C8C]">
+                  {m['pages.createEmail.bccWithColon']()}
+                </p>
                 <RecipientAutosuggest
                   control={form.control}
                   name="bcc"
@@ -634,7 +566,11 @@ export function EmailComposer({
                       <span className="text-sm">
                         {alias.name ? `${alias.name} <${alias.email}>` : alias.email}
                       </span>
-                      {alias.primary && <span className="text-xs text-[#8C8C8C]">{m['pages.createEmail.primary']()}</span>}
+                      {alias.primary && (
+                        <span className="text-xs text-[#8C8C8C]">
+                          {m['pages.createEmail.primary']()}
+                        </span>
+                      )}
                     </div>
                   </SelectItem>
                 ))}
@@ -649,10 +585,7 @@ export function EmailComposer({
             onClick={() => {
               editor.commands.focus();
             }}
-            className={cn(
-              `min-h-[200px] w-full`,
-              editorClassName,
-            )}
+            className={cn(`min-h-[200px] w-full`, editorClassName)}
           >
             <EditorContent editor={editor} className="h-full w-full max-w-full overflow-x-auto" />
           </div>
@@ -661,13 +594,18 @@ export function EmailComposer({
 
       {/* Bottom Actions */}
       <div className="inline-flex w-full shrink-0 items-end justify-between self-stretch rounded-b-2xl bg-[#FFFFFF] px-3 py-3 outline-white/5 dark:bg-[#202020]">
-        <div className="flex flex-col items-start justify-start gap-2">
+        <div className="flex w-full flex-col items-start justify-start gap-2">
+          <AttachmentUploadList
+            items={attachmentItems}
+            onRemove={removeAttachment}
+            onRetry={retryAttachment}
+          />
           {toggleToolbar && <Toolbar editor={editor} />}
           <div className="flex items-center justify-start gap-2">
             <Button
               size={'xs'}
               onClick={handleSend}
-              disabled={isLoading || settingsLoading || !isScheduleValid}
+              disabled={isLoading || settingsLoading || !isScheduleValid || hasBlockingAttachments}
             >
               <div className="flex items-center justify-center">
                 <div className="text-center text-sm leading-none text-white dark:text-black">
@@ -690,8 +628,10 @@ export function EmailComposer({
               onClick={() => fileInputRef.current?.click()}
               className="bg-background cursor-pointer border transition-colors hover:bg-gray-50 dark:hover:bg-[#404040]"
             >
-              <Plus className="h-3 w-3 fill-[#9A9A9A]" />
-              <span className="hidden px-0.5 text-sm md:block">{m['pages.createEmail.add']()}</span>
+              <Paperclip className="h-3.5 w-3.5 text-[#9A9A9A]" />
+              <span className="hidden px-0.5 text-sm md:block">
+                {m['pages.createEmail.attachmentsLabel']()}
+              </span>
             </Button>
             <TemplateButton
               editor={editor}
@@ -711,127 +651,12 @@ export function EmailComposer({
                 if (fileList) {
                   await handleAttachment(Array.from(fileList));
                 }
+                event.target.value = '';
               }}
               multiple
-              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
               ref={fileInputRef}
               style={{ zIndex: 100 }}
             />
-            {attachments && attachments.length > 0 && (
-              <Popover modal={true}>
-                <PopoverTrigger asChild>
-                  <button
-                    className="focus-visible:ring-ring flex cursor-pointer items-center gap-1.5 rounded-md border border-[#E7E7E7] bg-white/5 px-2 py-1 text-sm hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:border-[#2B2B2B]"
-                    aria-label={m['pages.createEmail.viewAttachedFiles']({ count: attachments.length })}
-                  >
-                    <Paperclip className="h-3.5 w-3.5 text-[#9A9A9A]" />
-                    <span className="font-medium">{attachments.length}</span>
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent
-                  className="z-100 w-[340px] rounded-lg p-0 shadow-lg dark:bg-[#202020]"
-                  align="start"
-                  sideOffset={6}
-                >
-                  <div className="flex flex-col">
-                    <div className="border-b border-[#E7E7E7] p-3 dark:border-[#2B2B2B]">
-                      <h4 className="text-sm font-semibold text-black dark:text-white/90">
-                        {m['pages.createEmail.attachmentsLabel']()}
-                      </h4>
-                      <p className="text-muted-foreground text-xs dark:text-[#9B9B9B]">
-                        {m['pages.createEmail.filesAttached']({ count: attachments.length })}
-                      </p>
-                    </div>
-
-                    <div className="border-b border-[#E7E7E7] p-3 dark:border-[#2B2B2B]">
-                      <ImageCompressionSettings
-                        quality={imageQuality}
-                        onQualityChange={handleQualityChange}
-                        className="border-0 shadow-none"
-                      />
-                    </div>
-
-                    <div className="max-h-[250px] flex-1 space-y-0.5 overflow-y-auto p-1.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                      {attachments.map((file: File, index: number) => {
-                        const nameParts = file.name.split('.');
-                        const extension = nameParts.length > 1 ? nameParts.pop() : undefined;
-                        const nameWithoutExt = nameParts.join('.');
-                        const maxNameLength = 22;
-                        const truncatedName =
-                          nameWithoutExt.length > maxNameLength
-                            ? `${nameWithoutExt.slice(0, maxNameLength)}…`
-                            : nameWithoutExt;
-                        return (
-                          <div
-                            key={file.name + index}
-                            className="group flex items-center justify-between gap-3 rounded-md px-1.5 py-1.5 hover:bg-black/5 dark:hover:bg-white/10"
-                          >
-                            <div className="flex min-w-0 flex-1 items-center gap-3">
-                              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#F0F0F0] dark:bg-[#2C2C2C]">
-                                {file.type.startsWith('image/') ? (
-                                  <img
-                                    src={URL.createObjectURL(file)}
-                                    alt={file.name}
-                                    className="h-full w-full rounded object-cover"
-                                    aria-hidden="true"
-                                  />
-                                ) : (
-                                  <span className="text-sm" aria-hidden="true">
-                                    {file.type.includes('pdf')
-                                      ? '📄'
-                                      : file.type.includes('excel') ||
-                                          file.type.includes('spreadsheetml')
-                                        ? '📊'
-                                        : file.type.includes('word') ||
-                                            file.type.includes('wordprocessingml')
-                                          ? '📝'
-                                          : '📎'}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex min-w-0 flex-1 flex-col">
-                                <p
-                                  className="flex items-baseline text-sm text-black dark:text-white/90"
-                                  title={file.name}
-                                >
-                                  <span className="truncate">{truncatedName}</span>
-                                  {extension && (
-                                    <span className="ml-0.5 shrink-0 text-[10px] text-[#8C8C8C] dark:text-[#9A9A9A]">
-                                      .{extension}
-                                    </span>
-                                  )}
-                                </p>
-                                <p className="text-muted-foreground text-xs dark:text-[#9B9B9B]">
-                                  {formatFileSize(file.size)}
-                                </p>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={async (e: React.MouseEvent<HTMLButtonElement>) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-
-                                try {
-                                  await removeAttachment(index);
-                                } catch (error) {
-                                  console.error('Failed to remove attachment:', error);
-                                  toast.error(m['pages.createEmail.failedToRemoveAttachment']());
-                                }
-                              }}
-                              className="focus-visible:ring-ring ml-1 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full bg-transparent hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2"
-                              aria-label={m['pages.createEmail.removeAttachment']({ name: file.name })}
-                            >
-                              <XIcon className="text-muted-foreground h-3.5 w-3.5 hover:text-black dark:text-[#9B9B9B] dark:hover:text-white" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            )}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -857,9 +682,7 @@ export function EmailComposer({
         <DialogContent showOverlay className="z-99999 sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>{m['pages.createEmail.discardTitle']()}</DialogTitle>
-            <DialogDescription>
-              {m['pages.createEmail.discardDescription']()}
-            </DialogDescription>
+            <DialogDescription>{m['pages.createEmail.discardDescription']()}</DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-2">
             <Button variant="outline" onClick={cancelLeave} className="cursor-pointer">

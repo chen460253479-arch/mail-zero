@@ -282,7 +282,9 @@ export const createQueryHarness = async () => {
       const blobId = 'blob-body-search' as BlobId;
       const bytes = new TextEncoder().encode('body-only ultrasecretterm');
       const pending = await dependencies.blobStore.putTemporary({
+        userId: 'query-user',
         accountId: queryAccountId,
+        kind: 'message_mime',
         bytes,
         contentType: 'text/plain; charset=utf-8',
       });
@@ -296,6 +298,7 @@ export const createQueryHarness = async () => {
         await tx.blobs.insert({
           id: blobId,
           accountId: queryAccountId,
+          kind: 'message_mime',
           sha256: pending.sha256,
           sizeBytes: pending.size,
           contentType: 'text/plain; charset=utf-8',
@@ -326,6 +329,7 @@ export const createQueryHarness = async () => {
         await tx.blobs.insert({
           id: blobId,
           accountId: otherQueryAccountId,
+          kind: 'message_mime',
           sha256: 'missing',
           sizeBytes: 10n,
           contentType: 'text/plain; charset=utf-8',

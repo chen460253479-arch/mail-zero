@@ -212,7 +212,7 @@ CREATE TABLE "app"."user_hotkeys" (
 CREATE TABLE "app"."user_settings" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
-	"settings" jsonb DEFAULT '{"language":"en","timezone":"UTC","dynamicContent":false,"externalImages":true,"trustedSenders":[],"isOnboarded":false,"colorTheme":"system","zeroSignature":true,"autoRead":true,"defaultEmailAlias":"","categories":[{"id":"Important","name":"Important","searchValue":"IMPORTANT","order":0,"icon":"Lightning","isDefault":false},{"id":"All Mail","name":"All Mail","searchValue":"","order":1,"icon":"Mail","isDefault":true},{"id":"Unread","name":"Unread","searchValue":"UNREAD","order":5,"icon":"ScanEye","isDefault":false}],"undoSendEnabled":false,"imageCompression":"medium","animations":false}'::jsonb NOT NULL,
+	"settings" jsonb DEFAULT '{"language":"en","timezone":"UTC","dynamicContent":false,"externalImages":true,"trustedSenders":[],"isOnboarded":false,"colorTheme":"system","zeroSignature":true,"autoRead":true,"defaultEmailAlias":"","categories":[{"id":"Important","name":"Important","searchValue":"IMPORTANT","order":0,"icon":"Lightning","isDefault":false},{"id":"All Mail","name":"All Mail","searchValue":"","order":1,"icon":"Mail","isDefault":true},{"id":"Unread","name":"Unread","searchValue":"UNREAD","order":5,"icon":"ScanEye","isDefault":false}],"undoSendEnabled":false,"animations":false}'::jsonb NOT NULL,
 	"created_at" timestamp NOT NULL,
 	"updated_at" timestamp NOT NULL,
 	CONSTRAINT "user_settings_user_id_unique" UNIQUE("user_id")
@@ -261,6 +261,7 @@ CREATE TABLE "mail"."identity" (
 CREATE TABLE "mail"."blob" (
 	"id" text PRIMARY KEY NOT NULL,
 	"mail_account_id" text NOT NULL,
+	"kind" text NOT NULL,
 	"sha256" text NOT NULL,
 	"size_bytes" bigint NOT NULL,
 	"content_type" text NOT NULL,
@@ -271,6 +272,7 @@ CREATE TABLE "mail"."blob" (
 	"deleted_at" timestamp with time zone,
 	CONSTRAINT "blob_id_account_uidx" UNIQUE("id","mail_account_id"),
 	CONSTRAINT "blob_status_check" CHECK ("mail"."blob"."status" IN ('pending', 'ready', 'deleting')),
+	CONSTRAINT "blob_kind_check" CHECK ("mail"."blob"."kind" IN ('attachment', 'draft_mime', 'message_mime')),
 	CONSTRAINT "blob_size_nonnegative_check" CHECK ("mail"."blob"."size_bytes" >= 0),
 	CONSTRAINT "blob_lifecycle_check" CHECK (("mail"."blob"."status" = 'pending' AND "mail"."blob"."ready_at" IS NULL AND "mail"."blob"."deleted_at" IS NULL)
           OR ("mail"."blob"."status" = 'ready' AND "mail"."blob"."ready_at" IS NOT NULL AND "mail"."blob"."deleted_at" IS NULL)
@@ -847,7 +849,7 @@ CREATE UNIQUE INDEX "mail_account_connection_id_uidx" ON "mail"."account" USING 
 CREATE INDEX "mail_account_user_id_idx" ON "mail"."account" USING btree ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "mail_identity_account_default_active_uidx" ON "mail"."identity" USING btree ("mail_account_id") WHERE "mail"."identity"."is_default" = true AND "mail"."identity"."deleted_at" IS NULL;--> statement-breakpoint
 CREATE INDEX "mail_identity_account_created_active_idx" ON "mail"."identity" USING btree ("mail_account_id","created_at","id") WHERE "mail"."identity"."deleted_at" IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "blob_account_sha_size_uidx" ON "mail"."blob" USING btree ("mail_account_id","sha256","size_bytes");--> statement-breakpoint
+CREATE UNIQUE INDEX "blob_account_kind_sha_size_uidx" ON "mail"."blob" USING btree ("mail_account_id","kind","sha256","size_bytes");--> statement-breakpoint
 CREATE INDEX "blob_account_object_key_idx" ON "mail"."blob" USING btree ("mail_account_id","object_key");--> statement-breakpoint
 CREATE INDEX "blob_account_created_id_idx" ON "mail"."blob" USING btree ("mail_account_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "blob_account_status_content_created_idx" ON "mail"."blob" USING btree ("mail_account_id","status","content_type","created_at","id");--> statement-breakpoint

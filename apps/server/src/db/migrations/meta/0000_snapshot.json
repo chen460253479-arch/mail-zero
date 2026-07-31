@@ -1507,7 +1507,7 @@
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
-          "default": "'{\"language\":\"en\",\"timezone\":\"UTC\",\"dynamicContent\":false,\"externalImages\":true,\"trustedSenders\":[],\"isOnboarded\":false,\"colorTheme\":\"system\",\"zeroSignature\":true,\"autoRead\":true,\"defaultEmailAlias\":\"\",\"categories\":[{\"id\":\"Important\",\"name\":\"Important\",\"searchValue\":\"IMPORTANT\",\"order\":0,\"icon\":\"Lightning\",\"isDefault\":false},{\"id\":\"All Mail\",\"name\":\"All Mail\",\"searchValue\":\"\",\"order\":1,\"icon\":\"Mail\",\"isDefault\":true},{\"id\":\"Unread\",\"name\":\"Unread\",\"searchValue\":\"UNREAD\",\"order\":5,\"icon\":\"ScanEye\",\"isDefault\":false}],\"undoSendEnabled\":false,\"imageCompression\":\"medium\",\"animations\":false}'::jsonb"
+          "default": "'{\"language\":\"en\",\"timezone\":\"UTC\",\"dynamicContent\":false,\"externalImages\":true,\"trustedSenders\":[],\"isOnboarded\":false,\"colorTheme\":\"system\",\"zeroSignature\":true,\"autoRead\":true,\"defaultEmailAlias\":\"\",\"categories\":[{\"id\":\"Important\",\"name\":\"Important\",\"searchValue\":\"IMPORTANT\",\"order\":0,\"icon\":\"Lightning\",\"isDefault\":false},{\"id\":\"All Mail\",\"name\":\"All Mail\",\"searchValue\":\"\",\"order\":1,\"icon\":\"Mail\",\"isDefault\":true},{\"id\":\"Unread\",\"name\":\"Unread\",\"searchValue\":\"UNREAD\",\"order\":5,\"icon\":\"ScanEye\",\"isDefault\":false}],\"undoSendEnabled\":false,\"animations\":false}'::jsonb"
         },
         "created_at": {
           "name": "created_at",
@@ -1971,6 +1971,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "sha256": {
           "name": "sha256",
           "type": "text",
@@ -2023,11 +2029,17 @@
         }
       },
       "indexes": {
-        "blob_account_sha_size_uidx": {
-          "name": "blob_account_sha_size_uidx",
+        "blob_account_kind_sha_size_uidx": {
+          "name": "blob_account_kind_sha_size_uidx",
           "columns": [
             {
               "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "kind",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2170,6 +2182,10 @@
         "blob_status_check": {
           "name": "blob_status_check",
           "value": "\"mail\".\"blob\".\"status\" IN ('pending', 'ready', 'deleting')"
+        },
+        "blob_kind_check": {
+          "name": "blob_kind_check",
+          "value": "\"mail\".\"blob\".\"kind\" IN ('attachment', 'draft_mime', 'message_mime')"
         },
         "blob_size_nonnegative_check": {
           "name": "blob_size_nonnegative_check",

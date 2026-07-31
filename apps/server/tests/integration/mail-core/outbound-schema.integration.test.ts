@@ -2,9 +2,9 @@ import { createDraft, createIdentity, createSubmission } from '@zero/mail-core';
 import { PgDialect, getTableConfig } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 
-import { outboundDelivery, sendAttempt } from '../../../src/db/schema';
 import { createPostgresMailTestHarness } from '../../helpers/mail-core/harness';
 import { withMailTestDatabase } from '../../helpers/mail-core/database';
+import { outboundDelivery, sendAttempt } from '../../../src/db/schema';
 
 const dialect = new PgDialect();
 
@@ -149,7 +149,7 @@ describe('PostgreSQL outbound spool schema', () => {
           subject: suffix,
           textBody: suffix,
           htmlBody: '',
-          attachmentBlobIds: [],
+          attachments: [],
         });
         return createSubmission(harness.dependencies, {
           accountId: harness.accountId,

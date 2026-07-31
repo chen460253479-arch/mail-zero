@@ -276,10 +276,11 @@ const createRepositories = (
       );
       return record === undefined ? null : copy(record);
     },
-    async findByDigest(accountId, sha256, sizeBytes) {
+    async findByDigest(accountId, kind, sha256, sizeBytes) {
       const record = [...state.blobs.values()].find(
         (candidate) =>
           candidate.accountId === accountId &&
+          candidate.kind === kind &&
           candidate.sha256 === sha256 &&
           candidate.sizeBytes === sizeBytes,
       );
@@ -307,6 +308,7 @@ const createRepositories = (
       const duplicate = [...state.blobs.values()].find(
         (candidate) =>
           candidate.accountId === record.accountId &&
+          candidate.kind === record.kind &&
           candidate.sha256 === record.sha256 &&
           candidate.sizeBytes === record.sizeBytes,
       );

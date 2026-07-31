@@ -9,10 +9,12 @@ import { LocalBlobStore } from '../../../src/modules/mail';
 import type { MailAccountId } from '@zero/mail-core';
 
 const accountId = '01LOCALACCOUNT' as MailAccountId;
+const userId = '01LOCALUSER';
 const otherAccountId = '01OTHERACCOUNT' as MailAccountId;
+const otherUserId = '01OTHERUSER';
 const bytes = new TextEncoder().encode('persistent local blob');
 const digest = createHash('sha256').update(bytes).digest('hex');
-const objectKey = `mail/${accountId}/sha256/${digest.slice(0, 2)}/${digest}`;
+const objectKey = `mail/users/${userId}/accounts/${accountId}/attachments/sha256/${digest.slice(0, 2)}/${digest}`;
 
 describe('LocalBlobStore', () => {
   let root: string;
@@ -35,7 +37,9 @@ describe('LocalBlobStore', () => {
     const firstStore = await createStore();
     const input = Uint8Array.from(bytes);
     const pending = await firstStore.putTemporary({
+      userId,
       accountId,
+      kind: 'attachment',
       bytes: input,
       contentType: 'text/plain',
     });
@@ -56,7 +60,9 @@ describe('LocalBlobStore', () => {
   it('commits the same content-addressed object idempotently', async () => {
     const store = await createStore();
     const first = await store.putTemporary({
+      userId,
       accountId,
+      kind: 'attachment',
       bytes,
       contentType: 'text/plain',
     });
@@ -65,7 +71,9 @@ describe('LocalBlobStore', () => {
     ).resolves.toEqual({ objectKey, created: true });
 
     const second = await store.putTemporary({
+      userId,
       accountId,
+      kind: 'attachment',
       bytes,
       contentType: 'application/octet-stream',
     });
@@ -78,7 +86,9 @@ describe('LocalBlobStore', () => {
   it('returns exact byte ranges', async () => {
     const store = await createStore();
     const pending = await store.putTemporary({
+      userId,
       accountId,
+      kind: 'attachment',
       bytes,
       contentType: 'text/plain',
     });
@@ -92,28 +102,36 @@ describe('LocalBlobStore', () => {
   it('lists account-owned temporary objects with cursor isolation', async () => {
     const store = await createStore();
     await store.putTemporary({
+      userId,
       accountId,
+      kind: 'attachment',
       bytes: new TextEncoder().encode('first'),
       contentType: 'text/plain',
     });
     await store.putTemporary({
+      userId,
       accountId,
+      kind: 'attachment',
       bytes: new TextEncoder().encode('second'),
       contentType: 'text/plain',
     });
     await store.putTemporary({
+      userId: otherUserId,
       accountId: otherAccountId,
+      kind: 'attachment',
       bytes: new TextEncoder().encode('other'),
       contentType: 'text/plain',
     });
 
     const firstPage = await store.list({
+      userId,
       accountId,
       kind: 'temporary',
       cursor: null,
       limit: 1,
     });
     const secondPage = await store.list({
+      userId,
       accountId,
       kind: 'temporary',
       cursor: firstPage.cursor,
@@ -126,11 +144,12 @@ describe('LocalBlobStore', () => {
     expect(secondPage.cursor).toBeNull();
     expect(
       [...firstPage.entries, ...secondPage.entries].every(({ key }) =>
-        key.startsWith(`mail/${accountId}/temporary/`),
+        key.startsWith(`mail/users/${userId}/accounts/${accountId}/temporary/attachment/`),
       ),
     ).toBe(true);
     await expect(
       store.list({
+        userId: otherUserId,
         accountId: otherAccountId,
         kind: 'temporary',
         cursor: firstPage.cursor,
@@ -142,7 +161,9 @@ describe('LocalBlobStore', () => {
   it('deletes temporary and committed files idempotently', async () => {
     const store = await createStore();
     const discarded = await store.putTemporary({
+      userId,
       accountId,
+      kind: 'attachment',
       bytes,
       contentType: 'text/plain',
     });
@@ -156,7 +177,9 @@ describe('LocalBlobStore', () => {
     ).rejects.toMatchObject({ code: 'BLOB_NOT_FOUND' });
 
     const committed = await store.putTemporary({
+      userId,
       accountId,
+      kind: 'attachment',
       bytes,
       contentType: 'text/plain',
     });
@@ -174,9 +197,9 @@ describe('LocalBlobStore', () => {
 
   it.each([
     '../escape',
-    `mail/${accountId}/sha256/00/${digest}`,
-    `mail/${accountId}/sha256/${digest.slice(0, 2)}/${digest}/extra`,
-    `mail/../sha256/${digest.slice(0, 2)}/${digest}`,
+    `mail/users/${userId}/accounts/${accountId}/attachments/sha256/00/${digest}`,
+    `mail/users/${userId}/accounts/${accountId}/attachments/sha256/${digest.slice(0, 2)}/${digest}/extra`,
+    `mail/users/../accounts/${accountId}/attachments/sha256/${digest.slice(0, 2)}/${digest}`,
   ])('rejects malformed object key %s before filesystem access', async (invalidKey) => {
     const store = await createStore();
     await expect(store.get({ accountId, objectKey: invalidKey })).rejects.toMatchObject({
@@ -193,7 +216,9 @@ describe('LocalBlobStore', () => {
     await mkdir(join(targetPath, '..'), { recursive: true });
     await writeFile(targetPath, new TextEncoder().encode('conflicting bytes'));
     const pending = await store.putTemporary({
+      userId,
       accountId,
+      kind: 'attachment',
       bytes,
       contentType: 'text/plain',
     });

@@ -1480,7 +1480,7 @@ export type DraftContent = {
   subject: string;
   textBody: string;
   htmlBody: string;
-  attachmentBlobIds: BlobId[];
+  attachments: Array<{ blobId: BlobId; filename: string }>;
 };
 ```
 

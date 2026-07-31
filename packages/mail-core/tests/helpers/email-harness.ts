@@ -83,12 +83,14 @@ export async function createSeededEmailHarness(options: { keywords?: Keyword[] }
       }): Promise<BlobRecord> => {
         const bytes = new TextEncoder().encode(`orphan-${accountId}-${seededBlobKeys.size}`);
         const pending = await deps.blobStore.putTemporary({
+          userId: account.userId,
           accountId,
+          kind: 'attachment',
           bytes,
           contentType: 'application/octet-stream',
         });
         const id = deps.idFactory.next<'Blob'>() as BlobId;
-        const objectKey = `mail/${accountId}/sha256/${pending.sha256.slice(0, 2)}/${pending.sha256}`;
+        const objectKey = `mail/users/${account.userId}/accounts/${accountId}/attachments/sha256/${pending.sha256.slice(0, 2)}/${pending.sha256}`;
         await deps.blobStore.commitTemporary({
           accountId,
           temporaryKey: pending.temporaryKey,
@@ -98,6 +100,7 @@ export async function createSeededEmailHarness(options: { keywords?: Keyword[] }
         const record: BlobRecord = {
           id,
           accountId,
+          kind: 'attachment',
           sha256: pending.sha256,
           sizeBytes: pending.size,
           contentType: 'application/octet-stream',

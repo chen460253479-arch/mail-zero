@@ -27,7 +27,7 @@ const createHarness = async () => {
     subject: 'Local draft',
     textBody: 'Draft body',
     htmlBody: '<p>Draft body</p>',
-    attachmentBlobIds: [],
+    attachments: [],
   };
   return { ...h, core: createMailCore(h.deps), content };
 };

@@ -9,11 +9,13 @@ describe('PostgreSQL Blob maintenance', () => {
     withMailTestDatabase(async ({ db, unitOfWork }) => {
       const harness = await createPostgresMailTestHarness(db, unitOfWork, 'blob-maintenance');
       const pending = await harness.blobStore.putTemporary({
+        userId: harness.userId,
         accountId: harness.accountId,
+        kind: 'attachment',
         bytes: new TextEncoder().encode('postgres orphan'),
         contentType: 'text/plain',
       });
-      const objectKey = `mail/${harness.accountId}/sha256/${pending.sha256.slice(0, 2)}/${pending.sha256}`;
+      const objectKey = `mail/users/${harness.userId}/accounts/${harness.accountId}/attachments/sha256/${pending.sha256.slice(0, 2)}/${pending.sha256}`;
       await harness.blobStore.commitTemporary({
         accountId: harness.accountId,
         temporaryKey: pending.temporaryKey,
@@ -30,7 +32,9 @@ describe('PostgreSQL Blob maintenance', () => {
         deletedObjectCount: 1,
         deletedTemporaryCount: 0,
         cursor: {
-          object: { value: null, exhausted: false },
+          attachment: { value: null, exhausted: false },
+          draft_mime: { value: null, exhausted: true },
+          message_mime: { value: null, exhausted: true },
           temporary: { value: null, exhausted: true },
         },
       });
@@ -45,11 +49,13 @@ describe('PostgreSQL Blob maintenance', () => {
     withMailTestDatabase(async ({ db, unitOfWork }) => {
       const harness = await createPostgresMailTestHarness(db, unitOfWork, 'blob-owner-conflict');
       const pending = await harness.blobStore.putTemporary({
+        userId: harness.userId,
         accountId: harness.accountId,
+        kind: 'attachment',
         bytes: new TextEncoder().encode('owned postgres object'),
         contentType: 'text/plain',
       });
-      const objectKey = `mail/${harness.accountId}/sha256/${pending.sha256.slice(0, 2)}/${pending.sha256}`;
+      const objectKey = `mail/users/${harness.userId}/accounts/${harness.accountId}/attachments/sha256/${pending.sha256.slice(0, 2)}/${pending.sha256}`;
       await harness.blobStore.commitTemporary({
         accountId: harness.accountId,
         temporaryKey: pending.temporaryKey,
@@ -61,6 +67,7 @@ describe('PostgreSQL Blob maintenance', () => {
         await tx.blobs.insert({
           id: ownerId,
           accountId: harness.accountId,
+          kind: 'attachment',
           sha256: pending.sha256,
           sizeBytes: pending.size + 1n,
           contentType: 'text/plain',
@@ -73,6 +80,7 @@ describe('PostgreSQL Blob maintenance', () => {
         await tx.blobs.insert({
           id: harness.dependencies.idFactory.next<'Blob'>() as BlobId,
           accountId: harness.accountId,
+          kind: 'attachment',
           sha256: pending.sha256,
           sizeBytes: pending.size,
           contentType: 'application/x-zero-orphan-reservation',

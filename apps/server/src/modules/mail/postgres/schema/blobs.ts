@@ -11,6 +11,7 @@ export const blob = createMailTable(
     mailAccountId: text('mail_account_id')
       .notNull()
       .references(() => mailAccount.id, { onDelete: 'cascade' }),
+    kind: text('kind').$type<'attachment' | 'draft_mime' | 'message_mime'>().notNull(),
     sha256: text('sha256').notNull(),
     sizeBytes: bigint('size_bytes', { mode: 'bigint' }).notNull(),
     contentType: text('content_type').notNull(),
@@ -22,6 +23,7 @@ export const blob = createMailTable(
   },
   (t) => [
     check('blob_status_check', sql`${t.status} IN ('pending', 'ready', 'deleting')`),
+    check('blob_kind_check', sql`${t.kind} IN ('attachment', 'draft_mime', 'message_mime')`),
     check('blob_size_nonnegative_check', sql`${t.sizeBytes} >= 0`),
     check(
       'blob_lifecycle_check',
@@ -30,7 +32,12 @@ export const blob = createMailTable(
           OR (${t.status} = 'deleting' AND ${t.readyAt} IS NOT NULL)`,
     ),
     unique('blob_id_account_uidx').on(t.id, t.mailAccountId),
-    uniqueIndex('blob_account_sha_size_uidx').on(t.mailAccountId, t.sha256, t.sizeBytes),
+    uniqueIndex('blob_account_kind_sha_size_uidx').on(
+      t.mailAccountId,
+      t.kind,
+      t.sha256,
+      t.sizeBytes,
+    ),
     index('blob_account_object_key_idx').on(t.mailAccountId, t.objectKey),
     index('blob_account_created_id_idx').on(t.mailAccountId, t.createdAt, t.id),
     index('blob_account_status_content_created_idx').on(

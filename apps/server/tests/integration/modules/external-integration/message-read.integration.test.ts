@@ -65,6 +65,7 @@ describe('external message PostgreSQL scope', () => {
           authSource: 'nango',
         },
       ]) {
+        const messageDigest = 'a'.repeat(64);
         await sql`
           INSERT INTO integration.connection (
             id, user_id, email, normalized_email, name, channel_id,
@@ -126,6 +127,22 @@ describe('external message PostgreSQL scope', () => {
           )
         `;
         await sql`
+          INSERT INTO mail.blob (
+            id, mail_account_id, kind, sha256, size_bytes, content_type,
+            object_key, status, ready_at
+          ) VALUES (
+            ${`blob-${owner.suffix}`},
+            ${`account-${owner.suffix}`},
+            'message_mime',
+            ${messageDigest},
+            4,
+            'message/rfc822',
+            ${`mail/users/${owner.userId}/accounts/account-${owner.suffix}/messages/sha256/aa/${messageDigest}`},
+            'ready',
+            now()
+          )
+        `;
+        await sql`
           INSERT INTO mail.thread (
             id, mail_account_id, normalized_subject, latest_received_at,
             email_count, unread_count, has_attachment
@@ -141,13 +158,14 @@ describe('external message PostgreSQL scope', () => {
         `;
         await sql`
           INSERT INTO mail.email (
-            id, mail_account_id, thread_id, message_id_header, subject,
+            id, mail_account_id, thread_id, blob_id, message_id_header, subject,
             normalized_subject, preview, received_at, size_bytes,
             has_attachment, lifecycle
           ) VALUES (
             ${`email-${owner.suffix}`},
             ${`account-${owner.suffix}`},
             ${`thread-${owner.suffix}`},
+            ${`blob-${owner.suffix}`},
             ${`<${owner.suffix}@example.test>`},
             'Trip',
             'trip',
@@ -172,24 +190,10 @@ describe('external message PostgreSQL scope', () => {
           )
         `;
         await sql`
-          INSERT INTO mail.blob (
-            id, mail_account_id, sha256, size_bytes, content_type,
-            object_key, status, ready_at
-          ) VALUES (
-            ${`blob-${owner.suffix}`},
-            ${`account-${owner.suffix}`},
-            ${`sha-${owner.suffix}`},
-            4,
-            'application/pdf',
-            ${`accounts/account-${owner.suffix}/blobs/sha-${owner.suffix}`},
-            'ready',
-            now()
-          )
-        `;
-        await sql`
           INSERT INTO mail.email_part (
             id, mail_account_id, email_id, position, part_path,
-            content_type, disposition, filename, blob_id, size_bytes, kind
+            content_type, disposition, filename, raw_blob_id,
+            offset_start, encoded_length, decoded_length, transfer_encoding, kind
           ) VALUES (
             ${`part-${owner.suffix}`},
             ${`account-${owner.suffix}`},
@@ -200,7 +204,10 @@ describe('external message PostgreSQL scope', () => {
             'attachment',
             'invoice.pdf',
             ${`blob-${owner.suffix}`},
+            0,
             4,
+            4,
+            'binary',
             'attachment'
           )
         `;
@@ -235,10 +242,7 @@ describe('external message PostgreSQL scope', () => {
       ).resolves.toMatchObject({
         mailAccountId: 'account-managed-a',
         emailId: 'email-managed-a',
-        blobId: 'blob-managed-a',
-        filename: 'invoice.pdf',
-        contentType: 'application/pdf',
-        sizeBytes: 4n,
+        partId: 'part-managed-a',
       });
       await expect(
         repository.findAttachmentScope({
@@ -247,7 +251,7 @@ describe('external message PostgreSQL scope', () => {
       ).resolves.toMatchObject({
         mailAccountId: 'account-managed-b',
         emailId: 'email-managed-b',
-        blobId: 'blob-managed-b',
+        partId: 'part-managed-b',
       });
       await expect(
         repository.findMessageScope({

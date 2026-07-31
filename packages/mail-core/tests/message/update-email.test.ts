@@ -205,7 +205,7 @@ describe('updateEmail', () => {
       subject: 'Protected Draft',
       textBody: 'Draft body',
       htmlBody: '',
-      attachmentBlobIds: [],
+      attachments: [],
     });
 
     for (const runInvalidPatch of [

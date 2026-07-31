@@ -471,7 +471,7 @@ Email Patch 使用：
   subject?: string;
   textBody?: string;
   htmlBody?: string;
-  attachmentBlobIds?: string[];
+  attachments?: Array<{ blobId: string; filename: string }>;
 }
 ```
 

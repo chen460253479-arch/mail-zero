@@ -1,9 +1,17 @@
-import type { BlobCommitReceipt, BlobStore, BlobStoreListPage } from '../store';
+import type {
+  BlobCommitReceipt,
+  BlobKind,
+  BlobStore,
+  BlobStoreListKind,
+  BlobStoreListPage,
+} from '../store';
 import type { MailAccountId } from '../types';
 import { MailCoreError } from '../types';
 
 interface StoredBlob {
+  userId: string;
   accountId: MailAccountId;
+  kind: BlobKind;
   bytes: Uint8Array;
   contentType: string;
   sha256: string;
@@ -57,7 +65,9 @@ export class MemoryBlobStore implements BlobStore {
   }
 
   async putTemporary(input: {
+    userId: string;
     accountId: MailAccountId;
+    kind: BlobKind;
     bytes: Uint8Array;
     contentType: string;
   }): Promise<{ temporaryKey: string; sha256: string; size: bigint }> {
@@ -67,7 +77,9 @@ export class MemoryBlobStore implements BlobStore {
     const temporaryKey = `temporary/${this.nextTemporaryKey.toString().padStart(8, '0')}`;
     this.nextTemporaryKey += 1;
     this.temporary.set(temporaryKey, {
+      userId: input.userId,
       accountId: input.accountId,
+      kind: input.kind,
       bytes,
       contentType: input.contentType,
       sha256: digest,
@@ -174,14 +186,20 @@ export class MemoryBlobStore implements BlobStore {
   }
 
   async list(input: {
+    userId: string;
     accountId: MailAccountId;
-    kind: 'object' | 'temporary';
+    kind: BlobStoreListKind;
     cursor: string | null;
     limit: number;
   }): Promise<BlobStoreListPage> {
-    const source = input.kind === 'object' ? this.objects : this.temporary;
+    const source = input.kind === 'temporary' ? this.temporary : this.objects;
     const entries = [...source.entries()]
-      .filter(([, blob]) => blob.accountId === input.accountId)
+      .filter(
+        ([, blob]) =>
+          blob.userId === input.userId &&
+          blob.accountId === input.accountId &&
+          (input.kind === 'temporary' || blob.kind === input.kind),
+      )
       .sort(([left], [right]) => left.localeCompare(right));
     const offset = input.cursor === null ? 0 : Number(input.cursor);
     if (

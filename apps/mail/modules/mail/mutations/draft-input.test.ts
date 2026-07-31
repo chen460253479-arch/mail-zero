@@ -11,7 +11,7 @@ const content = {
   subject: 'Subject',
   textBody: 'Hello world',
   htmlBody: '<p>Hello <strong>world</strong></p>',
-  attachmentBlobIds: ['blob-1'],
+  attachments: [{ blobId: 'blob-1', filename: '1.jpg' }],
 };
 
 describe('draft input', () => {

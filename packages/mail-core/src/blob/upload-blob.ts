@@ -43,9 +43,13 @@ const commitPreparedUpload = async (
     if (account.status !== 'active') {
       throw new MailCoreError('ACCOUNT_NOT_ACTIVE', { entityId: prepared.accountId });
     }
+    if (account.userId !== prepared.userId) {
+      throw new MailCoreError('BLOB_INTEGRITY', { entityId: prepared.accountId });
+    }
 
     const existing = await tx.blobs.findByDigest(
       prepared.accountId,
+      prepared.kind,
       prepared.sha256,
       prepared.sizeBytes,
     );
@@ -70,10 +74,16 @@ const commitPreparedUpload = async (
     const pending = await tx.blobs.insert({
       id: blobId,
       accountId: prepared.accountId,
+      kind: prepared.kind,
       sha256: prepared.sha256,
       sizeBytes: prepared.sizeBytes,
       contentType: prepared.contentType,
-      objectKey: contentAddressedObjectKey(prepared.accountId, prepared.sha256),
+      objectKey: contentAddressedObjectKey(
+        prepared.userId,
+        prepared.accountId,
+        prepared.kind,
+        prepared.sha256,
+      ),
       status: 'pending',
       createdAt: now,
       readyAt: null,
@@ -95,7 +105,15 @@ export async function uploadBlob(
   dependencies: MailCoreDependencies,
   input: UploadBlobInput,
 ): Promise<UploadBlobResult> {
-  const prepared = await prepareBlob(dependencies.blobStore, input);
+  const account = await dependencies.unitOfWork.run((tx) => tx.accounts.findById(input.accountId));
+  if (account === null) {
+    throw new MailCoreError('ACCOUNT_NOT_FOUND', { entityId: input.accountId });
+  }
+  const prepared = await prepareBlob(dependencies.blobStore, {
+    ...input,
+    userId: account.userId,
+    kind: 'attachment',
+  });
   const committedObjectKeys: string[] = [];
   const transactionCallbackState = { completed: false };
   try {

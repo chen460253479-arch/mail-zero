@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createSubmissionService } from '../../../../../src/modules/mail-api/application/submission-service';
 
+const rawSha256 = 'a'.repeat(64);
 const submission: SubmissionRecord = {
   id: 'submission-1' as SubmissionRecord['id'],
   accountId: 'account-1' as SubmissionRecord['accountId'],
@@ -13,9 +14,9 @@ const submission: SubmissionRecord = {
   idempotencyKey: 'request-1',
   draftRevision: 3,
   rawBlobId: 'raw-blob-1' as SubmissionRecord['rawBlobId'],
-  rawSha256: 'raw-sha-256',
+  rawSha256,
   rawSizeBytes: 123n,
-  rawObjectKey: 'accounts/account-1/blobs/raw-blob-1',
+  rawObjectKey: `mail/users/user-1/accounts/account-1/messages/sha256/aa/${rawSha256}`,
   providerMessageId: null,
   lastErrorCode: null,
   lastErrorMessage: null,

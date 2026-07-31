@@ -31,7 +31,7 @@ describe('PostgreSQL Draft integration', () => {
         subject: 'Draft subject',
         textBody: 'Draft revision one body.',
         htmlBody: '',
-        attachmentBlobIds: [],
+        attachments: [],
       };
       const draft = await createDraft(harness.dependencies, content);
       const initialRawBlob = await unitOfWork.run((tx) =>
@@ -98,13 +98,24 @@ describe('PostgreSQL Draft integration', () => {
         expect(updatedDraft!.blobId).not.toBe(draft.blobId);
         expect(await tx.blobs.findById(harness.accountId, draft.blobId!)).toEqual(initialRawBlob);
         expect(await tx.blobs.findById(harness.accountId, updatedDraft!.blobId!)).not.toBeNull();
-        expect(await tx.submissions.findById(harness.accountId, submission.id)).toMatchObject({
+        const frozenSubmission = await tx.submissions.findById(harness.accountId, submission.id);
+        const frozenMessage = await tx.blobs.findById(
+          harness.accountId,
+          frozenSubmission!.rawBlobId,
+        );
+        expect(frozenSubmission).toMatchObject({
           draftRevision: 1,
-          rawBlobId: draft.blobId,
+          rawBlobId: frozenMessage!.id,
           rawSha256: initialRawBlob!.sha256,
           rawSizeBytes: initialRawBlob!.sizeBytes,
-          rawObjectKey: initialRawBlob!.objectKey,
+          rawObjectKey: frozenMessage!.objectKey,
         });
+        expect(frozenMessage).toMatchObject({
+          kind: 'message_mime',
+          sha256: initialRawBlob!.sha256,
+          sizeBytes: initialRawBlob!.sizeBytes,
+        });
+        expect(frozenMessage!.id).not.toBe(draft.blobId);
       });
       expect(
         await harness.blobStore.get({
@@ -133,7 +144,7 @@ describe('PostgreSQL Draft integration', () => {
         subject: 'Batch draft',
         textBody: 'Batch body',
         htmlBody: '',
-        attachmentBlobIds: [],
+        attachments: [],
       };
       const updatedDraft = await createDraft(harness.dependencies, {
         accountId: harness.accountId,

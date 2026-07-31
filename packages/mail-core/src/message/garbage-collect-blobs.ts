@@ -37,8 +37,12 @@ export async function garbageCollectBlobs(
     throw new MailCoreError('INVALID_GC_REQUEST');
   }
 
-  const candidates = await dependencies.unitOfWork.run(async (tx) => {
+  const selection = await dependencies.unitOfWork.run(async (tx) => {
     await tx.lockAccount(input.accountId);
+    const account = await tx.accounts.findById(input.accountId);
+    if (account === null) {
+      throw new MailCoreError('ACCOUNT_NOT_FOUND', { entityId: input.accountId });
+    }
     const referenced = referencedBlobIds(await tx.emails.listByAccount(input.accountId));
     for (const submission of await tx.submissions.listByAccount(input.accountId)) {
       referenced.add(submission.rawBlobId);
@@ -51,7 +55,8 @@ export async function garbageCollectBlobs(
           blob.deletedAt === null &&
           blob.createdAt < input.olderThan &&
           !referenced.has(blob.id) &&
-          blob.objectKey === contentAddressedObjectKey(input.accountId, blob.sha256),
+          blob.objectKey ===
+            contentAddressedObjectKey(account.userId, input.accountId, blob.kind, blob.sha256),
       )
       .sort((left, right) => {
         const byCreatedAt = left.createdAt.getTime() - right.createdAt.getTime();
@@ -63,11 +68,11 @@ export async function garbageCollectBlobs(
         status: 'deleting',
       });
     }
-    return candidatesToMark;
+    return { account, candidates: candidatesToMark };
   });
 
   const collectedBlobIds: BlobId[] = [];
-  for (const candidate of candidates) {
+  for (const candidate of selection.candidates) {
     try {
       await dependencies.blobStore.delete({
         accountId: input.accountId,
@@ -85,7 +90,13 @@ export async function garbageCollectBlobs(
       if (
         current.status !== 'deleting' ||
         current.objectKey !== candidate.objectKey ||
-        current.objectKey !== contentAddressedObjectKey(input.accountId, current.sha256)
+        current.objectKey !==
+          contentAddressedObjectKey(
+            selection.account.userId,
+            input.accountId,
+            current.kind,
+            current.sha256,
+          )
       ) {
         throw new MailCoreError('BLOB_INTEGRITY');
       }

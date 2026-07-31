@@ -142,11 +142,13 @@ describe('importEmail', () => {
 
     const blobs = await deps.core.inspect.blobs(deps.input.accountId);
     expect(blobs).toHaveLength(1);
+    expect(blobs.every(({ kind }) => kind === 'message_mime')).toBe(true);
     expect(blobs.every(({ status }) => status === 'ready')).toBe(true);
     expect(
       blobs.every(
         ({ objectKey, sha256 }) =>
-          objectKey === `mail/${deps.input.accountId}/sha256/${sha256.slice(0, 2)}/${sha256}`,
+          objectKey ===
+          `mail/users/user-1/accounts/${deps.input.accountId}/messages/sha256/${sha256.slice(0, 2)}/${sha256}`,
       ),
     ).toBe(true);
     expect(stored?.parts).toHaveLength(5);
@@ -447,7 +449,7 @@ describe('importEmail', () => {
       subject: 'Frozen quota payload',
       textBody: 'body retained only by the Submission snapshot',
       htmlBody: '',
-      attachmentBlobIds: [],
+      attachments: [],
     });
     const submission = await createSubmission(deps, {
       accountId: account.id,
@@ -457,7 +459,8 @@ describe('importEmail', () => {
       sendAt: null,
     });
     await destroyDraft(deps, { accountId: account.id, emailId: draft.id });
-    expect(submission.rawBlobId).toBe(draft.blobId);
+    expect(submission.rawBlobId).not.toBe(draft.blobId);
+    expect(await deps.inspect.blob(submission.rawBlobId)).toMatchObject({ kind: 'message_mime' });
 
     const importOnlyQuota = BigInt(simpleRaw.byteLength);
     await deps.unitOfWork.run((tx) =>
@@ -495,7 +498,9 @@ describe('importEmail', () => {
       storageQuotaBytes: BigInt(multipartRaw.byteLength - 1),
     });
     const orphan = await deps.core.blobStore.putTemporary({
+      userId: 'user-1',
       accountId: deps.input.accountId,
+      kind: 'message_mime',
       bytes: orphanBytes,
       contentType: 'message/rfc822',
     });
@@ -509,6 +514,7 @@ describe('importEmail', () => {
       tx.blobs.insert({
         id: 'orphan-blob' as BlobId,
         accountId: deps.input.accountId,
+        kind: 'message_mime',
         sha256: orphan.sha256,
         sizeBytes: orphan.size,
         contentType: 'message/rfc822',
@@ -586,10 +592,12 @@ describe('importEmail', () => {
   it('does not delete a pre-existing destination object when conditional promotion rejects', async () => {
     const deps = await createSeededImportDependencies();
     const rawDigest = createHash('sha256').update(deps.input.raw).digest('hex');
-    const occupiedKey = `mail/${deps.input.accountId}/sha256/${rawDigest.slice(0, 2)}/${rawDigest}`;
+    const occupiedKey = `mail/users/user-1/accounts/${deps.input.accountId}/messages/sha256/${rawDigest.slice(0, 2)}/${rawDigest}`;
     const originalBytes = new Uint8Array([9, 8, 7]);
     const occupied = await deps.core.blobStore.putTemporary({
+      userId: 'user-1',
       accountId: deps.input.accountId,
+      kind: 'message_mime',
       bytes: originalBytes,
       contentType: 'application/octet-stream',
     });
@@ -667,7 +675,9 @@ describe('importEmail', () => {
       const deps = await createSeededImportDependencies();
       const storedBytes = failure === 'missing' ? expectedBytes : new Uint8Array([4, 3, 2, 1]);
       const pending = await deps.core.blobStore.putTemporary({
+        userId: 'user-1',
         accountId: deps.input.accountId,
+        kind: 'message_mime',
         bytes: storedBytes,
         contentType: 'message/rfc822',
       });
@@ -684,7 +694,9 @@ describe('importEmail', () => {
         });
       }
       const expected = await deps.core.blobStore.putTemporary({
+        userId: 'user-1',
         accountId: deps.input.accountId,
+        kind: 'message_mime',
         bytes: expectedBytes,
         contentType: 'image/png',
       });
@@ -696,6 +708,7 @@ describe('importEmail', () => {
         tx.blobs.insert({
           id: `reused-${failure}` as BlobId,
           accountId: deps.input.accountId,
+          kind: 'message_mime',
           sha256: expected.sha256,
           sizeBytes: expected.size,
           contentType: 'message/rfc822',

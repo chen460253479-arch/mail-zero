@@ -108,7 +108,17 @@ export async function finalizeSubmissionSentInTransaction(
     throw new MailCoreError('INVALID_EMAIL', { entityId: email.id });
   }
 
-  if (submission.rawBlobId !== email.blobId) {
+  const submittedBlob = await tx.blobs.findById(input.accountId, submission.rawBlobId);
+  if (
+    submittedBlob === null ||
+    submittedBlob.status !== 'ready' ||
+    submittedBlob.readyAt === null ||
+    submittedBlob.deletedAt !== null ||
+    submittedBlob.kind !== 'message_mime' ||
+    submittedBlob.sha256 !== submission.rawSha256 ||
+    submittedBlob.sizeBytes !== submission.rawSizeBytes ||
+    submittedBlob.objectKey !== submission.rawObjectKey
+  ) {
     throw new MailCoreError('BLOB_INTEGRITY', { entityId: email.id });
   }
   const remote = await tx.emails.findByRemoteId({
@@ -153,6 +163,8 @@ export async function finalizeSubmissionSentInTransaction(
 
   await tx.emails.update(input.accountId, email.id, {
     lifecycle: 'sent',
+    blobId: submittedBlob.id,
+    parts: email.parts.map((part) => ({ ...part, rawBlobId: submittedBlob.id })),
     sentAt: new Date(input.acceptedAt),
     mailboxIds: nextMailboxIds,
     restoreMailboxIds: sortStrings(new Set(nextRestoreMailboxIds)),
@@ -191,7 +203,16 @@ export async function finalizeSubmissionSentInTransaction(
         collection: 'email',
         entityId: email.id,
         changeType: 'updated',
-        changedProperties: ['lifecycle', 'sentAt', 'mailboxIds', 'restoreMailboxIds', 'keywords'],
+        changedProperties: [
+          'lifecycle',
+          'blobId',
+          'bodyStructure',
+          'attachments',
+          'sentAt',
+          'mailboxIds',
+          'restoreMailboxIds',
+          'keywords',
+        ],
       },
       {
         collection: 'email_submission',

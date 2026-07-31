@@ -105,6 +105,7 @@ describe('PostgreSQL account-scoped constraints', () => {
           await tx.blobs.insert({
             id,
             accountId,
+            kind: 'attachment',
             sha256: `sha-${id}`,
             sizeBytes: 1n,
             contentType: 'application/octet-stream',

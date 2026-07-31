@@ -54,6 +54,7 @@ describe('EmailSubmission sent finalization', () => {
     expect(result.email).toMatchObject({
       id: h.draftId,
       lifecycle: 'sent',
+      blobId: result.submission.rawBlobId,
       sentAt: acceptedAt,
       mailboxIds: [sentMailbox.id],
       keywords: ['$seen'],

@@ -187,7 +187,7 @@ export function GmailSettingsDialog({
       await refresh();
       dirtyRef.current = false;
       toast.success(m['pages.settings.integrations.gmail.saved']());
-      requestClose(false);
+      onOpenChange(false);
     } catch {
       toast.error(
         selectedSourceReady
@@ -282,7 +282,9 @@ export function GmailSettingsDialog({
             <div className="flex-1 space-y-7 overflow-y-auto px-5 py-6 sm:px-6">
               <FormSection
                 title={m['pages.settings.integrations.authorizationSource']()}
-                description={m['pages.settings.integrations.gmail.authorizationSourceDescription']()}
+                description={m[
+                  'pages.settings.integrations.gmail.authorizationSourceDescription'
+                ]()}
               >
                 <RadioGroup
                   value={form.authSource}
@@ -364,7 +366,9 @@ export function GmailSettingsDialog({
                 >
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
-                      <Label htmlFor="gmail-client-id">{m['pages.settings.integrations.clientId']()}</Label>
+                      <Label htmlFor="gmail-client-id">
+                        {m['pages.settings.integrations.clientId']()}
+                      </Label>
                       <Input
                         id="gmail-client-id"
                         value={gmailClientId}

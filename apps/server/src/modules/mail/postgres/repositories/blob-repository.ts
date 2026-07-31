@@ -7,6 +7,7 @@ import { blob } from '../schema';
 const mapBlob = (row: typeof blob.$inferSelect): BlobRecord => ({
   id: row.id as BlobRecord['id'],
   accountId: row.mailAccountId as BlobRecord['accountId'],
+  kind: row.kind,
   sha256: row.sha256,
   sizeBytes: row.sizeBytes,
   contentType: row.contentType,
@@ -43,7 +44,7 @@ export const createBlobRepository = (db: MailDatabase): BlobRepository => ({
         .limit(1);
       return rows[0] === undefined ? null : mapBlob(rows[0]);
     }),
-  findByDigest: (accountId, sha256, sizeBytes) =>
+  findByDigest: (accountId, kind, sha256, sizeBytes) =>
     runAdapter(async () => {
       const rows = await db
         .select()
@@ -51,6 +52,7 @@ export const createBlobRepository = (db: MailDatabase): BlobRepository => ({
         .where(
           and(
             eq(blob.mailAccountId, accountId),
+            eq(blob.kind, kind),
             eq(blob.sha256, sha256),
             eq(blob.sizeBytes, sizeBytes),
           ),

@@ -1,16 +1,34 @@
+import type { BlobCommitReceipt, BlobKind, BlobStore } from '../store';
 import { MailCoreError, type MailAccountId } from '../types';
-import type { BlobCommitReceipt, BlobStore } from '../store';
 
 export type PreparedBlob = {
+  userId: string;
   accountId: MailAccountId;
+  kind: BlobKind;
   temporaryKey: string;
   sha256: string;
   sizeBytes: bigint;
   contentType: string;
 };
 
-export const contentAddressedObjectKey = (accountId: MailAccountId, sha256: string): string =>
-  `mail/${accountId}/sha256/${sha256.slice(0, 2)}/${sha256}`;
+const blobDirectory = (kind: BlobKind): string => {
+  switch (kind) {
+    case 'attachment':
+      return 'attachments';
+    case 'draft_mime':
+      return 'drafts';
+    case 'message_mime':
+      return 'messages';
+  }
+};
+
+export const contentAddressedObjectKey = (
+  userId: string,
+  accountId: MailAccountId,
+  kind: BlobKind,
+  sha256: string,
+): string =>
+  `mail/users/${userId}/accounts/${accountId}/${blobDirectory(kind)}/sha256/${sha256.slice(0, 2)}/${sha256}`;
 
 const copyBytes = (bytes: Uint8Array): Uint8Array => Uint8Array.from(bytes);
 
@@ -50,7 +68,9 @@ const safeBlobStoreError = (error: unknown): MailCoreError =>
 export async function prepareBlob(
   blobStore: BlobStore,
   input: {
+    userId: string;
     accountId: MailAccountId;
+    kind: BlobKind;
     bytes: Uint8Array;
     contentType: string;
   },
@@ -81,7 +101,9 @@ export async function prepareBlob(
   }
 
   return {
+    userId: input.userId,
     accountId: input.accountId,
+    kind: input.kind,
     temporaryKey: pending.temporaryKey,
     sha256: expectedSha256,
     sizeBytes: expectedSize,

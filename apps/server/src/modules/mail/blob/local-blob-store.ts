@@ -12,7 +12,12 @@ import {
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { constants } from 'node:fs';
 
-import { MailCoreError, type BlobCommitReceipt, type BlobStore } from '@zero/mail-core';
+import {
+  MailCoreError,
+  type BlobCommitReceipt,
+  type BlobStore,
+  type BlobStoreListKind,
+} from '@zero/mail-core';
 
 import {
   buildObjectKey,
@@ -23,13 +28,15 @@ import {
   calculateSha256,
   copyBytes,
   requireObjectKeyForAccount,
+  parseTemporaryKey,
   requireTemporaryKeyForAccount,
 } from './blob-key';
 
 type BlobListCursor = {
   version: 1;
+  userId: string;
   accountId: string;
-  kind: 'object' | 'temporary';
+  kind: BlobStoreListKind;
   after: string;
 };
 
@@ -43,8 +50,9 @@ const blobNotFound = (): MailCoreError => new MailCoreError('BLOB_NOT_FOUND');
 
 const parseCursor = (
   cursor: string,
+  userId: string,
   accountId: string,
-  kind: 'object' | 'temporary',
+  kind: BlobStoreListKind,
 ): BlobListCursor => {
   try {
     const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as unknown;
@@ -53,6 +61,7 @@ const parseCursor = (
       typeof value !== 'object' ||
       Array.isArray(value) ||
       (value as Record<string, unknown>).version !== 1 ||
+      (value as Record<string, unknown>).userId !== userId ||
       (value as Record<string, unknown>).accountId !== accountId ||
       (value as Record<string, unknown>).kind !== kind ||
       typeof (value as Record<string, unknown>).after !== 'string'
@@ -107,7 +116,7 @@ export class LocalBlobStore implements BlobStore {
   async putTemporary(
     input: Parameters<BlobStore['putTemporary']>[0],
   ): ReturnType<BlobStore['putTemporary']> {
-    const temporaryKey = buildTemporaryKey(input.accountId);
+    const temporaryKey = buildTemporaryKey(input.userId, input.accountId, input.kind);
     const path = this.pathForKey(temporaryKey);
     const bytes = copyBytes(input.bytes);
     const sha256 = await calculateSha256(bytes);
@@ -125,6 +134,10 @@ export class LocalBlobStore implements BlobStore {
   ): Promise<BlobCommitReceipt> {
     requireTemporaryKeyForAccount(input.accountId, input.temporaryKey);
     const target = requireObjectKeyForAccount(input.accountId, input.objectKey);
+    const temporary = parseTemporaryKey(input.temporaryKey);
+    if (temporary.userId !== target.userId || temporary.kind !== target.kind) {
+      throw new MailCoreError('BLOB_INTEGRITY');
+    }
     const temporaryPath = this.pathForKey(input.temporaryKey);
     const objectPath = this.pathForKey(input.objectKey);
     let bytes: Uint8Array;
@@ -140,7 +153,10 @@ export class LocalBlobStore implements BlobStore {
     }
 
     const sha256 = await calculateSha256(bytes);
-    if (sha256 !== target.sha256 || input.objectKey !== buildObjectKey(target.accountId, sha256)) {
+    if (
+      sha256 !== target.sha256 ||
+      input.objectKey !== buildObjectKey(target.userId, target.accountId, target.kind, sha256)
+    ) {
       throw new MailCoreError('BLOB_INTEGRITY');
     }
 
@@ -214,11 +230,13 @@ export class LocalBlobStore implements BlobStore {
       throw blobStoreFailure();
     }
     const prefix =
-      input.kind === 'object'
-        ? buildObjectPrefix(input.accountId)
-        : buildTemporaryPrefix(input.accountId);
+      input.kind === 'temporary'
+        ? buildTemporaryPrefix(input.userId, input.accountId)
+        : buildObjectPrefix(input.userId, input.accountId, input.kind);
     const cursor =
-      input.cursor === null ? null : parseCursor(input.cursor, input.accountId, input.kind);
+      input.cursor === null
+        ? null
+        : parseCursor(input.cursor, input.userId, input.accountId, input.kind);
     const files = await listFiles(this.pathForPrefix(prefix));
     const keys = files
       .map((path) => relative(this.rootDirectory, path).split(sep).join('/'))
@@ -227,7 +245,7 @@ export class LocalBlobStore implements BlobStore {
     const pageKeys = keys.slice(0, input.limit);
     const entries = await Promise.all(
       pageKeys.map(async (key) => {
-        if (input.kind === 'object') {
+        if (input.kind !== 'temporary') {
           requireObjectKeyForAccount(input.accountId, key);
         } else {
           requireTemporaryKeyForAccount(input.accountId, key);
@@ -248,6 +266,7 @@ export class LocalBlobStore implements BlobStore {
       keys.length > pageKeys.length && pageKeys.length > 0
         ? encodeCursor({
             version: 1,
+            userId: input.userId,
             accountId: input.accountId,
             kind: input.kind,
             after: pageKeys.at(-1)!,

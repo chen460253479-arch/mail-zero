@@ -33,11 +33,12 @@ const seedPlannerFixtures = async (
   ) {
     await connection`
       INSERT INTO mail.blob (
-        id, mail_account_id, sha256, size_bytes, content_type, object_key, status, created_at
+        id, mail_account_id, kind, sha256, size_bytes, content_type, object_key, status, created_at
       )
       SELECT
         'plan-blob-' || lpad(value::text, 4, '0'),
         ${accountId},
+        'message_mime',
         'plan-sha-' || value,
         value,
         'text/plain',
@@ -128,7 +129,7 @@ const seedPlannerFixtures = async (
       INSERT INTO mail.email_part (
         id, mail_account_id, email_id, position, part_path, content_type,
         raw_blob_id, offset_start, encoded_length, decoded_length,
-        transfer_encoding, size_bytes, kind
+        transfer_encoding, kind
       )
       SELECT
         'plan-part-' || lpad(value::text, 4, '0'),
@@ -142,7 +143,6 @@ const seedPlannerFixtures = async (
         1,
         1,
         'binary',
-        1,
         'attachment'
       FROM generate_series(1, 1000) AS value
     `;

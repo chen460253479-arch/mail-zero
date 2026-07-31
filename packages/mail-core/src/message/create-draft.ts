@@ -12,6 +12,7 @@ import type {
   EmailPartRecord,
   EmailRecord,
   IdentityRecord,
+  MailAccountRecord,
   MailCoreDependencies,
   MailTransaction,
   ThreadRecord,
@@ -36,6 +37,7 @@ import { parseRawEmail } from './mime';
 import { z } from 'zod';
 
 export type DraftReferences = {
+  account: MailAccountRecord;
   identity: IdentityRecord;
   reply: EmailRecord | null;
   attachments: DraftAttachmentReference[];
@@ -45,12 +47,14 @@ export type DraftAttachmentReference =
   | {
       source: 'blob';
       blob: BlobRecord;
+      filename: string;
     }
   | {
       source: 'part';
       emailId: EmailId;
       part: EmailPartRecord;
       rawBlob: BlobRecord;
+      filename: string;
     };
 
 export type PreparedDraftRevision = {
@@ -125,10 +129,11 @@ const sameAttachments = (
     const compared = right[index];
     if (compared === undefined || compared.source !== reference.source) return false;
     if (reference.source === 'blob' && compared.source === 'blob') {
-      return sameBlob(reference.blob, compared.blob);
+      return reference.filename === compared.filename && sameBlob(reference.blob, compared.blob);
     }
     if (reference.source === 'part' && compared.source === 'part') {
       return (
+        reference.filename === compared.filename &&
         reference.emailId === compared.emailId &&
         reference.part.id === compared.part.id &&
         reference.part.rawBlobId === compared.part.rawBlobId &&
@@ -147,7 +152,8 @@ export async function requireDraftReferences(
   accountId: MailAccountId,
   content: DraftContent,
 ): Promise<DraftReferences> {
-  if ((await tx.accounts.findById(accountId)) === null) {
+  const account = await tx.accounts.findById(accountId);
+  if (account === null) {
     throw new MailCoreError('ACCOUNT_NOT_FOUND', { entityId: accountId });
   }
   const identity = await tx.identities.findById(accountId, content.identityId);
@@ -165,13 +171,19 @@ export async function requireDraftReferences(
     throw new MailCoreError('EMAIL_NOT_FOUND', { entityId: content.replyToEmailId });
   }
   const attachments: DraftAttachmentReference[] = [];
-  for (const attachmentId of content.attachmentBlobIds) {
+  for (const attachment of content.attachments) {
+    const attachmentId = attachment.blobId;
     const blob = await tx.blobs.findById(accountId, attachmentId);
     if (blob !== null) {
-      if (blob.status !== 'ready' || blob.readyAt === null || blob.deletedAt !== null) {
+      if (
+        blob.kind !== 'attachment' ||
+        blob.status !== 'ready' ||
+        blob.readyAt === null ||
+        blob.deletedAt !== null
+      ) {
         throw new MailCoreError('BLOB_INTEGRITY', { entityId: attachmentId });
       }
-      attachments.push({ source: 'blob', blob });
+      attachments.push({ source: 'blob', blob, filename: attachment.filename });
       continue;
     }
     const located = await tx.emails.findPartById(accountId, attachmentId);
@@ -198,14 +210,17 @@ export async function requireDraftReferences(
       emailId: located.emailId,
       part: located.part,
       rawBlob,
+      filename: attachment.filename,
     });
   }
-  return { identity, reply, attachments };
+  return { account, identity, reply, attachments };
 }
 
 export function requireStableReferences(before: DraftReferences, after: DraftReferences): void {
   if (
     !sameIdentity(before.identity, after.identity) ||
+    before.account.userId !== after.account.userId ||
+    before.account.status !== after.account.status ||
     !sameReply(before.reply, after.reply) ||
     !sameAttachments(before.attachments, after.attachments)
   ) {
@@ -233,7 +248,7 @@ export async function loadDraftAttachments(
       );
       attachments.push({
         id: record.id,
-        filename: record.id,
+        filename: reference.filename,
         contentType: record.contentType,
         sizeBytes: record.sizeBytes,
         bytes,
@@ -247,7 +262,7 @@ export async function loadDraftAttachments(
     });
     attachments.push({
       id: reference.part.id,
-      filename: part.filename ?? reference.part.id,
+      filename: reference.filename,
       contentType: part.contentType,
       sizeBytes: part.sizeBytes,
       bytes: part.bytes,
@@ -259,6 +274,7 @@ export async function loadDraftAttachments(
 export async function prepareDraftRevision(
   dependencies: MailCoreDependencies,
   input: {
+    userId: string;
     accountId: MailAccountId;
     raw: Uint8Array;
   },
@@ -266,7 +282,9 @@ export async function prepareDraftRevision(
   const all: PreparedBlob[] = [];
   try {
     const raw = await prepareBlob(dependencies.blobStore, {
+      userId: input.userId,
       accountId: input.accountId,
+      kind: 'draft_mime',
       bytes: input.raw,
       contentType: 'message/rfc822',
     });
@@ -287,12 +305,17 @@ export async function allocateDraftRevisionBlobs(
 ): Promise<DraftRevisionBlobs> {
   const resolved = new Map<string, DraftRevisionBlob>();
   const allocate = async (pending: PreparedBlob): Promise<DraftRevisionBlob> => {
-    const key = `${pending.sha256}:${pending.sizeBytes}`;
+    const key = `${pending.kind}:${pending.sha256}:${pending.sizeBytes}`;
     const alreadyResolved = resolved.get(key);
     if (alreadyResolved !== undefined) {
       return alreadyResolved;
     }
-    const existing = await tx.blobs.findByDigest(accountId, pending.sha256, pending.sizeBytes);
+    const existing = await tx.blobs.findByDigest(
+      accountId,
+      pending.kind,
+      pending.sha256,
+      pending.sizeBytes,
+    );
     if (existing !== null) {
       if (existing.status !== 'ready' || existing.readyAt === null || existing.deletedAt !== null) {
         throw new MailCoreError('BLOB_INTEGRITY', { entityId: existing.id });
@@ -308,10 +331,16 @@ export async function allocateDraftRevisionBlobs(
       record: {
         id,
         accountId,
+        kind: pending.kind,
         sha256: pending.sha256,
         sizeBytes: pending.sizeBytes,
         contentType: pending.contentType,
-        objectKey: contentAddressedObjectKey(accountId, pending.sha256),
+        objectKey: contentAddressedObjectKey(
+          pending.userId,
+          accountId,
+          pending.kind,
+          pending.sha256,
+        ),
         status: 'pending',
         createdAt: now,
         readyAt: null,
@@ -425,14 +454,28 @@ const draftAddressSchema = z.string().email();
 export const normalizeDraftContent = (
   dependencies: Pick<MailCoreDependencies, 'sanitizeHtml'>,
   content: DraftContent,
-): DraftContent => ({
-  ...content,
-  to: content.to.map(normalizeDraftAddress),
-  cc: content.cc.map(normalizeDraftAddress),
-  bcc: content.bcc.map(normalizeDraftAddress),
-  htmlBody:
-    content.htmlBody.length === 0 ? '' : dependencies.sanitizeHtml(content.htmlBody).trimEnd(),
-});
+): DraftContent => {
+  const attachments = content.attachments.map((attachment) => {
+    if (
+      attachment.filename.length === 0 ||
+      attachment.filename.length > 255 ||
+      attachment.filename.trim().length === 0 ||
+      /[\u0000-\u001f\u007f]/u.test(attachment.filename)
+    ) {
+      throw new MailCoreError('INVALID_PATCH');
+    }
+    return { ...attachment };
+  });
+  return {
+    ...content,
+    to: content.to.map(normalizeDraftAddress),
+    cc: content.cc.map(normalizeDraftAddress),
+    bcc: content.bcc.map(normalizeDraftAddress),
+    attachments,
+    htmlBody:
+      content.htmlBody.length === 0 ? '' : dependencies.sanitizeHtml(content.htmlBody).trimEnd(),
+  };
+};
 
 const normalizeDraftAddress = (address: DraftContent['to'][number]) => {
   const email = address.email.trim().normalize('NFC').toLocaleLowerCase('und');
@@ -613,6 +656,7 @@ export async function prepareDraftCreate(
     sanitizeHtml: dependencies.sanitizeHtml,
   });
   const prepared = await prepareDraftRevision(dependencies, {
+    userId: preflight.account.userId,
     accountId: input.accountId,
     raw,
   });

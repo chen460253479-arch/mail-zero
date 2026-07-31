@@ -1,14 +1,14 @@
 import { createDraft, createIdentity } from '@zero/mail-core';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createPostgresMailTestHarness } from '../../../../helpers/mail-core/harness';
-import { withMailTestDatabase } from '../../../../helpers/mail-core/database';
 import { PostgresMailOutboundUnitOfWork } from '../../../../../src/modules/mail-outbound/postgres/unit-of-work';
-import type { MailOutboundTransaction } from '../../../../../src/modules/mail-outbound/postgres/unit-of-work';
 import { finalizeFailedDelivery } from '../../../../../src/modules/mail-outbound/application/finalize-failed';
 import { finalizeAcceptedDelivery } from '../../../../../src/modules/mail-outbound/application/finalize-sent';
+import type { MailOutboundTransaction } from '../../../../../src/modules/mail-outbound/postgres/unit-of-work';
 import { cancelPendingDelivery } from '../../../../../src/modules/mail-outbound/application/cancel-delivery';
 import { enqueueSubmission } from '../../../../../src/modules/mail-outbound/application/enqueue-submission';
+import { createPostgresMailTestHarness } from '../../../../helpers/mail-core/harness';
+import { withMailTestDatabase } from '../../../../helpers/mail-core/database';
 
 describe('composite outbound finalization', () => {
   it('atomically marks Provider acceptance, local Draft-to-Sent, and Delivery completed', () =>
@@ -40,7 +40,7 @@ describe('composite outbound finalization', () => {
         subject: 'Finalize',
         textBody: 'Finalize body',
         htmlBody: '',
-        attachmentBlobIds: [],
+        attachments: [],
       });
       const queued = await enqueueSubmission(
         {
@@ -173,7 +173,7 @@ describe('composite outbound finalization', () => {
         subject: 'Failed',
         textBody: 'Failed body',
         htmlBody: '',
-        attachmentBlobIds: [],
+        attachments: [],
       });
       const queued = await enqueueSubmission(
         {
@@ -257,7 +257,7 @@ describe('composite outbound finalization', () => {
         subject: 'Cancel',
         textBody: 'Cancel body',
         htmlBody: '',
-        attachmentBlobIds: [],
+        attachments: [],
       });
       const queued = await enqueueSubmission(
         {

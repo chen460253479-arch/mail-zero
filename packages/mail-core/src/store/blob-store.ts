@@ -1,5 +1,8 @@
 import type { MailAccountId } from '../types';
 
+export type BlobKind = 'attachment' | 'draft_mime' | 'message_mime';
+export type BlobStoreListKind = BlobKind | 'temporary';
+
 export type BlobCommitReceipt = {
   objectKey: string;
   created: true;
@@ -18,7 +21,9 @@ export type BlobStoreListPage = {
 
 export interface BlobStore {
   putTemporary(input: {
+    userId: string;
     accountId: MailAccountId;
+    kind: BlobKind;
     bytes: Uint8Array;
     contentType: string;
   }): Promise<{ temporaryKey: string; sha256: string; size: bigint }>;
@@ -45,8 +50,9 @@ export interface BlobStore {
    * may only be reused with the same account and kind.
    */
   list(input: {
+    userId: string;
     accountId: MailAccountId;
-    kind: 'object' | 'temporary';
+    kind: BlobStoreListKind;
     cursor: string | null;
     limit: number;
   }): Promise<BlobStoreListPage>;

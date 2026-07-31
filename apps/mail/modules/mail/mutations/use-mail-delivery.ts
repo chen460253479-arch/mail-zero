@@ -3,14 +3,14 @@ import { useCallback } from 'react';
 
 import { trpcClient, useTRPC } from '@/providers/query-provider';
 
-import { buildCancelSubmissionInput, buildSubmissionCreateInput } from './submission-input';
 import { buildDraftCreateInput, buildDraftUpdateInput, htmlToPlainText } from './draft-input';
+import { buildCancelSubmissionInput, buildSubmissionCreateInput } from './submission-input';
 import { useMailAccountContext } from '../providers/mail-account-provider';
 import { selectDeliveryIdentity, toMailAddresses } from './delivery-input';
 import { useMailIdentities } from '../queries/use-mail-identities';
 import { uploadMailBlob } from '../api/blob-client';
 
-const attachmentBlobIds = new WeakMap<File, string>();
+const attachmentBlobIdCache = new WeakMap<File, string>();
 
 const nextId = (prefix: string) =>
   globalThis.crypto?.randomUUID?.() ??
@@ -34,7 +34,11 @@ export type SendLocalMessageInput = SaveLocalDraftInput & {
 };
 
 export function rememberMailAttachmentBlob(file: File, blobId: string) {
-  attachmentBlobIds.set(file, blobId);
+  attachmentBlobIdCache.set(file, blobId);
+}
+
+export function getRememberedMailAttachmentBlob(file: File) {
+  return attachmentBlobIdCache.get(file);
 }
 
 export function useMailDelivery() {
@@ -50,15 +54,15 @@ export function useMailDelivery() {
       if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
       return Promise.all(
         files.map(async (file) => {
-          const existing = attachmentBlobIds.get(file);
-          if (existing) return existing;
+          const existing = attachmentBlobIdCache.get(file);
+          if (existing) return { blobId: existing, filename: file.name };
           const uploaded = await uploadMailBlob({
             accountId: account.id,
             file,
             backendBaseUrl: import.meta.env.VITE_PUBLIC_BACKEND_URL,
           });
-          attachmentBlobIds.set(file, uploaded.blobId);
-          return uploaded.blobId;
+          attachmentBlobIdCache.set(file, uploaded.blobId);
+          return { blobId: uploaded.blobId, filename: file.name };
         }),
       );
     },
@@ -81,7 +85,7 @@ export function useMailDelivery() {
         subject: input.subject,
         textBody: htmlToPlainText(input.htmlBody),
         htmlBody: input.htmlBody,
-        attachmentBlobIds: attachmentIds,
+        attachments: attachmentIds,
       };
 
       if (input.draftId) {

@@ -66,6 +66,7 @@ export const createPostgresMailTestHarness = async (
     unitOfWork,
     dependencies,
     blobStore,
+    userId,
     accountId: account.id as MailAccountId,
     inbox: (await mailboxByRole('inbox'))!,
     drafts: (await mailboxByRole('drafts'))!,

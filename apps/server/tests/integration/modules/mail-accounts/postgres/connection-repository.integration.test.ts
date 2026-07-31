@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { withMailTestDatabase } from '../../../../helpers/mail-core/database';
 import { createPostgresConnectionRepository } from '../../../../../src/modules/mail-accounts/postgres/connection-repository';
+import { withMailTestDatabase } from '../../../../helpers/mail-core/database';
 
 const insertUser = async (
   sql: Parameters<Parameters<typeof withMailTestDatabase>[0]>[0]['sql'],
@@ -58,14 +58,15 @@ describe('PostgreSQL mail connection repository', () => {
         normalizedEmail: 'owner@example.com',
         status: 'connected',
       });
-      await expect(repository.findConnectionWithAuthorization('user-1', result.id)).resolves
-        .toMatchObject({
-          authorization: {
-            id: 'generated-2',
-            connectionId: 'generated-1',
-            authSource: 'zero_oauth',
-          },
-        });
+      await expect(
+        repository.findConnectionWithAuthorization('user-1', result.id),
+      ).resolves.toMatchObject({
+        authorization: {
+          id: 'generated-2',
+          connectionId: 'generated-1',
+          authSource: 'zero_oauth',
+        },
+      });
       await expect(repository.findFirstOwnedConnection('user-1')).resolves.toMatchObject({
         id: 'generated-1',
       });
@@ -113,11 +114,7 @@ describe('PostgreSQL mail connection repository', () => {
         authorization: zeroOAuthAuthorization,
       });
       await repository.removeAuthorizationBinding('user-1', created.id);
-      await repository.markDisconnected(
-        'user-1',
-        created.id,
-        new Date('2026-07-27T12:00:00.000Z'),
-      );
+      await repository.markDisconnected('user-1', created.id, new Date('2026-07-27T12:00:00.000Z'));
 
       await expect(
         repository.saveBinding({
@@ -165,11 +162,7 @@ describe('PostgreSQL mail connection repository', () => {
       ).resolves.toMatchObject({ id: created.id, status: 'connected' });
 
       await repository.removeAuthorizationBinding('user-1', created.id);
-      await repository.markDisconnected(
-        'user-1',
-        created.id,
-        new Date('2026-07-27T12:00:00.000Z'),
-      );
+      await repository.markDisconnected('user-1', created.id, new Date('2026-07-27T12:00:00.000Z'));
 
       await expect(
         repository.findMailboxByNormalizedEmail(
@@ -200,9 +193,9 @@ describe('PostgreSQL mail connection repository', () => {
         authorization: zeroOAuthAuthorization,
       });
 
-      await expect(
-        repository.markReconnectRequired('user-2', created.id),
-      ).rejects.toMatchObject({ code: 'MAILBOX_NOT_FOUND' });
+      await expect(repository.markReconnectRequired('user-2', created.id)).rejects.toMatchObject({
+        code: 'MAILBOX_NOT_FOUND',
+      });
       await repository.markReconnectRequired('user-1', created.id);
       await expect(repository.findOwnedConnection('user-1', created.id)).resolves.toMatchObject({
         status: 'reconnect_required',
@@ -222,9 +215,9 @@ describe('PostgreSQL mail connection repository', () => {
         authorization: zeroOAuthAuthorization,
       });
 
-      await expect(
-        repository.markDisconnecting('user-2', created.id),
-      ).rejects.toMatchObject({ code: 'MAILBOX_NOT_FOUND' });
+      await expect(repository.markDisconnecting('user-2', created.id)).rejects.toMatchObject({
+        code: 'MAILBOX_NOT_FOUND',
+      });
       await repository.markDisconnecting('user-1', created.id);
       await expect(repository.findOwnedConnection('user-1', created.id)).resolves.toMatchObject({
         status: 'disconnecting',
@@ -259,10 +252,8 @@ describe('PostgreSQL mail connection repository', () => {
 
       await expect(
         repository.findByNangoReference('gmail-primary', 'nango-connection-1'),
-      ).resolves.toEqual({ connectionId: created.id });
-      await expect(
-        repository.findByNangoReference('gmail-primary', 'missing'),
-      ).resolves.toBeNull();
+      ).resolves.toEqual({ connectionId: created.id, userId: 'user-1' });
+      await expect(repository.findByNangoReference('gmail-primary', 'missing')).resolves.toBeNull();
     });
   });
 
@@ -322,23 +313,23 @@ describe('PostgreSQL mail connection repository', () => {
         INSERT INTO mail.account (id, connection_id, user_id)
         VALUES ('account-1', ${created.id}, 'user-1')
       `;
+      const messageDigest = 'd'.repeat(64);
+      const messageObjectKey = `mail/users/user-1/accounts/account-1/messages/sha256/dd/${messageDigest}`;
       await sql`
         INSERT INTO mail.blob (
-          id, mail_account_id, sha256, size_bytes, content_type,
+          id, mail_account_id, kind, sha256, size_bytes, content_type,
           object_key, status, ready_at
         ) VALUES (
-          'blob-1', 'account-1', 'digest', 4, 'message/rfc822',
-          'accounts/account-1/blobs/digest', 'ready', now()
+          'blob-1', 'account-1', 'message_mime', ${messageDigest}, 4, 'message/rfc822',
+          ${messageObjectKey}, 'ready', now()
         )
       `;
 
-      await expect(
-        repository.listBlobObjectKeys('user-1', created.id),
-      ).resolves.toEqual(['accounts/account-1/blobs/digest']);
+      await expect(repository.listBlobObjectKeys('user-1', created.id)).resolves.toEqual([
+        messageObjectKey,
+      ]);
       await repository.markDeleting('user-1', created.id);
-      const [states] = await sql<
-        Array<{ connection_status: string; account_status: string }>
-      >`
+      const [states] = await sql<Array<{ connection_status: string; account_status: string }>>`
         SELECT c.status AS connection_status, a.status AS account_status
         FROM integration.connection c
         JOIN mail.account a ON a.connection_id = c.id

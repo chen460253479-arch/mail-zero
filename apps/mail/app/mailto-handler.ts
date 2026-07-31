@@ -152,7 +152,7 @@ async function createDraftFromMailto(mailtoData: {
           subject: mailtoData.subject,
           textBody: htmlToPlainText(htmlContent),
           htmlBody: htmlContent,
-          attachmentBlobIds: [],
+          attachments: [],
         },
       }),
     );

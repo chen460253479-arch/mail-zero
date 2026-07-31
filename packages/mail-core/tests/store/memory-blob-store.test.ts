@@ -5,12 +5,15 @@ import type { MailAccountId } from '../../src';
 
 describe('memory blob store', () => {
   const accountId = 'account-1' as MailAccountId;
+  const userId = 'user-1';
 
   it('keeps stored content isolated from caller byte mutations', async () => {
     const deps = createMemoryMailCoreDependencies();
     const input = new Uint8Array([1, 2, 3]);
     const pending = await deps.blobStore.putTemporary({
+      userId,
       accountId,
+      kind: 'attachment',
       bytes: input,
       contentType: 'application/octet-stream',
     });
@@ -35,7 +38,9 @@ describe('memory blob store', () => {
 
     await expect(
       deps.blobStore.putTemporary({
+        userId,
         accountId,
+        kind: 'attachment',
         bytes: new TextEncoder().encode('abc'),
         contentType: 'text/plain',
       }),
@@ -48,7 +53,9 @@ describe('memory blob store', () => {
   it('rejects a different blob for an occupied object key', async () => {
     const deps = createMemoryMailCoreDependencies();
     const first = await deps.blobStore.putTemporary({
+      userId,
       accountId,
+      kind: 'attachment',
       bytes: new Uint8Array([1]),
       contentType: 'application/octet-stream',
     });
@@ -58,7 +65,9 @@ describe('memory blob store', () => {
       objectKey: 'objects/blob-1',
     });
     const second = await deps.blobStore.putTemporary({
+      userId,
       accountId,
+      kind: 'attachment',
       bytes: new Uint8Array([2]),
       contentType: 'application/octet-stream',
     });
@@ -78,7 +87,9 @@ describe('memory blob store', () => {
   it('treats repeated deletion and deletion of a missing object as success', async () => {
     const deps = createMemoryMailCoreDependencies();
     const pending = await deps.blobStore.putTemporary({
+      userId,
       accountId,
+      kind: 'attachment',
       bytes: new Uint8Array([1]),
       contentType: 'application/octet-stream',
     });
@@ -103,27 +114,34 @@ describe('memory blob store', () => {
     const deps = createMemoryMailCoreDependencies();
     const otherAccountId = 'account-2' as MailAccountId;
     const first = await deps.blobStore.putTemporary({
+      userId,
       accountId,
+      kind: 'attachment',
       bytes: new Uint8Array([1]),
       contentType: 'application/octet-stream',
     });
     const second = await deps.blobStore.putTemporary({
+      userId,
       accountId,
+      kind: 'attachment',
       bytes: new Uint8Array([2]),
       contentType: 'application/octet-stream',
     });
     await deps.blobStore.putTemporary({
+      userId: 'user-2',
       accountId: otherAccountId,
+      kind: 'attachment',
       bytes: new Uint8Array([3]),
       contentType: 'application/octet-stream',
     });
     await deps.blobStore.commitTemporary({
       accountId,
       temporaryKey: first.temporaryKey,
-      objectKey: `mail/${accountId}/sha256/${first.sha256.slice(0, 2)}/${first.sha256}`,
+      objectKey: `mail/users/${userId}/accounts/${accountId}/attachments/sha256/${first.sha256.slice(0, 2)}/${first.sha256}`,
     });
 
     const temporaryPage = await deps.blobStore.list({
+      userId,
       accountId,
       kind: 'temporary',
       cursor: null,
@@ -138,15 +156,16 @@ describe('memory blob store', () => {
     expect(temporaryPage.cursor).toBeNull();
     await expect(
       deps.blobStore.list({
+        userId,
         accountId,
-        kind: 'object',
+        kind: 'attachment',
         cursor: null,
         limit: 1,
       }),
     ).resolves.toEqual({
       entries: [
         expect.objectContaining({
-          key: `mail/${accountId}/sha256/${first.sha256.slice(0, 2)}/${first.sha256}`,
+          key: `mail/users/${userId}/accounts/${accountId}/attachments/sha256/${first.sha256.slice(0, 2)}/${first.sha256}`,
           uploadedAt: deps.clock.now(),
         }),
       ],

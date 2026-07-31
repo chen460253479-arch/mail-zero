@@ -1,4 +1,9 @@
-export { createSubmission, createSubmissionInTransaction } from './create-submission';
+export {
+  createSubmission,
+  createSubmissionInTransaction,
+  prepareSubmission,
+  type PreparedSubmission,
+} from './create-submission';
 export {
   finalizeSubmissionSent,
   finalizeSubmissionSentInTransaction,

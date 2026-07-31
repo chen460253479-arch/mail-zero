@@ -33,7 +33,7 @@ describe('PostgreSQL Submission integration', () => {
         subject: 'Submit me',
         textBody: 'Submission body.',
         htmlBody: '',
-        attachmentBlobIds: [],
+        attachments: [],
       });
       const request = {
         accountId: harness.accountId,
@@ -91,7 +91,7 @@ describe('PostgreSQL Submission integration', () => {
         subject: 'Submit me second',
         textBody: 'Second submission body.',
         htmlBody: '',
-        attachmentBlobIds: [],
+        attachments: [],
       });
       const secondSubmission = await createSubmission(harness.dependencies, {
         accountId: harness.accountId,

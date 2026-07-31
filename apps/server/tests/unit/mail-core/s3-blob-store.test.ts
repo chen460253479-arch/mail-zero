@@ -12,10 +12,12 @@ import {
 } from '../../../src/modules/mail/blob/s3-blob-store';
 
 const accountId = '01S3ACCOUNT' as MailAccountId;
+const userId = '01S3USER';
 const otherAccountId = '01S3OTHER' as MailAccountId;
+const otherUserId = '01S3OTHERUSER';
 const bytes = new TextEncoder().encode('persistent S3 blob');
 const digest = createHash('sha256').update(bytes).digest('hex');
-const objectKey = `mail/${accountId}/sha256/${digest.slice(0, 2)}/${digest}`;
+const objectKey = `mail/users/${userId}/accounts/${accountId}/messages/sha256/${digest.slice(0, 2)}/${digest}`;
 
 type StoredObject = S3ObjectMetadata & {
   bytes: Uint8Array;
@@ -164,21 +166,27 @@ describe('S3BlobStore', () => {
   it('stores a private temporary object without retaining the caller buffer', async () => {
     const input = Uint8Array.from(bytes);
     const pending = await store.putTemporary({
+      userId,
       accountId,
+      kind: 'message_mime',
       bytes: input,
       contentType: 'message/rfc822',
     });
     input[0] = 0;
 
     expect(pending).toMatchObject({ sha256: digest, size: BigInt(bytes.byteLength) });
-    expect(pending.temporaryKey).toMatch(new RegExp(`^mail/${accountId}/temporary/`, 'u'));
+    expect(pending.temporaryKey).toMatch(
+      new RegExp(`^mail/users/${userId}/accounts/${accountId}/temporary/message_mime/`, 'u'),
+    );
     expect([...client.objects.keys()]).toEqual([pending.temporaryKey]);
     expect(client.objects.get(pending.temporaryKey)?.bytes).toEqual(bytes);
   });
 
   it('copies a temporary object to its content address and commits idempotently', async () => {
     const first = await store.putTemporary({
+      userId,
       accountId,
+      kind: 'message_mime',
       bytes,
       contentType: 'message/rfc822',
     });
@@ -189,7 +197,9 @@ describe('S3BlobStore', () => {
     await expect(store.get({ accountId, objectKey })).resolves.toEqual(bytes);
 
     const second = await store.putTemporary({
+      userId,
       accountId,
+      kind: 'message_mime',
       bytes,
       contentType: 'application/octet-stream',
     });
@@ -209,7 +219,9 @@ describe('S3BlobStore', () => {
       uploadedAt: new Date('2026-01-01T00:00:00.000Z'),
     });
     const pending = await store.putTemporary({
+      userId,
       accountId,
+      kind: 'message_mime',
       bytes,
       contentType: 'message/rfc822',
     });
@@ -221,7 +233,9 @@ describe('S3BlobStore', () => {
 
   it('returns exact byte ranges and maps a missing object to BLOB_NOT_FOUND', async () => {
     const pending = await store.putTemporary({
+      userId,
       accountId,
+      kind: 'message_mime',
       bytes,
       contentType: 'message/rfc822',
     });
@@ -238,35 +252,43 @@ describe('S3BlobStore', () => {
     await expect(
       store.get({
         accountId,
-        objectKey: `mail/${accountId}/sha256/${missingDigest.slice(0, 2)}/${missingDigest}`,
+        objectKey: `mail/users/${userId}/accounts/${accountId}/messages/sha256/${missingDigest.slice(0, 2)}/${missingDigest}`,
       }),
     ).rejects.toMatchObject({ code: 'BLOB_NOT_FOUND' });
   });
 
   it('lists only account-owned logical keys with an account-bound opaque cursor', async () => {
     await store.putTemporary({
+      userId,
       accountId,
+      kind: 'message_mime',
       bytes: new TextEncoder().encode('first'),
       contentType: 'text/plain',
     });
     await store.putTemporary({
+      userId,
       accountId,
+      kind: 'message_mime',
       bytes: new TextEncoder().encode('second'),
       contentType: 'text/plain',
     });
     await store.putTemporary({
+      userId: otherUserId,
       accountId: otherAccountId,
+      kind: 'message_mime',
       bytes: new TextEncoder().encode('other'),
       contentType: 'text/plain',
     });
 
     const firstPage = await store.list({
+      userId,
       accountId,
       kind: 'temporary',
       cursor: null,
       limit: 1,
     });
     const secondPage = await store.list({
+      userId,
       accountId,
       kind: 'temporary',
       cursor: firstPage.cursor,
@@ -276,13 +298,14 @@ describe('S3BlobStore', () => {
     expect([...firstPage.entries, ...secondPage.entries]).toHaveLength(2);
     expect(
       [...firstPage.entries, ...secondPage.entries].every(({ key }) =>
-        key.startsWith(`mail/${accountId}/temporary/`),
+        key.startsWith(`mail/users/${userId}/accounts/${accountId}/temporary/message_mime/`),
       ),
     ).toBe(true);
     expect(firstPage.cursor).not.toBeNull();
     expect(secondPage.cursor).toBeNull();
     await expect(
       store.list({
+        userId: otherUserId,
         accountId: otherAccountId,
         kind: 'temporary',
         cursor: firstPage.cursor,
@@ -293,7 +316,9 @@ describe('S3BlobStore', () => {
 
   it('deletes temporary and permanent objects idempotently and hides client failures', async () => {
     const temporary = await store.putTemporary({
+      userId,
       accountId,
+      kind: 'message_mime',
       bytes,
       contentType: 'message/rfc822',
     });
@@ -303,7 +328,9 @@ describe('S3BlobStore', () => {
     ).resolves.toBeUndefined();
 
     const committed = await store.putTemporary({
+      userId,
       accountId,
+      kind: 'message_mime',
       bytes,
       contentType: 'message/rfc822',
     });
@@ -317,7 +344,13 @@ describe('S3BlobStore', () => {
 
     client.failOperation = 'putObject';
     await expect(
-      store.putTemporary({ accountId, bytes, contentType: 'message/rfc822' }),
+      store.putTemporary({
+        userId,
+        accountId,
+        kind: 'message_mime',
+        bytes,
+        contentType: 'message/rfc822',
+      }),
     ).rejects.toMatchObject({ code: 'BLOB_STORE_FAILURE', details: {} });
   });
 
@@ -332,7 +365,7 @@ describe('S3BlobStore', () => {
     await expect(
       store.get({
         accountId,
-        objectKey: `mail/${accountId}/sha256/00/${digest}`,
+        objectKey: `mail/users/${userId}/accounts/${accountId}/messages/sha256/00/${digest}`,
       }),
     ).rejects.toMatchObject({ code: 'INVALID_BLOB_KEY' });
     expect(client.calls).toHaveLength(before);

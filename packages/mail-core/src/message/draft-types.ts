@@ -10,7 +10,12 @@ export type DraftContent = {
   subject: string;
   textBody: string;
   htmlBody: string;
-  attachmentBlobIds: BlobId[];
+  attachments: DraftAttachmentInput[];
+};
+
+export type DraftAttachmentInput = {
+  blobId: BlobId;
+  filename: string;
 };
 
 export type CreateDraftInput = DraftContent & {

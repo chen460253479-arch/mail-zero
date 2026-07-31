@@ -9,7 +9,10 @@ export type DraftContent = {
   subject: string;
   textBody: string;
   htmlBody: string;
-  attachmentBlobIds: string[];
+  attachments: Array<{
+    blobId: string;
+    filename: string;
+  }>;
 };
 
 export type Draft = Email & {

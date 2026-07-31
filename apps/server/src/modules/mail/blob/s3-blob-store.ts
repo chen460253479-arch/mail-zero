@@ -1,6 +1,7 @@
 import {
   MailCoreError,
   type BlobCommitReceipt,
+  type BlobStoreListKind,
   type BlobStore,
   type MailAccountId,
 } from '@zero/mail-core';
@@ -13,6 +14,7 @@ import {
   calculateSha256,
   copyBytes,
   requireObjectKeyForAccount,
+  parseTemporaryKey,
   requireTemporaryKeyForAccount,
 } from './blob-key';
 
@@ -35,11 +37,7 @@ export interface S3ObjectClient {
   copyObject(sourceKey: string, targetKey: string): Promise<void>;
   getObject(key: string, range?: { offset: number; length: number }): Promise<Uint8Array>;
   deleteObject(key: string): Promise<void>;
-  listObjects(input: {
-    prefix: string;
-    continuationToken: string | null;
-    limit: number;
-  }): Promise<{
+  listObjects(input: { prefix: string; continuationToken: string | null; limit: number }): Promise<{
     entries: Array<{ key: string; uploadedAt: Date; sizeBytes: bigint }>;
     continuationToken: string | null;
   }>;
@@ -54,8 +52,9 @@ export class S3ObjectNotFoundError extends Error {
 
 type S3ListCursor = {
   version: 1;
+  userId: string;
   accountId: string;
-  kind: 'object' | 'temporary';
+  kind: BlobStoreListKind;
   continuationToken: string;
 };
 
@@ -77,7 +76,9 @@ const normalizePrefix = (value: string): string => {
   if (
     prefix.length === 0 ||
     prefix.length > 512 ||
-    prefix.split('/').some((segment) => segment.length === 0 || segment === '.' || segment === '..') ||
+    prefix
+      .split('/')
+      .some((segment) => segment.length === 0 || segment === '.' || segment === '..') ||
     /[\u0000-\u001f\u007f\\]/u.test(prefix)
   ) {
     throw blobStoreFailure();
@@ -90,8 +91,9 @@ const encodeCursor = (cursor: S3ListCursor): string =>
 
 const parseCursor = (
   cursor: string,
+  userId: string,
   accountId: string,
-  kind: 'object' | 'temporary',
+  kind: BlobStoreListKind,
 ): S3ListCursor => {
   try {
     const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as unknown;
@@ -100,6 +102,7 @@ const parseCursor = (
       typeof value !== 'object' ||
       Array.isArray(value) ||
       (value as Record<string, unknown>).version !== 1 ||
+      (value as Record<string, unknown>).userId !== userId ||
       (value as Record<string, unknown>).accountId !== accountId ||
       (value as Record<string, unknown>).kind !== kind ||
       typeof (value as Record<string, unknown>).continuationToken !== 'string' ||
@@ -142,8 +145,9 @@ export class S3BlobStore implements BlobStore {
 
   async initialize(): Promise<void> {
     await safeClientCall(() => this.client.headBucket());
+    const userId = 'startup-probe';
     const accountId = 'startup-probe' as MailAccountId;
-    const logicalKey = buildTemporaryKey(accountId);
+    const logicalKey = buildTemporaryKey(userId, accountId, 'attachment');
     const physicalKey = this.physicalKey(logicalKey);
     const bytes = new TextEncoder().encode('zero-mail-s3-probe');
     const sha256 = await calculateSha256(bytes);
@@ -171,7 +175,7 @@ export class S3BlobStore implements BlobStore {
   async putTemporary(
     input: Parameters<BlobStore['putTemporary']>[0],
   ): ReturnType<BlobStore['putTemporary']> {
-    const temporaryKey = buildTemporaryKey(input.accountId);
+    const temporaryKey = buildTemporaryKey(input.userId, input.accountId, input.kind);
     const stored = copyBytes(input.bytes);
     const sha256 = await calculateSha256(stored);
     await safeClientCall(() =>
@@ -190,6 +194,10 @@ export class S3BlobStore implements BlobStore {
   ): Promise<BlobCommitReceipt> {
     requireTemporaryKeyForAccount(input.accountId, input.temporaryKey);
     const target = requireObjectKeyForAccount(input.accountId, input.objectKey);
+    const temporaryTarget = parseTemporaryKey(input.temporaryKey);
+    if (temporaryTarget.userId !== target.userId || temporaryTarget.kind !== target.kind) {
+      throw new MailCoreError('BLOB_INTEGRITY');
+    }
     const temporaryKey = this.physicalKey(input.temporaryKey);
     const objectKey = this.physicalKey(input.objectKey);
     const temporary = await safeClientCall(() => this.client.headObject(temporaryKey));
@@ -260,11 +268,13 @@ export class S3BlobStore implements BlobStore {
   async list(input: Parameters<BlobStore['list']>[0]): ReturnType<BlobStore['list']> {
     if (!Number.isInteger(input.limit) || input.limit < 1) throw blobStoreFailure();
     const logicalPrefix =
-      input.kind === 'object'
-        ? buildObjectPrefix(input.accountId)
-        : buildTemporaryPrefix(input.accountId);
+      input.kind === 'temporary'
+        ? buildTemporaryPrefix(input.userId, input.accountId)
+        : buildObjectPrefix(input.userId, input.accountId, input.kind);
     const cursor =
-      input.cursor === null ? null : parseCursor(input.cursor, input.accountId, input.kind);
+      input.cursor === null
+        ? null
+        : parseCursor(input.cursor, input.userId, input.accountId, input.kind);
     const page = await safeClientCall(() =>
       this.client.listObjects({
         prefix: this.physicalKey(logicalPrefix),
@@ -274,7 +284,7 @@ export class S3BlobStore implements BlobStore {
     );
     const entries = page.entries.map((entry) => {
       const key = this.logicalKey(entry.key);
-      if (input.kind === 'object') {
+      if (input.kind !== 'temporary') {
         requireObjectKeyForAccount(input.accountId, key);
       } else {
         requireTemporaryKeyForAccount(input.accountId, key);
@@ -292,6 +302,7 @@ export class S3BlobStore implements BlobStore {
           ? null
           : encodeCursor({
               version: 1,
+              userId: input.userId,
               accountId: input.accountId,
               kind: input.kind,
               continuationToken: page.continuationToken,

@@ -109,7 +109,6 @@ export const userSettingsSchema = z.object({
   categories: categoriesSchema.optional(),
   defaultEmailAlias: z.string().optional(),
   undoSendEnabled: z.boolean().default(false),
-  imageCompression: z.enum(['low', 'medium', 'original']).default('medium'),
   autoRead: z.boolean().default(true),
   animations: z.boolean().default(false),
 });
@@ -129,6 +128,5 @@ export const defaultUserSettings: UserSettings = {
   defaultEmailAlias: '',
   categories: defaultMailCategories,
   undoSendEnabled: false,
-  imageCompression: 'medium',
   animations: false,
 };

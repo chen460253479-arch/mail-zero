@@ -74,6 +74,40 @@ describe('EmailSubmission creation', () => {
     expect(result.sendAt.toISOString()).toBe('2026-01-01T00:01:00.000Z');
   });
 
+  it('counts the immutable message MIME copy against the account storage quota', async () => {
+    const h = await createSubmissionHarness();
+    const currentBytes = await h.deps.unitOfWork.run(async (tx) =>
+      (await tx.blobs.listByAccount(h.accountId))
+        .filter(
+          ({ deletedAt, status }) =>
+            deletedAt === null && (status === 'ready' || status === 'pending'),
+        )
+        .reduce((total, { sizeBytes }) => total + sizeBytes, 0n),
+    );
+    await h.deps.unitOfWork.run((tx) =>
+      tx.accounts.update(h.accountId, {
+        storageQuotaBytes: currentBytes,
+        updatedAt: h.deps.clock.now(),
+      }),
+    );
+
+    await expect(
+      createSubmission(h.deps, {
+        accountId: h.accountId,
+        emailId: h.draftId,
+        identityId: h.identityId,
+        idempotencyKey: 'message-copy-over-quota',
+        sendAt: null,
+      }),
+    ).rejects.toMatchObject({ code: 'OVER_QUOTA' });
+
+    expect(await h.inspect.submissions()).toEqual([]);
+    expect(
+      (await h.deps.inspect.blobs(h.accountId)).filter(({ kind }) => kind === 'message_mime'),
+    ).toEqual([]);
+    expect(h.deps.blobStore.temporarySnapshot().size).toBe(0);
+  });
+
   it('serializes exact idempotent retries without allocating state or Change', async () => {
     const h = await createSubmissionHarness();
     const input = {
@@ -167,7 +201,7 @@ describe('EmailSubmission creation', () => {
     const draft = await createDraft(h.deps, {
       ...h.content,
       subject: 'Frozen payload',
-      attachmentBlobIds: [attachment.id],
+      attachments: [{ blobId: attachment.id, filename: 'frozen.txt' }],
     });
     const rawBefore = await h.inspect.rawBytes(draft.id);
     const submission = await createSubmission(h.deps, {
@@ -179,12 +213,14 @@ describe('EmailSubmission creation', () => {
     });
 
     const rawRecordBefore = (await h.inspect.blob(draft.blobId!))!;
+    const submittedRaw = (await h.inspect.blob(submission.rawBlobId))!;
     expect(submission).toMatchObject({
-      rawBlobId: draft.blobId,
       rawSha256: rawRecordBefore.sha256,
       rawSizeBytes: rawRecordBefore.sizeBytes,
-      rawObjectKey: rawRecordBefore.objectKey,
     });
+    expect(submission.rawBlobId).not.toBe(draft.blobId);
+    expect(submittedRaw.kind).toBe('message_mime');
+    expect(submittedRaw.objectKey).toContain(`/accounts/${h.accountId}/messages/sha256/`);
 
     await updateDraft(h.deps, {
       accountId: h.accountId,
@@ -222,7 +258,10 @@ describe('EmailSubmission creation', () => {
       ...h.content,
       subject: 'Shared body and attachment bytes',
       htmlBody: h.content.textBody,
-      attachmentBlobIds: [attachment.id, attachment.id],
+      attachments: [
+        { blobId: attachment.id, filename: 'first.pdf' },
+        { blobId: attachment.id, filename: 'second.pdf' },
+      ],
     });
     await h.deps.unitOfWork.run((tx) =>
       tx.blobs.update(h.accountId, attachment.id, {
@@ -238,8 +277,9 @@ describe('EmailSubmission creation', () => {
       sendAt: null,
     });
 
-    expect(submission.rawBlobId).toBe(draft.blobId);
+    expect(submission.rawBlobId).not.toBe(draft.blobId);
     const rawRecord = (await h.inspect.blob(submission.rawBlobId))!;
+    expect(rawRecord.kind).toBe('message_mime');
     const raw = decode(
       await h.deps.blobStore.get({
         accountId: h.accountId,

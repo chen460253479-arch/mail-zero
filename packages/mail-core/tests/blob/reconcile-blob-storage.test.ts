@@ -19,13 +19,22 @@ const putCommitted = async (
   accountId: MailAccountId,
   value: string,
 ) => {
+  const account = await dependencies.inspect.account(accountId);
+  if (account === null) throw new Error('mail account fixture is missing');
   const bytes = new TextEncoder().encode(value);
   const pending = await dependencies.blobStore.putTemporary({
+    userId: account.userId,
     accountId,
+    kind: 'attachment',
     bytes,
     contentType: 'text/plain',
   });
-  const objectKey = contentAddressedObjectKey(accountId, pending.sha256);
+  const objectKey = contentAddressedObjectKey(
+    account.userId,
+    accountId,
+    'attachment',
+    pending.sha256,
+  );
   await dependencies.blobStore.commitTemporary({
     accountId,
     temporaryKey: pending.temporaryKey,
@@ -52,7 +61,9 @@ describe('reconcileBlobStorage', () => {
     const retained = await putCommitted(dependencies, account.id, 'metadata-owned');
     const orphan = await putCommitted(dependencies, account.id, 'orphan');
     const staleTemporary = await dependencies.blobStore.putTemporary({
+      userId: account.userId,
       accountId: account.id,
+      kind: 'attachment',
       bytes: new TextEncoder().encode('stale temporary'),
       contentType: 'text/plain',
     });
@@ -61,6 +72,7 @@ describe('reconcileBlobStorage', () => {
       tx.blobs.insert({
         id: dependencies.idFactory.next<'Blob'>() as BlobId,
         accountId: account.id,
+        kind: 'attachment',
         sha256: retained.sha256,
         sizeBytes: retained.size,
         contentType: 'text/plain',
@@ -74,7 +86,9 @@ describe('reconcileBlobStorage', () => {
     dependencies.clock.set(new Date('2026-01-03T00:00:00.000Z'));
     const recent = await putCommitted(dependencies, account.id, 'recent orphan');
     const recentTemporary = await dependencies.blobStore.putTemporary({
+      userId: account.userId,
       accountId: account.id,
+      kind: 'attachment',
       bytes: new TextEncoder().encode('recent temporary'),
       contentType: 'text/plain',
     });
@@ -89,7 +103,9 @@ describe('reconcileBlobStorage', () => {
       deletedObjectCount: 1,
       deletedTemporaryCount: 1,
       cursor: {
-        object: { value: null, exhausted: false },
+        attachment: { value: null, exhausted: false },
+        draft_mime: { value: null, exhausted: true },
+        message_mime: { value: null, exhausted: true },
         temporary: { value: null, exhausted: false },
       },
     });
@@ -112,7 +128,9 @@ describe('reconcileBlobStorage', () => {
     });
     const committed = await putCommitted(dependencies, account.id, 'failed committed cleanup');
     const pending = await dependencies.blobStore.putTemporary({
+      userId: account.userId,
       accountId: account.id,
+      kind: 'attachment',
       bytes: new TextEncoder().encode('failed temporary cleanup'),
       contentType: 'text/plain',
     });
@@ -121,7 +139,9 @@ describe('reconcileBlobStorage', () => {
     await discardCommittedBlobs(dependencies.blobStore, account.id, [committed.objectKey]);
     await discardTemporaryBlobs(dependencies.blobStore, [
       {
+        userId: account.userId,
         accountId: account.id,
+        kind: 'attachment',
         temporaryKey: pending.temporaryKey,
         sha256: pending.sha256,
         sizeBytes: pending.size,
@@ -186,7 +206,9 @@ describe('reconcileBlobStorage', () => {
       deletedObjectCount: 1,
       deletedTemporaryCount: 0,
       cursor: {
-        object: { value: null, exhausted: false },
+        attachment: { value: null, exhausted: false },
+        draft_mime: { value: null, exhausted: true },
+        message_mime: { value: null, exhausted: true },
         temporary: { value: null, exhausted: true },
       },
     });
@@ -226,7 +248,9 @@ describe('reconcileBlobStorage', () => {
       deletedObjectCount: 1,
       deletedTemporaryCount: 0,
       cursor: {
-        object: { value: null, exhausted: false },
+        attachment: { value: null, exhausted: false },
+        draft_mime: { value: null, exhausted: true },
+        message_mime: { value: null, exhausted: true },
         temporary: { value: null, exhausted: true },
       },
     });
@@ -272,6 +296,9 @@ describe('reconcileBlobStorage', () => {
       if (input.kind === 'temporary') {
         return originalList(input);
       }
+      if (input.kind !== 'attachment') {
+        return { entries: [], cursor: null };
+      }
       objectCursors.push(input.cursor);
       const pageNumber = Number(input.cursor ?? '0') + 1;
       return {
@@ -295,7 +322,9 @@ describe('reconcileBlobStorage', () => {
       deletedObjectCount: 0,
       deletedTemporaryCount: 0,
       cursor: {
-        object: { value: '10', exhausted: false },
+        attachment: { value: '10', exhausted: false },
+        draft_mime: { value: null, exhausted: true },
+        message_mime: { value: null, exhausted: true },
         temporary: { value: null, exhausted: true },
       },
     });
@@ -307,7 +336,7 @@ describe('reconcileBlobStorage', () => {
       limit: 1,
       cursor: first.cursor,
     });
-    expect(second.cursor.object).toEqual({ value: '20', exhausted: false });
+    expect(second.cursor.attachment).toEqual({ value: '20', exhausted: false });
     expect(objectCursors).toHaveLength(20);
     expect(objectCursors[10]).toBe('10');
   });
@@ -325,6 +354,7 @@ describe('reconcileBlobStorage', () => {
       tx.blobs.insert({
         id: dependencies.idFactory.next<'Blob'>() as BlobId,
         accountId: account.id,
+        kind: 'attachment',
         sha256: retained.sha256,
         sizeBytes: retained.size,
         contentType: 'text/plain',
@@ -336,7 +366,9 @@ describe('reconcileBlobStorage', () => {
       }),
     );
     const staleTemporary = await dependencies.blobStore.putTemporary({
+      userId: account.userId,
       accountId: account.id,
+      kind: 'attachment',
       bytes: new TextEncoder().encode('stale temporary'),
       contentType: 'text/plain',
     });
@@ -351,7 +383,9 @@ describe('reconcileBlobStorage', () => {
       deletedObjectCount: 0,
       deletedTemporaryCount: 1,
       cursor: {
-        object: { value: null, exhausted: true },
+        attachment: { value: null, exhausted: true },
+        draft_mime: { value: null, exhausted: true },
+        message_mime: { value: null, exhausted: true },
         temporary: { value: null, exhausted: false },
       },
     });
@@ -372,6 +406,7 @@ describe('reconcileBlobStorage', () => {
       tx.blobs.insert({
         id: dependencies.idFactory.next<'Blob'>() as BlobId,
         accountId: account.id,
+        kind: 'attachment',
         sha256: retained.sha256,
         sizeBytes: retained.size + 1n,
         contentType: 'text/plain',
@@ -393,7 +428,9 @@ describe('reconcileBlobStorage', () => {
       deletedObjectCount: 0,
       deletedTemporaryCount: 0,
       cursor: {
-        object: { value: null, exhausted: true },
+        attachment: { value: null, exhausted: true },
+        draft_mime: { value: null, exhausted: true },
+        message_mime: { value: null, exhausted: true },
         temporary: { value: null, exhausted: true },
       },
     });
@@ -414,6 +451,7 @@ describe('reconcileBlobStorage', () => {
       await tx.blobs.insert({
         id: ownerId,
         accountId: account.id,
+        kind: 'attachment',
         sha256: retained.sha256,
         sizeBytes: retained.size + 1n,
         contentType: 'text/plain',
@@ -426,6 +464,7 @@ describe('reconcileBlobStorage', () => {
       await tx.blobs.insert({
         id: dependencies.idFactory.next<'Blob'>() as BlobId,
         accountId: account.id,
+        kind: 'attachment',
         sha256: retained.sha256,
         sizeBytes: retained.size,
         contentType: 'application/x-zero-orphan-reservation',
@@ -461,7 +500,9 @@ describe('reconcileBlobStorage', () => {
     const orphan = await putCommitted(dependencies, account.id, 'older object orphan');
     dependencies.clock.set(new Date('2026-01-02T00:00:00.000Z'));
     const temporary = await dependencies.blobStore.putTemporary({
+      userId: account.userId,
       accountId: account.id,
+      kind: 'attachment',
       bytes: new TextEncoder().encode('newer temporary orphan'),
       contentType: 'text/plain',
     });
@@ -476,7 +517,9 @@ describe('reconcileBlobStorage', () => {
       deletedObjectCount: 1,
       deletedTemporaryCount: 0,
       cursor: {
-        object: { value: null, exhausted: false },
+        attachment: { value: null, exhausted: false },
+        draft_mime: { value: null, exhausted: true },
+        message_mime: { value: null, exhausted: true },
         temporary: { value: null, exhausted: false },
       },
     });
@@ -491,7 +534,9 @@ describe('reconcileBlobStorage', () => {
       deletedObjectCount: 0,
       deletedTemporaryCount: 1,
       cursor: {
-        object: { value: null, exhausted: true },
+        attachment: { value: null, exhausted: true },
+        draft_mime: { value: null, exhausted: true },
+        message_mime: { value: null, exhausted: true },
         temporary: { value: null, exhausted: false },
       },
     });
@@ -503,7 +548,9 @@ describe('reconcileBlobStorage', () => {
       deletedObjectCount: 0,
       deletedTemporaryCount: 0,
       cursor: {
-        object: { value: null, exhausted: true },
+        attachment: { value: null, exhausted: true },
+        draft_mime: { value: null, exhausted: true },
+        message_mime: { value: null, exhausted: true },
         temporary: { value: null, exhausted: true },
       },
     });
@@ -519,7 +566,9 @@ describe('reconcileBlobStorage', () => {
     });
     for (const value of ['first', 'second', 'third']) {
       await dependencies.blobStore.putTemporary({
+        userId: account.userId,
         accountId: account.id,
+        kind: 'attachment',
         bytes: new TextEncoder().encode(value),
         contentType: 'text/plain',
       });
@@ -549,7 +598,9 @@ describe('reconcileBlobStorage', () => {
       deletedObjectCount: 0,
       deletedTemporaryCount: 0,
       cursor: {
-        object: { value: null, exhausted: true },
+        attachment: { value: null, exhausted: true },
+        draft_mime: { value: null, exhausted: true },
+        message_mime: { value: null, exhausted: true },
         temporary: { value: null, exhausted: true },
       },
     });

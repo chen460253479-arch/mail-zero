@@ -34,6 +34,7 @@ import type { PendingMailChange } from '../changes';
 import { parseRawEmail } from './mime';
 
 type ImportValidation = {
+  userId: string;
   existing: RemoteEmailRecord | null;
   mailboxIds: MailboxId[];
   keywords: Keyword[];
@@ -45,15 +46,16 @@ type ResolvedBlob = {
   record: BlobRecord;
 };
 
-const digestKey = (blob: Pick<PreparedBlob, 'sha256' | 'sizeBytes'>): string =>
-  `${blob.sha256}:${blob.sizeBytes}`;
+const digestKey = (blob: Pick<PreparedBlob, 'kind' | 'sha256' | 'sizeBytes'>): string =>
+  `${blob.kind}:${blob.sha256}:${blob.sizeBytes}`;
 
 const requireImportReferences = async (
   tx: MailTransaction,
   input: ImportEmailInput,
   contentFingerprint: string,
 ): Promise<ImportValidation> => {
-  if ((await tx.accounts.findById(input.accountId)) === null) {
+  const account = await tx.accounts.findById(input.accountId);
+  if (account === null) {
     throw new MailCoreError('ACCOUNT_NOT_FOUND', {
       entityId: input.accountId,
     });
@@ -70,7 +72,7 @@ const requireImportReferences = async (
         entityId: existing.emailId,
       });
     }
-    return { existing, mailboxIds: [], keywords: [] };
+    return { userId: account.userId, existing, mailboxIds: [], keywords: [] };
   }
 
   const mailboxIds = Array.from(new Set(input.mailboxIds));
@@ -91,6 +93,7 @@ const requireImportReferences = async (
   }
 
   return {
+    userId: account.userId,
     existing: null,
     mailboxIds,
     keywords: Array.from(new Set(input.keywords.map(normalizeKeyword))),
@@ -156,6 +159,7 @@ const resolveBlobs = async (
     }
     const existing = await tx.blobs.findByDigest(
       input.accountId,
+      candidate.kind,
       candidate.sha256,
       candidate.sizeBytes,
     );
@@ -181,10 +185,16 @@ const resolveBlobs = async (
       record: {
         id: blobId,
         accountId: input.accountId,
+        kind: candidate.kind,
         sha256: candidate.sha256,
         sizeBytes: candidate.sizeBytes,
         contentType: candidate.contentType,
-        objectKey: contentAddressedObjectKey(input.accountId, candidate.sha256),
+        objectKey: contentAddressedObjectKey(
+          candidate.userId,
+          input.accountId,
+          candidate.kind,
+          candidate.sha256,
+        ),
         status: 'pending',
         createdAt: now,
         readyAt: null,
@@ -482,7 +492,9 @@ export async function importEmail(
   let importOperationCompleted = false;
   try {
     rawBlob = await prepareBlob(dependencies.blobStore, {
+      userId: preflight.userId,
       accountId: input.accountId,
+      kind: 'message_mime',
       bytes: raw,
       contentType: 'message/rfc822',
     });
@@ -491,6 +503,9 @@ export async function importEmail(
     const result = await dependencies.unitOfWork.run(async (tx): Promise<ImportEmailResult> => {
       await tx.lockAccount(input.accountId);
       const validation = await requireImportReferences(tx, input, contentFingerprint);
+      if (validation.userId !== preflight.userId) {
+        throw new MailCoreError('BLOB_INTEGRITY', { entityId: input.accountId });
+      }
       if (validation.existing !== null) {
         importOperationCompleted = true;
         return existingResult(validation.existing);

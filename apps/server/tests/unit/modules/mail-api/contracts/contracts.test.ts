@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { emailSchema, emailSetInputSchema } from '../../../../../src/modules/mail-api/contracts/email';
+import {
+  emailSchema,
+  emailSetInputSchema,
+} from '../../../../../src/modules/mail-api/contracts/email';
 import { submissionSetInputSchema } from '../../../../../src/modules/mail-api/contracts/submission';
 import { mailboxSchema } from '../../../../../src/modules/mail-api/contracts/mailbox';
 import { accountSchema } from '../../../../../src/modules/mail-api/contracts/account';
@@ -85,7 +88,8 @@ describe('Mail API contracts', () => {
       bodyValues: {},
       remoteEmailId: 'gmail-message-id',
       provider: 'gmail',
-      objectKey: 'mail/account/sha256/private',
+      objectKey:
+        'mail/users/user-1/accounts/account-1/messages/sha256/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       restoreMailboxIds: ['private'],
     });
 
@@ -108,7 +112,7 @@ describe('Mail API contracts', () => {
           subject: '',
           textBody: '',
           htmlBody: '',
-          attachmentBlobIds: [],
+          attachments: [],
         },
       ]),
     );

@@ -303,9 +303,14 @@ describe('local mail schema', () => {
     expect(identityDefault?.config.where).toBeDefined();
 
     const blobDigest = getTableConfig(schema.blob).indexes.find(
-      ({ config }) => config.name === 'blob_account_sha_size_uidx',
+      ({ config }) => config.name === 'blob_account_kind_sha_size_uidx',
     );
     expect(blobDigest?.config.unique).toBe(true);
+    expect(
+      blobDigest?.config.columns.map((column) =>
+        column instanceof IndexedColumn ? column.name : undefined,
+      ),
+    ).toEqual(['mail_account_id', 'kind', 'sha256', 'size_bytes']);
   });
 
   it('persists Task 11 identity, reply, revision, retention, and search projection fields', () => {

@@ -320,13 +320,8 @@
       "attachments": "附件",
       "attachmentCount": [
         {
-          "declarations": [
-            "input count",
-            "local countPlural = count: plural"
-          ],
-          "selectors": [
-            "countPlural"
-          ],
+          "declarations": ["input count", "local countPlural = count: plural"],
+          "selectors": ["countPlural"],
           "match": {
             "countPlural=0": "个附件",
             "countPlural=one": "个附件",
@@ -336,13 +331,8 @@
       ],
       "fileCount": [
         {
-          "declarations": [
-            "input count",
-            "local countPlural = count: plural"
-          ],
-          "selectors": [
-            "countPlural"
-          ],
+          "declarations": ["input count", "local countPlural = count: plural"],
+          "selectors": ["countPlural"],
           "match": {
             "countPlural=0": "个文件",
             "countPlural=one": "个文件",
@@ -381,13 +371,8 @@
       "noEmail": "无邮箱地址",
       "additionalPeople": [
         {
-          "declarations": [
-            "input count",
-            "local countPlural = count: plural"
-          ],
-          "selectors": [
-            "countPlural"
-          ],
+          "declarations": ["input count", "local countPlural = count: plural"],
+          "selectors": ["countPlural"],
           "match": {
             "countPlural=one": "另有 {count} 人",
             "countPlural=other": "另有 {count} 人"
@@ -396,13 +381,8 @@
       ],
       "remainingRecipients": [
         {
-          "declarations": [
-            "input count",
-            "local countPlural = count: plural"
-          ],
-          "selectors": [
-            "countPlural"
-          ],
+          "declarations": ["input count", "local countPlural = count: plural"],
+          "selectors": ["countPlural"],
           "match": {
             "countPlural=0": "",
             "countPlural=one": "，另有 {count} 人",
@@ -449,13 +429,8 @@
       "search": "搜索备注...",
       "noteCount": [
         {
-          "declarations": [
-            "input count",
-            "local countPlural = count: plural"
-          ],
-          "selectors": [
-            "countPlural"
-          ],
+          "declarations": ["input count", "local countPlural = count: plural"],
+          "selectors": ["countPlural"],
           "match": {
             "countPlural=0": "添加备注",
             "countPlural=one": "{count} 条备注",
@@ -487,7 +462,7 @@
         "noValidNotesToReorder": "没有可重新排序的有效备注",
         "failedToReorderNotes": "重新排序备注失败"
       },
-        "colors": {
+      "colors": {
         "default": "默认",
         "red": "红色",
         "orange": "橙色",
@@ -496,57 +471,42 @@
         "blue": "蓝色",
         "purple": "紫色",
         "pink": "粉色",
-          "gray": "灰色"
-        },
-        "relativeTime": {
-          "justNow": "刚刚",
-          "minutesAgo": [
-            {
-              "declarations": [
-                "input count",
-                "local countPlural = count: plural"
-              ],
-              "selectors": [
-                "countPlural"
-              ],
-              "match": {
-                "countPlural=one": "{count} 分钟前",
-                "countPlural=other": "{count} 分钟前"
-              }
+        "gray": "灰色"
+      },
+      "relativeTime": {
+        "justNow": "刚刚",
+        "minutesAgo": [
+          {
+            "declarations": ["input count", "local countPlural = count: plural"],
+            "selectors": ["countPlural"],
+            "match": {
+              "countPlural=one": "{count} 分钟前",
+              "countPlural=other": "{count} 分钟前"
             }
-          ],
-          "hoursAgo": [
-            {
-              "declarations": [
-                "input count",
-                "local countPlural = count: plural"
-              ],
-              "selectors": [
-                "countPlural"
-              ],
-              "match": {
-                "countPlural=one": "{count} 小时前",
-                "countPlural=other": "{count} 小时前"
-              }
+          }
+        ],
+        "hoursAgo": [
+          {
+            "declarations": ["input count", "local countPlural = count: plural"],
+            "selectors": ["countPlural"],
+            "match": {
+              "countPlural=one": "{count} 小时前",
+              "countPlural=other": "{count} 小时前"
             }
-          ],
-          "daysAgo": [
-            {
-              "declarations": [
-                "input count",
-                "local countPlural = count: plural"
-              ],
-              "selectors": [
-                "countPlural"
-              ],
-              "match": {
-                "countPlural=one": "{count} 天前",
-                "countPlural=other": "{count} 天前"
-              }
+          }
+        ],
+        "daysAgo": [
+          {
+            "declarations": ["input count", "local countPlural = count: plural"],
+            "selectors": ["countPlural"],
+            "match": {
+              "countPlural=one": "{count} 天前",
+              "countPlural=other": "{count} 天前"
             }
-          ]
-        },
-        "actions": {
+          }
+        ]
+      },
+      "actions": {
         "pin": "置顶备注",
         "unpin": "取消置顶",
         "edit": "编辑备注",
@@ -566,13 +526,8 @@
     "mail": {
       "replies": [
         {
-          "declarations": [
-            "input count",
-            "local countPlural = count: plural"
-          ],
-          "selectors": [
-            "countPlural"
-          ],
+          "declarations": ["input count", "local countPlural = count: plural"],
+          "selectors": ["countPlural"],
           "match": {
             "countPlural=0": "条回复",
             "countPlural=one": "{count} 条回复",
@@ -639,13 +594,8 @@
       "attachmentsWithCount": "附件（{count}）",
       "filterCount": [
         {
-          "declarations": [
-            "input count",
-            "local countPlural = count: plural"
-          ],
-          "selectors": [
-            "countPlural"
-          ],
+          "declarations": ["input count", "local countPlural = count: plural"],
+          "selectors": ["countPlural"],
           "match": {
             "countPlural=0": "筛选条件",
             "countPlural=one": "{count} 个筛选条件",
@@ -655,13 +605,8 @@
       ],
       "viewCount": [
         {
-          "declarations": [
-            "input count",
-            "local countPlural = count: plural"
-          ],
-          "selectors": [
-            "countPlural"
-          ],
+          "declarations": ["input count", "local countPlural = count: plural"],
+          "selectors": ["countPlural"],
           "match": {
             "countPlural=0": "视图",
             "countPlural=one": "{count} 个视图",
@@ -708,8 +653,8 @@
       "failedToPrintThread": "打印会话失败，请重试。",
       "chooseEmail": "选择一封邮件以查看详情",
       "sendEmail": "发送邮件",
-      "threadActions": "会话操作"
-      ,"noSubject": "无主题",
+      "threadActions": "会话操作",
+      "noSubject": "无主题",
       "noRecipient": "无收件人",
       "noEmailContent": "没有可用的邮件内容",
       "labelAdded": "已为 {count} 个会话添加标签",
@@ -1451,14 +1396,17 @@
       "failedToSendEmail": "邮件发送失败，请重试。",
       "failedToLoadDraft": "加载草稿失败",
       "loadingDraft": "正在加载草稿...",
-      "compressionFailed": "图片压缩失败，将使用原始文件",
-      "compressionSavings": "图片压缩完成，体积缩小 {savings}%",
       "recipientRequired": "必须填写收件人",
       "invalidSchedule": "请选择有效的计划发送日期和时间",
       "failedToSend": "发送邮件失败",
       "failedToSaveDraft": "保存草稿失败",
       "filesAttached": "已添加 {count} 个文件",
       "failedToRemoveAttachment": "移除附件失败",
+      "attachmentUploading": "正在上传 {progress}%",
+      "attachmentUploaded": "上传完成",
+      "attachmentUploadFailed": "上传失败",
+      "retryAttachmentUpload": "重试",
+      "attachmentsNotReady": "请等待所有附件上传完成，或移除上传失败的附件",
       "to": "收件人：",
       "enterEmail": "输入邮箱地址",
       "cc": "抄送",
@@ -1554,22 +1502,6 @@
         "namePlaceholder": "模板名称",
         "unnamed": "此模板",
         "deleteConfirm": "删除模板“{name}”？"
-      },
-      "imageCompression": {
-        "title": "图片压缩",
-        "description": "选择附件图片质量",
-        "low": {
-          "label": "低",
-          "description": "文件最小，画质损失明显"
-        },
-        "medium": {
-          "label": "中",
-          "description": "兼顾文件大小和画质"
-        },
-        "original": {
-          "label": "原始",
-          "description": "不压缩，保持原始画质"
-        }
       }
     }
   },

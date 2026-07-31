@@ -19,6 +19,7 @@ import type { SubmissionStatus } from '../submission/types';
 export type AccountStatus = 'active' | 'suspended' | 'deleting';
 export type EmailLifecycle = 'draft' | 'received' | 'sent';
 export type BlobStatus = 'pending' | 'ready' | 'deleting';
+export type { BlobKind } from './blob-store';
 export type { SubmissionStatus } from '../submission/types';
 export type { ChangeCollection, ChangeType } from '../changes/types';
 
@@ -65,6 +66,7 @@ export interface MailboxRecord {
 export interface BlobRecord {
   id: BlobId;
   accountId: MailAccountId;
+  kind: import('./blob-store').BlobKind;
   sha256: string;
   sizeBytes: bigint;
   contentType: string;
@@ -252,6 +254,7 @@ export interface BlobRepository {
   ): Promise<BlobRecord | null>;
   findByDigest(
     accountId: MailAccountId,
+    kind: import('./blob-store').BlobKind,
     sha256: string,
     sizeBytes: bigint,
   ): Promise<BlobRecord | null>;

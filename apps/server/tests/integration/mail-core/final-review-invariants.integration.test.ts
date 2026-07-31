@@ -83,7 +83,7 @@ describe('final review PostgreSQL invariants', () => {
         subject: 'Frozen payload',
         textBody: 'original payload',
         htmlBody: '<p>original payload</p>',
-        attachmentBlobIds: [attachment.blob.id],
+        attachments: [{ blobId: attachment.blob.id, filename: 'attachment.bin' }],
       });
       const rawRecord = await unitOfWork.run((tx) => tx.blobs.findById(h.accountId, draft.blobId!));
       const rawBefore = await h.blobStore.get({
@@ -98,12 +98,21 @@ describe('final review PostgreSQL invariants', () => {
         sendAt: null,
       });
 
+      const submissionRawRecord = await unitOfWork.run((tx) =>
+        tx.blobs.findById(h.accountId, submission.rawBlobId),
+      );
       expect(submission).toMatchObject({
-        rawBlobId: draft.blobId,
+        rawBlobId: submissionRawRecord!.id,
         rawSha256: rawRecord!.sha256,
         rawSizeBytes: rawRecord!.sizeBytes,
-        rawObjectKey: rawRecord!.objectKey,
+        rawObjectKey: submissionRawRecord!.objectKey,
       });
+      expect(submissionRawRecord).toMatchObject({
+        kind: 'message_mime',
+        sha256: rawRecord!.sha256,
+        sizeBytes: rawRecord!.sizeBytes,
+      });
+      expect(submissionRawRecord!.id).not.toBe(draft.blobId);
       await updateDraft(h.dependencies, {
         accountId: h.accountId,
         emailId: draft.id,
@@ -117,7 +126,7 @@ describe('final review PostgreSQL invariants', () => {
           subject: 'Replacement payload',
           textBody: 'replacement',
           htmlBody: '',
-          attachmentBlobIds: [],
+          attachments: [],
         },
       });
       await destroyDraft(h.dependencies, { accountId: h.accountId, emailId: draft.id });
@@ -134,6 +143,9 @@ describe('final review PostgreSQL invariants', () => {
         tx.blobs.findById(h.accountId, loaded!.rawBlobId),
       );
       expect(preserved).not.toBeNull();
+      await expect(
+        unitOfWork.run((tx) => tx.blobs.findById(h.accountId, draft.blobId!)),
+      ).resolves.toBeNull();
       await expect(
         h.blobStore.get({
           accountId: h.accountId,
@@ -159,7 +171,7 @@ describe('final review PostgreSQL invariants', () => {
         subject: 'Foreign',
         textBody: 'foreign blob',
         htmlBody: '',
-        attachmentBlobIds: [],
+        attachments: [],
       });
       const foreignRawRecord = await unitOfWork.run((tx) =>
         tx.blobs.findById(foreign.accountId, foreignDraft.blobId!),
@@ -327,7 +339,7 @@ describe('final review PostgreSQL invariants', () => {
         subject: 'Sensitive subject',
         textBody: 'sensitive body',
         htmlBody: '',
-        attachmentBlobIds: [],
+        attachments: [],
       });
       const beforeAccount = await unitOfWork.run((tx) => tx.accounts.findById(h.accountId));
       const beforeChanges = await db
@@ -413,7 +425,7 @@ describe('final review PostgreSQL invariants', () => {
         subject: 'Frozen quota payload',
         textBody: 'body retained only by the Submission snapshot',
         htmlBody: '',
-        attachmentBlobIds: [],
+        attachments: [],
       });
       await createSubmission(h.dependencies, {
         accountId: h.accountId,
@@ -480,7 +492,7 @@ describe('final review PostgreSQL invariants', () => {
         subject: 'Dedup',
         textBody: 'identical body',
         htmlBody: '',
-        attachmentBlobIds: [],
+        attachments: [],
       };
       const draft = await createDraft(h.dependencies, content);
       const updated = await updateDraft(h.dependencies, {

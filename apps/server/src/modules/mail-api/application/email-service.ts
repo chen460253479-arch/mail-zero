@@ -47,7 +47,7 @@ const draftFields = [
   'subject',
   'textBody',
   'htmlBody',
-  'attachmentBlobIds',
+  'attachments',
 ] as const;
 
 const toMailAddresses = (
@@ -79,10 +79,17 @@ function mergeDraftContent(
     subject: patch.subject ?? current.subject,
     textBody: patch.textBody ?? current.textBody,
     htmlBody: patch.htmlBody ?? current.htmlBody,
-    attachmentBlobIds: (patch.attachmentBlobIds ??
+    attachments: (patch.attachments ??
       current.parts.flatMap((part) =>
-        part.kind === 'attachment' || part.kind === 'inline' ? [part.id as BlobId] : [],
-      )) as BlobId[],
+        part.kind === 'attachment' || part.kind === 'inline'
+          ? [
+              {
+                blobId: part.id as BlobId,
+                filename: part.filename ?? part.id,
+              },
+            ]
+          : [],
+      )) as DraftContent['attachments'],
   };
 }
 
@@ -209,7 +216,10 @@ export const createEmailService = (
             ...content,
             identityId: content.identityId as DraftContent['identityId'],
             replyToEmailId: content.replyToEmailId as DraftContent['replyToEmailId'],
-            attachmentBlobIds: content.attachmentBlobIds as BlobId[],
+            attachments: content.attachments.map(({ blobId, filename }) => ({
+              blobId: blobId as BlobId,
+              filename,
+            })),
             to: toMailAddresses(content.to),
             cc: toMailAddresses(content.cc),
             bcc: toMailAddresses(content.bcc),

@@ -17,6 +17,11 @@ describe('Draft Email', () => {
       htmlBody: '<p>safe</p><script>alert(1)</script>',
     });
     expect(draft.htmlBody).toBe('<p>safe</p>');
+    const draftBlob = (await h.inspect.blob(draft.blobId!))!;
+    expect(draftBlob).toMatchObject({ kind: 'draft_mime' });
+    expect(draftBlob.objectKey).toContain(
+      `/accounts/${h.accountId}/drafts/sha256/${draftBlob.sha256.slice(0, 2)}/`,
+    );
     expect(decode(await h.inspect.rawBytes(draft.id))).not.toContain('<script');
 
     const objectsBefore = h.deps.blobStore.snapshot();
@@ -42,6 +47,46 @@ describe('Draft Email', () => {
     ).rejects.toMatchObject({ code: 'INVALID_EMAIL' });
     expect(h.deps.blobStore.snapshot()).toEqual(objectsBefore);
     expect(h.deps.blobStore.temporarySnapshot()).toEqual(temporaryBefore);
+  });
+
+  it('renders the caller-provided attachment filename without changing its bytes', async () => {
+    const h = await createDraftHarness();
+    const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
+    const attachment = await h.seedReadyBlob(bytes, 'image/jpeg');
+
+    const draft = await createDraft(h.deps, {
+      ...h.content,
+      attachments: [{ blobId: attachment.id, filename: '1.jpg' }],
+    });
+    const raw = decode(await h.inspect.rawBytes(draft.id));
+
+    expect(raw).toMatch(/filename="?1\.jpg"?/u);
+    expect(raw).toContain('/9j/4AECAwQ=');
+  });
+
+  it('rejects attachment filenames that can inject MIME headers', async () => {
+    const h = await createDraftHarness();
+    const attachment = await h.seedReadyBlob(new Uint8Array([1, 2, 3, 4]), 'image/jpeg');
+
+    await expect(
+      createDraft(h.deps, {
+        ...h.content,
+        attachments: [{ blobId: attachment.id, filename: '1.jpg\r\nBcc: attacker@test' }],
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_PATCH' });
+  });
+
+  it('rejects Draft or message MIME blobs used as standalone attachment uploads', async () => {
+    const h = await createDraftHarness();
+    const sourceDraft = await createDraft(h.deps, h.content);
+
+    await expect(
+      createDraft(h.deps, {
+        ...h.content,
+        subject: 'Invalid MIME attachment',
+        attachments: [{ blobId: sourceDraft.blobId!, filename: 'message.eml' }],
+      }),
+    ).rejects.toMatchObject({ code: 'BLOB_INTEGRITY' });
   });
 
   it('uses the single integrity-checked attachment read to render MIME', async () => {
@@ -72,7 +117,7 @@ describe('Draft Email', () => {
         { ...h.deps, blobStore },
         {
           ...h.content,
-          attachmentBlobIds: [attachment.id],
+          attachments: [{ blobId: attachment.id, filename: 'attachment.png' }],
         },
       ),
     ).resolves.toMatchObject({ hasAttachment: true });
@@ -84,7 +129,7 @@ describe('Draft Email', () => {
     const uploaded = await h.seedReadyBlob(new Uint8Array([1, 2, 3, 4]), 'image/png');
     const draft = await createDraft(h.deps, {
       ...h.content,
-      attachmentBlobIds: [uploaded.id],
+      attachments: [{ blobId: uploaded.id, filename: 'attachment.png' }],
     });
     const attachment = draft.parts.find(({ kind }) => kind === 'attachment')!;
 
@@ -95,7 +140,7 @@ describe('Draft Email', () => {
       content: {
         ...h.content,
         subject: 'Retained attachment',
-        attachmentBlobIds: [attachment.id as never],
+        attachments: [{ blobId: attachment.id as never, filename: 'attachment.png' }],
       },
     });
 
@@ -384,7 +429,7 @@ describe('Draft Email', () => {
     await expect(
       createDraft(h.deps, {
         ...h.content,
-        attachmentBlobIds: [foreignBlob.id],
+        attachments: [{ blobId: foreignBlob.id, filename: 'foreign.txt' }],
       }),
     ).rejects.toMatchObject({ code: 'BLOB_NOT_FOUND' });
   });
@@ -416,7 +461,10 @@ describe('Draft Email', () => {
       const second = await h.seedReadyBlob(new TextEncoder().encode('beta'), 'text/plain');
       const draft = await createDraft(h.deps, {
         ...h.content,
-        attachmentBlobIds: [first.id, second.id],
+        attachments: [
+          { blobId: first.id, filename: 'first.txt' },
+          { blobId: second.id, filename: 'second.txt' },
+        ],
       });
       return decode(await h.inspect.rawBytes(draft.id));
     };
@@ -511,7 +559,7 @@ describe('Draft Email', () => {
     await expect(
       createDraft(h.deps, {
         ...h.content,
-        attachmentBlobIds: [pending.id],
+        attachments: [{ blobId: pending.id, filename: 'pending.bin' }],
       }),
     ).rejects.toMatchObject({ code: 'BLOB_INTEGRITY' });
     expect(await h.inspect.stateVersion()).toBe(before);

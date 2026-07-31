@@ -9,6 +9,7 @@ import {
   calculateSha256,
   copyBytes,
   requireObjectKeyForAccount,
+  parseTemporaryKey,
   requireTemporaryKeyForAccount,
 } from './blob-key';
 
@@ -26,7 +27,7 @@ export class MemoryBlobStore implements BlobStore {
   async putTemporary(
     input: Parameters<BlobStore['putTemporary']>[0],
   ): ReturnType<BlobStore['putTemporary']> {
-    const temporaryKey = buildTemporaryKey(input.accountId);
+    const temporaryKey = buildTemporaryKey(input.userId, input.accountId, input.kind);
     const bytes = copyBytes(input.bytes);
     const sha256 = await calculateSha256(bytes);
     this.temporary.set(temporaryKey, {
@@ -43,13 +44,18 @@ export class MemoryBlobStore implements BlobStore {
   ): Promise<BlobCommitReceipt> {
     requireTemporaryKeyForAccount(input.accountId, input.temporaryKey);
     const target = requireObjectKeyForAccount(input.accountId, input.objectKey);
+    const temporary = parseTemporaryKey(input.temporaryKey);
+    if (temporary.userId !== target.userId || temporary.kind !== target.kind) {
+      throw new MailCoreError('BLOB_INTEGRITY');
+    }
     const pending = this.temporary.get(input.temporaryKey);
     if (pending === undefined) {
       throw new MailCoreError('BLOB_NOT_FOUND');
     }
     if (
       target.sha256 !== pending.sha256 ||
-      input.objectKey !== buildObjectKey(target.accountId, pending.sha256)
+      input.objectKey !==
+        buildObjectKey(target.userId, target.accountId, target.kind, pending.sha256)
     ) {
       throw new MailCoreError('BLOB_INTEGRITY');
     }
@@ -94,10 +100,10 @@ export class MemoryBlobStore implements BlobStore {
 
   async list(input: Parameters<BlobStore['list']>[0]): ReturnType<BlobStore['list']> {
     const prefix =
-      input.kind === 'object'
-        ? buildObjectPrefix(input.accountId)
-        : buildTemporaryPrefix(input.accountId);
-    const source = input.kind === 'object' ? this.objects : this.temporary;
+      input.kind === 'temporary'
+        ? buildTemporaryPrefix(input.userId, input.accountId)
+        : buildObjectPrefix(input.userId, input.accountId, input.kind);
+    const source = input.kind === 'temporary' ? this.temporary : this.objects;
     const entries = [...source.entries()]
       .filter(([key]) => key.startsWith(prefix))
       .sort(([left], [right]) => left.localeCompare(right));

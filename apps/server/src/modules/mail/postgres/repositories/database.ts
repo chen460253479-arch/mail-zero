@@ -35,7 +35,7 @@ const errorForConstraint = (constraint: string | undefined): MailCoreErrorCode |
     case 'email_submission_account_idempotency_uidx':
     case 'remote_email_account_provider_remote_uidx':
       return 'IDEMPOTENCY_CONFLICT';
-    case 'blob_account_sha_size_uidx':
+    case 'blob_account_kind_sha_size_uidx':
       return 'BLOB_INTEGRITY';
     case 'mail_account_connection_user_fk':
       return 'CROSS_ACCOUNT_REFERENCE';

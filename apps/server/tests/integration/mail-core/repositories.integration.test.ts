@@ -285,6 +285,7 @@ describe('PostgreSQL mail adapters', () => {
           await tx.blobs.insert({
             id,
             accountId: harness.accountId,
+            kind: 'message_mime',
             sha256: `aggregate-sha-${index}`,
             sizeBytes: BigInt(index + 1),
             contentType: 'application/octet-stream',
@@ -309,6 +310,7 @@ describe('PostgreSQL mail adapters', () => {
       const foreign = await createPostgresMailTestHarness(db, unitOfWork, 'repository-foreign');
       const now = primary.dependencies.clock.now();
       const blobId = 'repository-blob' as BlobId;
+      const messageBlobId = 'repository-message-blob' as BlobId;
       const threadId = 'repository-thread' as ThreadId;
       const identityId = 'repository-identity' as IdentityId;
       const foreignThreadId = 'repository-foreign-thread' as ThreadId;
@@ -318,10 +320,24 @@ describe('PostgreSQL mail adapters', () => {
         await tx.blobs.insert({
           id: blobId,
           accountId: primary.accountId,
+          kind: 'attachment',
           sha256: 'repository-blob-digest',
           sizeBytes: 9n,
           contentType: 'text/plain',
           objectKey: 'repository/blob',
+          status: 'ready',
+          createdAt: now,
+          readyAt: now,
+          deletedAt: null,
+        });
+        await tx.blobs.insert({
+          id: messageBlobId,
+          accountId: primary.accountId,
+          kind: 'message_mime',
+          sha256: 'repository-blob-digest',
+          sizeBytes: 9n,
+          contentType: 'message/rfc822',
+          objectKey: 'repository/message',
           status: 'ready',
           createdAt: now,
           readyAt: now,
@@ -381,8 +397,21 @@ describe('PostgreSQL mail adapters', () => {
           sizeBytes: 9n,
         });
         expect(
-          await tx.blobs.findByDigest(primary.accountId, 'repository-blob-digest', 9n),
+          await tx.blobs.findByDigest(
+            primary.accountId,
+            'attachment',
+            'repository-blob-digest',
+            9n,
+          ),
         ).toMatchObject({ id: blobId });
+        expect(
+          await tx.blobs.findByDigest(
+            primary.accountId,
+            'message_mime',
+            'repository-blob-digest',
+            9n,
+          ),
+        ).toMatchObject({ id: messageBlobId });
         expect(await tx.blobs.listByAccount(primary.accountId)).toEqual(
           expect.arrayContaining([expect.objectContaining({ id: blobId })]),
         );

@@ -38,6 +38,7 @@ describe('Blob upload', () => {
       deduplicated: false,
       blob: {
         accountId: h.account.id,
+        kind: 'attachment',
         contentType: 'text/plain',
         status: 'ready',
         sizeBytes: 4n,
@@ -46,7 +47,7 @@ describe('Blob upload', () => {
       },
     });
     expect(result.blob.objectKey).toBe(
-      `mail/${h.account.id}/sha256/${result.blob.sha256.slice(0, 2)}/${result.blob.sha256}`,
+      `mail/users/${h.account.userId}/accounts/${h.account.id}/attachments/sha256/${result.blob.sha256.slice(0, 2)}/${result.blob.sha256}`,
     );
     await expect(
       h.dependencies.blobStore.get({
@@ -234,7 +235,7 @@ describe('Blob upload', () => {
 
   it('retains a committed upload after an unknown transaction acknowledgement and deduplicates retry', async () => {
     const h = await createHarness();
-    h.dependencies.unitOfWork.failCommitAcknowledgementAfter(1);
+    h.dependencies.unitOfWork.failCommitAcknowledgementAfter(2);
 
     await expect(
       h.core.uploadBlob({

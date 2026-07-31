@@ -1,22 +1,23 @@
+import type { BlobKind, BlobStoreEntry, BlobStoreListKind, MailCoreDependencies } from '../store';
 import { MailCoreError, type BlobId, type MailAccountId } from '../types';
-import type { BlobStoreEntry, MailCoreDependencies } from '../store';
 import { contentAddressedObjectKey } from './blob-lifecycle';
 
 const MAX_MAINTENANCE_BATCH = 1000;
 const LIST_PAGE_SIZE = 1000;
 const MAX_SCAN_PAGES_PER_KIND = 10;
 const ORPHAN_RESERVATION_CONTENT_TYPE = 'application/x-zero-orphan-reservation';
+const PERSISTENT_KINDS = [
+  'attachment',
+  'draft_mime',
+  'message_mime',
+] as const satisfies readonly BlobKind[];
 
-export type ReconcileBlobStorageCursor = {
-  object: {
-    value: string | null;
-    exhausted: boolean;
-  };
-  temporary: {
-    value: string | null;
-    exhausted: boolean;
-  };
+type ScanCursor = {
+  value: string | null;
+  exhausted: boolean;
 };
+
+export type ReconcileBlobStorageCursor = Record<BlobStoreListKind, ScanCursor>;
 
 export type ReconcileBlobStorageInput = {
   accountId: MailAccountId;
@@ -32,46 +33,61 @@ export type ReconcileBlobStorageResult = {
 };
 
 type Candidate = BlobStoreEntry & {
-  kind: 'object' | 'temporary';
+  kind: BlobStoreListKind;
   reservationId: BlobId | null;
 };
 
-const sha256FromObjectKey = (accountId: MailAccountId, objectKey: string): string => {
+const initialCursor = (): ReconcileBlobStorageCursor => ({
+  attachment: { value: null, exhausted: false },
+  draft_mime: { value: null, exhausted: false },
+  message_mime: { value: null, exhausted: false },
+  temporary: { value: null, exhausted: false },
+});
+
+const objectIdentity = (
+  userId: string,
+  accountId: MailAccountId,
+  objectKey: string,
+): { kind: BlobKind; sha256: string } => {
   const sha256 = objectKey.split('/').at(-1);
-  if (
-    sha256 === undefined ||
-    !/^[0-9a-f]{64}$/u.test(sha256) ||
-    contentAddressedObjectKey(accountId, sha256) !== objectKey
-  ) {
+  if (sha256 === undefined || !/^[0-9a-f]{64}$/u.test(sha256)) {
     throw new MailCoreError('BLOB_INTEGRITY');
   }
-  return sha256;
+  const kind = PERSISTENT_KINDS.find(
+    (candidate) => contentAddressedObjectKey(userId, accountId, candidate, sha256) === objectKey,
+  );
+  if (kind === undefined) {
+    throw new MailCoreError('BLOB_INTEGRITY');
+  }
+  return { kind, sha256 };
 };
 
 const scanCandidates = async (
   dependencies: MailCoreDependencies,
+  userId: string,
   accountId: MailAccountId,
-  kind: Candidate['kind'],
+  kind: BlobStoreListKind,
   olderThan: Date,
   limit: number,
-  initialCursor: ReconcileBlobStorageCursor[Candidate['kind']],
+  cursorState: ScanCursor,
 ): Promise<{ entries: BlobStoreEntry[]; cursor: string | null; exhausted: boolean }> => {
-  if (limit === 0 || initialCursor.exhausted) {
+  if (limit === 0 || cursorState.exhausted) {
     return {
       entries: [],
-      cursor: initialCursor.value,
-      exhausted: initialCursor.exhausted,
+      cursor: cursorState.value,
+      exhausted: cursorState.exhausted,
     };
   }
 
   const entries: BlobStoreEntry[] = [];
-  const seenCursors = new Set<string>(initialCursor.value === null ? [] : [initialCursor.value]);
-  let cursor = initialCursor.value;
+  const seenCursors = new Set<string>(cursorState.value === null ? [] : [cursorState.value]);
+  let cursor = cursorState.value;
   for (let pageNumber = 0; pageNumber < MAX_SCAN_PAGES_PER_KIND; pageNumber += 1) {
     const pageLimit = Math.min(LIST_PAGE_SIZE, limit - entries.length);
     let page;
     try {
       page = await dependencies.blobStore.list({
+        userId,
         accountId,
         kind,
         cursor,
@@ -113,10 +129,13 @@ export async function reconcileBlobStorage(
   }
 
   try {
-    const initialCursor = input.cursor ?? {
-      object: { value: null, exhausted: false },
-      temporary: { value: null, exhausted: false },
-    };
+    const account = await dependencies.unitOfWork.run((tx) =>
+      tx.accounts.findById(input.accountId),
+    );
+    if (account === null) {
+      throw new MailCoreError('ACCOUNT_NOT_FOUND', { entityId: input.accountId });
+    }
+    const cursorBefore = input.cursor ?? initialCursor();
     const pendingReservations = await dependencies.unitOfWork.run(async (tx) => {
       await tx.lockAccount(input.accountId);
       return tx.blobs.listDeletingByContentType(
@@ -126,25 +145,34 @@ export async function reconcileBlobStorage(
       );
     });
     const scanLimit = Math.max(0, input.limit - pendingReservations.length);
-    const objectScan = await scanCandidates(
-      dependencies,
-      input.accountId,
-      'object',
-      input.olderThan,
-      scanLimit,
-      initialCursor.object,
-    );
-    const temporaryScan = await scanCandidates(
-      dependencies,
-      input.accountId,
-      'temporary',
-      input.olderThan,
-      scanLimit,
-      initialCursor.temporary,
-    );
+    const scans = new Map<
+      BlobStoreListKind,
+      { entries: BlobStoreEntry[]; cursor: string | null; exhausted: boolean }
+    >();
+    for (const kind of [...PERSISTENT_KINDS, 'temporary'] as const) {
+      scans.set(
+        kind,
+        await scanCandidates(
+          dependencies,
+          account.userId,
+          input.accountId,
+          kind,
+          input.olderThan,
+          scanLimit,
+          cursorBefore[kind],
+        ),
+      );
+    }
 
     const claimed = await dependencies.unitOfWork.run(async (tx) => {
       await tx.lockAccount(input.accountId);
+      const currentAccount = await tx.accounts.findById(input.accountId);
+      if (currentAccount === null) {
+        throw new MailCoreError('ACCOUNT_NOT_FOUND', { entityId: input.accountId });
+      }
+      if (currentAccount.userId !== account.userId) {
+        throw new MailCoreError('BLOB_INTEGRITY', { entityId: input.accountId });
+      }
       const now = dependencies.clock.now();
       const reservations = await tx.blobs.listDeletingByContentType(
         input.accountId,
@@ -156,8 +184,8 @@ export async function reconcileBlobStorage(
         if (blob.readyAt === null || blob.deletedAt === null) {
           throw new MailCoreError('BLOB_INTEGRITY');
         }
-        const sha256 = sha256FromObjectKey(input.accountId, blob.objectKey);
-        if (blob.sha256 !== sha256) {
+        const identity = objectIdentity(account.userId, input.accountId, blob.objectKey);
+        if (blob.sha256 !== identity.sha256 || blob.kind !== identity.kind) {
           throw new MailCoreError('BLOB_INTEGRITY');
         }
         const owner = await tx.blobs.findByObjectKeyExcluding(input.accountId, blob.objectKey, {
@@ -172,60 +200,63 @@ export async function reconcileBlobStorage(
           key: blob.objectKey,
           uploadedAt: blob.createdAt,
           sizeBytes: blob.sizeBytes,
-          kind: 'object' as const,
+          kind: blob.kind,
           reservationId: blob.id,
         });
       }
+
       const existingReservationKeys = new Set(
         existingReservations.map((reservation) => reservation.key),
       );
-      const eligibleObjectKeys = new Set<string>();
+      const eligibleKeys = new Map<BlobKind, Set<string>>(
+        PERSISTENT_KINDS.map((kind) => [kind, new Set<string>()]),
+      );
       const newObjects: Candidate[] = [];
-      for (const entry of objectScan.entries) {
-        const sha256 = sha256FromObjectKey(input.accountId, entry.key);
-        const owner = await tx.blobs.findByObjectKeyExcluding(input.accountId, entry.key, {
-          status: 'deleting',
-          contentType: ORPHAN_RESERVATION_CONTENT_TYPE,
-        });
-        if (owner !== null) {
-          continue;
-        }
-        const existing = await tx.blobs.findByDigest(input.accountId, sha256, entry.sizeBytes);
-        if (existing === null) {
-          eligibleObjectKeys.add(entry.key);
-          newObjects.push({
-            ...entry,
-            kind: 'object' as const,
-            reservationId: null,
-          });
-          continue;
-        }
-        if (
-          existing.status === 'deleting' &&
-          existing.contentType === ORPHAN_RESERVATION_CONTENT_TYPE
-        ) {
-          eligibleObjectKeys.add(entry.key);
-          if (existingReservationKeys.has(existing.objectKey)) {
-            continue;
-          }
-          if (existing.readyAt === null || existing.deletedAt === null) {
+      for (const scanKind of PERSISTENT_KINDS) {
+        for (const entry of scans.get(scanKind)!.entries) {
+          const identity = objectIdentity(account.userId, input.accountId, entry.key);
+          if (identity.kind !== scanKind) {
             throw new MailCoreError('BLOB_INTEGRITY');
           }
-          existingReservations.push({
-            key: existing.objectKey,
-            uploadedAt: existing.createdAt,
-            sizeBytes: existing.sizeBytes,
-            kind: 'object',
-            reservationId: existing.id,
+          const owner = await tx.blobs.findByObjectKeyExcluding(input.accountId, entry.key, {
+            status: 'deleting',
+            contentType: ORPHAN_RESERVATION_CONTENT_TYPE,
           });
-          existingReservationKeys.add(existing.objectKey);
+          if (owner !== null) continue;
+          const existing = await tx.blobs.findByDigest(
+            input.accountId,
+            scanKind,
+            identity.sha256,
+            entry.sizeBytes,
+          );
+          if (existing === null) {
+            eligibleKeys.get(scanKind)!.add(entry.key);
+            newObjects.push({ ...entry, kind: scanKind, reservationId: null });
+            continue;
+          }
+          if (
+            existing.status === 'deleting' &&
+            existing.contentType === ORPHAN_RESERVATION_CONTENT_TYPE
+          ) {
+            eligibleKeys.get(scanKind)!.add(entry.key);
+            if (existingReservationKeys.has(existing.objectKey)) continue;
+            if (existing.readyAt === null || existing.deletedAt === null) {
+              throw new MailCoreError('BLOB_INTEGRITY');
+            }
+            existingReservations.push({
+              key: existing.objectKey,
+              uploadedAt: existing.createdAt,
+              sizeBytes: existing.sizeBytes,
+              kind: existing.kind,
+              reservationId: existing.id,
+            });
+            existingReservationKeys.add(existing.objectKey);
+          }
         }
       }
-      const temporaryCandidates: Candidate[] = temporaryScan.entries.map((entry) => ({
-        ...entry,
-        kind: 'temporary' as const,
-        reservationId: null,
-      }));
+      const temporaryCandidates: Candidate[] = scans
+        .get('temporary')!
+        .entries.map((entry) => ({ ...entry, kind: 'temporary', reservationId: null }));
       const selected = [...existingReservations, ...newObjects, ...temporaryCandidates]
         .sort((left, right) => {
           const byUploadedAt = left.uploadedAt.getTime() - right.uploadedAt.getTime();
@@ -234,15 +265,14 @@ export async function reconcileBlobStorage(
         .slice(0, input.limit);
 
       for (const candidate of selected) {
-        if (candidate.kind !== 'object' || candidate.reservationId !== null) {
-          continue;
-        }
-        const sha256 = sha256FromObjectKey(input.accountId, candidate.key);
+        if (candidate.kind === 'temporary' || candidate.reservationId !== null) continue;
+        const identity = objectIdentity(account.userId, input.accountId, candidate.key);
         const reservationId = dependencies.idFactory.next<'Blob'>() as BlobId;
         await tx.blobs.insert({
           id: reservationId,
           accountId: input.accountId,
-          sha256,
+          kind: identity.kind,
+          sha256: identity.sha256,
           sizeBytes: candidate.sizeBytes,
           contentType: ORPHAN_RESERVATION_CONTENT_TYPE,
           objectKey: candidate.key,
@@ -253,17 +283,16 @@ export async function reconcileBlobStorage(
         });
         candidate.reservationId = reservationId;
       }
-      const selectedObjectKeys = new Set(
-        selected
-          .filter((candidate) => candidate.kind === 'object')
-          .map((candidate) => candidate.key),
-      );
+      const selectedKeys = new Set(selected.map((candidate) => candidate.key));
       return {
         candidates: selected,
-        objectScanFullyConsumed: [...eligibleObjectKeys].every((key) =>
-          selectedObjectKeys.has(key),
-        ),
-        temporaryScanFullyConsumed: temporaryCandidates.every((candidate) =>
+        fullyConsumed: Object.fromEntries(
+          PERSISTENT_KINDS.map((kind) => [
+            kind,
+            [...eligibleKeys.get(kind)!].every((key) => selectedKeys.has(key)),
+          ]),
+        ) as Record<BlobKind, boolean>,
+        temporaryFullyConsumed: temporaryCandidates.every((candidate) =>
           selected.includes(candidate),
         ),
       };
@@ -291,40 +320,42 @@ export async function reconcileBlobStorage(
       const finalized = await dependencies.unitOfWork.run(async (tx) => {
         await tx.lockAccount(input.accountId);
         const reservation = await tx.blobs.findById(input.accountId, reservationId);
-        if (reservation === null) {
-          return false;
-        }
+        if (reservation === null) return false;
         if (
           reservation.status !== 'deleting' ||
           reservation.readyAt === null ||
           reservation.deletedAt === null ||
           reservation.contentType !== ORPHAN_RESERVATION_CONTENT_TYPE ||
-          reservation.objectKey !== candidate.key
+          reservation.objectKey !== candidate.key ||
+          reservation.kind !== candidate.kind
         ) {
           throw new MailCoreError('BLOB_INTEGRITY');
         }
         await tx.blobs.delete(input.accountId, reservation.id);
         return true;
       });
-      if (finalized) {
-        deletedObjectCount += 1;
-      }
+      if (finalized) deletedObjectCount += 1;
     }
-    const deletedAnObject = claimed.candidates.some((candidate) => candidate.kind === 'object');
+
+    const nextCursor = initialCursor();
+    for (const kind of PERSISTENT_KINDS) {
+      const deleted = claimed.candidates.some((candidate) => candidate.kind === kind);
+      const scan = scans.get(kind)!;
+      nextCursor[kind] = deleted
+        ? { value: null, exhausted: false }
+        : claimed.fullyConsumed[kind]
+          ? { value: scan.cursor, exhausted: scan.exhausted }
+          : cursorBefore[kind];
+    }
     const deletedTemporary = claimed.candidates.some((candidate) => candidate.kind === 'temporary');
-    const cursor = {
-      object: deletedAnObject
-        ? { value: null, exhausted: false }
-        : claimed.objectScanFullyConsumed
-          ? { value: objectScan.cursor, exhausted: objectScan.exhausted }
-          : initialCursor.object,
-      temporary: deletedTemporary
-        ? { value: null, exhausted: false }
-        : claimed.temporaryScanFullyConsumed
-          ? { value: temporaryScan.cursor, exhausted: temporaryScan.exhausted }
-          : initialCursor.temporary,
-    };
-    return { deletedObjectCount, deletedTemporaryCount, cursor };
+    const temporaryScan = scans.get('temporary')!;
+    nextCursor.temporary = deletedTemporary
+      ? { value: null, exhausted: false }
+      : claimed.temporaryFullyConsumed
+        ? { value: temporaryScan.cursor, exhausted: temporaryScan.exhausted }
+        : cursorBefore.temporary;
+
+    return { deletedObjectCount, deletedTemporaryCount, cursor: nextCursor };
   } catch (error) {
     if (error instanceof MailCoreError && error.code !== 'BLOB_STORE_FAILURE') {
       throw error;
