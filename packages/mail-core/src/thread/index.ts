@@ -24,3 +24,8 @@ export {
   type UpdateThreadEmailsInput,
   type UpdateThreadEmailsResult,
 } from './update-thread-emails';
+export {
+  moveThreadEmails,
+  type MoveThreadEmailsInput,
+  type MoveThreadEmailsResult,
+} from './move-thread-emails';

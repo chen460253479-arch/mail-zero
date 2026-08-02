@@ -29,9 +29,15 @@ describe('Action Router', () => {
       updatedThreadIds: ['thread-1'],
       failed: {},
     }));
+    const moveThreadEmails = vi.fn(async () => ({
+      oldState: '5',
+      newState: '6',
+      movedThreadIds: ['thread-1'],
+      failed: {},
+    }));
     runtimeMocks.openAccessible.mockResolvedValue({
       account,
-      core: { updateThreadEmails } as unknown as MailCore,
+      core: { updateThreadEmails, moveThreadEmails } as unknown as MailCore,
       outbound: {},
       snooze: {
         snooze: vi.fn(),
@@ -65,6 +71,22 @@ describe('Action Router', () => {
       clientMutationId: 'mutation-1',
       updatedThreadIds: ['thread-1'],
     });
-    expect(runtimeMocks.close).toHaveBeenCalledOnce();
+    const moveResult = await caller.action.moveThreads({
+      accountId: account.id,
+      threadIds: ['thread-1'],
+      destinationMailboxId: 'mailbox-archive',
+      clientMutationId: 'mutation-2',
+    });
+    expect(moveThreadEmails).toHaveBeenCalledWith({
+      accountId: account.id,
+      threadIds: ['thread-1'],
+      destinationMailboxId: 'mailbox-archive',
+      ifInState: undefined,
+    });
+    expect(moveResult).toMatchObject({
+      clientMutationId: 'mutation-2',
+      movedThreadIds: ['thread-1'],
+    });
+    expect(runtimeMocks.close).toHaveBeenCalledTimes(2);
   });
 });

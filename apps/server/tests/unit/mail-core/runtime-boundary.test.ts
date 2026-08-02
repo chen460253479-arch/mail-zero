@@ -72,6 +72,7 @@ describe('mail runtime boundary', () => {
         'listAccounts',
         'listIdentities',
         'listMailboxes',
+        'moveThreadEmails',
         'queryEmails',
         'querySubmissions',
         'queryThreads',

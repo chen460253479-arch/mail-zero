@@ -12,7 +12,7 @@ import {
   prepareEmailStateReplacementInTransaction,
 } from '../message/update-email';
 import { assertState, type MailCoreSetError } from '../changes';
-import type { MailCoreDependencies } from '../store';
+import type { MailCoreDependencies, MailTransaction } from '../store';
 
 export type UpdateThreadEmailsInput = {
   accountId: MailAccountId;
@@ -46,6 +46,28 @@ const itemError = (error: unknown): MailCoreSetError | null =>
     ? { code: error.code, details: error.details }
     : null;
 
+const requireLabelMailboxes = async (
+  tx: MailTransaction,
+  accountId: MailAccountId,
+  mailboxIds: MailboxId[],
+): Promise<void> => {
+  for (const mailboxId of new Set(mailboxIds)) {
+    const mailbox = await tx.mailboxes.findById(accountId, mailboxId);
+    if (mailbox === null || mailbox.deletedAt !== null) {
+      if (await tx.mailboxes.existsOutsideAccount(accountId, mailboxId)) {
+        throw new MailCoreError('CROSS_ACCOUNT_REFERENCE', { entityId: mailboxId });
+      }
+      throw new MailCoreError('MAILBOX_NOT_FOUND', { entityId: mailboxId });
+    }
+    if (mailbox.kind === 'system') {
+      throw new MailCoreError('MAILBOX_ROLE_CONFLICT', { entityId: mailboxId });
+    }
+    if (mailbox.kind !== 'label') {
+      throw new MailCoreError('INVALID_PATCH', { entityId: mailboxId });
+    }
+  }
+};
+
 export async function updateThreadEmails(
   dependencies: MailCoreDependencies,
   input: UpdateThreadEmailsInput,
@@ -61,6 +83,10 @@ export async function updateThreadEmails(
   return dependencies.unitOfWork.run(async (tx) => {
     await tx.lockAccount(input.accountId);
     const oldState = await assertState(tx, input.accountId, input.ifInState);
+    await requireLabelMailboxes(tx, input.accountId, [
+      ...input.addMailboxIds,
+      ...input.removeMailboxIds,
+    ]);
     const updatedThreadIds: ThreadId[] = [];
     const failed: Record<string, MailCoreSetError> = {};
     for (const threadId of [...new Set(input.threadIds)]) {

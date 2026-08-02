@@ -34,6 +34,7 @@ describe('createMailCore', () => {
         'listAccounts',
         'listIdentities',
         'listMailboxes',
+        'moveThreadEmails',
         'queryEmails',
         'querySubmissions',
         'queryThreads',

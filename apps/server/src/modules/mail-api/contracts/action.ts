@@ -13,6 +13,16 @@ export const updateThreadsInputSchema = z.object({
   clientMutationId: z.string().min(1).max(255),
 });
 
+export const moveThreadsInputSchema = z
+  .object({
+    accountId: mailAccountIdSchema,
+    threadIds: z.array(mailIdSchema).min(1).max(200),
+    destinationMailboxId: mailIdSchema,
+    ifInState: stateSchema.optional(),
+    clientMutationId: z.string().min(1).max(255),
+  })
+  .strict();
+
 export const snoozeThreadsInputSchema = z.object({
   accountId: mailAccountIdSchema,
   threadIds: z.array(mailIdSchema).min(1).max(200),
@@ -39,6 +49,15 @@ export const updateThreadsResultSchema = z.object({
   oldState: stateSchema,
   newState: stateSchema,
   updatedThreadIds: z.array(mailIdSchema),
+  failed: z.record(mailIdSchema, setErrorSchema),
+});
+
+export const moveThreadsResultSchema = z.object({
+  accountId: mailAccountIdSchema,
+  clientMutationId: z.string(),
+  oldState: stateSchema,
+  newState: stateSchema,
+  movedThreadIds: z.array(mailIdSchema),
   failed: z.record(mailIdSchema, setErrorSchema),
 });
 

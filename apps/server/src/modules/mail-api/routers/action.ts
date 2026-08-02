@@ -7,6 +7,8 @@ import {
   unsnoozeThreadsInputSchema,
   updateThreadsResultSchema,
   updateThreadsInputSchema,
+  moveThreadsInputSchema,
+  moveThreadsResultSchema,
 } from '../contracts/action';
 import {
   createSnoozeActionService,
@@ -27,6 +29,10 @@ export const actionRouter = router({
     .input(updateThreadsInputSchema)
     .output(updateThreadsResultSchema)
     .mutation(({ ctx, input }) => createThreadActionService(ctx.mailApi.core).updateThreads(input)),
+  moveThreads: mailAccountProcedure
+    .input(moveThreadsInputSchema)
+    .output(moveThreadsResultSchema)
+    .mutation(({ ctx, input }) => createThreadActionService(ctx.mailApi.core).moveThreads(input)),
   snoozeThreads: mailAccountProcedure
     .input(snoozeThreadsInputSchema)
     .output(snoozeThreadsResultSchema)

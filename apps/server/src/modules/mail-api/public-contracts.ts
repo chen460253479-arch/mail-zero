@@ -10,6 +10,10 @@ import { submissionSchema } from './contracts/submission';
 import { identitySchema } from './contracts/identity';
 import { mailboxSchema } from './contracts/mailbox';
 import { emailSchema } from './contracts/email';
+import {
+  moveThreadsInputSchema,
+  moveThreadsResultSchema,
+} from './contracts/action';
 
 export type MailApiAccountDto = z.infer<typeof accountSchema>;
 export type MailApiAccountDetailDto = z.infer<typeof accountGetResultSchema>;
@@ -20,3 +24,5 @@ export type MailApiSubmissionDto = z.infer<typeof submissionSchema>;
 export type MailApiThreadSummaryDto = z.infer<typeof threadSummarySchema>;
 export type MailApiThreadPageResultDto = z.infer<typeof threadPageResultSchema>;
 export type MailApiThreadDetailResultDto = z.infer<typeof threadDetailResultSchema>;
+export type MailApiMoveThreadsInput = z.infer<typeof moveThreadsInputSchema>;
+export type MailApiMoveThreadsResult = z.infer<typeof moveThreadsResultSchema>;

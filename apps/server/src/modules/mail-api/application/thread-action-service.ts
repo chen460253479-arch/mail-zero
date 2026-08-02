@@ -14,11 +14,14 @@ import {
   destroyThreadsInputSchema,
   unsnoozeThreadsInputSchema,
   updateThreadsInputSchema,
+  moveThreadsInputSchema,
 } from '../contracts/action';
 import type { MailSnoozeRuntime } from '../../mail-snooze/runtime/create-mail-snooze';
 import { mapSetError, mapSetErrors } from './dto';
 
-export const createThreadActionService = (core: Pick<MailCore, 'updateThreadEmails'>) => ({
+export const createThreadActionService = (
+  core: Pick<MailCore, 'moveThreadEmails' | 'updateThreadEmails'>,
+) => ({
   async updateThreads(input: z.infer<typeof updateThreadsInputSchema>) {
     const result = await core.updateThreadEmails({
       accountId: input.accountId as MailAccountId,
@@ -28,6 +31,20 @@ export const createThreadActionService = (core: Pick<MailCore, 'updateThreadEmai
       removeMailboxIds: input.removeMailboxIds as MailboxId[],
       addKeywords: input.addKeywords as Keyword[],
       removeKeywords: input.removeKeywords as Keyword[],
+    });
+    return {
+      accountId: input.accountId,
+      clientMutationId: input.clientMutationId,
+      ...result,
+      failed: mapSetErrors(result.failed),
+    };
+  },
+  async moveThreads(input: z.infer<typeof moveThreadsInputSchema>) {
+    const result = await core.moveThreadEmails({
+      accountId: input.accountId as MailAccountId,
+      threadIds: input.threadIds as ThreadId[],
+      destinationMailboxId: input.destinationMailboxId as MailboxId,
+      ifInState: input.ifInState,
     });
     return {
       accountId: input.accountId,

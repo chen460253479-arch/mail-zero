@@ -7,6 +7,7 @@ import {
 import { submissionSetInputSchema } from '../../../../../src/modules/mail-api/contracts/submission';
 import { mailboxSchema } from '../../../../../src/modules/mail-api/contracts/mailbox';
 import { accountSchema } from '../../../../../src/modules/mail-api/contracts/account';
+import { moveThreadsInputSchema } from '../../../../../src/modules/mail-api/contracts/action';
 
 describe('Mail API contracts', () => {
   it('serializes account bigint and Date fields to stable public strings', () => {
@@ -139,6 +140,33 @@ describe('Mail API contracts', () => {
           ]),
         ),
         destroy: Array.from({ length: 100 }, (_, index) => `submission-${index}`),
+      }).success,
+    ).toBe(false);
+  });
+
+  it('accepts only one semantic destination for a Thread move request', () => {
+    expect(
+      moveThreadsInputSchema.parse({
+        accountId: 'account-1',
+        threadIds: ['thread-1'],
+        destinationMailboxId: 'folder-1',
+        ifInState: '12',
+        clientMutationId: 'mutation-1',
+      }),
+    ).toEqual({
+      accountId: 'account-1',
+      threadIds: ['thread-1'],
+      destinationMailboxId: 'folder-1',
+      ifInState: '12',
+      clientMutationId: 'mutation-1',
+    });
+    expect(
+      moveThreadsInputSchema.safeParse({
+        accountId: 'account-1',
+        threadIds: ['thread-1'],
+        destinationMailboxId: 'folder-1',
+        addMailboxIds: ['folder-2'],
+        clientMutationId: 'mutation-1',
       }).success,
     ).toBe(false);
   });
