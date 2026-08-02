@@ -38,6 +38,8 @@ export type UpdateMailboxActionInput = {
   isSubscribed?: boolean;
 };
 
+export type UpdateMailboxBatchInput = UpdateMailboxActionInput[];
+
 export function useMailboxActions() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
@@ -160,6 +162,30 @@ export function useMailboxActions() {
     [account, invalidateMailboxes, mailboxState, setMailbox],
   );
 
+  const updateMailboxes = useCallback(
+    async (updates: UpdateMailboxBatchInput) => {
+      if (!account) throw new Error('No active mail account');
+      if (updates.length === 0) return {};
+      const result = await setMailbox.mutateAsync({
+        accountId: account.id,
+        ...(mailboxState ? { ifInState: mailboxState } : {}),
+        create: {},
+        update: Object.fromEntries(
+          updates.map(({ id, ...patch }) => [
+            id,
+            Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)),
+          ]),
+        ),
+        destroy: [],
+      });
+      const firstFailure = Object.values(result.notUpdated)[0];
+      if (firstFailure) throw new Error(firstFailure.code);
+      await invalidateMailboxes();
+      return result.updated;
+    },
+    [account, invalidateMailboxes, mailboxState, setMailbox],
+  );
+
   const createLabel = useCallback(
     ({ name, color }: Pick<Label, 'name' | 'color'>) =>
       createMailbox({
@@ -185,6 +211,7 @@ export function useMailboxActions() {
   return {
     createMailbox,
     updateMailbox,
+    updateMailboxes,
     destroyMailbox,
     createLabel,
     updateLabel,

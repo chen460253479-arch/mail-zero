@@ -45,7 +45,7 @@ export default [
           route('zoho_mail', '(routes)/settings/integrations/zoho-mail/page.tsx'),
           route('imap_smtp', '(routes)/settings/integrations/imap-smtp/page.tsx'),
         ]),
-        route('/labels', '(routes)/settings/labels/page.tsx'),
+        route('/mailboxes', '(routes)/settings/mailboxes/page.tsx'),
         route('/categories', '(routes)/settings/categories/page.tsx'),
         route('/notifications', '(routes)/settings/notifications/page.tsx'),
         route('/privacy', '(routes)/settings/privacy/page.tsx'),

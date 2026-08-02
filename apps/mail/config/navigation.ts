@@ -22,7 +22,7 @@ export interface NavItem {
   id?: string;
   title: string;
   url: string;
-  icon: React.ComponentType<any>;
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
   badge?: number;
   isBackButton?: boolean;
   isSettingsButton?: boolean;
@@ -177,8 +177,8 @@ export const navigationConfig: Record<string, NavConfig> = {
             icon: Stars,
           },
           {
-            title: m['navigation.settings.labels'](),
-            url: '/settings/labels',
+            title: `${m['common.navigation.folders']()} / ${m['common.navigation.labels']()}`,
+            url: '/settings/mailboxes',
             icon: Sheet,
           },
           {

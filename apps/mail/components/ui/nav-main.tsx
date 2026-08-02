@@ -6,7 +6,7 @@ import { type NavItem } from '@/config/navigation';
 import { Link, useLocation } from 'react-router';
 import { Badge } from '@/components/ui/badge';
 import { useStats } from '@/hooks/use-stats';
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
 import { BASE_URL } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import * as React from 'react';
@@ -32,15 +32,10 @@ interface NavMainProps {
   }[];
 }
 
-type IconRefType = SVGSVGElement & {
-  startAnimation?: () => void;
-  stopAnimation?: () => void;
-};
-
 export function NavMain({ items }: NavMainProps) {
   const location = useLocation();
   const pathname = location.pathname;
-  const searchParams = new URLSearchParams();
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
 
   const { state } = useSidebar();
 
@@ -168,7 +163,6 @@ export function NavMain({ items }: NavMainProps) {
 }
 
 function NavItem(item: NavItemProps & { href: string }) {
-  const iconRef = useRef<IconRefType>(null);
   const { data: stats } = useStats();
   const { clearAllFilters } = useCommandPalette();
 
@@ -180,7 +174,7 @@ function NavItem(item: NavItemProps & { href: string }) {
         tooltip={state === 'collapsed' ? item.title : undefined}
         className="flex cursor-not-allowed items-center opacity-50"
       >
-        {item.icon && <item.icon ref={iconRef} className="relative mr-2.5 h-3 w-3.5" />}
+        {item.icon && <item.icon className="relative mr-2.5 h-3 w-3.5" />}
         <p className="relative bottom-px mt-0.5 truncate text-[13px]">{item.title}</p>
       </SidebarMenuButton>
     );
@@ -207,7 +201,7 @@ function NavItem(item: NavItemProps & { href: string }) {
           onClick={handleClick}
         >
           <Link target={item.target} to={item.href}>
-            {item.icon && <item.icon ref={iconRef} className="mr-2 shrink-0" />}
+            {item.icon && <item.icon className="mr-2 shrink-0" />}
             <p className="relative bottom-px mt-0.5 min-w-0 flex-1 truncate text-[13px]">
               {item.title}
             </p>
