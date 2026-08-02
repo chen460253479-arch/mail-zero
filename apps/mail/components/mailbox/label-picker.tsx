@@ -15,6 +15,7 @@ import { m } from '@/paraglide/messages';
 import { cn } from '@/lib/utils';
 
 import { buildLabelMutation, nextLabelSelectionState } from './mail-action-menu-domain';
+import { IconActionTooltip } from './icon-action-tooltip';
 
 export type LabelPickerProps = {
   threadIds: string[];
@@ -85,20 +86,22 @@ export function LabelPicker({ threadIds, threadMailboxIds, className, label }: L
 
   return (
     <Popover open={open} onOpenChange={setPickerOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size={label ? 'sm' : 'icon'}
-          className={cn('h-8', !label && 'w-8', className)}
-          aria-label={m['common.mailboxes.manageLabels']()}
-          onClick={stopPropagation}
-          disabled={threadIds.length === 0}
-        >
-          <Tags className="h-4 w-4" />
-          {label ? <span>{label}</span> : null}
-        </Button>
-      </PopoverTrigger>
+      <IconActionTooltip label={label} tooltip={m['common.mailboxes.manageLabels']()}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size={label ? 'sm' : 'icon'}
+            className={cn('h-8', !label && 'w-8', className)}
+            aria-label={m['common.mailboxes.manageLabels']()}
+            onClick={stopPropagation}
+            disabled={threadIds.length === 0}
+          >
+            <Tags className="h-4 w-4" />
+            {label ? <span>{label}</span> : null}
+          </Button>
+        </PopoverTrigger>
+      </IconActionTooltip>
       <PopoverContent
         align="end"
         className="w-72 p-2"

@@ -1,5 +1,5 @@
 import { FolderInput, Loader2, Search } from 'lucide-react';
-import { useMemo, useState, type MouseEvent } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { toast } from 'sonner';
 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -10,7 +10,9 @@ import { Input } from '@/components/ui/input';
 import { m } from '@/paraglide/messages';
 import { cn } from '@/lib/utils';
 
+import { getMailboxDisplayName, type SystemMailboxDisplayNames } from './mailbox-display-name';
 import { buildMoveTargets } from './mail-action-menu-domain';
+import { IconActionTooltip } from './icon-action-tooltip';
 
 export type MoveToFolderMenuProps = {
   threadIds: string[];
@@ -30,9 +32,14 @@ export function MoveToFolderMenu({
   const [pendingMailboxId, setPendingMailboxId] = useState<string | null>(null);
   const { mailboxes } = useMailboxes();
   const { moveThreadsToMailbox } = useOptimisticActions();
-  const targets = useMemo(
-    () => buildMoveTargets(mailboxes, currentMailboxId, search),
-    [currentMailboxId, mailboxes, search],
+  const systemMailboxDisplayNames = {
+    inbox: m['navigation.sidebar.inbox'](),
+    archive: m['navigation.sidebar.archive'](),
+    junk: m['navigation.sidebar.spam'](),
+    trash: m['navigation.sidebar.bin'](),
+  } satisfies SystemMailboxDisplayNames;
+  const targets = buildMoveTargets(mailboxes, currentMailboxId, search, (mailbox) =>
+    getMailboxDisplayName(mailbox, systemMailboxDisplayNames),
   );
 
   const setMenuOpen = (nextOpen: boolean) => {
@@ -61,20 +68,22 @@ export function MoveToFolderMenu({
 
   return (
     <Popover open={open} onOpenChange={setMenuOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size={label ? 'sm' : 'icon'}
-          className={cn('h-8', !label && 'w-8', className)}
-          aria-label={m['common.mailboxes.moveToFolder']()}
-          onClick={stopPropagation}
-          disabled={threadIds.length === 0}
-        >
-          <FolderInput className="h-4 w-4" />
-          {label ? <span>{label}</span> : null}
-        </Button>
-      </PopoverTrigger>
+      <IconActionTooltip label={label} tooltip={m['common.mailboxes.moveToFolder']()}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size={label ? 'sm' : 'icon'}
+            className={cn('h-8', !label && 'w-8', className)}
+            aria-label={m['common.mailboxes.moveToFolder']()}
+            onClick={stopPropagation}
+            disabled={threadIds.length === 0}
+          >
+            <FolderInput className="h-4 w-4" />
+            {label ? <span>{label}</span> : null}
+          </Button>
+        </PopoverTrigger>
+      </IconActionTooltip>
       <PopoverContent
         align="end"
         className="w-72 p-2"
@@ -97,7 +106,7 @@ export function MoveToFolderMenu({
               {m['common.mailboxes.noMoveTargets']()}
             </p>
           ) : (
-            targets.map(({ mailbox, depth }) => (
+            targets.map(({ mailbox, depth, displayName }) => (
               <button
                 key={mailbox.id}
                 type="button"
@@ -111,7 +120,7 @@ export function MoveToFolderMenu({
                 ) : (
                   <FolderInput className="text-muted-foreground h-4 w-4" />
                 )}
-                <span className="truncate">{mailbox.name}</span>
+                <span className="truncate">{displayName}</span>
               </button>
             ))
           )}

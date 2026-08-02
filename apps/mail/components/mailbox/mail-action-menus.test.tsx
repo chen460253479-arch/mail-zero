@@ -49,6 +49,19 @@ describe('mail action menu domain', () => {
     ]);
   });
 
+  it('searches system destinations by their localized display name', () => {
+    expect(
+      buildMoveTargets(mailboxes, null, '收件箱', (mailbox) =>
+        mailbox.role === 'inbox' ? '收件箱' : mailbox.name,
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        mailbox: expect.objectContaining({ id: 'inbox' }),
+        displayName: '收件箱',
+      }),
+    ]);
+  });
+
   it('turns only explicitly changed labels into one add/remove mutation', () => {
     expect(
       buildLabelMutation(

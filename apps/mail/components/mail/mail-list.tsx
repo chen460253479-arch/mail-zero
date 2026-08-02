@@ -26,7 +26,9 @@ import { useMailChanges } from '@/modules/mail/queries/use-mail-changes';
 import { ThreadContextMenu } from '@/components/context/thread-context';
 import { useOptimisticActions } from '@/hooks/use-optimistic-actions';
 import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
+import { buildOptimisticMailListLabels } from './mail-list-labels';
 import { useMail, type Config } from '@/components/mail/use-mail';
+import { getSystemMailLabelIcon } from './system-mail-label-icon';
 import { LabelPicker } from '@/components/mailbox/label-picker';
 import { useMailboxLabels } from '@/hooks/use-mailbox-labels';
 import { useSearchValue } from '@/hooks/use-search-value';
@@ -43,12 +45,12 @@ import { BimiAvatar } from '../ui/bimi-avatar';
 import { RenderLabels } from './render-labels';
 import { Badge } from '@/components/ui/badge';
 import { useDraft } from '@/hooks/use-drafts';
-import { Check, Star } from 'lucide-react';
 import { Skeleton } from '../ui/skeleton';
 import { m } from '@/paraglide/messages';
 import { useParams } from 'react-router';
 import { Button } from '../ui/button';
 import { Avatar } from '../ui/avatar';
+import { Check } from 'lucide-react';
 import { useQueryState } from 'nuqs';
 import { useAtom } from 'jotai';
 
@@ -69,7 +71,7 @@ const Thread = memo(
         messages: [message],
         hasUnread: message.unread,
         totalReplies: 1,
-        labels: message.tags.map((tag) => ({ id: tag.id, name: tag.name })),
+        labels: message.tags.map((tag) => ({ ...tag })),
       }),
       [message],
     );
@@ -109,31 +111,11 @@ const Thread = memo(
             ? !optimisticState.optimisticRead
             : (getThreadData?.hasUnread ?? false);
 
-        let labels: { id: string; name: string }[] = [];
-        if (getThreadData?.labels) {
-          labels = [...getThreadData.labels];
-          const hasStarredLabel = labels.some((label) => label.name === 'STARRED');
-
-          if (optimisticState.optimisticStarred !== null) {
-            if (optimisticState.optimisticStarred && !hasStarredLabel) {
-              labels.push({ id: 'starred-optimistic', name: 'STARRED' });
-            } else if (!optimisticState.optimisticStarred && hasStarredLabel) {
-              labels = labels.filter((label) => label.name !== 'STARRED');
-            }
-          }
-
-          if (optimisticState.optimisticLabels) {
-            labels = labels.filter(
-              (label) => !optimisticState.optimisticLabels.removedLabelIds.includes(label.id),
-            );
-
-            optimisticState.optimisticLabels.addedLabelIds.forEach((labelId) => {
-              if (!labels.some((label) => label.id === labelId)) {
-                labels.push({ id: labelId, name: labelId });
-              }
-            });
-          }
-        }
+        const labels = buildOptimisticMailListLabels(getThreadData?.labels ?? [], {
+          important: optimisticState.optimisticImportant,
+          starred: optimisticState.optimisticStarred,
+          labelChanges: optimisticState.optimisticLabels,
+        });
 
         return {
           displayStarred,
@@ -1098,7 +1080,7 @@ export const MailLabels = memo(
               <Tooltip key={label.id}>
                 <TooltipTrigger asChild>
                   <Badge className="rounded-md bg-amber-100 p-1 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400">
-                    {getLabelIcon(label.name)}
+                    {getSystemMailLabelIcon(label.name)}
                   </Badge>
                 </TooltipTrigger>
                 <TooltipContent className="hidden px-1 py-0 text-xs">
@@ -1110,7 +1092,7 @@ export const MailLabels = memo(
 
           // Skip rendering if style is "secondary" (default case)
           if (style === 'secondary') return null;
-          const content = getLabelIcon(label.name);
+          const content = getSystemMailLabelIcon(label.name);
 
           return content ? (
             <Badge key={label.id} className="rounded-md p-1" variant={style}>
@@ -1125,17 +1107,6 @@ export const MailLabels = memo(
     return JSON.stringify(prev.labels) === JSON.stringify(next.labels);
   },
 );
-
-function getLabelIcon(label: string) {
-  const normalizedLabel = label.toLowerCase().replace(/^category_/i, '');
-
-  switch (normalizedLabel) {
-    case 'starred':
-      return <Star className="h-[12px] w-[12px] fill-yellow-400 stroke-yellow-400" />;
-    default:
-      return null;
-  }
-}
 
 function getDefaultBadgeStyle(label: string): ComponentProps<typeof Badge>['variant'] {
   const normalizedLabel = label.toLowerCase().replace(/^category_/i, '');

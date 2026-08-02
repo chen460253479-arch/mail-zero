@@ -4,7 +4,10 @@ import { buildMailboxTree } from '@/modules/mail/selectors/mailbox-tree';
 export type MoveTarget = {
   mailbox: Mailbox;
   depth: number;
+  displayName: string;
 };
+
+type MailboxDisplayNameResolver = (mailbox: Mailbox) => string;
 
 const moveSystemRoles = new Set<MailboxRole>(['inbox', 'archive', 'junk', 'trash']);
 
@@ -17,6 +20,7 @@ export function buildMoveTargets(
   mailboxes: readonly Mailbox[],
   currentMailboxId: string | null,
   search: string,
+  getDisplayName: MailboxDisplayNameResolver = (mailbox) => mailbox.name,
 ): MoveTarget[] {
   const systems = mailboxes
     .filter(
@@ -28,7 +32,7 @@ export function buildMoveTargets(
     )
     .toSorted(compareMailboxes)
     .map((mailbox) => ({ mailbox, depth: 0 }));
-  const folders: MoveTarget[] = [];
+  const folders: Array<Omit<MoveTarget, 'displayName'>> = [];
   const visit = (nodes: ReturnType<typeof buildMailboxTree>, depth: number) => {
     for (const node of nodes) {
       if (node.id !== currentMailboxId) folders.push({ mailbox: node, depth });
@@ -37,10 +41,14 @@ export function buildMoveTargets(
   };
   visit(buildMailboxTree(mailboxes, { kind: 'folder' }), 0);
 
+  const targets = [...systems, ...folders].map((target) => ({
+    ...target,
+    displayName: getDisplayName(target.mailbox),
+  }));
   const normalizedSearch = search.trim().toLocaleLowerCase();
-  return [...systems, ...folders].filter(
-    ({ mailbox }) =>
-      normalizedSearch.length === 0 || mailbox.name.toLocaleLowerCase().includes(normalizedSearch),
+  return targets.filter(
+    ({ displayName }) =>
+      normalizedSearch.length === 0 || displayName.toLocaleLowerCase().includes(normalizedSearch),
   );
 }
 
