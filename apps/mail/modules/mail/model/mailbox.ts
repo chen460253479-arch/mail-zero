@@ -24,3 +24,11 @@ export type Mailbox = {
   totalThreads: number;
   unreadThreads: number;
 };
+
+export type CustomMailboxKind = Extract<MailboxKind, 'folder' | 'label'>;
+
+export type MailboxTreeNode = Mailbox & {
+  children: MailboxTreeNode[];
+};
+
+export type LabelSelectionState = 'all' | 'partial' | 'none';
