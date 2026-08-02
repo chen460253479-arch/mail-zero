@@ -37,9 +37,7 @@ export function useOptimisticActions() {
   const { mutateAsync: updateThreads } = useMutation(
     trpc.mail.action.updateThreads.mutationOptions(),
   );
-  const { mutateAsync: moveThreads } = useMutation(
-    trpc.mail.action.moveThreads.mutationOptions(),
-  );
+  const { mutateAsync: moveThreads } = useMutation(trpc.mail.action.moveThreads.mutationOptions());
   const { mutateAsync: snoozeThreads } = useMutation(
     trpc.mail.action.snoozeThreads.mutationOptions(),
   );
@@ -312,10 +310,7 @@ export function useOptimisticActions() {
         if (!account || !destination || destination === 'snoozed') {
           throw new Error('MAIL_MOVE_DESTINATION_UNAVAILABLE');
         }
-        const destinationMailboxId = resolveSystemMoveDestinationMailboxId(
-          destination,
-          mailboxes,
-        );
+        const destinationMailboxId = resolveSystemMoveDestinationMailboxId(destination, mailboxes);
         const result = await moveThreads(
           buildMoveThreadAction({
             accountId: account.id,
@@ -339,6 +334,33 @@ export function useOptimisticActions() {
       toastMessage: successMessage,
       folders: [currentFolder, destination],
     });
+  }
+
+  async function moveThreadsToMailbox(threadIds: string[], destinationMailboxId: string) {
+    if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
+    if (threadIds.length === 0 || !destinationMailboxId) {
+      throw new Error('MAIL_MOVE_DESTINATION_UNAVAILABLE');
+    }
+    const result = await moveThreads(
+      buildMoveThreadAction({
+        accountId: account.id,
+        threadIds,
+        destinationMailboxId,
+        ...(mailboxState ? { ifInState: mailboxState } : {}),
+        clientMutationId: mutationId(),
+      }),
+    );
+    if (Object.keys(result.failed).length > 0) {
+      throw new Error('THREAD_MOVE_PARTIAL_FAILURE');
+    }
+
+    if (threadId && threadIds.includes(threadId)) {
+      setThreadId(null);
+      setActiveReplyId(null);
+    }
+    setMail((current) => ({ ...current, bulkSelected: [] }));
+    await refreshData();
+    return result.movedThreadIds;
   }
 
   function optimisticDeleteThreads(threadIds: string[], currentFolder: string) {
@@ -484,6 +506,35 @@ export function useOptimisticActions() {
     });
   }
 
+  async function setThreadLabels(
+    threadIds: string[],
+    addLabelIds: string[],
+    removeLabelIds: string[],
+  ) {
+    if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
+    if (threadIds.length === 0 || (addLabelIds.length === 0 && removeLabelIds.length === 0)) {
+      return [];
+    }
+    const result = await updateThreads(
+      buildSetThreadLabelsAction({
+        accountId: account.id,
+        threadIds,
+        addLabelIds,
+        removeLabelIds,
+        mailboxes,
+        ...(mailboxState ? { ifInState: mailboxState } : {}),
+        clientMutationId: mutationId(),
+      }),
+    );
+    if (Object.keys(result.failed).length > 0) {
+      throw new Error('THREAD_LABEL_PARTIAL_FAILURE');
+    }
+
+    setMail((current) => ({ ...current, bulkSelected: [] }));
+    await refreshData();
+    return result.updatedThreadIds;
+  }
+
   function optimisticSnooze(threadIds: string[], currentFolder: string, wakeAt: Date) {
     if (!threadIds.length) return;
 
@@ -607,10 +658,12 @@ export function useOptimisticActions() {
     optimisticMarkAsUnread,
     optimisticToggleStar,
     optimisticMoveThreadsTo,
+    moveThreadsToMailbox,
     optimisticDeleteThreads,
     permanentlyDeleteThreads,
     optimisticToggleImportant,
     optimisticToggleLabel,
+    setThreadLabels,
     optimisticSnooze,
     optimisticUnsnooze,
     optimisticDeleteDraft,

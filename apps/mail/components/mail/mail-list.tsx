@@ -19,12 +19,15 @@ import { getArchiveToggleDestination, type ThreadDestination } from '@/lib/threa
 import { useOptimisticThreadState } from '@/components/mail/optimistic-thread-state';
 import { focusedIndexAtom, useMailNavigation } from '@/hooks/use-mail-navigation';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { MoveToFolderMenu } from '@/components/mailbox/move-to-folder-menu';
+import { resolveMailboxRoute } from '@/modules/mail/routing/mailbox-route';
 import type { MailSelectMode, ParsedMessage, ThreadProps } from '@/types';
 import { useMailChanges } from '@/modules/mail/queries/use-mail-changes';
 import { ThreadContextMenu } from '@/components/context/thread-context';
 import { useOptimisticActions } from '@/hooks/use-optimistic-actions';
 import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
 import { useMail, type Config } from '@/components/mail/use-mail';
+import { LabelPicker } from '@/components/mailbox/label-picker';
 import { useSearchValue } from '@/hooks/use-search-value';
 import { EmptyStateIcon } from '../icons/empty-state-svg';
 import { highlightText } from '@/lib/email-utils.client';
@@ -151,6 +154,18 @@ const Thread = memo(
 
     const { optimisticToggleStar, optimisticToggleImportant, optimisticMoveThreadsTo } =
       useOptimisticActions();
+    const { mailboxes } = useMailboxes();
+    const currentMailboxId = useMemo(() => {
+      const route = resolveMailboxRoute(folder ?? FOLDERS.INBOX, mailboxes);
+      return route.kind === 'mailbox' ? route.mailboxId : null;
+    }, [folder, mailboxes]);
+    const threadMailboxIds = useMemo(
+      () =>
+        getThreadData.labels
+          .map((label) => label.id)
+          .filter((mailboxId) => mailboxes.some((mailbox) => mailbox.id === mailboxId)),
+      [getThreadData.labels, mailboxes],
+    );
 
     const handleToggleStar = useCallback(
       async (e: React.MouseEvent) => {
@@ -331,6 +346,16 @@ const Thread = memo(
                     : m['common.threadDisplay.archive']()}
                 </TooltipContent>
               </Tooltip>
+              <MoveToFolderMenu
+                threadIds={idToUse ? [idToUse] : []}
+                currentMailboxId={currentMailboxId}
+                className="h-6 w-6 [&_svg]:size-3.5"
+              />
+              <LabelPicker
+                threadIds={idToUse ? [idToUse] : []}
+                threadMailboxIds={[threadMailboxIds]}
+                className="h-6 w-6 [&_svg]:size-3.5"
+              />
               {!isFolderBin ? (
                 <Tooltip>
                   <TooltipTrigger asChild>

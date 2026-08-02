@@ -8,10 +8,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Bell, Lightning, Mail, ScanEye, Tag, User, X, Search } from '../icons/icons';
 import { useCategorySettings, useDefaultCategoryId } from '@/hooks/use-categories';
 import { ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import { MoveToFolderMenu } from '@/components/mailbox/move-to-folder-menu';
+import { resolveMailboxRoute } from '@/modules/mail/routing/mailbox-route';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCommandPalette } from '../context/command-palette-context';
+import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
 import { useHotkeys, useHotkeysContext } from 'react-hotkeys-hook';
 import { ThreadDisplay } from '@/components/mail/thread-display';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { LabelPicker } from '@/components/mailbox/label-picker';
 import { useActiveConnection } from '@/hooks/use-connections';
 import { Check, ChevronDown, RefreshCcw } from 'lucide-react';
 import { useMediaQuery } from '../../hooks/use-media-query';
@@ -51,9 +55,25 @@ export function MailLayout() {
     prevFolderRef.current = folder;
   }, [folder, mail.bulkSelected.length, clearBulkSelection]);
 
-  const [{ isFetching, refetch: refetchThreads }] = useThreads({
+  const [{ isFetching, refetch: refetchThreads }, threads] = useThreads({
     enabled: Boolean(activeConnection?.id),
   });
+  const { mailboxes } = useMailboxes({ enabled: Boolean(activeConnection?.id) });
+  const currentMailboxId = useMemo(() => {
+    const route = resolveMailboxRoute(folder, mailboxes);
+    return route.kind === 'mailbox' ? route.mailboxId : null;
+  }, [folder, mailboxes]);
+  const selectedThreadMailboxIds = useMemo(
+    () =>
+      threads
+        .filter((thread) => mail.bulkSelected.includes(thread.threadId ?? thread.id))
+        .map((thread) =>
+          thread.tags
+            .map((tag) => tag.id)
+            .filter((mailboxId) => mailboxes.some((mailbox) => mailbox.id === mailboxId)),
+        ),
+    [mail.bulkSelected, mailboxes, threads],
+  );
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
   const [threadId] = useQueryState('threadId');
@@ -186,7 +206,7 @@ export function MailLayout() {
                               className="h-6 rounded-md px-2 text-xs"
                               onClick={handleClearFilters}
                             >
-                  {m['common.mail.clear']()}
+                              {m['common.mail.clear']()}
                             </Button>
                           )}
                           <kbd className="bg-muted border-border/40 dark:bg-muted/40 pointer-events-none hidden h-6 select-none items-center gap-1 rounded border px-2 text-xs font-medium opacity-80 sm:flex">
@@ -203,9 +223,21 @@ export function MailLayout() {
                       )}
                     </>
                   ) : (
-                    <div className="flex flex-1 items-center justify-between">
-                      <div className="text-foreground text-sm font-medium">
-                  {m['common.mail.selected']({ count: mail.bulkSelected.length })}
+                    <div className="flex flex-1 items-center justify-between gap-2">
+                      <div className="text-foreground whitespace-nowrap text-sm font-medium">
+                        {m['common.mail.selected']({ count: mail.bulkSelected.length })}
+                      </div>
+                      <div className="ml-auto flex items-center gap-1">
+                        <MoveToFolderMenu
+                          threadIds={mail.bulkSelected}
+                          currentMailboxId={currentMailboxId}
+                          label="移动"
+                        />
+                        <LabelPicker
+                          threadIds={mail.bulkSelected}
+                          threadMailboxIds={selectedThreadMailboxIds}
+                          label="标签"
+                        />
                       </div>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -253,7 +285,7 @@ export function MailLayout() {
                   <MailList />
                 ) : isConnectionPending ? (
                   <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-              {m['common.mail.loading']()}
+                    {m['common.mail.loading']()}
                   </div>
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center px-8 text-center">
@@ -269,7 +301,7 @@ export function MailLayout() {
                       variant="outline"
                       onClick={() => navigate('/settings/connections')}
                     >
-                        {m['common.mail.manageConnections']()}
+                      {m['common.mail.manageConnections']()}
                     </Button>
                   </div>
                 )}
@@ -495,7 +527,7 @@ function CategoryDropdown({ isMultiSelectMode }: CategoryDropdownProps) {
           className={cn(
             'text-muted-foreground border-border/40 bg-background/50 hover:bg-accent/30 dark:border-border/20 dark:bg-background/40 flex h-10 min-w-fit items-center gap-2 rounded-lg border px-3 backdrop-blur-sm transition-all',
           )}
-            aria-label={m['common.mail.filterByLabels']()}
+          aria-label={m['common.mail.filterByLabels']()}
           aria-expanded={isOpen}
           aria-haspopup="menu"
         >
@@ -516,7 +548,7 @@ function CategoryDropdown({ isMultiSelectMode }: CategoryDropdownProps) {
         className="border-border/50 bg-muted w-48 rounded-xl border p-2 dark:bg-[#232323]"
         align="start"
         role="menu"
-                  aria-label={m['common.mail.labelFilterOptions']()}
+        aria-label={m['common.mail.labelFilterOptions']()}
       >
         {categorySettings.map((category) => (
           <DropdownMenuItem

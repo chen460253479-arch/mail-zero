@@ -33,7 +33,11 @@ import {
 } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useOptimisticThreadState } from '@/components/mail/optimistic-thread-state';
+import { MoveToFolderMenu } from '@/components/mailbox/move-to-folder-menu';
+import { resolveMailboxRoute } from '@/modules/mail/routing/mailbox-route';
 import { useOptimisticActions } from '@/hooks/use-optimistic-actions';
+import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
+import { LabelPicker } from '@/components/mailbox/label-picker';
 import { focusedIndexAtom } from '@/hooks/use-mail-navigation';
 import { handleUnsubscribe } from '@/lib/email-utils.client';
 import { useThread, useThreads } from '@/hooks/use-threads';
@@ -197,6 +201,18 @@ export function ThreadDisplay() {
   const [focusedIndex, setFocusedIndex] = useAtom(focusedIndexAtom);
   const { optimisticMoveThreadsTo, optimisticToggleImportant, optimisticToggleStar } =
     useOptimisticActions();
+  const { mailboxes } = useMailboxes();
+  const currentMailboxId = useMemo(() => {
+    const route = resolveMailboxRoute(folder, mailboxes);
+    return route.kind === 'mailbox' ? route.mailboxId : null;
+  }, [folder, mailboxes]);
+  const threadMailboxIds = useMemo(
+    () =>
+      emailData?.labels
+        .map((label) => label.id)
+        .filter((mailboxId) => mailboxes.some((mailbox) => mailbox.id === mailboxId)) ?? [],
+    [emailData?.labels, mailboxes],
+  );
   const { sendMessage } = useMailDelivery();
   const [, setIsComposeOpen] = useQueryState('isComposeOpen');
 
@@ -867,6 +883,17 @@ export function ThreadDisplay() {
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
+
+                <MoveToFolderMenu
+                  threadIds={id ? [id] : []}
+                  currentMailboxId={currentMailboxId}
+                  className="h-7 w-7 bg-white dark:bg-[#313131]"
+                />
+                <LabelPicker
+                  threadIds={id ? [id] : []}
+                  threadMailboxIds={[threadMailboxIds]}
+                  className="h-7 w-7 bg-white dark:bg-[#313131]"
+                />
 
                 {!isInBin && (
                   <TooltipProvider delayDuration={0}>
