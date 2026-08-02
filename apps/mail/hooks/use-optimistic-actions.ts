@@ -1,5 +1,9 @@
+import {
+  optimisticActionsManager,
+  settlePendingAction,
+  type PendingAction,
+} from '@/lib/optimistic-actions-manager';
 import { addOptimisticActionAtom, removeOptimisticActionAtom } from '@/store/optimistic-updates';
-import { optimisticActionsManager, type PendingAction } from '@/lib/optimistic-actions-manager';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -71,13 +75,22 @@ export function useOptimisticActions() {
       queryClient.refetchQueries({
         queryKey: trpc.mail.view.threadPage.infiniteQueryKey(),
       }),
+      queryClient.refetchQueries({
+        queryKey: trpc.mail.view.threadDetail.queryKey(),
+      }),
       account
         ? queryClient.refetchQueries({
             queryKey: trpc.mail.mailbox.get.queryKey({ accountId: account.id }),
           })
         : Promise.resolve(),
     ]);
-  }, [account, queryClient, trpc.mail.mailbox.get, trpc.mail.view.threadPage]);
+  }, [
+    account,
+    queryClient,
+    trpc.mail.mailbox.get,
+    trpc.mail.view.threadDetail,
+    trpc.mail.view.threadPage,
+  ]);
 
   function createPendingAction({
     type,
@@ -99,20 +112,11 @@ export function useOptimisticActions() {
   }) {
     const pendingActionId = generatePendingActionId();
     optimisticActionsManager.lastActionId = pendingActionId;
-    console.log('here Generated pending action ID:', pendingActionId);
 
     if (!optimisticActionsManager.pendingActionsByType.has(type)) {
-      console.log('here Creating new Set for action type:', type);
       optimisticActionsManager.pendingActionsByType.set(type, new Set());
     }
     optimisticActionsManager.pendingActionsByType.get(type)?.add(pendingActionId);
-    console.log(
-      'here',
-      'Added pending action to type:',
-      type,
-      'Current size:',
-      optimisticActionsManager.pendingActionsByType.get(type)?.size,
-    );
 
     const pendingAction = {
       id: pendingActionId,
@@ -127,29 +131,28 @@ export function useOptimisticActions() {
     optimisticActionsManager.pendingActions.set(pendingActionId, pendingAction as PendingAction);
 
     const itemCount = threadIds.length;
-    const bulkActionMessage = itemCount > 1 ? m['common.actions.bulkAction']({ message: toastMessage, count: itemCount }) : toastMessage;
+    const bulkActionMessage =
+      itemCount > 1
+        ? m['common.actions.bulkAction']({ message: toastMessage, count: itemCount })
+        : toastMessage;
 
     async function doAction() {
       try {
         await execute();
-        const typeActions = optimisticActionsManager.pendingActionsByType.get(type);
-        console.log('here', {
-          pendingActionsByTypeRef: optimisticActionsManager.pendingActionsByType.get(type)?.size,
-          pendingActionsRef: optimisticActionsManager.pendingActions.size,
-          typeActions: typeActions?.size,
-        });
+        const { shouldRefresh } = settlePendingAction(
+          optimisticActionsManager,
+          pendingActionId,
+          type,
+        );
 
-        optimisticActionsManager.pendingActions.delete(pendingActionId);
-        optimisticActionsManager.pendingActionsByType.get(type)?.delete(pendingActionId);
-        if (typeActions?.size === 1) {
+        if (shouldRefresh) {
           await refreshData();
-          removeOptimisticAction(optimisticId);
         }
+        removeOptimisticAction(optimisticId);
       } catch (error) {
         console.error('Action failed:', error);
         removeOptimisticAction(optimisticId);
-        optimisticActionsManager.pendingActions.delete(pendingActionId);
-        optimisticActionsManager.pendingActionsByType.get(type)?.delete(pendingActionId);
+        settlePendingAction(optimisticActionsManager, pendingActionId, type);
         await refreshData();
         toast.error(m['common.actions.actionFailed']());
       }
@@ -167,8 +170,7 @@ export function useOptimisticActions() {
           label: m['common.actions.undo'](),
           onClick: () => {
             undo();
-            optimisticActionsManager.pendingActions.delete(pendingActionId);
-            optimisticActionsManager.pendingActionsByType.get(type)?.delete(pendingActionId);
+            settlePendingAction(optimisticActionsManager, pendingActionId, type);
           },
         },
         duration: 5000,
@@ -579,11 +581,11 @@ export function useOptimisticActions() {
     if (!lastAction) return;
 
     lastAction.undo();
-
-    optimisticActionsManager.pendingActions.delete(optimisticActionsManager.lastActionId);
-    optimisticActionsManager.pendingActionsByType
-      .get(lastAction.type)
-      ?.delete(optimisticActionsManager.lastActionId);
+    settlePendingAction(
+      optimisticActionsManager,
+      optimisticActionsManager.lastActionId,
+      lastAction.type,
+    );
 
     if (lastAction.toastId) {
       toast.dismiss(lastAction.toastId);

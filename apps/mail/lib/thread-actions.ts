@@ -9,6 +9,19 @@ export interface MoveThreadOptions {
   destination: ThreadDestination;
 }
 
+export function getArchiveToggleDestination(folder: FolderLocation): 'archive' | 'inbox' {
+  return folder === FOLDERS.ARCHIVE ? 'inbox' : 'archive';
+}
+
+export function getImportantToggleAction(isImportant: boolean): {
+  important: boolean;
+  label: 'markAsImportant' | 'removeFromImportant';
+} {
+  return isImportant
+    ? { important: false, label: 'removeFromImportant' }
+    : { important: true, label: 'markAsImportant' };
+}
+
 export function isActionAvailable(folder: FolderLocation, action: ThreadDestination): boolean {
   if (!action) return false;
 

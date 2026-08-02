@@ -15,6 +15,7 @@ import {
   type ComponentProps,
   useState,
 } from 'react';
+import { getArchiveToggleDestination, type ThreadDestination } from '@/lib/thread-actions';
 import { useOptimisticThreadState } from '@/components/mail/optimistic-thread-state';
 import { focusedIndexAtom, useMailNavigation } from '@/hooks/use-mail-navigation';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -24,7 +25,6 @@ import { ThreadContextMenu } from '@/components/context/thread-context';
 import { useOptimisticActions } from '@/hooks/use-optimistic-actions';
 import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
 import { useMail, type Config } from '@/components/mail/use-mail';
-import { type ThreadDestination } from '@/lib/thread-actions';
 import { useSearchValue } from '@/hooks/use-search-value';
 import { EmptyStateIcon } from '../icons/empty-state-svg';
 import { highlightText } from '@/lib/email-utils.client';
@@ -316,7 +316,7 @@ const Thread = memo(
                     className="h-6 w-6 [&_svg]:size-3.5"
                     onClick={(e) => {
                       e.stopPropagation();
-                      moveThreadTo('archive');
+                      moveThreadTo(getArchiveToggleDestination(folder ?? FOLDERS.INBOX));
                     }}
                   >
                     <Archive2 className="fill-[#9D9D9D]" />
@@ -326,7 +326,9 @@ const Thread = memo(
                   side={index === 0 ? 'bottom' : 'top'}
                   className="dark:bg-panelDark mb-1 bg-white"
                 >
-                  {m['common.threadDisplay.archive']()}
+                  {folder === FOLDERS.ARCHIVE
+                    ? m['common.mail.unarchive']()
+                    : m['common.threadDisplay.archive']()}
                 </TooltipContent>
               </Tooltip>
               {!isFolderBin ? (
@@ -667,7 +669,7 @@ const Draft = memo(function Draft({
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 hover:bg-[#FDE4E9] dark:hover:bg-[#411D23] [&_svg]:size-3.5"
-                          aria-label={m['common.mail.deleteDraft']()}
+                aria-label={m['common.mail.deleteDraft']()}
                 disabled={optimisticState.isRemoving}
                 onClick={handleDeleteDraft}
               >
@@ -694,9 +696,7 @@ const Draft = memo(function Draft({
                     )}
                   >
                     <span className={cn('max-w-[25ch] truncate text-sm')}>
-                      {cleanNameDisplay(
-                        draft?.to?.[0] || m['common.mail.noRecipient'](),
-                      ) || ''}
+                      {cleanNameDisplay(draft?.to?.[0] || m['common.mail.noRecipient']()) || ''}
                     </span>
                   </span>
                 </div>

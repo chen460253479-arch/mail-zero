@@ -18,6 +18,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  getArchiveToggleDestination,
+  getImportantToggleAction,
+  type ThreadDestination,
+} from '@/lib/thread-actions';
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -30,18 +35,19 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useOptimisticThreadState } from '@/components/mail/optimistic-thread-state';
 import { useOptimisticActions } from '@/hooks/use-optimistic-actions';
 import { focusedIndexAtom } from '@/hooks/use-mail-navigation';
-import { type ThreadDestination } from '@/lib/thread-actions';
 import { handleUnsubscribe } from '@/lib/email-utils.client';
 import { useThread, useThreads } from '@/hooks/use-threads';
 import { EmptyStateIcon } from '../icons/empty-state-svg';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { ParsedMessage, Attachment } from '@/types';
+import { getDateLocale } from '@/lib/i18n/date-locale';
 import { useAnimations } from '@/hooks/use-animations';
 import { AnimatePresence, motion } from 'motion/react';
 import { MailDisplaySkeleton } from './mail-skeleton';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useMailDelivery } from '@/modules/mail';
 import { Button } from '@/components/ui/button';
+import { getLocale } from '@/paraglide/runtime';
 import { cleanHtml } from '@/lib/email-utils';
 import ReplyCompose from './reply-composer';
 import { NotesPanel } from './note-panel';
@@ -54,8 +60,6 @@ import { useQueryState } from 'nuqs';
 import { format } from 'date-fns';
 import { useAtom } from 'jotai';
 import { toast } from 'sonner';
-import { getDateLocale } from '@/lib/i18n/date-locale';
-import { getLocale } from '@/paraglide/runtime';
 
 const formatFileSize = (size: number) => {
   const sizeInMB = (size / (1024 * 1024)).toFixed(2);
@@ -198,6 +202,7 @@ export function ThreadDisplay() {
 
   // Get optimistic state for this thread
   const optimisticState = useOptimisticThreadState(id ?? '');
+  const displayImportant = optimisticState.optimisticImportant ?? isImportant;
 
   const handleNext = useCallback(() => {
     if (!id || !items.length || focusedIndex === null) return setThreadId(null);
@@ -598,8 +603,7 @@ export function ThreadDisplay() {
               <div class="email-body">
                 <div class="email-content">
                   ${cleanHtml(
-                    message.decodedBody ??
-                      `<p><em>${m['common.mail.noEmailContent']()}</em></p>`,
+                    message.decodedBody ?? `<p><em>${m['common.mail.noEmailContent']()}</em></p>`,
                   )}
                 </div>
               </div>
@@ -675,8 +679,9 @@ export function ThreadDisplay() {
 
   const handleToggleImportant = useCallback(async () => {
     if (!emailData || !id) return;
-    optimisticToggleImportant([id], !isImportant);
-  }, [emailData, id, isImportant, optimisticToggleImportant]);
+    const action = getImportantToggleAction(displayImportant);
+    optimisticToggleImportant([id], action.important);
+  }, [displayImportant, emailData, id, optimisticToggleImportant]);
 
   // Set initial star state based on email data
   useEffect(() => {
@@ -756,7 +761,7 @@ export function ThreadDisplay() {
                     <Mail className="mr-1 h-3.5 w-3.5 fill-[#959595]" />
                     <div className="flex items-center justify-center gap-2.5 px-0.5">
                       <div className="dark:text-base-gray-950 justify-start text-sm leading-none">
-                    {m['common.mail.sendEmail']()}
+                        {m['common.mail.sendEmail']()}
                       </div>
                     </div>
                   </button>
@@ -849,14 +854,16 @@ export function ThreadDisplay() {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
-                        onClick={() => moveThreadTo('archive')}
+                        onClick={() => moveThreadTo(getArchiveToggleDestination(folder))}
                         className="inline-flex h-7 w-7 cursor-pointer items-center justify-center gap-1 overflow-hidden rounded-lg bg-white transition-colors hover:bg-gray-100 dark:bg-[#313131] dark:hover:bg-[#404040]"
                       >
                         <Archive className="fill-iconLight dark:fill-iconDark" />
                       </button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="bg-white dark:bg-[#313131]">
-                      {m['common.threadDisplay.archive']()}
+                      {isInArchive
+                        ? m['common.mail.unarchive']()
+                        : m['common.threadDisplay.archive']()}
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -883,7 +890,7 @@ export function ThreadDisplay() {
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-              aria-label={m['common.mail.threadActions']()}
+                      aria-label={m['common.mail.threadActions']()}
                       aria-haspopup="menu"
                       className="focus:outline-hidden inline-flex h-7 w-7 cursor-pointer items-center justify-center gap-1 overflow-hidden rounded-lg bg-white transition-colors focus:ring-0 dark:bg-[#313131]"
                     >
@@ -929,12 +936,12 @@ export function ThreadDisplay() {
                         ) : null}
                       </>
                     )}
-                    {!isImportant && (
-                      <DropdownMenuItem onClick={handleToggleImportant}>
-                        <Lightning className="fill-iconLight dark:fill-iconDark mr-2" />
-                        {m['common.mail.markAsImportant']()}
-                      </DropdownMenuItem>
-                    )}
+                    <DropdownMenuItem onClick={handleToggleImportant}>
+                      <Lightning className="fill-iconLight dark:fill-iconDark mr-2" />
+                      {getImportantToggleAction(displayImportant).label === 'removeFromImportant'
+                        ? m['common.mail.removeFromImportant']()
+                        : m['common.mail.markAsImportant']()}
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>

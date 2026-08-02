@@ -22,10 +22,28 @@ export type PendingAction = BasePendingAction &
     | { type: 'DELETE_DRAFT'; params: Record<string, never> }
   );
 
-class OptimisticActionsManager {
+export class OptimisticActionsManager {
   pendingActions: Map<string, PendingAction> = new Map();
   pendingActionsByType: Map<string, Set<string>> = new Map();
   lastActionId: string | null = null;
 }
+
+export const settlePendingAction = (
+  manager: OptimisticActionsManager,
+  actionId: string,
+  type: PendingAction['type'],
+): { shouldRefresh: boolean } => {
+  manager.pendingActions.delete(actionId);
+
+  const typeActions = manager.pendingActionsByType.get(type);
+  typeActions?.delete(actionId);
+
+  const shouldRefresh = typeActions === undefined || typeActions.size === 0;
+  if (typeActions?.size === 0) {
+    manager.pendingActionsByType.delete(type);
+  }
+
+  return { shouldRefresh };
+};
 
 export const optimisticActionsManager = new OptimisticActionsManager();
