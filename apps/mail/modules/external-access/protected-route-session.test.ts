@@ -3,6 +3,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { loadProtectedRouteSession } from '../auth/protected-route-session';
 import routes from '../../app/routes';
 
+vi.mock('@/paraglide/messages', () => ({
+  m: new Proxy(
+    {},
+    {
+      get: () => () => '',
+    },
+  ),
+}));
+
 type TestRoute = {
   file?: string;
   path?: string;
