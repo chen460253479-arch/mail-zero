@@ -36,25 +36,25 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { getMainSearchTerm } from '@/lib/utils';
 import { DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { useMailboxLabels } from '@/hooks/use-mailbox-labels';
+import { useActiveConnection } from '@/hooks/use-connections';
 import { useSearchValue } from '@/hooks/use-search-value';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLocation, useNavigate } from 'react-router';
+import { getDateLocale } from '@/lib/i18n/date-locale';
 import { navigationConfig } from '@/config/navigation';
 import { Separator } from '@/components/ui/separator';
 import { Calendar } from '@/components/ui/calendar';
 import { useThreads } from '@/hooks/use-threads';
-import { useLabels } from '@/hooks/use-labels';
-import { useActiveConnection } from '@/hooks/use-connections';
+import { getLocale } from '@/paraglide/runtime';
+import { getMainSearchTerm } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { format, subDays } from 'date-fns';
-import { getDateLocale } from '@/lib/i18n/date-locale';
 import { VisuallyHidden } from 'radix-ui';
 import { m } from '@/paraglide/messages';
-import { getLocale } from '@/paraglide/runtime';
 import { Pencil2 } from '../icons/icons';
 import { Button } from '../ui/button';
 import { useQueryState } from 'nuqs';
@@ -197,7 +197,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
-  const { userLabels = [] } = useLabels({ enabled: Boolean(activeConnection) });
+  const { labels: userLabels } = useMailboxLabels({ enabled: Boolean(activeConnection) });
 
   useEffect(() => {
     setRecentSearches(getRecentSearches());
@@ -536,7 +536,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
             id: `search-${Date.now()}`,
             type: 'search',
             value: query,
-          display: m['common.commandPalette.mailSearch.searchDisplay']({ query }),
+            display: m['common.commandPalette.mailSearch.searchDisplay']({ query }),
           };
           addFilter(searchFilter);
         }
@@ -762,7 +762,9 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
       {activeFilters.length > 0 && (
         <div className="border-b px-3 py-2">
           <div className="mb-1 flex items-center justify-between">
-            <span className="text-muted-foreground text-xs">{m['common.commandPalette.mailSearch.activeFilters']()}</span>
+            <span className="text-muted-foreground text-xs">
+              {m['common.commandPalette.mailSearch.activeFilters']()}
+            </span>
             <Button
               variant="ghost"
               size="sm"
@@ -806,9 +808,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
           {isProcessing ? (
             <Loader2 className="m-auto h-4 w-4 animate-spin" />
           ) : (
-            <>
-              {m['common.commandPalette.mailSearch.noResultsInFolder']({ key: 'ENTER' })}
-            </>
+            <>{m['common.commandPalette.mailSearch.noResultsInFolder']({ key: 'ENTER' })}</>
           )}
         </CommandEmpty>
         {allCommands.map((group, groupIndex) => (
@@ -954,10 +954,14 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
                 >
                   <Mail className="h-4 w-4 opacity-60" />
                   <div className="ml-2 flex flex-1 flex-col overflow-hidden">
-                    <span className="truncate font-medium">{thread.subject || m['common.commandPalette.mailSearch.noSubject']()}</span>
+                    <span className="truncate font-medium">
+                      {thread.subject || m['common.commandPalette.mailSearch.noSubject']()}
+                    </span>
                     <span className="text-muted-foreground truncate text-xs">
-                      {thread.from?.name || thread.from?.email || m['common.commandPalette.mailSearch.unknownSender']()} -{' '}
-                      {thread.snippet || ''}
+                      {thread.from?.name ||
+                        thread.from?.email ||
+                        m['common.commandPalette.mailSearch.unknownSender']()}{' '}
+                      - {thread.snippet || ''}
                     </span>
                   </div>
                 </CommandItem>
@@ -969,12 +973,19 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
             <CommandGroup heading={m['common.commandPalette.mailSearch.searchSuggestions']()}>
               <CommandItem onSelect={() => handleSearch(searchQuery)} disabled={isProcessing}>
                 <Search className="h-4 w-4 opacity-60" />
-                <span className="ml-2">{m['common.commandPalette.mailSearch.searchFor']({ query: searchQuery })}</span>
+                <span className="ml-2">
+                  {m['common.commandPalette.mailSearch.searchFor']({ query: searchQuery })}
+                </span>
               </CommandItem>
 
-              <CommandItem onSelect={() => handleSearch(`"${searchQuery}"`)} disabled={isProcessing}>
+              <CommandItem
+                onSelect={() => handleSearch(`"${searchQuery}"`)}
+                disabled={isProcessing}
+              >
                 <Search className="relative top-2 h-4 w-4 opacity-60" />
-                <span className="ml-2">{m['common.commandPalette.mailSearch.exactMatch']({ query: searchQuery })}</span>
+                <span className="ml-2">
+                  {m['common.commandPalette.mailSearch.exactMatch']({ query: searchQuery })}
+                </span>
               </CommandItem>
 
               {searchQuery.includes('@') && (
@@ -983,7 +994,9 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
                   disabled={isProcessing}
                 >
                   <Mail className="h-4 w-4 opacity-60" />
-                  <span className="ml-2">{m['common.commandPalette.mailSearch.fromSearch']({ query: searchQuery })}</span>
+                  <span className="ml-2">
+                    {m['common.commandPalette.mailSearch.fromSearch']({ query: searchQuery })}
+                  </span>
                 </CommandItem>
               )}
 
@@ -992,7 +1005,9 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
                 disabled={isProcessing}
               >
                 <FileText className="h-4 w-4 opacity-60" />
-                <span className="ml-2">{m['common.commandPalette.mailSearch.subjectContains']({ query: searchQuery })}</span>
+                <span className="ml-2">
+                  {m['common.commandPalette.mailSearch.subjectContains']({ query: searchQuery })}
+                </span>
               </CommandItem>
 
               <CommandItem
@@ -1000,7 +1015,9 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
                 disabled={isProcessing}
               >
                 <Hash className="h-4 w-4 opacity-60" />
-                <span className="ml-2">{m['common.commandPalette.mailSearch.bodyContains']({ query: searchQuery })}</span>
+                <span className="ml-2">
+                  {m['common.commandPalette.mailSearch.bodyContains']({ query: searchQuery })}
+                </span>
               </CommandItem>
             </CommandGroup>
           )}
@@ -1049,7 +1066,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
               }
             }}
           >
-            <ArrowLeft className="h-4 w-4"/>
+            <ArrowLeft className="h-4 w-4" />
           </button>
           <CommandInput
             autoFocus
@@ -1211,7 +1228,9 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
                                 id: `filter-${Date.now()}`,
                                 type: 'from',
                                 value: newQuery,
-                                display: m['common.commandPalette.mailSearch.fromSearch']({ query: email }),
+                                display: m['common.commandPalette.mailSearch.fromSearch']({
+                                  query: email,
+                                }),
                               };
                               addFilter(activeFilter);
                               executeSearch(newQuery);
@@ -1240,7 +1259,9 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
         ) : selectedDateFilter === 'between' ? (
           <div className="px-4 py-4">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-sm font-medium">{m['common.commandPalette.mailSearch.selectDateRange']()}</h3>
+              <h3 className="text-sm font-medium">
+                {m['common.commandPalette.mailSearch.selectDateRange']()}
+              </h3>
               <button
                 onClick={() => {
                   setSelectedDateFilter(null);
@@ -1254,7 +1275,9 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
             </div>
             <div className="space-y-4">
               <div>
-                <Label className="text-xs">{m['common.commandPalette.mailSearch.startDate']()}</Label>
+                <Label className="text-xs">
+                  {m['common.commandPalette.mailSearch.startDate']()}
+                </Label>
                 <Calendar
                   mode="single"
                   selected={dateRangeStart}
@@ -1337,11 +1360,11 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
                       id: `filter-${Date.now()}`,
                       type: selectedDateFilter,
                       value: filterValue,
-                          display: `${
-                            selectedDateFilter === 'after'
-                              ? m['common.commandPalette.mailSearch.after']()
-                              : m['common.commandPalette.mailSearch.before']()
-                          } ${format(date, 'MMM d, yyyy', { locale: dateLocale })}`,
+                      display: `${
+                        selectedDateFilter === 'after'
+                          ? m['common.commandPalette.mailSearch.after']()
+                          : m['common.commandPalette.mailSearch.before']()
+                      } ${format(date, 'MMM d, yyyy', { locale: dateLocale })}`,
                     };
                     addFilter(activeFilter);
                     executeSearch(filterValue);
@@ -1363,7 +1386,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
           className="text-muted-foreground hover:text-foreground ml-2"
           onClick={() => setCurrentView('filter')}
         >
-          <ArrowLeft className="h-4 w-4"/>
+          <ArrowLeft className="h-4 w-4" />
         </button>
         <CommandInput
           autoFocus
@@ -1398,7 +1421,9 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
                           id: `filter-${Date.now()}`,
                           type: 'label',
                           value: filterValue,
-                          display: m['common.commandPalette.mailSearch.labelDisplay']({ label: label.name }),
+                          display: m['common.commandPalette.mailSearch.labelDisplay']({
+                            label: label.name,
+                          }),
                         };
                         addFilter(activeFilter);
                         executeSearch(filterValue);
@@ -1411,7 +1436,9 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
                         style={{ backgroundColor: label.color.backgroundColor }}
                       />
                     )}
-                    <span className="text-sm">{label.name || m['common.commandPalette.mailSearch.unnamedLabel']()}</span>
+                    <span className="text-sm">
+                      {label.name || m['common.commandPalette.mailSearch.unnamedLabel']()}
+                    </span>
                     {/* {selectedLabels.includes(label.id || '') && (
                       <Check className="ml-auto h-4 w-4" />
                     )} */}
@@ -1471,7 +1498,9 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
       <ScrollArea className="h-[400px]">
         <div className="p-4">
           {savedSearches.length === 0 ? (
-            <p className="text-muted-foreground text-center text-sm">{m['common.commandPalette.mailSearch.noSavedSearches']()}</p>
+            <p className="text-muted-foreground text-center text-sm">
+              {m['common.commandPalette.mailSearch.noSavedSearches']()}
+            </p>
           ) : (
             <div className="space-y-2">
               {savedSearches.map((search) => (
@@ -1527,7 +1556,9 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
                 <div key={filterType}>
                   <Label className="text-sm">{filter.name}</Label>
                   <Input
-                    placeholder={m['common.commandPalette.mailSearch.enterFilter']({ filter: filter.name })}
+                    placeholder={m['common.commandPalette.mailSearch.enterFilter']({
+                      filter: filter.name,
+                    })}
                     value={filterBuilderState[filterType] || ''}
                     onChange={(e) =>
                       setFilterBuilderState({
@@ -1588,7 +1619,9 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">{m['common.commandPalette.mailSearch.before']()}</Label>
+                  <Label className="text-xs">
+                    {m['common.commandPalette.mailSearch.before']()}
+                  </Label>
                   <Input
                     type="date"
                     value={filterBuilderState.beforeDate || ''}
@@ -1681,19 +1714,27 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
       <ScrollArea className="h-[400px]">
         <div className="space-y-4 p-4">
           <div>
-            <h4 className="mb-2 font-medium">{m['common.commandPalette.mailSearch.basicFilters']()}</h4>
+            <h4 className="mb-2 font-medium">
+              {m['common.commandPalette.mailSearch.basicFilters']()}
+            </h4>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <code className="bg-muted rounded px-2 py-1">from:email@example.com</code>
-                <span className="text-muted-foreground">{m['common.commandPalette.mailSearch.emailsFromSender']()}</span>
+                <span className="text-muted-foreground">
+                  {m['common.commandPalette.mailSearch.emailsFromSender']()}
+                </span>
               </div>
               <div className="flex justify-between">
                 <code className="bg-muted rounded px-2 py-1">to:email@example.com</code>
-                <span className="text-muted-foreground">{m['common.commandPalette.mailSearch.emailsToRecipient']()}</span>
+                <span className="text-muted-foreground">
+                  {m['common.commandPalette.mailSearch.emailsToRecipient']()}
+                </span>
               </div>
               <div className="flex justify-between">
                 <code className="bg-muted rounded px-2 py-1">subject:"meeting notes"</code>
-                <span className="text-muted-foreground">{m['common.commandPalette.mailSearch.emailsWithSubject']()}</span>
+                <span className="text-muted-foreground">
+                  {m['common.commandPalette.mailSearch.emailsWithSubject']()}
+                </span>
               </div>
             </div>
           </div>
@@ -1701,19 +1742,27 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
           <Separator />
 
           <div>
-            <h4 className="mb-2 font-medium">{m['common.commandPalette.mailSearch.statusFilters']()}</h4>
+            <h4 className="mb-2 font-medium">
+              {m['common.commandPalette.mailSearch.statusFilters']()}
+            </h4>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <code className="bg-muted rounded px-2 py-1">is:unread</code>
-                <span className="text-muted-foreground">{m['common.commandPalette.mailSearch.unreadEmails']()}</span>
+                <span className="text-muted-foreground">
+                  {m['common.commandPalette.mailSearch.unreadEmails']()}
+                </span>
               </div>
               <div className="flex justify-between">
                 <code className="bg-muted rounded px-2 py-1">is:starred</code>
-                <span className="text-muted-foreground">{m['common.commandPalette.mailSearch.starredEmails']()}</span>
+                <span className="text-muted-foreground">
+                  {m['common.commandPalette.mailSearch.starredEmails']()}
+                </span>
               </div>
               <div className="flex justify-between">
                 <code className="bg-muted rounded px-2 py-1">has:attachment</code>
-                <span className="text-muted-foreground">{m['common.commandPalette.mailSearch.emailsWithAttachments']()}</span>
+                <span className="text-muted-foreground">
+                  {m['common.commandPalette.mailSearch.emailsWithAttachments']()}
+                </span>
               </div>
             </div>
           </div>
@@ -1721,19 +1770,27 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
           <Separator />
 
           <div>
-            <h4 className="mb-2 font-medium">{m['common.commandPalette.mailSearch.dateFilters']()}</h4>
+            <h4 className="mb-2 font-medium">
+              {m['common.commandPalette.mailSearch.dateFilters']()}
+            </h4>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <code className="bg-muted rounded px-2 py-1">after:2024/01/01</code>
-                <span className="text-muted-foreground">{m['common.commandPalette.mailSearch.emailsAfterDate']()}</span>
+                <span className="text-muted-foreground">
+                  {m['common.commandPalette.mailSearch.emailsAfterDate']()}
+                </span>
               </div>
               <div className="flex justify-between">
                 <code className="bg-muted rounded px-2 py-1">before:2024/12/31</code>
-                <span className="text-muted-foreground">{m['common.commandPalette.mailSearch.emailsBeforeDate']()}</span>
+                <span className="text-muted-foreground">
+                  {m['common.commandPalette.mailSearch.emailsBeforeDate']()}
+                </span>
               </div>
               <div className="flex justify-between">
                 <code className="bg-muted rounded px-2 py-1">older_than:1d</code>
-                <span className="text-muted-foreground">{m['common.commandPalette.mailSearch.emailsOlderThanDay']()}</span>
+                <span className="text-muted-foreground">
+                  {m['common.commandPalette.mailSearch.emailsOlderThanDay']()}
+                </span>
               </div>
             </div>
           </div>
@@ -1741,7 +1798,9 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
           <Separator />
 
           <div>
-            <h4 className="mb-2 font-medium">{m['common.commandPalette.mailSearch.combiningFilters']()}</h4>
+            <h4 className="mb-2 font-medium">
+              {m['common.commandPalette.mailSearch.combiningFilters']()}
+            </h4>
             <div className="space-y-2 text-sm">
               <p className="text-muted-foreground">
                 {m['common.commandPalette.mailSearch.combiningFiltersDescription']()}
@@ -1755,27 +1814,39 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
           <Separator />
 
           <div>
-            <h4 className="mb-2 font-medium">{m['common.commandPalette.mailSearch.keyboardShortcuts']()}</h4>
+            <h4 className="mb-2 font-medium">
+              {m['common.commandPalette.mailSearch.keyboardShortcuts']()}
+            </h4>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <kbd className="bg-muted rounded px-2 py-1">⌘K</kbd>
-                <span className="text-muted-foreground">{m['common.commandPalette.mailSearch.openCommandPalette']()}</span>
+                <span className="text-muted-foreground">
+                  {m['common.commandPalette.mailSearch.openCommandPalette']()}
+                </span>
               </div>
               <div className="flex justify-between">
                 <kbd className="bg-muted rounded px-2 py-1">⌘F</kbd>
-                <span className="text-muted-foreground">{m['common.commandPalette.mailSearch.openFilters']()}</span>
+                <span className="text-muted-foreground">
+                  {m['common.commandPalette.mailSearch.openFilters']()}
+                </span>
               </div>
               <div className="flex justify-between">
                 <kbd className="bg-muted rounded px-2 py-1">⌘S</kbd>
-                <span className="text-muted-foreground">{m['common.commandPalette.mailSearch.openSearch']()}</span>
+                <span className="text-muted-foreground">
+                  {m['common.commandPalette.mailSearch.openSearch']()}
+                </span>
               </div>
               <div className="flex justify-between">
                 <kbd className="bg-muted rounded px-2 py-1">⌘L</kbd>
-                <span className="text-muted-foreground">{m['common.commandPalette.mailSearch.openLabels']()}</span>
+                <span className="text-muted-foreground">
+                  {m['common.commandPalette.mailSearch.openLabels']()}
+                </span>
               </div>
               <div className="flex justify-between">
                 <kbd className="bg-muted rounded px-2 py-1">ESC</kbd>
-                <span className="text-muted-foreground">{m['common.commandPalette.mailSearch.goBackClose']()}</span>
+                <span className="text-muted-foreground">
+                  {m['common.commandPalette.mailSearch.goBackClose']()}
+                </span>
               </div>
             </div>
           </div>

@@ -19,7 +19,6 @@ import { LabelPicker } from '@/components/mailbox/label-picker';
 import { useActiveConnection } from '@/hooks/use-connections';
 import { Check, ChevronDown, RefreshCcw } from 'lucide-react';
 import { useMediaQuery } from '../../hooks/use-media-query';
-import useSearchLabels from '@/hooks/use-labels-search';
 import * as CustomIcons from '@/components/icons/icons';
 import { MailList } from '@/components/mail/mail-list';
 import { useNavigate, useParams } from 'react-router';
@@ -461,7 +460,10 @@ interface CategoryDropdownProps {
 
 function CategoryDropdown({ isMultiSelectMode }: CategoryDropdownProps) {
   const categorySettings = useCategorySettings();
-  const { setLabels, labels } = useSearchLabels();
+  const defaultCategoryId = useDefaultCategoryId();
+  const [activeCategory, setActiveCategory] = useQueryState('category', {
+    defaultValue: defaultCategoryId,
+  });
   const params = useParams<{ folder: string }>();
   const folder = params?.folder ?? 'inbox';
   const [isOpen, setIsOpen] = useState(false);
@@ -471,13 +473,7 @@ function CategoryDropdown({ isMultiSelectMode }: CategoryDropdownProps) {
     (key) => {
       const category = categorySettings[Number(key.key) - 1];
       if (!category) return;
-      const isCurrentlyActive = labels.includes(category.searchValue);
-
-      if (isCurrentlyActive) {
-        setLabels(labels.filter((label) => label !== category.searchValue));
-      } else {
-        setLabels([...labels, category.searchValue]);
-      }
+      setActiveCategory(category.id);
     },
     {
       scopes: ['mail-list'],
@@ -485,37 +481,6 @@ function CategoryDropdown({ isMultiSelectMode }: CategoryDropdownProps) {
       enableOnFormTags: false,
     },
   );
-
-  const handleLabelChange = (searchValue: string) => {
-    const trimmed = searchValue.trim();
-    if (!trimmed) {
-      setLabels([]);
-      return;
-    }
-
-    const parsedLabels = trimmed
-      .split(',')
-      .map((label) => label.trim())
-      .filter((label) => label.length > 0);
-
-    if (parsedLabels.length === 0) {
-      setLabels([]);
-      return;
-    }
-
-    const currentLabelsSet = new Set(labels);
-    const parsedLabelsSet = new Set(parsedLabels);
-
-    const allLabelsSelected = parsedLabels.every((label) => currentLabelsSet.has(label));
-
-    if (allLabelsSelected) {
-      const updatedLabels = labels.filter((label) => !parsedLabelsSet.has(label));
-      setLabels(updatedLabels);
-    } else {
-      const newLabelsSet = new Set([...labels, ...parsedLabels]);
-      setLabels(Array.from(newLabelsSet));
-    }
-  };
 
   if (folder !== 'inbox' || isMultiSelectMode) return null;
 
@@ -532,9 +497,8 @@ function CategoryDropdown({ isMultiSelectMode }: CategoryDropdownProps) {
           aria-haspopup="menu"
         >
           <span className="text-sm font-medium">
-            {labels.length > 0
-              ? m['common.mail.viewCount']({ count: labels.length })
-              : m['navigation.settings.categories']()}
+            {categorySettings.find((category) => category.id === activeCategory)?.name ??
+              m['navigation.settings.categories']()}
           </span>
           <ChevronDown
             className={cn(
@@ -557,20 +521,16 @@ function CategoryDropdown({ isMultiSelectMode }: CategoryDropdownProps) {
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              handleLabelChange(category.searchValue);
+              setActiveCategory(category.id);
             }}
             role="menuitemcheckbox"
-            aria-checked={labels.includes(category.id)}
+            aria-checked={activeCategory === category.id}
           >
             <span className="text-foreground font-medium capitalize">
               {category.name.toLowerCase()}
             </span>
             {/* Special case: empty searchValue means "All Mail" - shows everything */}
-            {(category.searchValue === ''
-              ? labels.length === 0
-              : category.searchValue.split(',').some((val) => labels.includes(val))) && (
-              <Check className="text-primary ml-auto h-4 w-4" />
-            )}
+            {activeCategory === category.id && <Check className="text-primary ml-auto h-4 w-4" />}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

@@ -28,13 +28,13 @@ import { useOptimisticActions } from '@/hooks/use-optimistic-actions';
 import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
 import { useMail, type Config } from '@/components/mail/use-mail';
 import { LabelPicker } from '@/components/mailbox/label-picker';
+import { useMailboxLabels } from '@/hooks/use-mailbox-labels';
 import { useSearchValue } from '@/hooks/use-search-value';
 import { EmptyStateIcon } from '../icons/empty-state-svg';
 import { highlightText } from '@/lib/email-utils.client';
 import { useIsFetching } from '@tanstack/react-query';
 import { cn, FOLDERS, formatDate } from '@/lib/utils';
 import { useTRPC } from '@/providers/query-provider';
-import { useThreadLabels } from '@/hooks/use-labels';
 import { useSettings } from '@/hooks/use-settings';
 import { useKeyState } from '@/hooks/use-hot-key';
 import { useThreads } from '@/hooks/use-threads';
@@ -213,9 +213,9 @@ const Thread = memo(
       [idToUse, folder, optimisticMoveThreadsTo, handleNext],
     );
 
-    const { labels: threadLabels } = useThreadLabels(
-      optimisticLabels ? optimisticLabels.map((l) => l.id) : [],
-    );
+    const { labels: threadLabels } = useMailboxLabels({
+      ids: optimisticLabels ? optimisticLabels.map((label) => label.id) : [],
+    });
 
     const [mailState, setMail] = useMail();
     const { isMailSelected, isMailBulkSelected } = useMemo(() => {

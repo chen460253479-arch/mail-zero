@@ -18,10 +18,11 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
+import { getCategoryDisplayName, type CategorySetting } from '@/hooks/use-categories';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { SettingsCard } from '@/components/settings/settings-card';
 import { Check, ChevronDown, Trash2, Plus } from 'lucide-react';
-import { getCategoryDisplayName, type CategorySetting } from '@/hooks/use-categories';
+import { useMailboxLabels } from '@/hooks/use-mailbox-labels';
 import { defaultMailCategories } from '@zero/server/schemas';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTRPC } from '@/providers/query-provider';
@@ -30,7 +31,6 @@ import type { DragEndEvent } from '@dnd-kit/core';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { useSortable } from '@dnd-kit/sortable';
-import { useLabels } from '@/hooks/use-labels';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -218,8 +218,15 @@ export default function CategoriesSettingsPage() {
   const { data } = useSettings();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { userLabels, systemLabels } = useLabels();
-  const allLabels = useMemo(() => [...systemLabels, ...userLabels], [systemLabels, userLabels]);
+  const { labels } = useMailboxLabels();
+  const allLabels = useMemo(
+    () => [
+      { id: '$important', name: 'IMPORTANT', type: 'system' },
+      { id: '$flagged', name: 'STARRED', type: 'system' },
+      ...labels.map((label) => ({ id: label.id, name: label.name, type: 'label' })),
+    ],
+    [labels],
+  );
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const { mutateAsync: saveUserSettings } = useMutation(trpc.settings.save.mutationOptions());

@@ -1,9 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
-import { useTRPC } from '@/providers/query-provider';
-import type { Label } from '@/types';
 import type { CustomMailboxKind } from '../model/mailbox';
+import { useTRPC } from '@/providers/query-provider';
 
 import {
   buildCreateMailboxInput,
@@ -14,10 +13,6 @@ import { useMailboxes } from '../queries/use-mailboxes';
 
 function nextClientId() {
   return globalThis.crypto?.randomUUID?.() ?? `mailbox-${Date.now()}`;
-}
-
-function getLabelColor(color: Label['color']) {
-  return color?.backgroundColor;
 }
 
 export type CreateMailboxActionInput = {
@@ -54,14 +49,7 @@ export function useMailboxActions() {
   }, [account, queryClient, trpc.mail.mailbox.get]);
 
   const createMailbox = useCallback(
-    async ({
-      name,
-      kind,
-      parentId,
-      color,
-      sortOrder,
-      isSubscribed,
-    }: CreateMailboxActionInput) => {
+    async ({ name, kind, parentId, color, sortOrder, isSubscribed }: CreateMailboxActionInput) => {
       if (!account) throw new Error('No active mail account');
 
       const clientId = nextClientId();
@@ -107,14 +95,7 @@ export function useMailboxActions() {
   );
 
   const updateMailbox = useCallback(
-    async ({
-      id,
-      name,
-      parentId,
-      color,
-      sortOrder,
-      isSubscribed,
-    }: UpdateMailboxActionInput) => {
+    async ({ id, name, parentId, color, sortOrder, isSubscribed }: UpdateMailboxActionInput) => {
       if (!account) throw new Error('No active mail account');
 
       const result = await setMailbox.mutateAsync(
@@ -186,36 +167,11 @@ export function useMailboxActions() {
     [account, invalidateMailboxes, mailboxState, setMailbox],
   );
 
-  const createLabel = useCallback(
-    ({ name, color }: Pick<Label, 'name' | 'color'>) =>
-      createMailbox({
-        name,
-        kind: 'label',
-        parentId: null,
-        color: getLabelColor(color),
-      }),
-    [createMailbox],
-  );
-
-  const updateLabel = useCallback(
-    ({ id, name, color }: Pick<Label, 'id' | 'name' | 'color'>) =>
-      updateMailbox({ id, name, color: getLabelColor(color) }),
-    [updateMailbox],
-  );
-
-  const deleteLabel = useCallback(
-    ({ id }: Pick<Label, 'id'>) => destroyMailbox({ id }),
-    [destroyMailbox],
-  );
-
   return {
     createMailbox,
     updateMailbox,
     updateMailboxes,
     destroyMailbox,
-    createLabel,
-    updateLabel,
-    deleteLabel,
     isPending: setMailbox.isPending,
   };
 }

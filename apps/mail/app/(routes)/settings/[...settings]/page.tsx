@@ -6,7 +6,7 @@ import SecurityPage from '../security/page';
 import { m } from '@/paraglide/messages';
 import GeneralPage from '../general/page';
 import { useParams } from 'react-router';
-import LabelsPage from '../labels/page';
+import MailboxesPage from '../mailboxes/page';
 
 const settingsPages: Record<string, React.ComponentType> = {
   general: GeneralPage,
@@ -15,7 +15,7 @@ const settingsPages: Record<string, React.ComponentType> = {
   appearance: AppearancePage,
   shortcuts: ShortcutsPage,
   notifications: NotificationsPage,
-  labels: LabelsPage,
+  mailboxes: MailboxesPage,
 };
 
 export default function SettingsPage() {

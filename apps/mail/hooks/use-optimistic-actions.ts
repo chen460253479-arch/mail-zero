@@ -461,51 +461,6 @@ export function useOptimisticActions() {
     [addOptimisticAction, removeOptimisticAction, setMail, updateKeyword],
   );
 
-  function optimisticToggleLabel(threadIds: string[], labelId: string, add: boolean) {
-    if (!threadIds.length || !labelId) return;
-
-    const optimisticId = addOptimisticAction({
-      type: 'LABEL',
-      threadIds,
-      labelIds: [labelId],
-      add,
-    });
-
-    createPendingAction({
-      type: 'LABEL',
-      threadIds,
-      params: { labelId, add },
-      optimisticId,
-      execute: async () => {
-        if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
-        const result = await updateThreads(
-          buildSetThreadLabelsAction({
-            accountId: account.id,
-            threadIds,
-            addLabelIds: add ? [labelId] : [],
-            removeLabelIds: add ? [] : [labelId],
-            mailboxes,
-            ...(mailboxState ? { ifInState: mailboxState } : {}),
-            clientMutationId: mutationId(),
-          }),
-        );
-        if (Object.keys(result.failed).length > 0) {
-          throw new Error('THREAD_LABEL_PARTIAL_FAILURE');
-        }
-
-        if (mail.bulkSelected.length > 0) {
-          setMail({ ...mail, bulkSelected: [] });
-        }
-      },
-      undo: () => {
-        removeOptimisticAction(optimisticId);
-      },
-      toastMessage: add
-        ? m['common.mail.labelAdded']({ count: threadIds.length })
-        : m['common.mail.labelRemoved']({ count: threadIds.length }),
-    });
-  }
-
   async function setThreadLabels(
     threadIds: string[],
     addLabelIds: string[],
@@ -662,7 +617,6 @@ export function useOptimisticActions() {
     optimisticDeleteThreads,
     permanentlyDeleteThreads,
     optimisticToggleImportant,
-    optimisticToggleLabel,
     setThreadLabels,
     optimisticSnooze,
     optimisticUnsnooze,

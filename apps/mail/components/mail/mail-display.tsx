@@ -14,6 +14,12 @@ import {
   Printer,
 } from '../icons/icons';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
+import {
   Briefcase,
   Star,
   StickyNote,
@@ -22,20 +28,16 @@ import {
   HardDriveDownload,
   CopyIcon,
 } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../ui/dropdown-menu';
 import { cn, formatDate, formatTime, shouldShowSeparateTime } from '@/lib/utils';
 import { memo, useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { EmailVerificationBadge } from './email-verification-badge';
 import type { Sender, ParsedMessage, Attachment } from '@/types';
+import { useMailboxLabels } from '@/hooks/use-mailbox-labels';
 import { useActiveConnection } from '@/hooks/use-connections';
-import { useThreadLabels } from '@/hooks/use-labels';
+import { getDateLocale } from '@/lib/i18n/date-locale';
+import { getLocale } from '@/paraglide/runtime';
 import { useThread } from '@/hooks/use-threads';
 import { BimiAvatar } from '../ui/bimi-avatar';
 import { RenderLabels } from './render-labels';
@@ -48,8 +50,6 @@ import { useQueryState } from 'nuqs';
 import { Badge } from '../ui/badge';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import { getDateLocale } from '@/lib/i18n/date-locale';
-import { getLocale } from '@/paraglide/runtime';
 
 // Add formatFileSize utility function
 const formatFileSize = (size: number) => {
@@ -228,8 +228,8 @@ const ThreadAttachments = ({ attachments }: { attachments: Attachment[] }) => {
     <div className="mt-2 w-full">
       <div className="flex items-center gap-2">
         <span className="text-sm font-medium">
-              {m['common.mail.threadAttachments']()}{' '}
-              <span className="text-[#8D8D8D]">[{attachments.length}]</span>
+          {m['common.mail.threadAttachments']()}{' '}
+          <span className="text-[#8D8D8D]">[{attachments.length}]</span>
         </span>
       </div>
       <div className="mt-2 flex flex-wrap gap-2">
@@ -423,9 +423,9 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
   const collapseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [activeReplyId, setActiveReplyId] = useQueryState('activeReplyId');
-  const { labels: threadLabels } = useThreadLabels(
-    emailData.tags ? emailData.tags.map((l) => l.id) : [],
-  );
+  const { labels: threadLabels } = useMailboxLabels({
+    ids: emailData.tags ? emailData.tags.map((label) => label.id) : [],
+  });
   const { data: activeConnection } = useActiveConnection();
   const isLastEmail = useMemo(
     () => emailData.id === threadData?.latest?.id,
@@ -1258,7 +1258,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                                   }}
                                 >
                                   <HardDriveDownload className="fill-iconLight dark:text-iconDark dark:fill-iconLight mr-2 h-4 w-4" />
-                              {m['common.mail.downloadAllAttachments']()}
+                                  {m['common.mail.downloadAllAttachments']()}
                                 </DropdownMenuItem>
                               )}
                             </DropdownMenuContent>
@@ -1307,7 +1307,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                           </p>
                           {(emailData?.bcc?.length || 0) > 0 && (
                             <p className="text-muted-foreground text-sm font-medium dark:text-[#8C8C8C]">
-                            {m['common.mail.bcc']()}{' '}
+                              {m['common.mail.bcc']()}{' '}
                               {emailData?.bcc?.map((recipient, index) => (
                                 <span key={recipient.email}>
                                   {cleanNameDisplay(recipient.name) ||

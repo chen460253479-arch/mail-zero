@@ -4,9 +4,6 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuShortcut,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '../ui/context-menu';
 import {
@@ -20,24 +17,17 @@ import {
   ReplyAll,
   Star,
   StarOff,
-  Tag,
-  Plus,
   Trash,
 } from 'lucide-react';
 import { useOptimisticThreadState } from '@/components/mail/optimistic-thread-state';
-import { useMemo, type ReactNode, useState, useCallback } from 'react';
 import { useOptimisticActions } from '@/hooks/use-optimistic-actions';
 import { ExclamationCircle, Mail, Clock } from '../icons/icons';
-import { LabelDialog } from '@/components/labels/label-dialog';
 import { SnoozeDialog } from '@/components/mail/snooze-dialog';
 import { type ThreadDestination } from '@/lib/thread-actions';
 import { useThread, useThreads } from '@/hooks/use-threads';
-import { useMailboxActions } from '@/modules/mail';
-import type { Label as LabelType } from '@/types';
-import { useLabels } from '@/hooks/use-labels';
+import { useMemo, type ReactNode, useState } from 'react';
 import { FOLDERS, LABELS } from '@/lib/utils';
 import { useMail } from '../mail/use-mail';
-import { Checkbox } from '../ui/checkbox';
 import { m } from '@/paraglide/messages';
 import { useParams } from 'react-router';
 import { useQueryState } from 'nuqs';
@@ -63,91 +53,6 @@ interface EmailContextMenuProps {
   refreshCallback?: () => void;
 }
 
-const LabelsList = ({
-  threadId,
-  bulkSelected,
-  onCreateLabel,
-}: {
-  threadId: string;
-  bulkSelected: string[];
-  onCreateLabel: () => void;
-}) => {
-  const { userLabels: labels } = useLabels();
-  const { optimisticToggleLabel } = useOptimisticActions();
-  const targetThreadIds = bulkSelected.length > 0 ? bulkSelected : [threadId];
-
-  const { data: thread } = useThread(threadId);
-  const rightClickedThreadOptimisticState = useOptimisticThreadState(threadId);
-
-  if (!labels || !thread) return null;
-
-  const handleToggleLabel = (labelId: string) => {
-    if (!labelId) return;
-
-    // Determine current label state considering optimistic updates
-    let hasLabel = thread!.labels?.some((l) => l.id === labelId) ?? false;
-
-    if (rightClickedThreadOptimisticState.optimisticLabels) {
-      if (rightClickedThreadOptimisticState.optimisticLabels.addedLabelIds.includes(labelId)) {
-        hasLabel = true;
-      } else if (
-        rightClickedThreadOptimisticState.optimisticLabels.removedLabelIds.includes(labelId)
-      ) {
-        hasLabel = false;
-      }
-    }
-
-    optimisticToggleLabel(targetThreadIds, labelId, !hasLabel);
-  };
-
-  // If no labels exist, show create label button
-  if (!labels || labels.length === 0) {
-    return (
-      <ContextMenuItem onClick={onCreateLabel} className="font-normal">
-        <Plus className="mr-2 h-4 w-4 opacity-60" />
-        {m['common.mail.createNewLabel']()}
-      </ContextMenuItem>
-    );
-  }
-
-  return (
-    <>
-      {labels
-        .filter((label) => label.id)
-        .map((label) => {
-          let isChecked = label.id
-            ? (thread!.labels?.some((l) => l.id === label.id) ?? false)
-            : false;
-
-          if (rightClickedThreadOptimisticState.optimisticLabels) {
-            if (
-              rightClickedThreadOptimisticState.optimisticLabels.addedLabelIds.includes(label.id)
-            ) {
-              isChecked = true;
-            } else if (
-              rightClickedThreadOptimisticState.optimisticLabels.removedLabelIds.includes(label.id)
-            ) {
-              isChecked = false;
-            }
-          }
-
-          return (
-            <ContextMenuItem
-              key={label.id}
-              onClick={() => label.id && handleToggleLabel(label.id)}
-              className="font-normal"
-            >
-              <div className="flex items-center">
-                <Checkbox checked={isChecked} className="mr-2 h-4 w-4" />
-                {label.name}
-              </div>
-            </ContextMenuItem>
-          );
-        })}
-    </>
-  );
-};
-
 export function ThreadContextMenu({
   children,
   threadId,
@@ -167,7 +72,6 @@ export function ThreadContextMenu({
   const { data: threadData } = useThread(threadId);
   const [, setActiveReplyId] = useQueryState('activeReplyId');
   const optimisticState = useOptimisticThreadState(threadId);
-  const { refetch: refetchLabels } = useLabels();
   const {
     optimisticMoveThreadsTo,
     optimisticToggleStar,
@@ -178,7 +82,6 @@ export function ThreadContextMenu({
     optimisticSnooze,
     optimisticUnsnooze,
   } = useOptimisticActions();
-  const { createLabel } = useMailboxActions();
 
   const { isUnread, isStarred, isImportant } = useMemo(() => {
     const unread = threadData?.hasUnread ?? false;
@@ -381,7 +284,7 @@ export function ThreadContextMenu({
       return [
         {
           id: 'unsnooze',
-        label: m['common.mail.unsnooze'](),
+          label: m['common.mail.unsnooze'](),
           icon: <Inbox className="mr-2.5 h-4 w-4 opacity-60" />,
           action: () => {
             const targets = mail.bulkSelected.length ? mail.bulkSelected : [threadId];
@@ -466,45 +369,11 @@ export function ThreadContextMenu({
   }, [isSpam, isBin, isArchiveFolder, isInbox, isSent, handleMove, handleDelete]);
 
   const [snoozeOpen, setSnoozeOpen] = useState(false);
-  const [createLabelOpen, setCreateLabelOpen] = useState(false);
-
-  const handleOpenCreateLabel = useCallback(() => {
-    setCreateLabelOpen(true);
-  }, []);
 
   const handleSnoozeConfirm = (wakeAt: Date) => {
     const targets = mail.bulkSelected.length ? mail.bulkSelected : [threadId];
     optimisticSnooze(targets, currentFolder, wakeAt);
     setSnoozeOpen(false);
-  };
-
-  const handleCreateLabel = async (data: LabelType) => {
-    const labelData = {
-      name: data.name,
-      color: {
-        backgroundColor: data.color?.backgroundColor || '#202020',
-        textColor: data.color?.textColor || '#FFFFFF',
-      },
-    };
-
-    try {
-      const promise = createLabel(labelData).then(async (result) => {
-        await refetchLabels();
-        return result;
-      });
-
-      toast.promise(promise, {
-        loading: m['common.labels.savingLabel'](),
-        success: m['common.labels.saveLabelSuccess'](),
-        error: m['common.labels.failedToSavingLabel'](),
-      });
-
-      await promise;
-    } catch (error) {
-      console.error('Failed to create label:', error);
-    } finally {
-      setCreateLabelOpen(false);
-    }
   };
 
   const otherActions: EmailAction[] = useMemo(
@@ -566,11 +435,6 @@ export function ThreadContextMenu({
 
   return (
     <>
-      <LabelDialog
-        open={createLabelOpen}
-        onOpenChange={setCreateLabelOpen}
-        onSubmit={handleCreateLabel}
-      />
       <ContextMenu>
         <ContextMenuTrigger disabled={isLoading || isFetching} className="w-full">
           {children}
@@ -580,22 +444,6 @@ export function ThreadContextMenu({
           onContextMenu={(e) => e.preventDefault()}
         >
           {primaryActions.map(renderAction)}
-
-          <ContextMenuSeparator className="bg-[#E7E7E7] dark:bg-[#252525]" />
-
-          <ContextMenuSub>
-            <ContextMenuSubTrigger className="font-normal">
-              <Tag className="mr-2.5 h-4 w-4 opacity-60" />
-              {m['common.mail.labels']()}
-            </ContextMenuSubTrigger>
-            <ContextMenuSubContent className="dark:bg-panelDark max-h-[520px] w-48 overflow-y-auto bg-white">
-              <LabelsList
-                threadId={threadId}
-                bulkSelected={mail.bulkSelected}
-                onCreateLabel={handleOpenCreateLabel}
-              />
-            </ContextMenuSubContent>
-          </ContextMenuSub>
 
           <ContextMenuSeparator className="bg-[#E7E7E7] dark:bg-[#252525]" />
 
