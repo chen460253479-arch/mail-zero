@@ -1,6 +1,10 @@
 import type { MailCoreDependencies, MailTransaction } from '../store';
 import type { DestroyMailboxInput } from './types';
 import { MailCoreError } from '../types';
+import {
+  applyPreparedEmailStateInTransaction,
+  prepareEmailStateReplacementInTransaction,
+} from '../message/update-email';
 
 export async function destroyMailbox(
   dependencies: MailCoreDependencies,
@@ -34,10 +38,26 @@ export async function destroyMailboxInTransaction(
       entityId: input.mailboxId,
     });
   }
-  if (await tx.mailboxes.hasEmail(input.accountId, mailbox.id)) {
+  if (mailbox.kind === 'folder' && (await tx.mailboxes.hasEmail(input.accountId, mailbox.id))) {
     throw new MailCoreError('MAILBOX_HAS_EMAIL', {
       entityId: input.mailboxId,
     });
+  }
+
+  if (mailbox.kind === 'label') {
+    const prepared = [];
+    for (const email of await tx.emails.listByMailbox(input.accountId, mailbox.id)) {
+      prepared.push(
+        await prepareEmailStateReplacementInTransaction(dependencies, tx, {
+          accountId: input.accountId,
+          emailId: email.id,
+          mailboxIds: email.mailboxIds.filter((mailboxId) => mailboxId !== mailbox.id),
+        }),
+      );
+    }
+    for (const mutation of prepared) {
+      await applyPreparedEmailStateInTransaction(tx, mutation);
+    }
   }
 
   await tx.mailboxes.delete(input.accountId, input.mailboxId);

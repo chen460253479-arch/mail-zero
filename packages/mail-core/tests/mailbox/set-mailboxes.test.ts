@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import type { MailAccountId, MailCoreDependencies, MailTransaction } from '../../src';
-import { createMailAccount, createMailCore, createMailbox } from '../../src';
+import { createMailAccount, createMailCore, createMailbox, updateEmail } from '../../src';
 import { createMemoryMailCoreDependencies } from '../../src/testing/fakes';
+import { createSeededEmailHarness } from '../helpers/email-harness';
 
 const createHarness = async () => {
   const dependencies = createMemoryMailCoreDependencies();
@@ -173,6 +174,37 @@ describe('Mailbox set', () => {
     expect(result.notUpdated[h.inbox.id]).toMatchObject({ code: 'MAILBOX_ROLE_CONFLICT' });
     expect(result.notDestroyed[h.inbox.id]).toMatchObject({ code: 'MAILBOX_ROLE_CONFLICT' });
     expect(await h.dependencies.inspect.stateVersion(h.account.id)).toBe(oldState);
+  });
+
+  it('reports an attached leaf label as destroyed after detaching it from retained email', async () => {
+    const h = await createSeededEmailHarness();
+    const core = createMailCore(h.deps);
+    const label = await createMailbox(h.deps, {
+      accountId: h.accountId,
+      name: 'Removable label',
+      kind: 'label',
+      role: null,
+      parentId: null,
+    });
+    await updateEmail(h.deps, {
+      accountId: h.accountId,
+      emailId: h.emailId,
+      addMailboxIds: [label.id],
+    });
+
+    const result = await core.setMailboxes({
+      accountId: h.accountId,
+      create: {},
+      update: {},
+      destroy: [label.id],
+    });
+
+    expect(result.destroyed).toEqual([label.id]);
+    expect(result.notDestroyed).toEqual({});
+    expect(await h.inspect.email(h.emailId)).toMatchObject({
+      mailboxIds: [h.inboxId],
+      destroyedAt: null,
+    });
   });
 
   it('aborts and rolls back successful items when a storage operation fails', async () => {

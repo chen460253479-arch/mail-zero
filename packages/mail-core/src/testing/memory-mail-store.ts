@@ -493,6 +493,11 @@ const createRepositories = (
     async listByThread(accountId, threadId) {
       return listScoped(state.emails, accountId).filter((email) => email.threadId === threadId);
     },
+    async listByMailbox(accountId, mailboxId) {
+      return listScoped(state.emails, accountId).filter(
+        (email) => email.destroyedAt === null && email.mailboxIds.includes(mailboxId),
+      );
+    },
     async moveThread(accountId, fromThreadId, toThreadId, updatedAt) {
       const movedEmailIds: EmailId[] = [];
       for (const [key, email] of state.emails) {

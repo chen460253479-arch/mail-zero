@@ -334,6 +334,7 @@ export interface EmailRepository {
   findByRemoteId(input: FindRemoteEmailInput): Promise<RemoteEmailRecord | null>;
   listByAccount(accountId: MailAccountId): Promise<EmailRecord[]>;
   listByThread(accountId: MailAccountId, threadId: ThreadId): Promise<EmailRecord[]>;
+  listByMailbox(accountId: MailAccountId, mailboxId: MailboxId): Promise<EmailRecord[]>;
   moveThread(
     accountId: MailAccountId,
     fromThreadId: ThreadId,

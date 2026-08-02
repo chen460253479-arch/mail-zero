@@ -5,11 +5,13 @@ import {
   createMailbox,
   destroyMailbox,
   listMailboxes,
+  updateEmail,
   updateMailbox,
   type MailAccountId,
 } from '../../src';
 import { createMemoryMailCoreDependencies } from '../../src/testing/fakes';
 import type { MailCoreDependencies, MailTransaction } from '../../src';
+import { createSeededEmailHarness } from '../helpers/email-harness';
 
 describe('Mailbox commands', () => {
   it('lists the account Mailboxes through the public query API in stable order', async () => {
@@ -208,6 +210,54 @@ describe('Mailbox commands', () => {
     ).rejects.toMatchObject({ code: 'MAILBOX_ROLE_CONFLICT' });
     expect(await deps.inspect.mailbox(archive.id)).not.toBeNull();
     expect(await deps.inspect.stateVersion(account.id)).toBe(1n);
+  });
+
+  it('deletes a leaf label by detaching it without deleting the email or its primary mailbox', async () => {
+    const h = await createSeededEmailHarness();
+    const label = await createMailbox(h.deps, {
+      accountId: h.accountId,
+      name: 'Customer',
+      kind: 'label',
+      role: null,
+      parentId: null,
+    });
+    await updateEmail(h.deps, {
+      accountId: h.accountId,
+      emailId: h.emailId,
+      addMailboxIds: [label.id],
+    });
+
+    await destroyMailbox(h.deps, {
+      accountId: h.accountId,
+      mailboxId: label.id,
+    });
+
+    expect(await h.inspect.mailbox(label.id)).toBeNull();
+    expect(await h.inspect.email(h.emailId)).toMatchObject({
+      id: h.emailId,
+      mailboxIds: [h.inboxId],
+      destroyedAt: null,
+    });
+    expect(await h.inspect.thread(h.threadId)).not.toBeNull();
+    expect(await h.inspect.mailbox(h.inboxId)).toMatchObject({
+      totalEmails: 1,
+      totalThreads: 1,
+    });
+    expect(await h.inspect.changes()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          collection: 'email',
+          entityId: h.emailId,
+          changeType: 'updated',
+          changedProperties: ['mailboxIds'],
+        }),
+        expect.objectContaining({
+          collection: 'mailbox',
+          entityId: label.id,
+          changeType: 'destroyed',
+        }),
+      ]),
+    );
   });
 
   it('renames and reparents custom folders and labels within one account', async () => {

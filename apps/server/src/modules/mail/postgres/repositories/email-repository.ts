@@ -465,6 +465,31 @@ export const createEmailRepository = (db: MailDatabase): EmailRepository => {
           .orderBy(asc(email.receivedAt), asc(email.id));
         return Promise.all(rows.map((row) => hydrateEmail(db, row)));
       }),
+    listByMailbox: (accountId, mailboxId) =>
+      runAdapter(async () => {
+        const rows = await db
+          .select({ id: email.id })
+          .from(email)
+          .innerJoin(
+            emailMailbox,
+            and(
+              eq(emailMailbox.mailAccountId, email.mailAccountId),
+              eq(emailMailbox.emailId, email.id),
+            ),
+          )
+          .where(
+            and(
+              eq(email.mailAccountId, accountId),
+              eq(emailMailbox.mailboxId, mailboxId),
+              isNull(email.destroyedAt),
+            ),
+          )
+          .orderBy(asc(email.receivedAt), asc(email.id));
+        return repository.findByIds(
+          accountId,
+          rows.map(({ id }) => id as EmailId),
+        );
+      }),
     moveThread: (accountId, fromThreadId, toThreadId, updatedAt) =>
       runAdapter(async () => {
         const hasMailbox = exists(
