@@ -9,6 +9,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   buildKeywordThreadAction,
   buildMoveThreadAction,
+  buildSetThreadLabelsAction,
+  resolveSystemMoveDestinationMailboxId,
 } from '@/modules/mail/mutations/thread-action-input';
 import { useMailAccountContext } from '@/modules/mail/providers/mail-account-provider';
 import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
@@ -34,6 +36,9 @@ export function useOptimisticActions() {
   const { mailboxes, mailboxState } = useMailboxes();
   const { mutateAsync: updateThreads } = useMutation(
     trpc.mail.action.updateThreads.mutationOptions(),
+  );
+  const { mutateAsync: moveThreads } = useMutation(
+    trpc.mail.action.moveThreads.mutationOptions(),
   );
   const { mutateAsync: snoozeThreads } = useMutation(
     trpc.mail.action.snoozeThreads.mutationOptions(),
@@ -307,12 +312,15 @@ export function useOptimisticActions() {
         if (!account || !destination || destination === 'snoozed') {
           throw new Error('MAIL_MOVE_DESTINATION_UNAVAILABLE');
         }
-        const result = await updateThreads(
+        const destinationMailboxId = resolveSystemMoveDestinationMailboxId(
+          destination,
+          mailboxes,
+        );
+        const result = await moveThreads(
           buildMoveThreadAction({
             accountId: account.id,
             threadIds,
-            destination,
-            mailboxes,
+            destinationMailboxId,
             ifInState: mailboxState,
             clientMutationId: mutationId(),
           }),
@@ -355,12 +363,11 @@ export function useOptimisticActions() {
       optimisticId,
       execute: async () => {
         if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
-        const result = await updateThreads(
+        const result = await moveThreads(
           buildMoveThreadAction({
             accountId: account.id,
             threadIds,
-            destination: 'bin',
-            mailboxes,
+            destinationMailboxId: resolveSystemMoveDestinationMailboxId('bin', mailboxes),
             ifInState: mailboxState,
             clientMutationId: mutationId(),
           }),
@@ -449,16 +456,17 @@ export function useOptimisticActions() {
       optimisticId,
       execute: async () => {
         if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
-        const result = await updateThreads({
-          accountId: account.id,
-          threadIds,
-          ...(mailboxState ? { ifInState: mailboxState } : {}),
-          addMailboxIds: add ? [labelId] : [],
-          removeMailboxIds: add ? [] : [labelId],
-          addKeywords: [],
-          removeKeywords: [],
-          clientMutationId: mutationId(),
-        });
+        const result = await updateThreads(
+          buildSetThreadLabelsAction({
+            accountId: account.id,
+            threadIds,
+            addLabelIds: add ? [labelId] : [],
+            removeLabelIds: add ? [] : [labelId],
+            mailboxes,
+            ...(mailboxState ? { ifInState: mailboxState } : {}),
+            clientMutationId: mutationId(),
+          }),
+        );
         if (Object.keys(result.failed).length > 0) {
           throw new Error('THREAD_LABEL_PARTIAL_FAILURE');
         }

@@ -7,23 +7,25 @@ import {
 } from './mailbox-set-input';
 
 describe('mailbox set input', () => {
-  it('creates a local label mailbox with a client creation id', () => {
+  it('creates an explicit local folder or label with a client creation id', () => {
     expect(
       buildCreateMailboxInput({
         accountId: 'account-1',
         state: 'state-1',
         clientId: 'create-1',
-        name: 'Customer',
+        name: 'Projects',
+        kind: 'folder',
+        parentId: 'folder-parent',
       }),
     ).toEqual({
       accountId: 'account-1',
       ifInState: 'state-1',
       create: {
         'create-1': {
-          name: 'Customer',
-          kind: 'label',
+          name: 'Projects',
+          kind: 'folder',
           role: null,
-          parentId: null,
+          parentId: 'folder-parent',
         },
       },
       update: {},
@@ -31,7 +33,7 @@ describe('mailbox set input', () => {
     });
   });
 
-  it('updates and destroys only the requested local mailbox', () => {
+  it('updates every mutable local mailbox field and destroys only the requested mailbox', () => {
     expect(
       buildUpdateMailboxInput({
         accountId: 'account-1',
@@ -39,6 +41,9 @@ describe('mailbox set input', () => {
         mailboxId: 'label-1',
         name: 'VIP',
         color: '#ff0000',
+        parentId: 'label-parent',
+        sortOrder: 20,
+        isSubscribed: false,
       }),
     ).toMatchObject({
       accountId: 'account-1',
@@ -47,6 +52,9 @@ describe('mailbox set input', () => {
         'label-1': {
           name: 'VIP',
           color: '#ff0000',
+          parentId: 'label-parent',
+          sortOrder: 20,
+          isSubscribed: false,
         },
       },
     });

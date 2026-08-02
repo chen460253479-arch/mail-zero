@@ -7,6 +7,27 @@ type CommonThreadAction = {
   clientMutationId: string;
 };
 
+export type SystemMoveDestination = 'inbox' | 'archive' | 'spam' | 'bin';
+
+const systemDestinationRoles = {
+  inbox: 'inbox',
+  archive: 'archive',
+  spam: 'junk',
+  bin: 'trash',
+} as const satisfies Record<SystemMoveDestination, MailboxRole>;
+
+export function resolveSystemMoveDestinationMailboxId(
+  destination: SystemMoveDestination,
+  mailboxes: readonly Mailbox[],
+): string {
+  const role = systemDestinationRoles[destination];
+  const mailbox = mailboxes.find(
+    (candidate) => candidate.kind === 'system' && candidate.role === role,
+  );
+  if (!mailbox) throw new Error(`MAILBOX_ROLE_NOT_FOUND:${role}`);
+  return mailbox.id;
+}
+
 export function buildKeywordThreadAction({
   keyword,
   enabled,
@@ -27,43 +48,49 @@ export function buildKeywordThreadAction({
   };
 }
 
-const destinationRoles = {
-  inbox: 'inbox',
-  archive: 'archive',
-  spam: 'junk',
-  bin: 'trash',
-} as const satisfies Record<string, MailboxRole>;
-
-const exclusiveSystemRoles = new Set<MailboxRole>(['inbox', 'archive', 'junk', 'trash']);
-
 export function buildMoveThreadAction({
-  destination,
+  destinationMailboxId,
+  ...common
+}: CommonThreadAction & {
+  destinationMailboxId: string;
+}) {
+  return {
+    accountId: common.accountId,
+    threadIds: common.threadIds,
+    ...(common.ifInState ? { ifInState: common.ifInState } : {}),
+    destinationMailboxId,
+    clientMutationId: common.clientMutationId,
+  };
+}
+
+export function buildSetThreadLabelsAction({
+  addLabelIds,
+  removeLabelIds,
   mailboxes,
   ...common
 }: CommonThreadAction & {
-  destination: keyof typeof destinationRoles;
+  addLabelIds: readonly string[];
+  removeLabelIds: readonly string[];
   mailboxes: readonly Mailbox[];
 }) {
-  const destinationRole = destinationRoles[destination];
-  const destinationMailbox = mailboxes.find((mailbox) => mailbox.role === destinationRole);
-  if (!destinationMailbox) {
-    throw new Error(`MAILBOX_ROLE_NOT_FOUND:${destinationRole}`);
-  }
-
-  const removeMailboxIds = mailboxes
-    .filter(
-      (mailbox) =>
-        mailbox.role !== null &&
-        exclusiveSystemRoles.has(mailbox.role) &&
-        mailbox.id !== destinationMailbox.id,
-    )
-    .map((mailbox) => mailbox.id);
+  const mailboxById = new Map(mailboxes.map((mailbox) => [mailbox.id, mailbox]));
+  const requireLabels = (mailboxIds: readonly string[]) =>
+    [...new Set(mailboxIds)].map((mailboxId) => {
+      if (mailboxById.get(mailboxId)?.kind !== 'label') {
+        throw new Error(`MAILBOX_LABEL_NOT_FOUND:${mailboxId}`);
+      }
+      return mailboxId;
+    });
+  const addMailboxIds = requireLabels(addLabelIds);
+  const removeMailboxIds = requireLabels(removeLabelIds).filter(
+    (mailboxId) => !addMailboxIds.includes(mailboxId),
+  );
 
   return {
     accountId: common.accountId,
     threadIds: common.threadIds,
     ...(common.ifInState ? { ifInState: common.ifInState } : {}),
-    addMailboxIds: [destinationMailbox.id],
+    addMailboxIds,
     removeMailboxIds,
     addKeywords: [],
     removeKeywords: [],

@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 
 import { useTRPC } from '@/providers/query-provider';
 import type { Label } from '@/types';
+import type { CustomMailboxKind } from '../model/mailbox';
 
 import {
   buildCreateMailboxInput,
@@ -19,6 +20,24 @@ function getLabelColor(color: Label['color']) {
   return color?.backgroundColor;
 }
 
+export type CreateMailboxActionInput = {
+  name: string;
+  kind: CustomMailboxKind;
+  parentId: string | null;
+  color?: string | null;
+  sortOrder?: number;
+  isSubscribed?: boolean;
+};
+
+export type UpdateMailboxActionInput = {
+  id: string;
+  name?: string;
+  parentId?: string | null;
+  color?: string | null;
+  sortOrder?: number;
+  isSubscribed?: boolean;
+};
+
 export function useMailboxActions() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
@@ -32,8 +51,15 @@ export function useMailboxActions() {
     });
   }, [account, queryClient, trpc.mail.mailbox.get]);
 
-  const createLabel = useCallback(
-    async ({ name, color }: Pick<Label, 'name' | 'color'>) => {
+  const createMailbox = useCallback(
+    async ({
+      name,
+      kind,
+      parentId,
+      color,
+      sortOrder,
+      isSubscribed,
+    }: CreateMailboxActionInput) => {
       if (!account) throw new Error('No active mail account');
 
       const clientId = nextClientId();
@@ -43,6 +69,8 @@ export function useMailboxActions() {
           state: mailboxState,
           clientId,
           name,
+          kind,
+          parentId,
         }),
       );
       const created = result.created[clientId];
@@ -51,30 +79,40 @@ export function useMailboxActions() {
         throw new Error(failure?.code ?? 'Failed to create mailbox');
       }
 
-      const labelColor = getLabelColor(color);
-      if (labelColor) {
-        const colorResult = await setMailbox.mutateAsync(
+      let completed = created;
+      if (color !== undefined || sortOrder !== undefined || isSubscribed !== undefined) {
+        const updateResult = await setMailbox.mutateAsync(
           buildUpdateMailboxInput({
             accountId: account.id,
             state: result.newState,
             mailboxId: created.id,
-            color: labelColor,
+            color,
+            sortOrder,
+            isSubscribed,
           }),
         );
-        const colorFailure = colorResult.notUpdated[created.id];
-        if (colorFailure) {
-          throw new Error(colorFailure.code);
+        const updateFailure = updateResult.notUpdated[created.id];
+        if (updateFailure) {
+          throw new Error(updateFailure.code);
         }
+        completed = updateResult.updated[created.id] ?? created;
       }
 
       await invalidateMailboxes();
-      return created;
+      return completed;
     },
     [account, invalidateMailboxes, mailboxState, setMailbox],
   );
 
-  const updateLabel = useCallback(
-    async ({ id, name, color }: Pick<Label, 'id' | 'name' | 'color'>) => {
+  const updateMailbox = useCallback(
+    async ({
+      id,
+      name,
+      parentId,
+      color,
+      sortOrder,
+      isSubscribed,
+    }: UpdateMailboxActionInput) => {
       if (!account) throw new Error('No active mail account');
 
       const result = await setMailbox.mutateAsync(
@@ -83,7 +121,10 @@ export function useMailboxActions() {
           state: mailboxState,
           mailboxId: id,
           name,
-          color: getLabelColor(color),
+          parentId,
+          color,
+          sortOrder,
+          isSubscribed,
         }),
       );
       const failure = result.notUpdated[id];
@@ -97,8 +138,8 @@ export function useMailboxActions() {
     [account, invalidateMailboxes, mailboxState, setMailbox],
   );
 
-  const deleteLabel = useCallback(
-    async ({ id }: Pick<Label, 'id'>) => {
+  const destroyMailbox = useCallback(
+    async ({ id }: { id: string }) => {
       if (!account) throw new Error('No active mail account');
 
       const result = await setMailbox.mutateAsync(
@@ -119,7 +160,32 @@ export function useMailboxActions() {
     [account, invalidateMailboxes, mailboxState, setMailbox],
   );
 
+  const createLabel = useCallback(
+    ({ name, color }: Pick<Label, 'name' | 'color'>) =>
+      createMailbox({
+        name,
+        kind: 'label',
+        parentId: null,
+        color: getLabelColor(color),
+      }),
+    [createMailbox],
+  );
+
+  const updateLabel = useCallback(
+    ({ id, name, color }: Pick<Label, 'id' | 'name' | 'color'>) =>
+      updateMailbox({ id, name, color: getLabelColor(color) }),
+    [updateMailbox],
+  );
+
+  const deleteLabel = useCallback(
+    ({ id }: Pick<Label, 'id'>) => destroyMailbox({ id }),
+    [destroyMailbox],
+  );
+
   return {
+    createMailbox,
+    updateMailbox,
+    destroyMailbox,
     createLabel,
     updateLabel,
     deleteLabel,

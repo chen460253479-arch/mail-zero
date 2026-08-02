@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildKeywordThreadAction, buildMoveThreadAction } from './thread-action-input';
+import {
+  buildKeywordThreadAction,
+  buildMoveThreadAction,
+  buildSetThreadLabelsAction,
+  resolveSystemMoveDestinationMailboxId,
+} from './thread-action-input';
 import type { Mailbox } from '../model/mailbox';
 
 const systemMailbox = (id: string, role: NonNullable<Mailbox['role']>): Mailbox => ({
@@ -17,13 +22,6 @@ const systemMailbox = (id: string, role: NonNullable<Mailbox['role']>): Mailbox 
   totalThreads: 0,
   unreadThreads: 0,
 });
-
-const mailboxes = [
-  systemMailbox('mailbox-inbox', 'inbox'),
-  systemMailbox('mailbox-archive', 'archive'),
-  systemMailbox('mailbox-trash', 'trash'),
-  systemMailbox('mailbox-junk', 'junk'),
-];
 
 describe('thread action input', () => {
   it('maps read state to the local $seen keyword with a state precondition', () => {
@@ -48,13 +46,12 @@ describe('thread action input', () => {
     });
   });
 
-  it('moves Inbox threads into the local Archive mailbox', () => {
+  it('moves threads through the dedicated semantic destination input', () => {
     expect(
       buildMoveThreadAction({
         accountId: 'account-1',
         threadIds: ['thread-1'],
-        destination: 'archive',
-        mailboxes,
+        destinationMailboxId: 'mailbox-archive',
         ifInState: 'state-3',
         clientMutationId: 'mutation-2',
       }),
@@ -62,23 +59,64 @@ describe('thread action input', () => {
       accountId: 'account-1',
       threadIds: ['thread-1'],
       ifInState: 'state-3',
-      addMailboxIds: ['mailbox-archive'],
-      removeMailboxIds: ['mailbox-inbox', 'mailbox-trash', 'mailbox-junk'],
-      addKeywords: [],
-      removeKeywords: [],
+      destinationMailboxId: 'mailbox-archive',
       clientMutationId: 'mutation-2',
     });
   });
 
-  it('fails locally when the destination system mailbox is unavailable', () => {
-    expect(() =>
-      buildMoveThreadAction({
+  it('resolves legacy system actions to one local destination mailbox', () => {
+    const mailboxes = [
+      systemMailbox('mailbox-inbox', 'inbox'),
+      systemMailbox('mailbox-archive', 'archive'),
+    ];
+    expect(resolveSystemMoveDestinationMailboxId('archive', mailboxes)).toBe('mailbox-archive');
+    expect(() => resolveSystemMoveDestinationMailboxId('spam', mailboxes)).toThrow(
+      'MAILBOX_ROLE_NOT_FOUND:junk',
+    );
+  });
+
+  it('submits only label mailboxes through updateThreads', () => {
+    const mailboxes = [
+      systemMailbox('mailbox-inbox', 'inbox'),
+      {
+        ...systemMailbox('label-customer', 'inbox'),
+        kind: 'label' as const,
+        role: null,
+      },
+      {
+        ...systemMailbox('folder-projects', 'inbox'),
+        kind: 'folder' as const,
+        role: null,
+      },
+    ];
+
+    expect(
+      buildSetThreadLabelsAction({
         accountId: 'account-1',
         threadIds: ['thread-1'],
-        destination: 'archive',
-        mailboxes: [],
+        addLabelIds: ['label-customer', 'label-customer'],
+        removeLabelIds: [],
+        mailboxes,
         clientMutationId: 'mutation-3',
       }),
-    ).toThrow('MAILBOX_ROLE_NOT_FOUND:archive');
+    ).toEqual({
+      accountId: 'account-1',
+      threadIds: ['thread-1'],
+      addMailboxIds: ['label-customer'],
+      removeMailboxIds: [],
+      addKeywords: [],
+      removeKeywords: [],
+      clientMutationId: 'mutation-3',
+    });
+    expect(() =>
+      buildSetThreadLabelsAction({
+        accountId: 'account-1',
+        threadIds: ['thread-1'],
+        addLabelIds: ['folder-projects'],
+        removeLabelIds: [],
+        mailboxes,
+        clientMutationId: 'mutation-4',
+      }),
+    ).toThrow('MAILBOX_LABEL_NOT_FOUND:folder-projects');
   });
 });

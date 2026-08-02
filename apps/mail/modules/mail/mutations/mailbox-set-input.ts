@@ -1,3 +1,5 @@
+import type { CustomMailboxKind } from '../model/mailbox';
+
 type MailboxSetContext = {
   accountId: string;
   state?: string;
@@ -14,19 +16,23 @@ const base = ({ accountId, state }: MailboxSetContext) => ({
 export function buildCreateMailboxInput({
   clientId,
   name,
+  kind,
+  parentId,
   ...context
 }: MailboxSetContext & {
   clientId: string;
   name: string;
+  kind: CustomMailboxKind;
+  parentId: string | null;
 }) {
   return {
     ...base(context),
     create: {
       [clientId]: {
         name,
-        kind: 'label' as const,
+        kind,
         role: null,
-        parentId: null,
+        parentId,
       },
     },
   };
@@ -36,11 +42,17 @@ export function buildUpdateMailboxInput({
   mailboxId,
   name,
   color,
+  parentId,
+  sortOrder,
+  isSubscribed,
   ...context
 }: MailboxSetContext & {
   mailboxId: string;
   name?: string;
   color?: string | null;
+  parentId?: string | null;
+  sortOrder?: number;
+  isSubscribed?: boolean;
 }) {
   return {
     ...base(context),
@@ -48,6 +60,9 @@ export function buildUpdateMailboxInput({
       [mailboxId]: {
         ...(name === undefined ? {} : { name }),
         ...(color === undefined ? {} : { color }),
+        ...(parentId === undefined ? {} : { parentId }),
+        ...(sortOrder === undefined ? {} : { sortOrder }),
+        ...(isSubscribed === undefined ? {} : { isSubscribed }),
       },
     },
   };
