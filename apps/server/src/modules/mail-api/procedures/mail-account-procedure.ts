@@ -1,4 +1,4 @@
-import type { MailAccountId } from '@zero/mail-core';
+import { MailCoreError, type MailAccountId } from '@zero/mail-core';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -34,7 +34,15 @@ const trpcCode = (
 };
 
 export const toMailApiTrpcError = (error: unknown): TRPCError => {
-  if (error instanceof TRPCError) return error;
+  if (error instanceof TRPCError) {
+    if (
+      error.code !== 'INTERNAL_SERVER_ERROR' ||
+      !(error.cause instanceof MailApiError || error.cause instanceof MailCoreError)
+    ) {
+      return error;
+    }
+    error = error.cause;
+  }
   const mapped = error instanceof MailApiError ? error : mapMailCoreError(error);
   return new TRPCError({
     code: trpcCode(mapped),
@@ -65,7 +73,9 @@ export const createMailAccountProcedure = (
       }
       try {
         try {
-          return await next({ ctx: { ...ctx, mailApi: runtime } });
+          const result = await next({ ctx: { ...ctx, mailApi: runtime } });
+          if (!result.ok) throw result.error;
+          return result;
         } catch (error) {
           throw toMailApiTrpcError(error);
         }

@@ -1,4 +1,9 @@
-import type { MailAccountId, MailAccountRecord, MailCore } from '@zero/mail-core';
+import {
+  MailCoreError,
+  type MailAccountId,
+  type MailAccountRecord,
+  type MailCore,
+} from '@zero/mail-core';
 import { describe, expect, it, vi } from 'vitest';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -144,5 +149,38 @@ describe('mailAccountProcedure', () => {
         })
         .read({ accountId: 'other-users-account' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('maps a downstream state mismatch to CONFLICT and closes the runtime', async () => {
+    const close = vi.fn(async () => undefined);
+    const open = vi.fn(
+      async (): Promise<OwnedMailApiRuntime> => ({
+        account: account(),
+        core: {} as MailCore,
+        outbound: {} as OwnedMailApiRuntime['outbound'],
+        snooze: {} as OwnedMailApiRuntime['snooze'],
+        db: {} as OwnedMailApiRuntime['db'],
+        cursorSigningKey: 'procedure-test-cursor-key',
+        listAllAccounts: vi.fn(async () => [account()]),
+        close,
+      }),
+    );
+    const testRouter = router({
+      update: createMailAccountProcedure(open).mutation(() => {
+        throw new MailCoreError('STATE_MISMATCH');
+      }),
+    });
+
+    const update = testRouter
+      .createCaller({
+        c: { var: { services: {} } } as never,
+        sessionUser: { id: 'user-1', role: 'user' } as never,
+        authSession: { authMethod: 'password' } as never,
+        auth: {} as never,
+      })
+      .update({ accountId: 'account-1' });
+
+    await expect(update).rejects.toMatchObject({ code: 'CONFLICT', message: 'STATE_MISMATCH' });
+    expect(close).toHaveBeenCalledOnce();
   });
 });
