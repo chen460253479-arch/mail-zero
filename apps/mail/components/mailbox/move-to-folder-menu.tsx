@@ -7,6 +7,7 @@ import { useOptimisticActions } from '@/hooks/use-optimistic-actions';
 import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { m } from '@/paraglide/messages';
 import { cn } from '@/lib/utils';
 
 import { buildMoveTargets } from './mail-action-menu-domain';
@@ -45,12 +46,12 @@ export function MoveToFolderMenu({
     setPendingMailboxId(destinationMailboxId);
     try {
       await moveThreadsToMailbox(threadIds, destinationMailboxId);
-      toast.success('邮件已移动');
+      toast.success(m['common.mailboxes.messageMoved']());
       setOpen(false);
       setSearch('');
     } catch (error) {
       console.error('Failed to move threads:', error);
-      toast.error('移动邮件失败，请重试');
+      toast.error(m['common.mailboxes.moveFailed']());
     } finally {
       setPendingMailboxId(null);
     }
@@ -66,7 +67,7 @@ export function MoveToFolderMenu({
           variant="ghost"
           size={label ? 'sm' : 'icon'}
           className={cn('h-8', !label && 'w-8', className)}
-          aria-label="移动到文件夹"
+          aria-label={m['common.mailboxes.moveToFolder']()}
           onClick={stopPropagation}
           disabled={threadIds.length === 0}
         >
@@ -85,7 +86,7 @@ export function MoveToFolderMenu({
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="搜索文件夹"
+            placeholder={m['common.mailboxes.searchFolders']()}
             className="h-9 pl-8"
             autoFocus
           />
@@ -93,7 +94,7 @@ export function MoveToFolderMenu({
         <div className="max-h-72 overflow-y-auto">
           {targets.length === 0 ? (
             <p className="text-muted-foreground px-2 py-6 text-center text-sm">
-              没有可移动的文件夹
+              {m['common.mailboxes.noMoveTargets']()}
             </p>
           ) : (
             targets.map(({ mailbox, depth }) => (

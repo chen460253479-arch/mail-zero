@@ -63,7 +63,11 @@ const subtreeHeight = (mailboxes: readonly Mailbox[], mailboxId: string): number
 
 export type MailboxEditorValidation =
   | { ok: true; name: string; parentId: string | null }
-  | { ok: false; message: string };
+  | {
+      ok: false;
+      code: 'NAME_REQUIRED' | 'PARENT_KIND_MISMATCH' | 'PARENT_CYCLE' | 'SIBLING_NAME_CONFLICT';
+    }
+  | { ok: false; code: 'MAX_DEPTH_EXCEEDED'; maxDepth: number };
 
 export function validateMailboxEditorInput({
   mailboxes,
@@ -81,17 +85,17 @@ export function validateMailboxEditorInput({
   maxDepth?: number;
 }): MailboxEditorValidation {
   const normalizedName = name.trim();
-  if (!normalizedName) return { ok: false, message: '名称不能为空。' };
+  if (!normalizedName) return { ok: false, code: 'NAME_REQUIRED' };
 
   const parent = parentId === null ? null : mailboxes.find((mailbox) => mailbox.id === parentId);
   if (parentId !== null && (!parent || parent.kind !== kind)) {
-    return { ok: false, message: '父级必须与当前项目类型一致。' };
+    return { ok: false, code: 'PARENT_KIND_MISMATCH' };
   }
   if (
     editingId !== null &&
     (parentId === editingId || descendantIds(mailboxes, editingId).has(parentId ?? ''))
   ) {
-    return { ok: false, message: '不能将自身或子项设为父级。' };
+    return { ok: false, code: 'PARENT_CYCLE' };
   }
 
   const conflict = mailboxes.some(
@@ -101,12 +105,12 @@ export function validateMailboxEditorInput({
       mailbox.parentId === parentId &&
       mailbox.name.trim().localeCompare(normalizedName, undefined, { sensitivity: 'accent' }) === 0,
   );
-  if (conflict) return { ok: false, message: '同一层级已存在同名项目。' };
+  if (conflict) return { ok: false, code: 'SIBLING_NAME_CONFLICT' };
 
   const parentDepth = parent ? mailboxDepth(mailboxes, parent.id) : 0;
   const height = editingId === null ? 1 : subtreeHeight(mailboxes, editingId);
   if (parentDepth + height > maxDepth) {
-    return { ok: false, message: `层级不能超过 ${maxDepth} 级。` };
+    return { ok: false, code: 'MAX_DEPTH_EXCEEDED', maxDepth };
   }
   return { ok: true, name: normalizedName, parentId };
 }
@@ -114,13 +118,13 @@ export function validateMailboxEditorInput({
 export function getMailboxDeleteConstraint(
   mailbox: Mailbox,
   mailboxes: readonly Mailbox[],
-): string | null {
-  if (mailbox.kind === 'system') return '系统邮箱不能修改或删除。';
+): 'SYSTEM_MAILBOX' | 'HAS_CHILDREN' | 'FOLDER_HAS_MAIL' | null {
+  if (mailbox.kind === 'system') return 'SYSTEM_MAILBOX';
   if (mailboxes.some((candidate) => candidate.parentId === mailbox.id)) {
-    return '该项目仍有子项，请先移动或删除子项。';
+    return 'HAS_CHILDREN';
   }
   if (mailbox.kind === 'folder' && (mailbox.totalThreads > 0 || mailbox.totalEmails > 0)) {
-    return '该文件夹仍有邮件，请先移动或清空邮件。';
+    return 'FOLDER_HAS_MAIL';
   }
   return null;
 }
@@ -142,9 +146,7 @@ export function reorderMailboxSiblings(
     return [];
   }
   const siblings = mailboxes
-    .filter(
-      (mailbox) => mailbox.kind === active.kind && mailbox.parentId === active.parentId,
-    )
+    .filter((mailbox) => mailbox.kind === active.kind && mailbox.parentId === active.parentId)
     .toSorted(compareMailboxes);
   const oldIndex = siblings.findIndex((mailbox) => mailbox.id === activeId);
   const newIndex = siblings.findIndex((mailbox) => mailbox.id === overId);

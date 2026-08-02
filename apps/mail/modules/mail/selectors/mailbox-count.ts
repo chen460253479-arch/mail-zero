@@ -8,7 +8,7 @@ export function mailboxBadgeCount(mailbox: Mailbox): number | null {
     count = mailbox.unreadThreads;
   } else if (mailbox.role !== null && unreadSystemRoles.has(mailbox.role)) {
     count = mailbox.unreadThreads;
-  } else if (mailbox.role === 'drafts') {
+  } else if (mailbox.role === 'drafts' || mailbox.role === 'sent') {
     count = mailbox.totalThreads;
   }
   return count !== null && count > 0 ? count : null;

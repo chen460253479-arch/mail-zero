@@ -1,6 +1,6 @@
-import { Plus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router';
+import { Plus } from 'lucide-react';
 
 import {
   SidebarGroup,
@@ -8,10 +8,10 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
 } from '@/components/ui/sidebar';
-import type { Mailbox } from '@/modules/mail/model/mailbox';
-import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
 import { resolveActiveMailboxId } from '@/modules/mail/routing/mailbox-route';
 import { buildMailboxTree } from '@/modules/mail/selectors/mailbox-tree';
+import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
+import type { Mailbox } from '@/modules/mail/model/mailbox';
 import { m } from '@/paraglide/messages';
 
 import { FolderTree } from './folder-tree';
@@ -29,7 +29,9 @@ const loadExpandedIds = (accountId: string | undefined): Set<string> => {
   if (!accountId || typeof window === 'undefined') return new Set();
   try {
     const value = JSON.parse(window.localStorage.getItem(expandedStorageKey(accountId)) ?? '[]');
-    return new Set(Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []);
+    return new Set(
+      Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [],
+    );
   } catch {
     return new Set();
   }
@@ -64,6 +66,7 @@ export function MailboxSidebar() {
     <>
       <MailboxTreeSection
         title={m['common.navigation.folders']()}
+        kindLabel={m['common.mailboxes.folder']()}
         createHref="/settings/mailboxes?tab=folders&create=true"
         nodes={model.folders}
         activeMailboxId={activeMailboxId}
@@ -72,6 +75,7 @@ export function MailboxSidebar() {
       />
       <MailboxTreeSection
         title={m['common.navigation.labels']()}
+        kindLabel={m['common.mailboxes.label']()}
         createHref="/settings/mailboxes?tab=labels&create=true"
         nodes={model.labels}
         activeMailboxId={activeMailboxId}
@@ -84,6 +88,7 @@ export function MailboxSidebar() {
 
 function MailboxTreeSection({
   title,
+  kindLabel,
   createHref,
   nodes,
   activeMailboxId,
@@ -91,6 +96,7 @@ function MailboxTreeSection({
   onToggle,
 }: {
   title: string;
+  kindLabel: string;
   createHref: string;
   nodes: ReturnType<typeof buildMailboxTree>;
   activeMailboxId: string | null;
@@ -100,10 +106,10 @@ function MailboxTreeSection({
   return (
     <SidebarGroup>
       <SidebarGroupLabel>{title}</SidebarGroupLabel>
-      <SidebarGroupAction asChild title={`创建${title}`}>
+      <SidebarGroupAction asChild title={m['common.mailboxes.createItem']({ kind: kindLabel })}>
         <Link to={createHref}>
           <Plus />
-          <span className="sr-only">创建{title}</span>
+          <span className="sr-only">{m['common.mailboxes.createItem']({ kind: kindLabel })}</span>
         </Link>
       </SidebarGroupAction>
       <SidebarGroupContent>

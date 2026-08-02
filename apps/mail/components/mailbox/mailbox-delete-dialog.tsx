@@ -1,4 +1,3 @@
-import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -8,6 +7,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import type { Mailbox } from '@/modules/mail/model/mailbox';
+import { Button } from '@/components/ui/button';
+import { m } from '@/paraglide/messages';
 
 import { getMailboxDeleteConstraint } from './mailbox-settings-domain';
 
@@ -25,24 +26,38 @@ export function MailboxDeleteDialog({
   isPending: boolean;
 }) {
   const constraint = mailbox ? getMailboxDeleteConstraint(mailbox, mailboxes) : null;
+  const constraintMessage =
+    constraint === 'SYSTEM_MAILBOX'
+      ? m['common.mailboxes.systemMailboxProtected']()
+      : constraint === 'HAS_CHILDREN'
+        ? m['common.mailboxes.hasChildren']()
+        : constraint === 'FOLDER_HAS_MAIL'
+          ? m['common.mailboxes.folderHasMail']()
+          : null;
+  const kindName =
+    mailbox?.kind === 'folder' ? m['common.mailboxes.folder']() : m['common.mailboxes.label']();
   return (
     <Dialog open={mailbox !== null} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>删除{mailbox?.kind === 'folder' ? '文件夹' : '标签'}</DialogTitle>
+          <DialogTitle>{m['common.mailboxes.deleteItem']({ kind: kindName })}</DialogTitle>
           <DialogDescription>
-            {constraint ??
+            {constraintMessage ??
               (mailbox?.kind === 'label'
-                ? '标签会从相关邮件中解除，邮件和主要文件夹不会被删除。'
-                : '此操作无法撤销。')}
+                ? m['common.mailboxes.labelDeleteDescription']()
+                : m['common.mailboxes.irreversible']())}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            取消
+            {m['common.actions.cancel']()}
           </Button>
-          <Button variant="destructive" disabled={Boolean(constraint) || isPending} onClick={onConfirm}>
-            删除
+          <Button
+            variant="destructive"
+            disabled={Boolean(constraint) || isPending}
+            onClick={onConfirm}
+          >
+            {m['common.actions.confirmDelete']()}
           </Button>
         </DialogFooter>
       </DialogContent>

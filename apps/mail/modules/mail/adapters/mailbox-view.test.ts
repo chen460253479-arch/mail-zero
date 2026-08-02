@@ -37,6 +37,9 @@ describe('buildMailboxStats', () => {
         },
         { ...mailbox('mailbox-sent', 'Sent', 'system'), role: 'sent', totalThreads: 8 },
       ]),
-    ).toEqual([{ label: 'inbox', mailboxId: 'mailbox-inbox', count: 2 }]);
+    ).toEqual([
+      { label: 'inbox', mailboxId: 'mailbox-inbox', count: 2 },
+      { label: 'sent', mailboxId: 'mailbox-sent', count: 8 },
+    ]);
   });
 });

@@ -1,18 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Mailbox } from '@/modules/mail/model/mailbox';
 import {
   getMailboxDeleteConstraint,
   getMailboxParentOptions,
   reorderMailboxSiblings,
   validateMailboxEditorInput,
 } from './mailbox-settings';
+import type { Mailbox } from '@/modules/mail/model/mailbox';
 
-const mailbox = (
-  id: string,
-  kind: Mailbox['kind'],
-  options: Partial<Mailbox> = {},
-): Mailbox => ({
+const mailbox = (id: string, kind: Mailbox['kind'], options: Partial<Mailbox> = {}): Mailbox => ({
   id,
   parentId: null,
   name: id,
@@ -38,9 +34,9 @@ const mailboxes = [
 
 describe('Mailbox settings domain', () => {
   it('offers only same-kind parents and excludes the edited node and descendants', () => {
-    expect(getMailboxParentOptions(mailboxes, 'folder', 'folder-root').map(({ id }) => id)).toEqual([
-      'folder-sibling',
-    ]);
+    expect(getMailboxParentOptions(mailboxes, 'folder', 'folder-root').map(({ id }) => id)).toEqual(
+      ['folder-sibling'],
+    );
     expect(getMailboxParentOptions(mailboxes, 'label', null).map(({ id }) => id)).toEqual([
       'label-root',
     ]);
@@ -55,7 +51,7 @@ describe('Mailbox settings domain', () => {
         name: '   ',
         parentId: null,
       }),
-    ).toEqual({ ok: false, message: '名称不能为空。' });
+    ).toEqual({ ok: false, code: 'NAME_REQUIRED' });
     expect(
       validateMailboxEditorInput({
         mailboxes,
@@ -64,7 +60,7 @@ describe('Mailbox settings domain', () => {
         name: ' projects ',
         parentId: null,
       }),
-    ).toEqual({ ok: false, message: '同一层级已存在同名项目。' });
+    ).toEqual({ ok: false, code: 'SIBLING_NAME_CONFLICT' });
     expect(
       validateMailboxEditorInput({
         mailboxes,
@@ -73,7 +69,7 @@ describe('Mailbox settings domain', () => {
         name: 'Projects',
         parentId: 'folder-grandchild',
       }),
-    ).toEqual({ ok: false, message: '不能将自身或子项设为父级。' });
+    ).toEqual({ ok: false, code: 'PARENT_CYCLE' });
     expect(
       validateMailboxEditorInput({
         mailboxes,
@@ -82,7 +78,7 @@ describe('Mailbox settings domain', () => {
         name: 'Valid',
         parentId: 'label-root',
       }),
-    ).toEqual({ ok: false, message: '父级必须与当前项目类型一致。' });
+    ).toEqual({ ok: false, code: 'PARENT_KIND_MISMATCH' });
     expect(
       validateMailboxEditorInput({
         mailboxes,
@@ -92,7 +88,7 @@ describe('Mailbox settings domain', () => {
         parentId: 'folder-grandchild',
         maxDepth: 3,
       }),
-    ).toEqual({ ok: false, message: '层级不能超过 3 级。' });
+    ).toEqual({ ok: false, code: 'MAX_DEPTH_EXCEEDED', maxDepth: 3 });
     expect(
       validateMailboxEditorInput({
         mailboxes,
@@ -105,15 +101,13 @@ describe('Mailbox settings domain', () => {
   });
 
   it('protects system rows and enforces folder and label delete constraints', () => {
-    expect(getMailboxDeleteConstraint(mailbox('inbox', 'system', { role: 'inbox' }), mailboxes)).toBe(
-      '系统邮箱不能修改或删除。',
-    );
-    expect(getMailboxDeleteConstraint(mailboxes[0]!, mailboxes)).toBe(
-      '该项目仍有子项，请先移动或删除子项。',
-    );
+    expect(
+      getMailboxDeleteConstraint(mailbox('inbox', 'system', { role: 'inbox' }), mailboxes),
+    ).toBe('SYSTEM_MAILBOX');
+    expect(getMailboxDeleteConstraint(mailboxes[0]!, mailboxes)).toBe('HAS_CHILDREN');
     expect(
       getMailboxDeleteConstraint(mailbox('used-folder', 'folder', { totalThreads: 2 }), mailboxes),
-    ).toBe('该文件夹仍有邮件，请先移动或清空邮件。');
+    ).toBe('FOLDER_HAS_MAIL');
     expect(
       getMailboxDeleteConstraint(mailbox('used-label', 'label', { totalThreads: 2 }), mailboxes),
     ).toBeNull();

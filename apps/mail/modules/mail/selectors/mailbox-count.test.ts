@@ -31,14 +31,15 @@ describe('mailboxBadgeCount', () => {
     expect(mailboxBadgeCount(mailbox('label', null, 9, 5))).toBe(5);
   });
 
-  it('shows total thread count only for Drafts and hides zero values', () => {
+  it('shows total thread counts for Drafts and Sent and hides zero values', () => {
     expect(mailboxBadgeCount(mailbox('system', 'drafts', 6, 0))).toBe(6);
     expect(mailboxBadgeCount(mailbox('system', 'drafts', 0, 0))).toBeNull();
+    expect(mailboxBadgeCount(mailbox('system', 'sent', 4, 1))).toBe(4);
+    expect(mailboxBadgeCount(mailbox('system', 'sent', 0, 0))).toBeNull();
     expect(mailboxBadgeCount(mailbox('folder', null, 4, 0))).toBeNull();
   });
 
-  it('does not show counts for Sent, Archive, Trash, or auxiliary system mailboxes', () => {
-    expect(mailboxBadgeCount(mailbox('system', 'sent', 4, 1))).toBeNull();
+  it('does not show counts for Archive, Trash, or auxiliary system mailboxes', () => {
     expect(mailboxBadgeCount(mailbox('system', 'archive', 4, 1))).toBeNull();
     expect(mailboxBadgeCount(mailbox('system', 'trash', 4, 1))).toBeNull();
     expect(mailboxBadgeCount(mailbox('system', 'outbox', 4, 1))).toBeNull();

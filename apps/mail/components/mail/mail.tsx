@@ -230,12 +230,12 @@ export function MailLayout() {
                         <MoveToFolderMenu
                           threadIds={mail.bulkSelected}
                           currentMailboxId={currentMailboxId}
-                          label="移动"
+                          label={m['common.mailboxes.move']()}
                         />
                         <LabelPicker
                           threadIds={mail.bulkSelected}
                           threadMailboxIds={selectedThreadMailboxIds}
-                          label="标签"
+                          label={m['common.navigation.labels']()}
                         />
                       </div>
                       <Tooltip>

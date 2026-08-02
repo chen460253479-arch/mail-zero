@@ -13,23 +13,24 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { ExternalLink, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { CSS } from '@dnd-kit/utilities';
 import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { CustomMailboxKind, Mailbox, MailboxTreeNode } from '@/modules/mail/model/mailbox';
 import { mailboxErrorMessage } from '@/modules/mail/mutations/mailbox-error-message';
 import { useMailboxActions } from '@/modules/mail/mutations/use-mailbox-actions';
-import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { buildMailboxTree } from '@/modules/mail/selectors/mailbox-tree';
+import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
+import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
+import { m } from '@/paraglide/messages';
 
-import { MailboxDeleteDialog } from './mailbox-delete-dialog';
 import { MailboxEditorDialog, type MailboxEditorValue } from './mailbox-editor-dialog';
+import { MailboxDeleteDialog } from './mailbox-delete-dialog';
 import { mailboxNodeHref } from './mailbox-tree-node';
 
 export {
@@ -43,10 +44,7 @@ import { reorderMailboxSiblings } from './mailbox-settings-domain';
 type FlatMailbox = { mailbox: Mailbox; depth: number };
 
 const flattenTree = (nodes: readonly MailboxTreeNode[], depth = 0): FlatMailbox[] =>
-  nodes.flatMap((node) => [
-    { mailbox: node, depth },
-    ...flattenTree(node.children, depth + 1),
-  ]);
+  nodes.flatMap((node) => [{ mailbox: node, depth }, ...flattenTree(node.children, depth + 1)]);
 
 export function MailboxSettings() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -62,10 +60,7 @@ export function MailboxSettings() {
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-  const rows = useMemo(
-    () => flattenTree(buildMailboxTree(mailboxes, { kind })),
-    [kind, mailboxes],
-  );
+  const rows = useMemo(() => flattenTree(buildMailboxTree(mailboxes, { kind })), [kind, mailboxes]);
 
   useEffect(() => {
     if (searchParams.get('create') !== 'true') return;
@@ -88,7 +83,7 @@ export function MailboxSettings() {
       } else if (editorKind) {
         await createMailbox({ kind: editorKind, sortOrder: rows.length * 10, ...value });
       }
-      toast.success('邮箱项目已保存');
+      toast.success(m['common.mailboxes.saved']());
     } catch (error) {
       throw new Error(mailboxErrorMessage(error instanceof Error ? error.message : 'UNKNOWN'));
     }
@@ -118,7 +113,7 @@ export function MailboxSettings() {
     try {
       await destroyMailbox({ id: deletingMailbox.id });
       setDeletingMailbox(null);
-      toast.success('邮箱项目已删除');
+      toast.success(m['common.mailboxes.deleted']());
     } catch (error) {
       toast.error(mailboxErrorMessage(error instanceof Error ? error.message : 'UNKNOWN'));
     }
@@ -129,32 +124,42 @@ export function MailboxSettings() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">文件夹与标签</h1>
+          <h1 className="text-2xl font-semibold">{m['common.mailboxes.settingsTitle']()}</h1>
           <p className="text-muted-foreground text-sm">
-            管理本地邮件的主要文件夹和可多选标签，不会反向同步到邮件服务商。
+            {m['common.mailboxes.settingsDescription']()}
           </p>
         </div>
         <Button onClick={() => setEditorKind(kind)}>
           <Plus className="mr-2 size-4" />
-          创建{kind === 'folder' ? '文件夹' : '标签'}
+          {m['common.mailboxes.createItem']({
+            kind:
+              kind === 'folder' ? m['common.mailboxes.folder']() : m['common.mailboxes.label'](),
+          })}
         </Button>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="folders">文件夹</TabsTrigger>
-          <TabsTrigger value="labels">标签</TabsTrigger>
+          <TabsTrigger value="folders">{m['common.navigation.folders']()}</TabsTrigger>
+          <TabsTrigger value="labels">{m['common.navigation.labels']()}</TabsTrigger>
         </TabsList>
         <TabsContent value={tab}>
           {isLoading ? (
-            <p className="text-muted-foreground py-8 text-center text-sm">正在加载…</p>
+            <p className="text-muted-foreground py-8 text-center text-sm">
+              {m['common.actions.loading']()}
+            </p>
           ) : rows.length === 0 ? (
             <p className="text-muted-foreground rounded-lg border py-8 text-center text-sm">
-              暂无{kind === 'folder' ? '文件夹' : '标签'}
+              {kind === 'folder'
+                ? m['common.mailboxes.noFolders']()
+                : m['common.mailboxes.noLabels']()}
             </p>
           ) : (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-              <SortableContext items={rows.map(({ mailbox }) => mailbox.id)} strategy={verticalListSortingStrategy}>
+              <SortableContext
+                items={rows.map(({ mailbox }) => mailbox.id)}
+                strategy={verticalListSortingStrategy}
+              >
                 <div className="divide-y rounded-lg border">
                   {rows.map(({ mailbox, depth }) => (
                     <SortableMailboxRow
@@ -181,7 +186,13 @@ export function MailboxSettings() {
             setEditingMailbox(null);
           }
         }}
-        kind={editingMailbox?.kind === 'label' ? 'label' : editingMailbox?.kind === 'folder' ? 'folder' : editorKind ?? kind}
+        kind={
+          editingMailbox?.kind === 'label'
+            ? 'label'
+            : editingMailbox?.kind === 'folder'
+              ? 'folder'
+              : (editorKind ?? kind)
+        }
         mailbox={editingMailbox}
         mailboxes={mailboxes}
         onSubmit={saveMailbox}
@@ -219,11 +230,20 @@ function SortableMailboxRow({
     <div
       ref={setNodeRef}
       className="bg-background flex items-center gap-3 p-3"
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.6 : 1,
+      }}
     >
-      <button type="button" className="text-muted-foreground cursor-grab" {...attributes} {...listeners}>
+      <button
+        type="button"
+        className="text-muted-foreground cursor-grab"
+        {...attributes}
+        {...listeners}
+      >
         <GripVertical className="size-4" />
-        <span className="sr-only">调整顺序</span>
+        <span className="sr-only">{m['common.mailboxes.reorder']()}</span>
       </button>
       <div className="min-w-0 flex-1" style={{ paddingLeft: `${depth * 20}px` }}>
         <div className="flex items-center gap-2">
@@ -233,27 +253,30 @@ function SortableMailboxRow({
           <span className="truncate font-medium">{mailbox.name}</span>
         </div>
         <p className="text-muted-foreground text-xs">
-          {mailbox.totalThreads.toLocaleString()} 个会话 · {mailbox.unreadThreads.toLocaleString()} 个未读
+          {m['common.mailboxes.threadStats']({
+            total: mailbox.totalThreads.toLocaleString(),
+            unread: mailbox.unreadThreads.toLocaleString(),
+          })}
         </p>
       </div>
       <Switch
         checked={mailbox.isSubscribed}
         onCheckedChange={onSubscribedChange}
-        aria-label="在侧边栏显示"
+        aria-label={m['common.mailboxes.showInSidebar']()}
       />
       <Button variant="ghost" size="icon" asChild>
         <Link to={mailboxNodeHref(mailbox.id)}>
           <ExternalLink className="size-4" />
-          <span className="sr-only">打开</span>
+          <span className="sr-only">{m['common.mailboxes.open']()}</span>
         </Link>
       </Button>
       <Button variant="ghost" size="icon" onClick={onEdit}>
         <Pencil className="size-4" />
-        <span className="sr-only">编辑</span>
+        <span className="sr-only">{m['common.mailboxes.edit']()}</span>
       </Button>
       <Button variant="ghost" size="icon" onClick={onDelete}>
         <Trash2 className="size-4" />
-        <span className="sr-only">删除</span>
+        <span className="sr-only">{m['common.mailboxes.delete']()}</span>
       </Button>
     </div>
   );

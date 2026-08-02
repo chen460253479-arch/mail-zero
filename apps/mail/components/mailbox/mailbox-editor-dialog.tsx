@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -9,8 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -18,8 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import type { CustomMailboxKind, Mailbox } from '@/modules/mail/model/mailbox';
+import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { m } from '@/paraglide/messages';
 
 import { getMailboxParentOptions, validateMailboxEditorInput } from './mailbox-settings-domain';
 
@@ -76,7 +77,23 @@ export function MailboxEditorDialog({
       parentId,
     });
     if (!validation.ok) {
-      setError(validation.message);
+      switch (validation.code) {
+        case 'NAME_REQUIRED':
+          setError(m['common.mailboxes.nameRequired']());
+          break;
+        case 'PARENT_KIND_MISMATCH':
+          setError(m['common.mailboxes.parentKindMismatch']());
+          break;
+        case 'PARENT_CYCLE':
+          setError(m['common.mailboxes.parentCycle']());
+          break;
+        case 'SIBLING_NAME_CONFLICT':
+          setError(m['common.mailboxes.siblingNameConflict']());
+          break;
+        case 'MAX_DEPTH_EXCEEDED':
+          setError(m['common.mailboxes.maxDepthExceeded']({ maxDepth: validation.maxDepth }));
+          break;
+      }
       return;
     }
     setSaving(true);
@@ -89,23 +106,28 @@ export function MailboxEditorDialog({
       });
       onOpenChange(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '邮箱操作失败，请重试。');
+      setError(cause instanceof Error ? cause.message : m['common.mailboxes.operationFailed']());
     } finally {
       setSaving(false);
     }
   };
 
-  const kindName = kind === 'folder' ? '文件夹' : '标签';
+  const kindName =
+    kind === 'folder' ? m['common.mailboxes.folder']() : m['common.mailboxes.label']();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{mailbox ? `编辑${kindName}` : `创建${kindName}`}</DialogTitle>
-          <DialogDescription>名称和层级只保存在 Zero 本地邮箱中。</DialogDescription>
+          <DialogTitle>
+            {mailbox
+              ? m['common.mailboxes.editItem']({ kind: kindName })
+              : m['common.mailboxes.createItem']({ kind: kindName })}
+          </DialogTitle>
+          <DialogDescription>{m['common.mailboxes.localOnlyDescription']()}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor="mailbox-name">名称</Label>
+            <Label htmlFor="mailbox-name">{m['common.mailboxes.name']()}</Label>
             <Input
               id="mailbox-name"
               value={name}
@@ -114,7 +136,7 @@ export function MailboxEditorDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label>父级</Label>
+            <Label>{m['common.mailboxes.parent']()}</Label>
             <Select
               value={parentId ?? ROOT_PARENT}
               onValueChange={(value) => setParentId(value === ROOT_PARENT ? null : value)}
@@ -123,7 +145,7 @@ export function MailboxEditorDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ROOT_PARENT}>根级</SelectItem>
+                <SelectItem value={ROOT_PARENT}>{m['common.mailboxes.root']()}</SelectItem>
                 {parentOptions.map((option) => (
                   <SelectItem key={option.id} value={option.id}>
                     {option.name}
@@ -134,7 +156,7 @@ export function MailboxEditorDialog({
           </div>
           {kind === 'label' ? (
             <div className="space-y-2">
-              <Label htmlFor="mailbox-color">颜色</Label>
+              <Label htmlFor="mailbox-color">{m['common.mailboxes.color']()}</Label>
               <Input
                 id="mailbox-color"
                 type="color"
@@ -145,8 +167,10 @@ export function MailboxEditorDialog({
           ) : null}
           <div className="flex items-center justify-between rounded-lg border p-3">
             <div>
-              <p className="text-sm font-medium">在侧边栏显示</p>
-              <p className="text-muted-foreground text-xs">关闭后仍可在此设置页管理。</p>
+              <p className="text-sm font-medium">{m['common.mailboxes.showInSidebar']()}</p>
+              <p className="text-muted-foreground text-xs">
+                {m['common.mailboxes.showInSidebarDescription']()}
+              </p>
             </div>
             <Switch checked={isSubscribed} onCheckedChange={setIsSubscribed} />
           </div>
@@ -154,10 +178,10 @@ export function MailboxEditorDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            取消
+            {m['common.actions.cancel']()}
           </Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? '保存中…' : '保存'}
+            {saving ? m['common.actions.saving']() : m['common.actions.save']()}
           </Button>
         </DialogFooter>
       </DialogContent>

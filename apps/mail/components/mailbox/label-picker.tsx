@@ -11,6 +11,7 @@ import type { MailboxTreeNode } from '@/modules/mail/model/mailbox';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { m } from '@/paraglide/messages';
 import { cn } from '@/lib/utils';
 
 import { buildLabelMutation, nextLabelSelectionState } from './mail-action-menu-domain';
@@ -68,13 +69,13 @@ export function LabelPicker({ threadIds, threadMailboxIds, className, label }: L
     setPending(true);
     try {
       await setThreadLabels(threadIds, mutation.addLabelIds, mutation.removeLabelIds);
-      toast.success('标签已更新');
+      toast.success(m['common.mailboxes.labelsUpdated']());
       setOpen(false);
       setSearch('');
       setChanges({});
     } catch (error) {
       console.error('Failed to update thread labels:', error);
-      toast.error('更新标签失败，请重试');
+      toast.error(m['common.mailboxes.labelsUpdateFailed']());
     } finally {
       setPending(false);
     }
@@ -90,7 +91,7 @@ export function LabelPicker({ threadIds, threadMailboxIds, className, label }: L
           variant="ghost"
           size={label ? 'sm' : 'icon'}
           className={cn('h-8', !label && 'w-8', className)}
-          aria-label="管理标签"
+          aria-label={m['common.mailboxes.manageLabels']()}
           onClick={stopPropagation}
           disabled={threadIds.length === 0}
         >
@@ -109,14 +110,16 @@ export function LabelPicker({ threadIds, threadMailboxIds, className, label }: L
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="搜索标签"
+            placeholder={m['common.mailboxes.searchLabels']()}
             className="h-9 pl-8"
             autoFocus
           />
         </div>
         <div className="max-h-64 overflow-y-auto">
           {labels.length === 0 ? (
-            <p className="text-muted-foreground px-2 py-6 text-center text-sm">没有可用标签</p>
+            <p className="text-muted-foreground px-2 py-6 text-center text-sm">
+              {m['common.mailboxes.noLabelsAvailable']()}
+            </p>
           ) : (
             labels.map(({ mailbox, depth }) => {
               const state =
@@ -151,7 +154,7 @@ export function LabelPicker({ threadIds, threadMailboxIds, className, label }: L
         </div>
         <div className="mt-2 flex justify-end gap-2 border-t pt-2">
           <Button type="button" variant="ghost" size="sm" onClick={() => setPickerOpen(false)}>
-            取消
+            {m['common.actions.cancel']()}
           </Button>
           <Button
             type="button"
@@ -160,7 +163,7 @@ export function LabelPicker({ threadIds, threadMailboxIds, className, label }: L
             onClick={() => void apply()}
           >
             {pending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-            应用
+            {m['common.mailboxes.apply']()}
           </Button>
         </div>
       </PopoverContent>

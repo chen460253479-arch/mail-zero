@@ -7,9 +7,10 @@ import {
   SidebarMenuItem,
   SidebarMenuSub,
 } from '@/components/ui/sidebar';
-import { useSidebar } from '@/components/context/sidebar-context';
-import type { MailboxTreeNode } from '@/modules/mail/model/mailbox';
 import { mailboxBadgeCount } from '@/modules/mail/selectors/mailbox-count';
+import type { MailboxTreeNode } from '@/modules/mail/model/mailbox';
+import { useSidebar } from '@/components/context/sidebar-context';
+import { m } from '@/paraglide/messages';
 import { cn } from '@/lib/utils';
 
 export const mailboxNodeHref = (mailboxId: string) => `/mail/${encodeURIComponent(mailboxId)}`;
@@ -39,7 +40,11 @@ export function MailboxTreeNodeItem({
         {hasChildren ? (
           <button
             type="button"
-            aria-label={expanded ? `折叠 ${node.name}` : `展开 ${node.name}`}
+            aria-label={
+              expanded
+                ? m['common.mailboxes.collapseItem']({ name: node.name })
+                : m['common.mailboxes.expandItem']({ name: node.name })
+            }
             aria-expanded={expanded}
             className="text-muted-foreground flex size-6 shrink-0 items-center justify-center"
             onClick={() => onToggle(node.id)}
@@ -51,7 +56,10 @@ export function MailboxTreeNodeItem({
         )}
         <SidebarMenuButton asChild isActive={activeMailboxId === node.id} className="min-w-0">
           <Link to={mailboxNodeHref(node.id)} onClick={() => setOpenMobile(false)}>
-            <Icon className="size-4 shrink-0" style={node.color ? { color: node.color } : undefined} />
+            <Icon
+              className="size-4 shrink-0"
+              style={node.color ? { color: node.color } : undefined}
+            />
             <span className="truncate">{node.name}</span>
           </Link>
         </SidebarMenuButton>
