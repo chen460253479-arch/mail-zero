@@ -24,20 +24,19 @@ const systemMailbox = (id: string, role: NonNullable<Mailbox['role']>): Mailbox 
 });
 
 describe('thread action input', () => {
-  it('maps read state to the local $seen keyword with a state precondition', () => {
-    expect(
-      buildKeywordThreadAction({
-        accountId: 'account-1',
-        threadIds: ['thread-1'],
-        keyword: '$seen',
-        enabled: true,
-        ifInState: 'state-3',
-        clientMutationId: 'mutation-1',
-      }),
-    ).toEqual({
+  it('omits a stale state precondition from an idempotent keyword command', () => {
+    const commandWithStaleState = {
       accountId: 'account-1',
       threadIds: ['thread-1'],
-      ifInState: 'state-3',
+      keyword: '$seen',
+      enabled: true,
+      ifInState: 'stale-state',
+      clientMutationId: 'mutation-1',
+    };
+
+    expect(buildKeywordThreadAction(commandWithStaleState)).toEqual({
+      accountId: 'account-1',
+      threadIds: ['thread-1'],
       addMailboxIds: [],
       removeMailboxIds: [],
       addKeywords: ['$seen'],

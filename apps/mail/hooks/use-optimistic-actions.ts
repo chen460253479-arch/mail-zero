@@ -12,6 +12,11 @@ import {
   buildSetThreadLabelsAction,
   resolveSystemMoveDestinationMailboxId,
 } from '@/modules/mail/mutations/thread-action-input';
+import {
+  KeyedActionQueue,
+  startImmediateReversibleAction,
+} from '@/lib/immediate-reversible-action';
+import { createKeywordActionOperations } from '@/modules/mail/mutations/keyword-action-operations';
 import { useMailAccountContext } from '@/modules/mail/providers/mail-account-provider';
 import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
 import type { ThreadDestination } from '@/lib/thread-actions';
@@ -23,6 +28,8 @@ import { useQueryState } from 'nuqs';
 import { useCallback } from 'react';
 import { useAtom } from 'jotai';
 import { toast } from 'sonner';
+
+const keywordActionQueue = new KeyedActionQueue();
 
 export function useOptimisticActions() {
   const trpc = useTRPC();
@@ -61,7 +68,6 @@ export function useOptimisticActions() {
         threadIds,
         keyword,
         enabled,
-        ifInState: mailboxState,
         clientMutationId: mutationId(),
       }),
     );
@@ -101,6 +107,8 @@ export function useOptimisticActions() {
     params,
     optimisticId,
     execute,
+    revert,
+    queueKey,
     undo,
     toastMessage,
   }: {
@@ -109,6 +117,8 @@ export function useOptimisticActions() {
     params: PendingAction['params'];
     optimisticId: string;
     execute: () => Promise<void>;
+    revert?: () => Promise<void>;
+    queueKey?: string;
     undo: () => void;
     toastMessage: string;
     folders?: string[];
@@ -161,6 +171,76 @@ export function useOptimisticActions() {
       }
     }
 
+    if (revert || queueKey) {
+      if (!revert || !queueKey) {
+        throw new Error('REVERSIBLE_ACTION_CONFIGURATION_INVALID');
+      }
+
+      const reversibleAction = startImmediateReversibleAction({
+        queue: keywordActionQueue,
+        key: queueKey,
+        execute,
+        revert,
+        onUndoRequested: undo,
+        onCommitted: async () => {
+          const { shouldRefresh } = settlePendingAction(
+            optimisticActionsManager,
+            pendingActionId,
+            type,
+          );
+          try {
+            if (shouldRefresh) {
+              await refreshData();
+            }
+          } finally {
+            removeOptimisticAction(optimisticId);
+          }
+        },
+        onForwardFailed: async (error) => {
+          console.error('Action failed:', error);
+          removeOptimisticAction(optimisticId);
+          settlePendingAction(optimisticActionsManager, pendingActionId, type);
+          await refreshData();
+          toast.error(m['common.actions.actionFailed']());
+        },
+        onReverted: async () => {
+          await refreshData();
+        },
+        onRevertFailed: async (error) => {
+          console.error('Undo failed:', error);
+          await refreshData();
+          toast.error(m['common.actions.actionFailed']());
+        },
+      });
+
+      pendingAction.undo = () => {
+        void reversibleAction.undo();
+      };
+
+      if (toastMessage.trim().length) {
+        toast(bulkActionMessage, {
+          onAutoClose: () => {
+            void reversibleAction.finalize();
+          },
+          onDismiss: () => {
+            void reversibleAction.finalize();
+          },
+          action: {
+            label: m['common.actions.undo'](),
+            onClick: () => {
+              pendingAction.undo();
+              settlePendingAction(optimisticActionsManager, pendingActionId, type);
+            },
+          },
+          duration: 5000,
+        });
+      } else {
+        void reversibleAction.finalize();
+      }
+
+      return pendingActionId;
+    }
+
     if (toastMessage.trim().length) {
       toast(bulkActionMessage, {
         onAutoClose: () => {
@@ -189,6 +269,14 @@ export function useOptimisticActions() {
     (threadIds: string[], silent = false) => {
       if (!threadIds.length) return;
 
+      const keywordAction = createKeywordActionOperations({
+        accountId: account?.id ?? 'unavailable',
+        threadIds,
+        keyword: '$seen',
+        enabled: true,
+        updateKeyword,
+      });
+
       const optimisticId = addOptimisticAction({
         type: 'READ',
         threadIds,
@@ -201,23 +289,33 @@ export function useOptimisticActions() {
         params: { read: true },
         optimisticId,
         execute: async () => {
-          await updateKeyword(threadIds, '$seen', true);
+          await keywordAction.execute();
 
           if (mail.bulkSelected.length > 0) {
             setMail((prev) => ({ ...prev, bulkSelected: [] }));
           }
         },
+        revert: keywordAction.revert,
+        queueKey: keywordAction.queueKey,
         undo: () => {
           removeOptimisticAction(optimisticId);
         },
         toastMessage: silent ? '' : m['common.mail.markedAsRead'](),
       });
     },
-    [addOptimisticAction, removeOptimisticAction, setMail, updateKeyword],
+    [account?.id, addOptimisticAction, removeOptimisticAction, setMail, updateKeyword],
   );
 
   function optimisticMarkAsUnread(threadIds: string[]) {
     if (!threadIds.length) return;
+
+    const keywordAction = createKeywordActionOperations({
+      accountId: account?.id ?? 'unavailable',
+      threadIds,
+      keyword: '$seen',
+      enabled: false,
+      updateKeyword,
+    });
 
     const optimisticId = addOptimisticAction({
       type: 'READ',
@@ -231,12 +329,14 @@ export function useOptimisticActions() {
       params: { read: false },
       optimisticId,
       execute: async () => {
-        await updateKeyword(threadIds, '$seen', false);
+        await keywordAction.execute();
 
         if (mail.bulkSelected.length > 0) {
           setMail({ ...mail, bulkSelected: [] });
         }
       },
+      revert: keywordAction.revert,
+      queueKey: keywordAction.queueKey,
       undo: () => {
         removeOptimisticAction(optimisticId);
       },
@@ -247,6 +347,14 @@ export function useOptimisticActions() {
   const optimisticToggleStar = useCallback(
     (threadIds: string[], starred: boolean) => {
       if (!threadIds.length) return;
+
+      const keywordAction = createKeywordActionOperations({
+        accountId: account?.id ?? 'unavailable',
+        threadIds,
+        keyword: '$flagged',
+        enabled: starred,
+        updateKeyword,
+      });
 
       const optimisticId = addOptimisticAction({
         type: 'STAR',
@@ -259,9 +367,9 @@ export function useOptimisticActions() {
         threadIds,
         params: { starred },
         optimisticId,
-        execute: async () => {
-          await updateKeyword(threadIds, '$flagged', starred);
-        },
+        execute: keywordAction.execute,
+        revert: keywordAction.revert,
+        queueKey: keywordAction.queueKey,
         undo: () => {
           removeOptimisticAction(optimisticId);
         },
@@ -270,7 +378,7 @@ export function useOptimisticActions() {
           : m['common.actions.removedFromFavorites'](),
       });
     },
-    [addOptimisticAction, removeOptimisticAction, setMail, updateKeyword],
+    [account?.id, addOptimisticAction, removeOptimisticAction, updateKeyword],
   );
 
   function optimisticMoveThreadsTo(
@@ -432,6 +540,14 @@ export function useOptimisticActions() {
     (threadIds: string[], isImportant: boolean) => {
       if (!threadIds.length) return;
 
+      const keywordAction = createKeywordActionOperations({
+        accountId: account?.id ?? 'unavailable',
+        threadIds,
+        keyword: '$important',
+        enabled: isImportant,
+        updateKeyword,
+      });
+
       const optimisticId = addOptimisticAction({
         type: 'IMPORTANT',
         threadIds,
@@ -444,12 +560,14 @@ export function useOptimisticActions() {
         params: { important: isImportant },
         optimisticId,
         execute: async () => {
-          await updateKeyword(threadIds, '$important', isImportant);
+          await keywordAction.execute();
 
           if (mail.bulkSelected.length > 0) {
             setMail((prev) => ({ ...prev, bulkSelected: [] }));
           }
         },
+        revert: keywordAction.revert,
+        queueKey: keywordAction.queueKey,
         undo: () => {
           removeOptimisticAction(optimisticId);
         },
@@ -458,7 +576,7 @@ export function useOptimisticActions() {
           : m['common.mail.markedAsUnimportant'](),
       });
     },
-    [addOptimisticAction, removeOptimisticAction, setMail, updateKeyword],
+    [account?.id, addOptimisticAction, removeOptimisticAction, setMail, updateKeyword],
   );
 
   async function setThreadLabels(

@@ -4,6 +4,7 @@ import {
   type Persister,
 } from '@tanstack/react-query-persist-client';
 import { QueryCache, QueryClient, hashKey, type InfiniteData } from '@tanstack/react-query';
+import { revalidatePersistedMailCache } from '@/modules/mail/api/persisted-mail-cache';
 import { getQueryCacheStorageKey } from '@/modules/mail/api/query-cache-scope';
 import { createTRPCContext } from '@trpc/tanstack-react-query';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
@@ -151,8 +152,9 @@ export function QueryProvider({
             };
           },
         );
-        // invalidate the query, it will refetch when the data is it is being accessed
-        queryClient.invalidateQueries({ queryKey: threadQueryKey });
+        // Persisted mail data is an initial snapshot only. Revalidate every view that can expose
+        // mutable mailbox state so list, detail, and counts cannot hydrate from different versions.
+        void revalidatePersistedMailCache(queryClient);
       }}
     >
       <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>

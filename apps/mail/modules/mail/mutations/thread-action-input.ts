@@ -3,8 +3,11 @@ import type { Mailbox, MailboxRole } from '../model/mailbox';
 type CommonThreadAction = {
   accountId: string;
   threadIds: string[];
-  ifInState?: string;
   clientMutationId: string;
+};
+
+type StateConditionalThreadAction = CommonThreadAction & {
+  ifInState?: string;
 };
 
 export type SystemMoveDestination = 'inbox' | 'archive' | 'spam' | 'bin';
@@ -39,7 +42,6 @@ export function buildKeywordThreadAction({
   return {
     accountId: common.accountId,
     threadIds: common.threadIds,
-    ...(common.ifInState ? { ifInState: common.ifInState } : {}),
     addMailboxIds: [],
     removeMailboxIds: [],
     addKeywords: enabled ? [keyword] : [],
@@ -51,7 +53,7 @@ export function buildKeywordThreadAction({
 export function buildMoveThreadAction({
   destinationMailboxId,
   ...common
-}: CommonThreadAction & {
+}: StateConditionalThreadAction & {
   destinationMailboxId: string;
 }) {
   return {
@@ -68,7 +70,7 @@ export function buildSetThreadLabelsAction({
   removeLabelIds,
   mailboxes,
   ...common
-}: CommonThreadAction & {
+}: StateConditionalThreadAction & {
   addLabelIds: readonly string[];
   removeLabelIds: readonly string[];
   mailboxes: readonly Mailbox[];

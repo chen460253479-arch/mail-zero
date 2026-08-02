@@ -32,6 +32,7 @@ import {
   type Ref,
 } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { applyOptimisticKeywordTags } from '@/components/mail/optimistic-keyword-tags';
 import { useOptimisticThreadState } from '@/components/mail/optimistic-thread-state';
 import { MoveToFolderMenu } from '@/components/mailbox/move-to-folder-menu';
 import { resolveMailboxRoute } from '@/modules/mail/routing/mailbox-route';
@@ -219,6 +220,17 @@ export function ThreadDisplay() {
   // Get optimistic state for this thread
   const optimisticState = useOptimisticThreadState(id ?? '');
   const displayImportant = optimisticState.optimisticImportant ?? isImportant;
+  const displayMessages = useMemo(
+    () =>
+      emailData?.messages.map((message) => ({
+        ...message,
+        tags: applyOptimisticKeywordTags(message.tags, {
+          important: optimisticState.optimisticImportant,
+          starred: optimisticState.optimisticStarred,
+        }),
+      })) ?? [],
+    [emailData?.messages, optimisticState.optimisticImportant, optimisticState.optimisticStarred],
+  );
 
   const handleNext = useCallback(() => {
     if (!id || !items.length || focusedIndex === null) return setThreadId(null);
@@ -1008,7 +1020,7 @@ export function ThreadDisplay() {
                     className="h-full w-full"
                   >
                     <MessageList
-                      messages={emailData.messages}
+                      messages={displayMessages}
                       isFullscreen={isFullscreen}
                       totalReplies={emailData?.totalReplies}
                       allThreadAttachments={allThreadAttachments}
@@ -1020,7 +1032,7 @@ export function ThreadDisplay() {
                 </AnimatePresence>
               ) : (
                 <MessageList
-                  messages={emailData.messages}
+                  messages={displayMessages}
                   isFullscreen={isFullscreen}
                   totalReplies={emailData?.totalReplies}
                   allThreadAttachments={allThreadAttachments}
