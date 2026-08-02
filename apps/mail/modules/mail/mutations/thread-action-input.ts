@@ -51,16 +51,28 @@ export function buildKeywordThreadAction({
 }
 
 export function buildMoveThreadAction({
+  sourceMailboxId,
   destinationMailboxId,
   ...common
 }: StateConditionalThreadAction & {
+  sourceMailboxId: string;
   destinationMailboxId: string;
 }) {
   return {
     accountId: common.accountId,
     threadIds: common.threadIds,
     ...(common.ifInState ? { ifInState: common.ifInState } : {}),
+    sourceMailboxId,
     destinationMailboxId,
+    clientMutationId: common.clientMutationId,
+  };
+}
+
+export function buildRestoreArchivedThreadAction(common: StateConditionalThreadAction) {
+  return {
+    accountId: common.accountId,
+    threadIds: common.threadIds,
+    ...(common.ifInState ? { ifInState: common.ifInState } : {}),
     clientMutationId: common.clientMutationId,
   };
 }

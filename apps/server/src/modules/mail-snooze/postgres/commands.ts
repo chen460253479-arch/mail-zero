@@ -17,6 +17,7 @@ import type { DB } from '../../../db';
 
 type SnoozeInput = { accountId: string; threadIds: string[]; wakeAt: Date };
 type UnsnoozeInput = { accountId: string; threadIds: string[] };
+type ArchiveSnoozedInput = { accountId: string; threadIds: string[] };
 
 const itemFailure = (code: string): MailCoreSetError => ({ code: code as never, details: {} });
 
@@ -171,6 +172,27 @@ export const createPostgresMailSnoozeCommands = (dependencies: {
         restored.push(threadId);
       }
       return { restored, notFound };
+    });
+  },
+
+  async archive(input: ArchiveSnoozedInput) {
+    const now = dependencies.clock.now();
+    const accountId = input.accountId as MailAccountId;
+    return runPostgresMailTransaction(dependencies.db, async (tx, database) => {
+      await tx.lockAccount(accountId);
+      const repository = createPostgresMailSnoozeTransactionRepository(database);
+      const archived: string[] = [];
+      const notFound: string[] = [];
+      for (const threadId of [...new Set(input.threadIds)]) {
+        const record = await repository.find(input.accountId, threadId);
+        if (record === null || !['scheduled', 'waking'].includes(record.status)) {
+          notFound.push(threadId);
+          continue;
+        }
+        await repository.cancel({ accountId: input.accountId, threadId, now });
+        archived.push(threadId);
+      }
+      return { archived, notFound };
     });
   },
 

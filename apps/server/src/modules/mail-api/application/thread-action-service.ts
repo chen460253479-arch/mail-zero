@@ -15,12 +15,14 @@ import {
   unsnoozeThreadsInputSchema,
   updateThreadsInputSchema,
   moveThreadsInputSchema,
+  restoreArchivedThreadsInputSchema,
+  archiveSnoozedThreadsInputSchema,
 } from '../contracts/action';
 import type { MailSnoozeRuntime } from '../../mail-snooze/runtime/create-mail-snooze';
 import { mapSetError, mapSetErrors } from './dto';
 
 export const createThreadActionService = (
-  core: Pick<MailCore, 'moveThreadEmails' | 'updateThreadEmails'>,
+  core: Pick<MailCore, 'moveThreadEmails' | 'restoreArchivedThreadEmails' | 'updateThreadEmails'>,
 ) => ({
   async updateThreads(input: z.infer<typeof updateThreadsInputSchema>) {
     const result = await core.updateThreadEmails({
@@ -43,7 +45,21 @@ export const createThreadActionService = (
     const result = await core.moveThreadEmails({
       accountId: input.accountId as MailAccountId,
       threadIds: input.threadIds as ThreadId[],
+      sourceMailboxId: input.sourceMailboxId as MailboxId,
       destinationMailboxId: input.destinationMailboxId as MailboxId,
+      ifInState: input.ifInState,
+    });
+    return {
+      accountId: input.accountId,
+      clientMutationId: input.clientMutationId,
+      ...result,
+      failed: mapSetErrors(result.failed),
+    };
+  },
+  async restoreArchivedThreads(input: z.infer<typeof restoreArchivedThreadsInputSchema>) {
+    const result = await core.restoreArchivedThreadEmails({
+      accountId: input.accountId as MailAccountId,
+      threadIds: input.threadIds as ThreadId[],
       ifInState: input.ifInState,
     });
     return {
@@ -56,7 +72,7 @@ export const createThreadActionService = (
 });
 
 export const createSnoozeActionService = (
-  snooze: Pick<MailSnoozeRuntime, 'snooze' | 'unsnooze'>,
+  snooze: Pick<MailSnoozeRuntime, 'archive' | 'snooze' | 'unsnooze'>,
 ) => ({
   async snoozeThreads(input: z.infer<typeof snoozeThreadsInputSchema>) {
     return {
@@ -74,6 +90,16 @@ export const createSnoozeActionService = (
       accountId: input.accountId,
       clientMutationId: input.clientMutationId,
       ...(await snooze.unsnooze({
+        accountId: input.accountId,
+        threadIds: input.threadIds,
+      })),
+    };
+  },
+  async archiveSnoozedThreads(input: z.infer<typeof archiveSnoozedThreadsInputSchema>) {
+    return {
+      accountId: input.accountId,
+      clientMutationId: input.clientMutationId,
+      ...(await snooze.archive({
         accountId: input.accountId,
         threadIds: input.threadIds,
       })),

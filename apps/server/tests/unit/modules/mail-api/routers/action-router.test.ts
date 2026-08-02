@@ -74,12 +74,14 @@ describe('Action Router', () => {
     const moveResult = await caller.action.moveThreads({
       accountId: account.id,
       threadIds: ['thread-1'],
+      sourceMailboxId: 'mailbox-inbox',
       destinationMailboxId: 'mailbox-archive',
       clientMutationId: 'mutation-2',
     });
     expect(moveThreadEmails).toHaveBeenCalledWith({
       accountId: account.id,
       threadIds: ['thread-1'],
+      sourceMailboxId: 'mailbox-inbox',
       destinationMailboxId: 'mailbox-archive',
       ifInState: undefined,
     });

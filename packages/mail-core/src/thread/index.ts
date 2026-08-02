@@ -26,6 +26,8 @@ export {
 } from './update-thread-emails';
 export {
   moveThreadEmails,
+  restoreArchivedThreadEmails,
   type MoveThreadEmailsInput,
   type MoveThreadEmailsResult,
+  type RestoreArchivedThreadEmailsInput,
 } from './move-thread-emails';

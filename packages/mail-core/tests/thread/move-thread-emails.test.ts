@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createMailAccount,
   createMailCore,
+  createMailCoreMaintenance,
   createMailbox,
   updateEmail,
   type EmailId,
@@ -107,6 +108,10 @@ describe('moveThreadEmails', () => {
     const archive = await systemMailbox(h, 'archive');
     const sent = await seedLifecycleEmail(h, 'sent', 'sent');
     const draft = await seedLifecycleEmail(h, 'draft', 'drafts');
+    await createMailCoreMaintenance(h.deps).reconcileMailAggregates({
+      accountId: h.accountId,
+      repair: true,
+    });
 
     const result = await core.moveThreadEmails({
       accountId: h.accountId,
@@ -118,6 +123,84 @@ describe('moveThreadEmails', () => {
     expect((await h.inspect.email(h.emailId))?.mailboxIds).toContain(archive.id);
     expect((await h.inspect.email(sent.emailId))?.mailboxIds).toEqual([sent.mailboxId]);
     expect((await h.inspect.email(draft.emailId))?.mailboxIds).toEqual([draft.mailboxId]);
+  });
+
+  it('archives only emails in the selected Sent source mailbox', async () => {
+    const h = await createSeededEmailHarness();
+    const core = createMailCore(h.deps);
+    const archive = await systemMailbox(h, 'archive');
+    const sent = await seedLifecycleEmail(h, 'sent', 'sent');
+    const draft = await seedLifecycleEmail(h, 'draft', 'drafts');
+    await createMailCoreMaintenance(h.deps).reconcileMailAggregates({
+      accountId: h.accountId,
+      repair: true,
+    });
+
+    const result = await core.moveThreadEmails({
+      accountId: h.accountId,
+      threadIds: [h.threadId],
+      sourceMailboxId: sent.mailboxId,
+      destinationMailboxId: archive.id,
+    });
+
+    expect(result).toMatchObject({ movedThreadIds: [h.threadId], failed: {} });
+    expect((await h.inspect.email(sent.emailId))?.mailboxIds).toEqual([archive.id]);
+    expect((await h.inspect.email(sent.emailId))?.lifecycle).toBe('sent');
+    expect((await h.inspect.email(h.emailId))?.mailboxIds).toEqual([h.inboxId]);
+    expect((await h.inspect.email(draft.emailId))?.mailboxIds).toEqual([draft.mailboxId]);
+  });
+
+  it('reports a source mismatch instead of returning a false successful move', async () => {
+    const h = await createSeededEmailHarness();
+    const core = createMailCore(h.deps);
+    const sent = await systemMailbox(h, 'sent');
+
+    const result = await core.moveThreadEmails({
+      accountId: h.accountId,
+      threadIds: [h.threadId],
+      sourceMailboxId: sent.id,
+      destinationMailboxId: h.archiveId,
+    });
+
+    expect(result.movedThreadIds).toEqual([]);
+    expect(result.failed).toEqual({
+      [h.threadId]: { code: 'INVALID_PATCH', details: { entityId: h.threadId } },
+    });
+    expect((await h.inspect.email(h.emailId))?.mailboxIds).toEqual([h.inboxId]);
+  });
+
+  it('unarchives received and sent emails to their lifecycle mailboxes in one mixed thread', async () => {
+    const h = await createSeededEmailHarness();
+    const core = createMailCore(h.deps);
+    const archive = await systemMailbox(h, 'archive');
+    const sent = await seedLifecycleEmail(h, 'sent', 'sent');
+    const sentMailbox = await systemMailbox(h, 'sent');
+    await createMailCoreMaintenance(h.deps).reconcileMailAggregates({
+      accountId: h.accountId,
+      repair: true,
+    });
+
+    await updateEmail(h.deps, {
+      accountId: h.accountId,
+      emailId: h.emailId,
+      addMailboxIds: [archive.id],
+      removeMailboxIds: [h.inboxId],
+    });
+    await updateEmail(h.deps, {
+      accountId: h.accountId,
+      emailId: sent.emailId,
+      addMailboxIds: [archive.id],
+      removeMailboxIds: [sent.mailboxId],
+    });
+
+    const result = await core.restoreArchivedThreadEmails({
+      accountId: h.accountId,
+      threadIds: [h.threadId],
+    });
+
+    expect(result).toMatchObject({ movedThreadIds: [h.threadId], failed: {} });
+    expect((await h.inspect.email(h.emailId))?.mailboxIds).toEqual([h.inboxId]);
+    expect((await h.inspect.email(sent.emailId))?.mailboxIds).toEqual([sentMailbox.id]);
   });
 
   it('rejects labels, lifecycle mailboxes, and cross-account folders as destinations', async () => {

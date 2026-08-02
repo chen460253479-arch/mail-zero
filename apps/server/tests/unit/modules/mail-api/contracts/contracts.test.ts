@@ -5,9 +5,9 @@ import {
   emailSetInputSchema,
 } from '../../../../../src/modules/mail-api/contracts/email';
 import { submissionSetInputSchema } from '../../../../../src/modules/mail-api/contracts/submission';
+import { moveThreadsInputSchema } from '../../../../../src/modules/mail-api/contracts/action';
 import { mailboxSchema } from '../../../../../src/modules/mail-api/contracts/mailbox';
 import { accountSchema } from '../../../../../src/modules/mail-api/contracts/account';
-import { moveThreadsInputSchema } from '../../../../../src/modules/mail-api/contracts/action';
 
 describe('Mail API contracts', () => {
   it('serializes account bigint and Date fields to stable public strings', () => {
@@ -149,6 +149,7 @@ describe('Mail API contracts', () => {
       moveThreadsInputSchema.parse({
         accountId: 'account-1',
         threadIds: ['thread-1'],
+        sourceMailboxId: 'mailbox-inbox',
         destinationMailboxId: 'folder-1',
         ifInState: '12',
         clientMutationId: 'mutation-1',
@@ -156,6 +157,7 @@ describe('Mail API contracts', () => {
     ).toEqual({
       accountId: 'account-1',
       threadIds: ['thread-1'],
+      sourceMailboxId: 'mailbox-inbox',
       destinationMailboxId: 'folder-1',
       ifInState: '12',
       clientMutationId: 'mutation-1',
@@ -164,6 +166,7 @@ describe('Mail API contracts', () => {
       moveThreadsInputSchema.safeParse({
         accountId: 'account-1',
         threadIds: ['thread-1'],
+        sourceMailboxId: 'mailbox-inbox',
         destinationMailboxId: 'folder-1',
         addMailboxIds: ['folder-2'],
         clientMutationId: 'mutation-1',

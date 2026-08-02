@@ -17,7 +17,17 @@ export const moveThreadsInputSchema = z
   .object({
     accountId: mailAccountIdSchema,
     threadIds: z.array(mailIdSchema).min(1).max(200),
+    sourceMailboxId: mailIdSchema,
     destinationMailboxId: mailIdSchema,
+    ifInState: stateSchema.optional(),
+    clientMutationId: z.string().min(1).max(255),
+  })
+  .strict();
+
+export const restoreArchivedThreadsInputSchema = z
+  .object({
+    accountId: mailAccountIdSchema,
+    threadIds: z.array(mailIdSchema).min(1).max(200),
     ifInState: stateSchema.optional(),
     clientMutationId: z.string().min(1).max(255),
   })
@@ -35,6 +45,8 @@ export const unsnoozeThreadsInputSchema = z.object({
   threadIds: z.array(mailIdSchema).min(1).max(200),
   clientMutationId: z.string().min(1).max(255),
 });
+
+export const archiveSnoozedThreadsInputSchema = unsnoozeThreadsInputSchema;
 
 export const destroyThreadsInputSchema = z.object({
   accountId: mailAccountIdSchema,
@@ -72,6 +84,13 @@ export const unsnoozeThreadsResultSchema = z.object({
   accountId: mailAccountIdSchema,
   clientMutationId: z.string(),
   restored: z.array(mailIdSchema),
+  notFound: z.array(mailIdSchema),
+});
+
+export const archiveSnoozedThreadsResultSchema = z.object({
+  accountId: mailAccountIdSchema,
+  clientMutationId: z.string(),
+  archived: z.array(mailIdSchema),
   notFound: z.array(mailIdSchema),
 });
 

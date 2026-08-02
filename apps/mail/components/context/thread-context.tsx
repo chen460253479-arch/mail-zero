@@ -305,7 +305,7 @@ export function ThreadContextMenu({
       ];
     }
 
-    if (isArchiveFolder || !isInbox) {
+    if (isArchiveFolder) {
       return [
         {
           id: 'move-to-inbox',

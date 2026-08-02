@@ -1,3 +1,4 @@
+import { archiveSnoozedThreads } from '../application/archive-snoozed-threads';
 import type { PostgresMailSnoozeCommands } from '../postgres/commands';
 import { unsnoozeThreads } from '../application/unsnooze-threads';
 import { wakeDueSnoozes } from '../application/wake-due-snoozes';
@@ -14,6 +15,8 @@ export const createMailSnoozeRuntime = (dependencies: {
     snoozeThreads(input, dependencies),
   unsnooze: (input: { accountId: string; threadIds: string[] }) =>
     unsnoozeThreads(input, dependencies),
+  archive: (input: { accountId: string; threadIds: string[] }) =>
+    archiveSnoozedThreads(input, dependencies),
   wakeDue: (input: { now: Date; limit: number }) =>
     wakeDueSnoozes(
       {

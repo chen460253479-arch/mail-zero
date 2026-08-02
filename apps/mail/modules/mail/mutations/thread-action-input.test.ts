@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildKeywordThreadAction,
   buildMoveThreadAction,
+  buildRestoreArchivedThreadAction,
   buildSetThreadLabelsAction,
   resolveSystemMoveDestinationMailboxId,
 } from './thread-action-input';
@@ -50,6 +51,7 @@ describe('thread action input', () => {
       buildMoveThreadAction({
         accountId: 'account-1',
         threadIds: ['thread-1'],
+        sourceMailboxId: 'mailbox-inbox',
         destinationMailboxId: 'mailbox-archive',
         ifInState: 'state-3',
         clientMutationId: 'mutation-2',
@@ -58,8 +60,25 @@ describe('thread action input', () => {
       accountId: 'account-1',
       threadIds: ['thread-1'],
       ifInState: 'state-3',
+      sourceMailboxId: 'mailbox-inbox',
       destinationMailboxId: 'mailbox-archive',
       clientMutationId: 'mutation-2',
+    });
+  });
+
+  it('builds a lifecycle-aware archive restore command without a destination mailbox', () => {
+    expect(
+      buildRestoreArchivedThreadAction({
+        accountId: 'account-1',
+        threadIds: ['thread-1'],
+        ifInState: 'state-4',
+        clientMutationId: 'mutation-restore',
+      }),
+    ).toEqual({
+      accountId: 'account-1',
+      threadIds: ['thread-1'],
+      ifInState: 'state-4',
+      clientMutationId: 'mutation-restore',
     });
   });
 

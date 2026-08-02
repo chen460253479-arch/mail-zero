@@ -1,4 +1,5 @@
 import { useOptimisticActions } from '@/hooks/use-optimistic-actions';
+import { getArchiveToggleDestination } from '@/lib/thread-actions';
 import { enhancedKeyboardShortcuts } from '@/config/shortcuts';
 // import { useSearchValue } from '@/hooks/use-search-value';
 import {
@@ -109,8 +110,9 @@ export function MailListHotkeys() {
   }, [mail.bulkSelected, optimisticToggleImportant, shouldUseHover]);
 
   const archiveEmail = useCallback(async () => {
+    const destination = getArchiveToggleDestination(folder);
     if (shouldUseHover && hoveredEmailId.current) {
-      optimisticMoveThreadsTo([hoveredEmailId.current], folder, 'archive');
+      optimisticMoveThreadsTo([hoveredEmailId.current], folder, destination);
       return;
     }
 
@@ -120,12 +122,13 @@ export function MailListHotkeys() {
       return;
     }
 
-    optimisticMoveThreadsTo(idsToArchive, folder, 'archive');
+    optimisticMoveThreadsTo(idsToArchive, folder, destination);
   }, [mail.bulkSelected, folder, optimisticMoveThreadsTo, shouldUseHover]);
 
   const bulkArchive = useCallback(() => {
+    const destination = getArchiveToggleDestination(folder);
     if (shouldUseHover && hoveredEmailId.current) {
-      optimisticMoveThreadsTo([hoveredEmailId.current], folder, 'archive');
+      optimisticMoveThreadsTo([hoveredEmailId.current], folder, destination);
       return;
     }
 
@@ -135,7 +138,7 @@ export function MailListHotkeys() {
       return;
     }
 
-    optimisticMoveThreadsTo(idsToArchive, folder, 'archive');
+    optimisticMoveThreadsTo(idsToArchive, folder, destination);
   }, [mail.bulkSelected, folder, optimisticMoveThreadsTo, shouldUseHover]);
 
   const bulkDelete = useCallback(() => {

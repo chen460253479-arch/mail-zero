@@ -28,12 +28,19 @@ describe('thread action service', () => {
           },
         };
       },
+      restoreArchivedThreadEmails: async (): Promise<MoveThreadEmailsResult> => ({
+        oldState: '13',
+        newState: '14',
+        movedThreadIds: [],
+        failed: {},
+      }),
     });
 
     await expect(
       service.moveThreads({
         accountId: 'account-1',
         threadIds: ['thread-1', 'thread-missing'],
+        sourceMailboxId: 'mailbox-sent',
         destinationMailboxId: 'folder-1',
         ifInState: '12',
         clientMutationId: 'mutation-1',
@@ -55,9 +62,47 @@ describe('thread action service', () => {
       {
         accountId: 'account-1',
         threadIds: ['thread-1', 'thread-missing'],
+        sourceMailboxId: 'mailbox-sent',
         destinationMailboxId: 'folder-1',
         ifInState: '12',
       },
     ]);
+  });
+
+  it('routes archive restoration through lifecycle-aware core semantics', async () => {
+    const calls: unknown[] = [];
+    const service = createThreadActionService({
+      updateThreadEmails: async () => ({
+        oldState: '0',
+        newState: '0',
+        updatedThreadIds: [],
+        failed: {},
+      }),
+      moveThreadEmails: async (): Promise<MoveThreadEmailsResult> => ({
+        oldState: '0',
+        newState: '0',
+        movedThreadIds: [],
+        failed: {},
+      }),
+      restoreArchivedThreadEmails: async (input): Promise<MoveThreadEmailsResult> => {
+        calls.push(input);
+        return {
+          oldState: '14',
+          newState: '15',
+          movedThreadIds: ['thread-1' as ThreadId],
+          failed: {},
+        };
+      },
+    });
+
+    await expect(
+      service.restoreArchivedThreads({
+        accountId: 'account-1',
+        threadIds: ['thread-1'],
+        ifInState: '14',
+        clientMutationId: 'mutation-2',
+      }),
+    ).resolves.toMatchObject({ movedThreadIds: ['thread-1'], failed: {} });
+    expect(calls).toEqual([{ accountId: 'account-1', threadIds: ['thread-1'], ifInState: '14' }]);
   });
 });

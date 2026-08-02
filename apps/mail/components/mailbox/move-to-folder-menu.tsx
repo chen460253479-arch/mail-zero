@@ -52,7 +52,8 @@ export function MoveToFolderMenu({
     if (pendingMailboxId || threadIds.length === 0) return;
     setPendingMailboxId(destinationMailboxId);
     try {
-      await moveThreadsToMailbox(threadIds, destinationMailboxId);
+      if (!currentMailboxId) throw new Error('MAIL_SOURCE_MAILBOX_UNAVAILABLE');
+      await moveThreadsToMailbox(threadIds, currentMailboxId, destinationMailboxId);
       toast.success(m['common.mailboxes.messageMoved']());
       setOpen(false);
       setSearch('');

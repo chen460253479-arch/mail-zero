@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   buildKeywordThreadAction,
   buildMoveThreadAction,
+  buildRestoreArchivedThreadAction,
   buildSetThreadLabelsAction,
   resolveSystemMoveDestinationMailboxId,
 } from '@/modules/mail/mutations/thread-action-input';
@@ -17,7 +18,9 @@ import {
   startImmediateReversibleAction,
 } from '@/lib/immediate-reversible-action';
 import { createKeywordActionOperations } from '@/modules/mail/mutations/keyword-action-operations';
+import { createArchiveToggleOperations } from '@/modules/mail/mutations/archive-toggle-operations';
 import { useMailAccountContext } from '@/modules/mail/providers/mail-account-provider';
+import { resolveMailboxRoute } from '@/modules/mail/routing/mailbox-route';
 import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
 import type { ThreadDestination } from '@/lib/thread-actions';
 import { useTRPC } from '@/providers/query-provider';
@@ -29,7 +32,7 @@ import { useCallback } from 'react';
 import { useAtom } from 'jotai';
 import { toast } from 'sonner';
 
-const keywordActionQueue = new KeyedActionQueue();
+const reversibleActionQueue = new KeyedActionQueue();
 
 export function useOptimisticActions() {
   const trpc = useTRPC();
@@ -45,6 +48,12 @@ export function useOptimisticActions() {
     trpc.mail.action.updateThreads.mutationOptions(),
   );
   const { mutateAsync: moveThreads } = useMutation(trpc.mail.action.moveThreads.mutationOptions());
+  const { mutateAsync: restoreArchivedThreads } = useMutation(
+    trpc.mail.action.restoreArchivedThreads.mutationOptions(),
+  );
+  const { mutateAsync: archiveSnoozedThreads } = useMutation(
+    trpc.mail.action.archiveSnoozedThreads.mutationOptions(),
+  );
   const { mutateAsync: snoozeThreads } = useMutation(
     trpc.mail.action.snoozeThreads.mutationOptions(),
   );
@@ -111,6 +120,7 @@ export function useOptimisticActions() {
     queueKey,
     undo,
     toastMessage,
+    immediate = false,
   }: {
     type: PendingAction['type'];
     threadIds: string[];
@@ -121,6 +131,7 @@ export function useOptimisticActions() {
     queueKey?: string;
     undo: () => void;
     toastMessage: string;
+    immediate?: boolean;
     folders?: string[];
   }) {
     const pendingActionId = generatePendingActionId();
@@ -177,7 +188,7 @@ export function useOptimisticActions() {
       }
 
       const reversibleAction = startImmediateReversibleAction({
-        queue: keywordActionQueue,
+        queue: reversibleActionQueue,
         key: queueKey,
         execute,
         revert,
@@ -238,6 +249,14 @@ export function useOptimisticActions() {
         void reversibleAction.finalize();
       }
 
+      return pendingActionId;
+    }
+
+    if (immediate) {
+      void doAction();
+      if (toastMessage.trim().length) {
+        toast(bulkActionMessage, { duration: 5000 });
+      }
       return pendingActionId;
     }
 
@@ -387,6 +406,7 @@ export function useOptimisticActions() {
     destination: ThreadDestination,
   ) {
     if (!threadIds.length || !destination) return;
+    if (currentFolder === 'draft' && destination === 'archive') return;
 
     // setFocusedIndex(null);
 
@@ -409,55 +429,149 @@ export function useOptimisticActions() {
             ? m['common.actions.movedToBin']()
             : m['common.actions.archived']();
 
+    const moveToSystemMailbox = async (
+      sourceMailboxId: string,
+      target: Exclude<ThreadDestination, null | 'snoozed'>,
+      ifInState?: string,
+    ) => {
+      if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
+      const result = await moveThreads(
+        buildMoveThreadAction({
+          accountId: account.id,
+          threadIds,
+          sourceMailboxId,
+          destinationMailboxId: resolveSystemMoveDestinationMailboxId(target, mailboxes),
+          ...(ifInState ? { ifInState } : {}),
+          clientMutationId: mutationId(),
+        }),
+      );
+      if (Object.keys(result.failed).length > 0) {
+        throw new Error('THREAD_MOVE_PARTIAL_FAILURE');
+      }
+    };
+    const resolveSourceMailboxId = (folder: string) => {
+      const route = resolveMailboxRoute(folder || 'inbox', mailboxes);
+      if (route.kind !== 'mailbox') throw new Error('MAIL_SOURCE_MAILBOX_UNAVAILABLE');
+      return route.mailboxId;
+    };
+    const restoreFromArchive = async (ifInState?: string) => {
+      if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
+      const result = await restoreArchivedThreads(
+        buildRestoreArchivedThreadAction({
+          accountId: account.id,
+          threadIds,
+          ...(ifInState ? { ifInState } : {}),
+          clientMutationId: mutationId(),
+        }),
+      );
+      if (Object.keys(result.failed).length > 0) {
+        throw new Error('THREAD_MOVE_PARTIAL_FAILURE');
+      }
+    };
+    const archiveSnoozed = async () => {
+      if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
+      const result = await archiveSnoozedThreads({
+        accountId: account.id,
+        threadIds,
+        clientMutationId: mutationId(),
+      });
+      if (result.notFound.length > 0) throw new Error('SNOOZED_THREAD_NOT_FOUND');
+    };
+    const executeMove = async (ifInState?: string) => {
+      if (!destination || destination === 'snoozed') {
+        throw new Error('MAIL_MOVE_DESTINATION_UNAVAILABLE');
+      }
+      if (currentFolder === 'snoozed') {
+        await archiveSnoozed();
+        if (destination === 'archive') return;
+        await moveToSystemMailbox(
+          resolveSystemMoveDestinationMailboxId('archive', mailboxes),
+          destination,
+          ifInState,
+        );
+        return;
+      }
+      if (currentFolder === 'archive' && destination === 'inbox') {
+        await restoreFromArchive(ifInState);
+        return;
+      }
+      await moveToSystemMailbox(resolveSourceMailboxId(currentFolder), destination, ifInState);
+    };
+    const archiveToggleOperations = account
+      ? createArchiveToggleOperations({
+          accountId: account.id,
+          currentFolder,
+          destination,
+          moveBetween: (source, target) =>
+            moveToSystemMailbox(
+              resolveSystemMoveDestinationMailboxId(source, mailboxes),
+              target,
+              source === currentFolder ? mailboxState : undefined,
+            ),
+        })
+      : null;
+
     createPendingAction({
       type: 'MOVE',
       threadIds,
       params: { currentFolder, destination },
       optimisticId,
       execute: async () => {
-        if (!account || !destination || destination === 'snoozed') {
-          throw new Error('MAIL_MOVE_DESTINATION_UNAVAILABLE');
-        }
-        const destinationMailboxId = resolveSystemMoveDestinationMailboxId(destination, mailboxes);
-        const result = await moveThreads(
-          buildMoveThreadAction({
-            accountId: account.id,
-            threadIds,
-            destinationMailboxId,
-            ifInState: mailboxState,
-            clientMutationId: mutationId(),
-          }),
-        );
-        if (Object.keys(result.failed).length > 0) {
-          throw new Error('THREAD_MOVE_PARTIAL_FAILURE');
-        }
+        if (archiveToggleOperations) await archiveToggleOperations.execute();
+        else await executeMove(mailboxState);
 
         if (mail.bulkSelected.length > 0) {
           setMail({ ...mail, bulkSelected: [] });
         }
       },
+      ...(archiveToggleOperations
+        ? {
+            revert: archiveToggleOperations.revert,
+            queueKey: archiveToggleOperations.queueKey,
+          }
+        : {}),
       undo: () => {
         removeOptimisticAction(optimisticId);
       },
       toastMessage: successMessage,
+      immediate:
+        !archiveToggleOperations &&
+        (destination === 'archive' || currentFolder === 'archive' || currentFolder === 'snoozed'),
       folders: [currentFolder, destination],
     });
   }
 
-  async function moveThreadsToMailbox(threadIds: string[], destinationMailboxId: string) {
+  async function moveThreadsToMailbox(
+    threadIds: string[],
+    sourceMailboxId: string,
+    destinationMailboxId: string,
+  ) {
     if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
     if (threadIds.length === 0 || !destinationMailboxId) {
       throw new Error('MAIL_MOVE_DESTINATION_UNAVAILABLE');
     }
-    const result = await moveThreads(
-      buildMoveThreadAction({
-        accountId: account.id,
-        threadIds,
-        destinationMailboxId,
-        ...(mailboxState ? { ifInState: mailboxState } : {}),
-        clientMutationId: mutationId(),
-      }),
-    );
+    const source = mailboxes.find((mailbox) => mailbox.id === sourceMailboxId);
+    const destination = mailboxes.find((mailbox) => mailbox.id === destinationMailboxId);
+    const result =
+      source?.role === 'archive' && destination?.role === 'inbox'
+        ? await restoreArchivedThreads(
+            buildRestoreArchivedThreadAction({
+              accountId: account.id,
+              threadIds,
+              ...(mailboxState ? { ifInState: mailboxState } : {}),
+              clientMutationId: mutationId(),
+            }),
+          )
+        : await moveThreads(
+            buildMoveThreadAction({
+              accountId: account.id,
+              threadIds,
+              sourceMailboxId,
+              destinationMailboxId,
+              ...(mailboxState ? { ifInState: mailboxState } : {}),
+              clientMutationId: mutationId(),
+            }),
+          );
     if (Object.keys(result.failed).length > 0) {
       throw new Error('THREAD_MOVE_PARTIAL_FAILURE');
     }
@@ -493,18 +607,35 @@ export function useOptimisticActions() {
       optimisticId,
       execute: async () => {
         if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
+        if (currentFolder === 'snoozed') {
+          const archived = await archiveSnoozedThreads({
+            accountId: account.id,
+            threadIds,
+            clientMutationId: mutationId(),
+          });
+          if (archived.notFound.length > 0) throw new Error('SNOOZED_THREAD_NOT_FOUND');
+        }
+        const sourceMailboxId =
+          currentFolder === 'snoozed'
+            ? resolveSystemMoveDestinationMailboxId('archive', mailboxes)
+            : (() => {
+                const route = resolveMailboxRoute(currentFolder || 'inbox', mailboxes);
+                if (route.kind !== 'mailbox') {
+                  throw new Error('MAIL_SOURCE_MAILBOX_UNAVAILABLE');
+                }
+                return route.mailboxId;
+              })();
         const result = await moveThreads(
           buildMoveThreadAction({
             accountId: account.id,
             threadIds,
+            sourceMailboxId,
             destinationMailboxId: resolveSystemMoveDestinationMailboxId('bin', mailboxes),
             ifInState: mailboxState,
             clientMutationId: mutationId(),
           }),
         );
-        if (Object.keys(result.failed).length > 0) {
-          throw new Error('THREAD_MOVE_PARTIAL_FAILURE');
-        }
+        if (Object.keys(result.failed).length > 0) throw new Error('THREAD_MOVE_PARTIAL_FAILURE');
 
         if (mail.bulkSelected.length > 0) {
           setMail({ ...mail, bulkSelected: [] });

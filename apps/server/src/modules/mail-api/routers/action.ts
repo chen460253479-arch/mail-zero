@@ -9,6 +9,9 @@ import {
   updateThreadsInputSchema,
   moveThreadsInputSchema,
   moveThreadsResultSchema,
+  restoreArchivedThreadsInputSchema,
+  archiveSnoozedThreadsInputSchema,
+  archiveSnoozedThreadsResultSchema,
 } from '../contracts/action';
 import {
   createSnoozeActionService,
@@ -33,6 +36,12 @@ export const actionRouter = router({
     .input(moveThreadsInputSchema)
     .output(moveThreadsResultSchema)
     .mutation(({ ctx, input }) => createThreadActionService(ctx.mailApi.core).moveThreads(input)),
+  restoreArchivedThreads: mailAccountProcedure
+    .input(restoreArchivedThreadsInputSchema)
+    .output(moveThreadsResultSchema)
+    .mutation(({ ctx, input }) =>
+      createThreadActionService(ctx.mailApi.core).restoreArchivedThreads(input),
+    ),
   snoozeThreads: mailAccountProcedure
     .input(snoozeThreadsInputSchema)
     .output(snoozeThreadsResultSchema)
@@ -44,5 +53,11 @@ export const actionRouter = router({
     .output(unsnoozeThreadsResultSchema)
     .mutation(({ ctx, input }) =>
       createSnoozeActionService(ctx.mailApi.snooze).unsnoozeThreads(input),
+    ),
+  archiveSnoozedThreads: mailAccountProcedure
+    .input(archiveSnoozedThreadsInputSchema)
+    .output(archiveSnoozedThreadsResultSchema)
+    .mutation(({ ctx, input }) =>
+      createSnoozeActionService(ctx.mailApi.snooze).archiveSnoozedThreads(input),
     ),
 });
