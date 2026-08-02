@@ -1,5 +1,6 @@
 import type { Mailbox } from '../model/mailbox';
 import type { Label } from '../../../types';
+import { mailboxBadgeCount } from '../selectors/mailbox-count';
 
 const SYSTEM_LABELS: Label[] = [
   { id: '$important', name: 'IMPORTANT', type: 'system' },
@@ -22,10 +23,12 @@ const toLabel = (mailbox: Mailbox, labels?: Label[]): Label => ({
 });
 
 export function buildMailboxStats(mailboxes: readonly Mailbox[]) {
-  return mailboxes.map((mailbox) => ({
-    label: mailbox.role ?? mailbox.name,
-    count: mailbox.totalThreads,
-  }));
+  return mailboxes.flatMap((mailbox) => {
+    const count = mailboxBadgeCount(mailbox);
+    return count === null
+      ? []
+      : [{ label: mailbox.role ?? mailbox.id, mailboxId: mailbox.id, count }];
+  });
 }
 
 export function buildLabelView(mailboxes: readonly Mailbox[]) {

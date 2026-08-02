@@ -1,4 +1,8 @@
-import { resolveMailboxRoute, type RoutableMailbox } from './mailbox-route';
+import {
+  resolveActiveMailboxId,
+  resolveMailboxRoute,
+  type RoutableMailbox,
+} from './mailbox-route';
 import { describe, expect, it } from 'vitest';
 
 const mailboxes: RoutableMailbox[] = [
@@ -43,5 +47,11 @@ describe('resolveMailboxRoute', () => {
     expect(resolveMailboxRoute('CATEGORY_PROMOTIONS', mailboxes)).toEqual({
       kind: 'not-found',
     });
+  });
+
+  it('resolves active navigation by the mailbox id behind system and custom routes', () => {
+    expect(resolveActiveMailboxId('/mail/inbox', mailboxes)).toBe('mailbox-inbox');
+    expect(resolveActiveMailboxId('/mail/label-customer', mailboxes)).toBe('label-customer');
+    expect(resolveActiveMailboxId('/mail/snoozed', mailboxes)).toBeNull();
   });
 });

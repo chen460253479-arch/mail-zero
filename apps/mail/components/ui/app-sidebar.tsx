@@ -14,9 +14,9 @@ import { CreateEmail } from '../create/create-email';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useSession } from '@/lib/auth-client';
 import { PencilCompose } from '../icons/icons';
-import { useStats } from '@/hooks/use-stats';
 import { useLocation } from 'react-router';
-import { cn, FOLDERS } from '@/lib/utils';
+import { MailboxSidebar } from '@/components/mailbox/mailbox-sidebar';
+import { cn } from '@/lib/utils';
 import { m } from '@/paraglide/messages';
 import React, { useMemo } from 'react';
 import { NavUser } from './nav-user';
@@ -24,7 +24,6 @@ import { NavMain } from './nav-main';
 import { useQueryState } from 'nuqs';
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { data: stats } = useStats();
   const location = useLocation();
   const { data: session } = useSession();
   const { data: activeConnection } = useActiveConnection();
@@ -41,17 +40,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         items: section.items.filter((item) => !item.adminOnly || isAdministrator(session)),
       }));
 
-      if (currentSection === 'mail' && stats && stats.length) {
-        if (items[0]?.items[0]) {
-          items[0].items[0].badge =
-            stats.find((stat) => stat.label?.toLowerCase() === FOLDERS.INBOX)?.count ?? 0;
-        }
-        if (items[0]?.items[3]) {
-          items[0].items[3].badge =
-            stats.find((stat) => stat.label?.toLowerCase() === FOLDERS.SENT)?.count ?? 0;
-        }
-      }
-
       return { currentSection, navItems: items };
     } else {
       return {
@@ -59,7 +47,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         navItems: [],
       };
     }
-  }, [location.pathname, session, stats]);
+  }, [location.pathname, session]);
 
   const showComposeButton = currentSection === 'mail';
   const { state } = useSidebar();
@@ -89,6 +77,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         >
           <div className="flex-1 py-0">
             <NavMain items={navItems} />
+            {currentSection === 'mail' ? <MailboxSidebar /> : null}
           </div>
         </SidebarContent>
 

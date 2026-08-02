@@ -41,3 +41,18 @@ export function resolveMailboxRoute(
 
   return mailbox ? { kind: 'mailbox', mailboxId: mailbox.id } : { kind: 'not-found' };
 }
+
+export function resolveActiveMailboxId(
+  pathname: string,
+  mailboxes: readonly RoutableMailbox[],
+): string | null {
+  const prefix = '/mail/';
+  if (!pathname.startsWith(prefix)) return null;
+  try {
+    const slug = decodeURIComponent(pathname.slice(prefix.length).split('/')[0] ?? '');
+    const route = resolveMailboxRoute(slug, mailboxes);
+    return route.kind === 'mailbox' ? route.mailboxId : null;
+  } catch {
+    return null;
+  }
+}

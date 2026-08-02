@@ -1,13 +1,11 @@
 import { useLoaderData, useNavigate } from 'react-router';
 
-import { useActiveConnection } from '@/hooks/use-connections';
 import { MailLayout } from '@/components/mail/mail';
-import { useLabels } from '@/hooks/use-labels';
+import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
+import { resolveMailboxRoute } from '@/modules/mail/routing/mailbox-route';
 import { useEffect, useState } from 'react';
 import type { Route } from './+types/page';
 import { m } from '@/paraglide/messages';
-
-const ALLOWED_FOLDERS = new Set(['inbox', 'draft', 'sent', 'spam', 'bin', 'archive', 'snoozed']);
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   if (!params.folder) return Response.redirect(`${import.meta.env.VITE_PUBLIC_APP_URL}/mail/inbox`);
@@ -20,49 +18,21 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
 export default function MailPage() {
   const { folder } = useLoaderData<typeof clientLoader>();
   const navigate = useNavigate();
-  const [isLabelValid, setIsLabelValid] = useState<boolean | null>(true);
-
-  const isStandardFolder = ALLOWED_FOLDERS.has(folder);
-
-  const { data: activeConnection } = useActiveConnection();
-  const { userLabels, isLoading: isLoadingLabels } = useLabels({
-    enabled: Boolean(activeConnection) && !isStandardFolder,
-  });
+  const [isMailboxValid, setIsMailboxValid] = useState<boolean | null>(null);
+  const { mailboxes, accountStatus, isLoading } = useMailboxes();
 
   useEffect(() => {
-    if (isStandardFolder) {
-      setIsLabelValid(true);
-      return;
+    if (accountStatus !== 'ready' || isLoading) return;
+    const route = resolveMailboxRoute(folder, mailboxes);
+    const valid = route.kind !== 'not-found';
+    setIsMailboxValid(valid);
+    if (!valid) {
+      const timer = setTimeout(() => navigate('/mail/inbox'), 2000);
+      return () => clearTimeout(timer);
     }
+  }, [accountStatus, folder, isLoading, mailboxes, navigate]);
 
-    if (isLoadingLabels) return;
-
-    if (userLabels) {
-      const checkLabelExists = (labels: any[]): boolean => {
-        for (const label of labels) {
-          if (label.id === folder) return true;
-          if (label.labels && label.labels.length > 0) {
-            if (checkLabelExists(label.labels)) return true;
-          }
-        }
-        return false;
-      };
-
-      const labelExists = checkLabelExists(userLabels);
-      setIsLabelValid(labelExists);
-
-      if (!labelExists) {
-        const timer = setTimeout(() => {
-          navigate('/mail/inbox');
-        }, 2000);
-        return () => clearTimeout(timer);
-      }
-    } else {
-      setIsLabelValid(false);
-    }
-  }, [folder, userLabels, isLoadingLabels, isStandardFolder, navigate]);
-
-  if (!isLabelValid) {
+  if (isMailboxValid === false) {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center">
         <h2 className="text-xl font-semibold">{m['common.mail.folderNotFound']()}</h2>

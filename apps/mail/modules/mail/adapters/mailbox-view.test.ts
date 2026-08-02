@@ -55,18 +55,19 @@ describe('buildLabelView', () => {
 });
 
 describe('buildMailboxStats', () => {
-  it('reports the number of threads visible in each mailbox instead of unread threads', () => {
+  it('reports only role-appropriate non-zero badge counts', () => {
     expect(
       buildMailboxStats([
         {
-          ...mailbox('mailbox-sent', 'Sent', 'system'),
-          role: 'sent',
-          totalEmails: 1,
-          totalThreads: 1,
-          unreadEmails: 0,
-          unreadThreads: 0,
+          ...mailbox('mailbox-inbox', 'Inbox', 'system'),
+          role: 'inbox',
+          totalEmails: 5,
+          totalThreads: 5,
+          unreadEmails: 2,
+          unreadThreads: 2,
         },
+        { ...mailbox('mailbox-sent', 'Sent', 'system'), role: 'sent', totalThreads: 8 },
       ]),
-    ).toEqual([{ label: 'sent', count: 1 }]);
+    ).toEqual([{ label: 'inbox', mailboxId: 'mailbox-inbox', count: 2 }]);
   });
 });
