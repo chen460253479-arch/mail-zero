@@ -80,6 +80,7 @@ describe('mail runtime boundary', () => {
         'readBlobRange',
         'readEmailPart',
         'readEmailPartById',
+        'restoreArchivedThreadEmails',
         'setEmails',
         'setIdentities',
         'setMailboxes',

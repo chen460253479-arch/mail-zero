@@ -150,7 +150,6 @@ const createCompatibilityEnvironment = (config: RuntimeConfig): ZeroEnv =>
     MAIL_WEBHOOK_ENABLED: config.externalIntegration.webhook.enabled ? 'true' : 'false',
     MAIL_WEBHOOK_URL: config.externalIntegration.webhook.url,
     BETTER_AUTH_SECRET: config.betterAuthSecret,
-    BETTER_AUTH_URL: config.betterAuthUrl,
     RESEND_API_KEY: config.resendApiKey ?? '',
     COOKIE_DOMAIN: config.cookieDomain,
     BETTER_AUTH_TRUSTED_ORIGINS: config.betterAuthTrustedOrigins.join(','),

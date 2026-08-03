@@ -20,7 +20,6 @@ const validEnvironment = (): Record<string, string | undefined> => ({
   MAIL_BLOB_S3_ACCESS_KEY_ID: 'external-s3-access-key',
   MAIL_BLOB_S3_SECRET_ACCESS_KEY: 'external-s3-secret-key',
   BETTER_AUTH_SECRET: 'a'.repeat(32),
-  BETTER_AUTH_URL: 'https://api.example.test',
   VITE_PUBLIC_APP_URL: 'https://mail.example.test',
   VITE_PUBLIC_BACKEND_URL: 'https://api.example.test',
   COOKIE_DOMAIN: 'example.test',
@@ -86,7 +85,6 @@ describe('parseRuntimeConfig', () => {
       },
       publicAppUrl: 'https://mail.example.test',
       publicBackendUrl: 'https://api.example.test',
-      betterAuthUrl: 'https://api.example.test',
       cookieDomain: 'example.test',
       betterAuthTrustedOrigins: ['https://mail.example.test', 'https://admin.example.test'],
       nango: {
@@ -112,6 +110,12 @@ describe('parseRuntimeConfig', () => {
       host: '0.0.0.0',
       port: 8787,
       shutdownGraceMs: 30_000,
+    });
+  });
+
+  it('does not require a duplicate Better Auth URL', () => {
+    expect(parseRuntimeConfig(validEnvironment())).toMatchObject({
+      publicBackendUrl: 'https://api.example.test',
     });
   });
 

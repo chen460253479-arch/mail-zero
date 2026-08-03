@@ -68,7 +68,6 @@ const environmentSchema = z
     BASE_URL: optionalUrl,
     JWT_SECRET: optionalString,
     BETTER_AUTH_SECRET: z.string().min(32),
-    BETTER_AUTH_URL: z.string().url(),
     COOKIE_DOMAIN: z.string().trim().min(1),
     BETTER_AUTH_TRUSTED_ORIGINS: optionalString,
     CREDENTIAL_ENCRYPTION_KEY: credentialEncryptionKey,
@@ -134,7 +133,6 @@ export type RuntimeConfig = {
   baseUrl?: string;
   jwtSecret: string;
   betterAuthSecret: string;
-  betterAuthUrl: string;
   cookieDomain: string;
   betterAuthTrustedOrigins: string[];
   credentialEncryptionKey: string;
@@ -200,7 +198,6 @@ export const parseRuntimeConfig = (source: RuntimeEnvironmentSource): RuntimeCon
     ...(parsed.BASE_URL === undefined ? {} : { baseUrl: parsed.BASE_URL }),
     jwtSecret: parsed.JWT_SECRET ?? parsed.BETTER_AUTH_SECRET,
     betterAuthSecret: parsed.BETTER_AUTH_SECRET,
-    betterAuthUrl: parsed.BETTER_AUTH_URL,
     cookieDomain: parsed.COOKIE_DOMAIN,
     betterAuthTrustedOrigins: splitOrigins(
       parsed.BETTER_AUTH_TRUSTED_ORIGINS,

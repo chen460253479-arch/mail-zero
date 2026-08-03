@@ -16,7 +16,6 @@ export type ZeroEnv = {
   MAIL_WEBHOOK_ENABLED?: 'true' | 'false';
   MAIL_WEBHOOK_URL?: string;
   BETTER_AUTH_SECRET: string;
-  BETTER_AUTH_URL: string;
   RESEND_API_KEY: string;
   COOKIE_DOMAIN: string;
   BETTER_AUTH_TRUSTED_ORIGINS: string;

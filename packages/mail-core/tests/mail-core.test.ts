@@ -42,6 +42,7 @@ describe('createMailCore', () => {
         'readBlobRange',
         'readEmailPart',
         'readEmailPartById',
+        'restoreArchivedThreadEmails',
         'setEmails',
         'setIdentities',
         'setMailboxes',

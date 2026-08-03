@@ -107,6 +107,7 @@ describe('Docker self-hosted stack', () => {
 
   it('documents the native Node self-hosted deployment workflow', () => {
     const env = read('.env.example');
+    const testingEnv = read('packages/testing/.env.example');
     const readme = read('README.md');
 
     expect(env).not.toContain('ZERO_WRANGLER_ENV');
@@ -116,6 +117,14 @@ describe('Docker self-hosted stack', () => {
     expect(env).toContain('MAIL_BLOB_STORE=s3');
     expect(env).toContain('MAIL_BLOB_S3_ENDPOINT=https://objects.example.com');
     expect(env).toContain('MAIL_BLOB_S3_BUCKET=your-private-mail-bucket');
+    expect(env).not.toContain('BETTER_AUTH_URL');
+    expect(env).not.toContain('PLAYWRIGHT_SESSION_TOKEN');
+    expect(env).not.toContain('PLAYWRIGHT_SESSION_DATA');
+    expect(env).not.toMatch(/^EMAIL\s*=/mu);
+    expect(testingEnv).toContain('PLAYWRIGHT_SESSION_TOKEN=');
+    expect(testingEnv).toContain('PLAYWRIGHT_SESSION_DATA=');
+    expect(testingEnv).toContain('PLAYWRIGHT_TEST_EMAIL=');
+    expect(testingEnv).toContain('PLAYWRIGHT_BASE_URL=');
     expect(readme).toContain('pnpm docker:deploy mail');
     expect(readme).toContain('pnpm docker:deploy server');
     expect(readme).not.toMatch(/^\s*pnpm docker:deploy\s*$/m);

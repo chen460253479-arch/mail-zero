@@ -1,10 +1,10 @@
 import { observeMailApi } from './helpers/mail-api-observer';
 import { test, expect } from '@playwright/test';
 
-const email = process.env.EMAIL;
+const email = process.env.PLAYWRIGHT_TEST_EMAIL;
 
 if (!email) {
-  throw new Error('EMAIL environment variable must be set.');
+  throw new Error('PLAYWRIGHT_TEST_EMAIL environment variable must be set.');
 }
 
 test.describe('Signing In, Sending mail, Replying to a mail', () => {
