@@ -12,13 +12,14 @@ describe('Docker self-hosted stack', () => {
       scripts: Record<string, string>;
     };
     const deployCommand = packageJson.scripts['docker:deploy'] ?? '';
-    const infrastructureCommand = packageJson.scripts['docker:cache:up'] ?? '';
 
     expect(deployCommand).toBe('node scripts/docker-deploy.mjs');
     expect(deployCommand).not.toMatch(
       /install-dependencies|\bdown\b|--volumes|db:push|db:migrate|db:seed/,
     );
-    expect(infrastructureCommand).toBe('docker compose up -d valkey upstash-proxy');
+    expect(packageJson.scripts).not.toHaveProperty('docker:cache:up');
+    expect(packageJson.scripts).not.toHaveProperty('docker:cache:stop');
+    expect(packageJson.scripts).not.toHaveProperty('docker:cache:down');
   });
 
   it('requires exactly one supported service and builds only that service', async () => {
@@ -77,7 +78,7 @@ describe('Docker self-hosted stack', () => {
       ([, serviceName]) => serviceName,
     );
 
-    expect(serviceNames).toEqual(['mail', 'server', 'valkey', 'upstash-proxy']);
+    expect(serviceNames).toEqual(['mail', 'server']);
     expect(compose).not.toMatch(/^  protocol-worker:/m);
     expect(compose).not.toMatch(/^x-zero-development:/m);
     expect(compose).not.toContain('zerodotemail-protocol-worker');
@@ -95,6 +96,13 @@ describe('Docker self-hosted stack', () => {
     expect(compose).not.toContain('POSTGRES_USER');
     expect(compose).not.toContain('POSTGRES_PASSWORD');
     expect(compose).not.toContain('POSTGRES_DB');
+    expect(compose).not.toContain('zerodotemail-redis');
+    expect(compose).not.toContain('zerodotemail-upstash-proxy');
+    expect(compose).not.toContain('bitnami/valkey');
+    expect(compose).not.toContain('serverless-redis-http');
+    expect(compose).not.toContain('REDIS_URL');
+    expect(compose).not.toContain('REDIS_TOKEN');
+    expect(compose).not.toContain('valkey-data');
     expect(compose).not.toContain('zero-mail-blobs');
     expect(compose).toContain('MAIL_BLOB_STORE: s3');
     expect(compose).toContain('MAIL_BLOB_S3_ENDPOINT: ${MAIL_BLOB_S3_ENDPOINT:-}');

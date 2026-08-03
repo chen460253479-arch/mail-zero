@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@10.15.0",
   "scripts": {
-    "go": "pnpm docker:cache:up && pnpm run dev",
+    "go": "pnpm run dev",
     "prepare": "husky",
     "nizzy": "tsx ./packages/cli/src/cli.ts",
     "postinstall": "pnpm nizzy sync",
@@ -20,9 +20,6 @@
     "check": "pnpm run check:format && pnpm run lint",
     "check:format": "prettier . --check",
     "lint-staged": "prettier --write --ignore-unknown",
-    "docker:cache:up": "docker compose up -d valkey upstash-proxy",
-    "docker:cache:stop": "docker compose stop valkey upstash-proxy",
-    "docker:cache:down": "docker compose rm --stop --force valkey upstash-proxy",
     "docker:deploy": "node scripts/docker-deploy.mjs",
     "docker:inspect:server": "node scripts/inspect-server-image.mjs",
     "db:generate": "dotenv -- pnpm run -C apps/server db:generate",

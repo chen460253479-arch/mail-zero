@@ -160,8 +160,6 @@ const createCompatibilityEnvironment = (config: RuntimeConfig): ZeroEnv =>
     ZERO_ADMIN_BOOTSTRAP_SECRET: config.admin.bootstrapSecret,
     GITHUB_CLIENT_ID: config.github.clientId ?? '',
     GITHUB_CLIENT_SECRET: config.github.clientSecret ?? '',
-    REDIS_URL: config.redis.url,
-    REDIS_TOKEN: config.redis.token,
   }) as ZeroEnv;
 
 const createEmailSender = (config: RuntimeConfig) => {

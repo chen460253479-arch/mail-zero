@@ -1,5 +1,4 @@
-import { createRateLimiterMiddleware, privateProcedure, router } from '../trpc';
-import { Ratelimit } from '@upstash/ratelimit';
+import { privateProcedure, router } from '../trpc';
 import { TRPCError } from '@trpc/server';
 import { env } from '../../env';
 
@@ -19,32 +18,25 @@ type MeetResponse = {
 };
 
 export const meetRouter = router({
-  create: privateProcedure
-    .use(
-      createRateLimiterMiddleware({
-        limiter: Ratelimit.slidingWindow(10, '1m'),
-        generatePrefix: ({ sessionUser }) => `ratelimit:meet-create-${sessionUser?.id}`,
-      }),
-    )
-    .mutation(async () => {
-      const enableMeet = env.ENABLE_MEET === 'true';
-      if (!enableMeet) return new Response('Not implemented', { status: 501 });
+  create: privateProcedure.mutation(async () => {
+    const enableMeet = env.ENABLE_MEET === 'true';
+    if (!enableMeet) return new Response('Not implemented', { status: 501 });
 
-      const AuthHeader = env.MEET_AUTH_HEADER;
-      const response = await fetch(env.MEET_API_URL + '/meetings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: AuthHeader,
-        },
-      });
+    const AuthHeader = env.MEET_AUTH_HEADER;
+    const response = await fetch(env.MEET_API_URL + '/meetings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: AuthHeader,
+      },
+    });
 
-      if (!response.ok) {
-        console.error(await response.text());
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create meeting' });
-      }
+    if (!response.ok) {
+      console.error(await response.text());
+      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create meeting' });
+    }
 
-      const data = (await response.json()) as MeetResponse;
-      return data;
-    }),
+    const data = (await response.json()) as MeetResponse;
+    return data;
+  }),
 });

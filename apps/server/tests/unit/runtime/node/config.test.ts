@@ -30,8 +30,6 @@ const validEnvironment = (): Record<string, string | undefined> => ({
   NANGO_OUTLOOK_INTEGRATION_KEY: 'outlook',
   NANGO_ZOHO_MAIL_INTEGRATION_KEY: 'zoho-mail',
   NANGO_IMAP_SMTP_INTEGRATION_KEY: 'generic-email',
-  REDIS_URL: 'http://redis.example.test',
-  REDIS_TOKEN: 'redis-token',
 });
 
 describe('parseRuntimeConfig', () => {
@@ -92,10 +90,6 @@ describe('parseRuntimeConfig', () => {
         outlookIntegrationKey: 'outlook',
         zohoMailIntegrationKey: 'zoho-mail',
         imapSmtpIntegrationKey: 'generic-email',
-      },
-      redis: {
-        url: 'http://redis.example.test',
-        token: 'redis-token',
       },
     });
   });

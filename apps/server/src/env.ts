@@ -27,8 +27,6 @@ export type ZeroEnv = {
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
   VITE_PUBLIC_BACKEND_URL: string;
-  REDIS_URL: string;
-  REDIS_TOKEN: string;
   MEET_AUTH_HEADER: string;
   MEET_API_URL: string;
   ENABLE_MEET: 'true' | 'false';

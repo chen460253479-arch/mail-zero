@@ -16,11 +16,8 @@ This is a pnpm workspace monorepo with the following structure:
 ## Frequently Used Commands
 
 ### Development
-- `pnpm go` - Quick start: starts local cache services and dev servers
+- `pnpm go` - Quick start: starts the development servers
 - `pnpm dev` - Start all development servers (uses Turbo)
-- `pnpm docker:cache:up` - Start Valkey and its HTTP proxy in Docker
-- `pnpm docker:cache:stop` - Stop the local cache services
-- `pnpm docker:cache:down` - Stop and remove the local cache containers
 
 ### Build & Deploy
 - `pnpm build` - Build all packages (uses Turbo)
@@ -84,9 +81,8 @@ This is a pnpm workspace monorepo with the following structure:
 2. Setup environment: `pnpm nizzy env`
 3. Sync environment: `pnpm nizzy sync`
 4. Configure `DATABASE_URL` for the externally managed PostgreSQL database
-5. Start cache services: `pnpm docker:cache:up`
-6. Initialize or upgrade the database: `pnpm db:migrate`
-7. Start development: `pnpm dev`
+5. Initialize or upgrade the database: `pnpm db:migrate`
+6. Start development: `pnpm dev`
 
 ## Common Workflow
 

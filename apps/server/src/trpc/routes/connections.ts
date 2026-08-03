@@ -1,10 +1,4 @@
-import {
-  createRateLimiterMiddleware,
-  mailSessionProcedure,
-  privateProcedure,
-  publicProcedure,
-  router,
-} from '../trpc';
+import { mailSessionProcedure, privateProcedure, publicProcedure, router } from '../trpc';
 import {
   bindManualMailbox,
   ManualMailboxBindingError,
@@ -34,7 +28,6 @@ import { defaultMailChannelRegistry } from '../../mail-channel/registry';
 import { NangoIntegrationError } from '../../integrations/nango/errors';
 import type { RuntimeServices } from '../../runtime/node/services';
 import { user as userTable } from '../../db/schema';
-import { Ratelimit } from '@upstash/ratelimit';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 import type { DB } from '../../db';
@@ -206,41 +199,33 @@ const listChannelNangoConnections = async (services: RuntimeServices, channelId:
 };
 
 export const connectionsRouter = router({
-  list: mailSessionProcedure
-    .use(
-      createRateLimiterMiddleware({
-        limiter: Ratelimit.slidingWindow(120, '1m'),
-        generatePrefix: ({ sessionUser }) =>
-          `ratelimit:get-connections-${sessionUser?.id ?? 'anonymous'}`,
-      }),
-    )
-    .query(async ({ ctx }) => {
-      const repository = createPostgresConnectionRepository(ctx.c.var.services!.database.db);
-      const records = ctx.mailAccess.isAdministrator
-        ? await repository.listAllConnectionsWithAuthorization()
-        : await repository.listConnectionsWithAuthorization(ctx.mailAccess.userId);
+  list: mailSessionProcedure.query(async ({ ctx }) => {
+    const repository = createPostgresConnectionRepository(ctx.c.var.services!.database.db);
+    const records = ctx.mailAccess.isAdministrator
+      ? await repository.listAllConnectionsWithAuthorization()
+      : await repository.listConnectionsWithAuthorization(ctx.mailAccess.userId);
 
-      const disconnectedIds = records
-        .filter(({ connection }) => connection.status === 'disconnected')
-        .map(({ connection }) => connection.id);
+    const disconnectedIds = records
+      .filter(({ connection }) => connection.status === 'disconnected')
+      .map(({ connection }) => connection.id);
 
-      return {
-        connections: records.map(({ connection, authorization }) => ({
-          id: connection.id,
-          email: connection.email,
-          name: connection.name,
-          picture: connection.picture,
-          createdAt: connection.createdAt,
-          channelId: connection.channelId,
-          status: connection.status,
-          authSource: authorization?.authSource ?? null,
-          capabilities: Array.from(
-            defaultMailChannelRegistry.find(connection.channelId)?.capabilities ?? [],
-          ),
-        })),
-        disconnectedIds,
-      };
-    }),
+    return {
+      connections: records.map(({ connection, authorization }) => ({
+        id: connection.id,
+        email: connection.email,
+        name: connection.name,
+        picture: connection.picture,
+        createdAt: connection.createdAt,
+        channelId: connection.channelId,
+        status: connection.status,
+        authSource: authorization?.authSource ?? null,
+        capabilities: Array.from(
+          defaultMailChannelRegistry.find(connection.channelId)?.capabilities ?? [],
+        ),
+      })),
+      disconnectedIds,
+    };
+  }),
   getGmailAuthorizationOptions: privateProcedure.query(
     async ({ ctx }) => await getGmailAuthorizationOptions(ctx.c.var.services!),
   ),

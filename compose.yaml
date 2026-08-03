@@ -56,8 +56,6 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       NANGO_BASE_URL: ${NANGO_BASE_URL:-}
       NANGO_SECRET_KEY: ${NANGO_SECRET_KEY:-}
-      REDIS_URL: http://upstash-proxy:80
-      REDIS_TOKEN: ${REDIS_TOKEN:-upstash-local-token}
       MAIL_PROTOCOL_ALLOWED_HOSTS: ${MAIL_PROTOCOL_ALLOWED_HOSTS:-}
       INTEGRATION_API_TOKEN: ${INTEGRATION_API_TOKEN:-}
       MAIL_WEBHOOK_ENABLED: ${MAIL_WEBHOOK_ENABLED:-false}
@@ -74,9 +72,6 @@ services:
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
     restart: unless-stopped
-    depends_on:
-      upstash-proxy:
-        condition: service_healthy
     ports:
       - '${ZERO_SERVER_PORT:-8787}:8787'
     healthcheck:
@@ -91,42 +86,3 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
-
-  valkey:
-    container_name: zerodotemail-redis
-    image: docker.io/bitnami/valkey:latest
-    restart: unless-stopped
-    environment:
-      ALLOW_EMPTY_PASSWORD: 'yes'
-      VALKEY_DISABLE_COMMANDS: FLUSHDB,FLUSHALL
-    ports:
-      - '${VALKEY_PORT:-6379}:6379'
-    volumes:
-      - valkey-data:/bitnami/valkey/data
-    healthcheck:
-      test: ['CMD', 'valkey-cli', '-h', '127.0.0.1', '-p', '6379', 'ping']
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-  upstash-proxy:
-    container_name: zerodotemail-upstash-proxy
-    image: hiett/serverless-redis-http:latest
-    restart: unless-stopped
-    environment:
-      SRH_MODE: env
-      SRH_TOKEN: ${REDIS_TOKEN:-upstash-local-token}
-      SRH_CONNECTION_STRING: redis://valkey:6379
-    depends_on:
-      valkey:
-        condition: service_healthy
-    ports:
-      - '${REDIS_HTTP_PORT:-8079}:80'
-    healthcheck:
-      test: ['CMD', 'wget', '--spider', '--quiet', 'http://127.0.0.1:80']
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-volumes:
-  valkey-data:

@@ -1,11 +1,8 @@
 import type { HonoContext, HonoVariables, MailAccessSubject } from '../ctx';
 import { assertAdministrator } from '../integrations/core/permissions';
-import { Ratelimit, type RatelimitConfig } from '@upstash/ratelimit';
 import { getActiveConnection } from '../lib/server-utils';
-import { getConnInfo } from '@hono/node-server/conninfo';
 import { initTRPC, TRPCError } from '@trpc/server';
 
-import { redis } from '../lib/services';
 import type { Context } from 'hono';
 import superjson from 'superjson';
 
@@ -156,33 +153,3 @@ export const activeConnectionProcedure = privateProcedure.use(async ({ ctx, next
     });
   }
 });
-
-export const createRateLimiterMiddleware = (config: {
-  limiter: RatelimitConfig['limiter'];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  generatePrefix: (ctx: TrpcContext, input: any) => string;
-}) =>
-  t.middleware(async ({ next, ctx, input }) => {
-    const ratelimiter = new Ratelimit({
-      redis: redis(),
-      limiter: config.limiter,
-      analytics: true,
-      prefix: config.generatePrefix(ctx, input),
-    });
-    const finalIp = getConnInfo(ctx.c).remote.address ?? 'no-ip';
-    const { success, limit, reset, remaining } = await ratelimiter.limit(finalIp);
-
-    ctx.c.res.headers.append('X-RateLimit-Limit', limit.toString());
-    ctx.c.res.headers.append('X-RateLimit-Remaining', remaining.toString());
-    ctx.c.res.headers.append('X-RateLimit-Reset', reset.toString());
-
-    if (!success) {
-      console.log(`Rate limit exceeded for IP ${finalIp}.`);
-      throw new TRPCError({
-        code: 'TOO_MANY_REQUESTS',
-        message: 'Too many requests. Please try again later.',
-      });
-    }
-
-    return next();
-  });

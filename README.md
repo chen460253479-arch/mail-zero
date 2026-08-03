@@ -94,10 +94,9 @@ You can set up Zero in two ways:
 
 2. **Initialize the database**
 
-   Start the local cache infrastructure and apply migrations to the external database:
+   Apply migrations to the external database:
 
    ```bash
-   pnpm docker:cache:up
    pnpm db:migrate
    ```
 
@@ -172,16 +171,12 @@ You can set up Zero in two ways:
 
    ```
    pnpm install
-
-   # Start the local cache services
-   pnpm docker:cache:up
    ```
 
 2. **Set Up Environment**
    - Run `pnpm nizzy env` to setup your environment variables
    - Run `pnpm nizzy sync` to sync your environment variables and types
    - Configure `DATABASE_URL` to use the externally managed PostgreSQL database
-   - Start Valkey and its HTTP proxy: `pnpm docker:cache:up`
    - Initialize or upgrade the database: `pnpm db:migrate`
 
 3. **Start The App**

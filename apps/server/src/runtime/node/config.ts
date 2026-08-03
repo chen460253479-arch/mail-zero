@@ -78,8 +78,6 @@ const environmentSchema = z
     NANGO_OUTLOOK_INTEGRATION_KEY: z.string().trim().min(1).default('outlook'),
     NANGO_ZOHO_MAIL_INTEGRATION_KEY: z.string().trim().min(1).default('zoho-mail'),
     NANGO_IMAP_SMTP_INTEGRATION_KEY: z.string().trim().min(1).default('generic-email'),
-    REDIS_URL: z.string().url().default('http://upstash-proxy:80'),
-    REDIS_TOKEN: z.string().min(1).default('upstash-local-token'),
     ZERO_ADMIN_AUTO_PROVISION: booleanFromEnvironment(false),
     ZERO_ADMIN_NAME: optionalString,
     ZERO_ADMIN_EMAIL: z.preprocess(
@@ -145,7 +143,6 @@ export type RuntimeConfig = {
     zohoMailIntegrationKey: string;
     imapSmtpIntegrationKey: string;
   };
-  redis: { url: string; token: string };
   admin: {
     autoProvision: boolean;
     name?: string;
@@ -213,7 +210,6 @@ export const parseRuntimeConfig = (source: RuntimeEnvironmentSource): RuntimeCon
       zohoMailIntegrationKey: parsed.NANGO_ZOHO_MAIL_INTEGRATION_KEY,
       imapSmtpIntegrationKey: parsed.NANGO_IMAP_SMTP_INTEGRATION_KEY,
     },
-    redis: { url: parsed.REDIS_URL, token: parsed.REDIS_TOKEN },
     admin: {
       autoProvision: parsed.ZERO_ADMIN_AUTO_PROVISION,
       ...(parsed.ZERO_ADMIN_NAME === undefined ? {} : { name: parsed.ZERO_ADMIN_NAME }),
