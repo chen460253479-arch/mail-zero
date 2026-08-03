@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { m } from '@/paraglide/messages';
 import { useTRPC } from '@/providers/query-provider';
+import { refreshMailboxConnectionQueries } from '@/modules/mail-connections/refresh-mailbox-queries';
 
 type DialogProps = {
   connectionId: string;
@@ -35,11 +36,21 @@ export function DisconnectDialog({
   const [open, setOpen] = useState(false);
   const [deleteLocalData, setDeleteLocalData] = useState(false);
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const disconnect = useMutation(trpc.connections.disconnect.mutationOptions());
 
   const submit = async () => {
     try {
       await disconnect.mutateAsync({ connectionId, deleteLocalData });
+      await refreshMailboxConnectionQueries(
+        queryClient,
+        {
+          connectionList: trpc.connections.list.queryKey(),
+          defaultConnection: trpc.connections.getDefault.queryKey(),
+          mailAccountList: trpc.mail.account.list.queryKey(),
+        },
+        { clearDefaultConnection: true },
+      );
       toast.success(m['pages.settings.connections.disconnectSuccess']());
       setOpen(false);
       setDeleteLocalData(false);
@@ -94,11 +105,21 @@ export function DeleteRetainedDataDialog({
 }: DialogProps) {
   const [open, setOpen] = useState(false);
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const remove = useMutation(trpc.connections.deleteRetainedData.mutationOptions());
 
   const submit = async () => {
     try {
       await remove.mutateAsync({ connectionId });
+      await refreshMailboxConnectionQueries(
+        queryClient,
+        {
+          connectionList: trpc.connections.list.queryKey(),
+          defaultConnection: trpc.connections.getDefault.queryKey(),
+          mailAccountList: trpc.mail.account.list.queryKey(),
+        },
+        { clearDefaultConnection: true },
+      );
       toast.success(m['pages.settings.connections.localDataDeleted']());
       setOpen(false);
       onCompleted();

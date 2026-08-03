@@ -17,6 +17,10 @@ import { provisionChannelMailboxInDatabase } from '../../modules/mail-accounts/r
 import { createPostgresConnectionRepository } from '../../modules/mail-accounts/postgres/connection-repository';
 import { createMailboxLifecycleForDatabase } from '../../modules/mail-accounts/runtime/lifecycle-environment';
 import { resolveGmailConnectMode } from '../../modules/mail-accounts/application/gmail-connection-options';
+import {
+  isDefaultConnectionSelectable,
+  selectDefaultConnectionRecord,
+} from '../../modules/mail-accounts/application/select-default-connection';
 import { connectNangoMailbox } from '../../modules/mail-accounts/application/connect-nango-mailbox';
 import { createChannelConfigRepository } from '../../integrations/core/channel-config-repository';
 import { manualCredentialSnapshotSchema } from '../../modules/mail-accounts/credentials/manual';
@@ -32,7 +36,7 @@ import type { RuntimeServices } from '../../runtime/node/services';
 import { user as userTable } from '../../db/schema';
 import { Ratelimit } from '@upstash/ratelimit';
 import { TRPCError } from '@trpc/server';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { DB } from '../../db';
 import { z } from 'zod';
 
@@ -359,6 +363,9 @@ export const connectionsRouter = router({
         ? await repository.findConnection(connectionId)
         : await repository.findOwnedConnection(ctx.mailAccess.userId, connectionId);
       if (!foundConnection) throw new TRPCError({ code: 'NOT_FOUND' });
+      if (!isDefaultConnectionSelectable(foundConnection)) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED' });
+      }
       await db
         .update(userTable)
         .set({ defaultConnectionId: connectionId, updatedAt: new Date() })
@@ -420,25 +427,10 @@ export const connectionsRouter = router({
       where: eq(userTable.id, ctx.sessionUser.id),
     });
     const isAdministrator = ctx.sessionUser.role === 'admin';
-    const selectedConnection = foundUser?.defaultConnectionId
-      ? ((await (isAdministrator
-          ? repository.findConnection(foundUser.defaultConnectionId)
-          : repository.findOwnedConnection(ctx.sessionUser.id, foundUser.defaultConnectionId))) ??
-        (isAdministrator
-          ? await repository.findFirstConnection()
-          : await repository.findFirstOwnedConnection(ctx.sessionUser.id)))
-      : isAdministrator
-        ? await repository.findFirstConnection()
-        : await repository.findFirstOwnedConnection(ctx.sessionUser.id);
-    if (!selectedConnection) return null;
-    const record = isAdministrator
-      ? (await repository.listAllConnectionsWithAuthorization()).find(
-          ({ connection }) => connection.id === selectedConnection.id,
-        )
-      : await repository.findConnectionWithAuthorization(
-          ctx.sessionUser.id,
-          selectedConnection.id,
-        );
+    const records = isAdministrator
+      ? await repository.listAllConnectionsWithAuthorization()
+      : await repository.listConnectionsWithAuthorization(ctx.sessionUser.id);
+    const record = selectDefaultConnectionRecord(records, foundUser?.defaultConnectionId ?? null);
     if (!record) return null;
     const { connection, authorization } = record;
     return {

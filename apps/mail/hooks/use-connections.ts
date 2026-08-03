@@ -1,5 +1,6 @@
 import { useTRPC } from '@/providers/query-provider';
 import { useQuery } from '@tanstack/react-query';
+import { selectConnectedConnection } from '@/modules/mail-connections/connected-connections';
 
 export const useConnections = () => {
   const trpc = useTRPC();
@@ -16,6 +17,7 @@ export const useActiveConnection = () => {
       refetchOnWindowFocus: false,
       refetchOnMount: false,
       refetchOnReconnect: false,
+      select: selectConnectedConnection,
     }),
   );
   return connectionsQuery;

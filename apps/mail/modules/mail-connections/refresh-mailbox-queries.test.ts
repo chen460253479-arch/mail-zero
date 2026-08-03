@@ -23,4 +23,23 @@ describe('mailbox connection query refresh', () => {
       expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
     }
   });
+
+  it('clears the cached default connection before refreshing after a disconnect', async () => {
+    const queryClient = new QueryClient();
+    const queryKeys = {
+      connectionList: ['connections', 'list'] as const,
+      defaultConnection: ['connections', 'default'] as const,
+      mailAccountList: ['mail', 'account', 'list'] as const,
+    };
+    queryClient.setQueryData(queryKeys.defaultConnection, {
+      id: 'disconnected-connection',
+      status: 'connected',
+    });
+
+    await refreshMailboxConnectionQueries(queryClient, queryKeys, {
+      clearDefaultConnection: true,
+    });
+
+    expect(queryClient.getQueryData(queryKeys.defaultConnection)).toBeNull();
+  });
 });

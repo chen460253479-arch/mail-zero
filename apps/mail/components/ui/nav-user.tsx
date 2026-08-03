@@ -36,6 +36,7 @@ import { useQueryState } from 'nuqs';
 import { Button } from './button';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { listConnectedConnections } from '@/modules/mail-connections/connected-connections';
 
 const bytesToMB = (bytes: number) => (bytes / 1024 / 1024).toFixed(2);
 
@@ -101,7 +102,11 @@ export function NavUser() {
   );
   const pathname = useLocation().pathname;
   const queryClient = useQueryClient();
-  const { data: activeConnection, refetch: refetchActiveConnection } = useActiveConnection();
+  const {
+    data: activeConnection,
+    isPending: isActiveConnectionPending,
+    refetch: refetchActiveConnection,
+  } = useActiveConnection();
   const [category] = useQueryState('category', { defaultValue: 'All Mail' });
   const { setLoading } = useLoading();
   const [{ isSyncing, syncingFolders, storageSize, shards }] = useDoState();
@@ -124,7 +129,7 @@ export function NavUser() {
     toast.success(m['common.navUser.connectionIdCopied']());
   }, [activeConnection]);
 
-  const { data: activeAccount } = useActiveConnection();
+  const activeAccount = activeConnection;
 
   useEffect(() => setIsRendered(true), []);
 
@@ -176,10 +181,14 @@ export function NavUser() {
     });
   };
 
+  const connectedConnections = useMemo(
+    () => listConnectedConnections(data?.connections ?? []),
+    [data?.connections],
+  );
   const otherConnections = useMemo(() => {
-    if (!data || !activeAccount) return [];
-    return data.connections.filter((connection) => connection.id !== activeAccount?.id);
-  }, [data, activeAccount]);
+    if (!activeAccount) return [];
+    return connectedConnections.filter((connection) => connection.id !== activeAccount.id);
+  }, [activeAccount, connectedConnections]);
 
   const handleThemeToggle = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
@@ -187,8 +196,6 @@ export function NavUser() {
 
   if (!isRendered) return null;
   if (!session) return null;
-
-  const fallbackUserName = m['common.navUser.defaultUser']();
 
   return (
     <div className="flex flex-col gap-2">
@@ -230,15 +237,12 @@ export function NavUser() {
                       <Avatar className="border-border/50 mb-2 size-14 rounded-xl border">
                         <AvatarImage
                           className="rounded-xl"
-                          src={
-                            (activeAccount.picture ?? undefined) ||
-                            (session.user.image ?? undefined)
-                          }
-                          alt={activeAccount.name || session.user.name || fallbackUserName}
+                          src={activeAccount.picture ?? undefined}
+                          alt={activeAccount.name || activeAccount.email}
                         />
                         <AvatarFallback className="rounded-xl">
                           <span>
-                            {(activeAccount.name || session.user.name || fallbackUserName)
+                            {(activeAccount.name || activeAccount.email)
                               .split(' ')
                               .map((n) => n[0])
                               .join('')
@@ -249,7 +253,7 @@ export function NavUser() {
                       </Avatar>
                       <div className="w-full">
                         <div className="flex items-center justify-center gap-0.5 text-sm font-medium">
-                          {activeAccount.name || session.user.name || fallbackUserName}
+                          {activeAccount.name || activeAccount.email}
                         </div>
                         <div className="text-muted-foreground text-xs">{activeAccount.email}</div>
                       </div>
@@ -263,8 +267,8 @@ export function NavUser() {
                       {m['common.navUser.accounts']()}
                     </p>
 
-                    {data?.connections
-                      ?.filter((connection) => connection.id !== activeConnection?.id)
+                    {connectedConnections
+                      .filter((connection) => connection.id !== activeConnection?.id)
                       .map((connection) => (
                         <DropdownMenuItem
                           key={connection.id}
@@ -398,7 +402,7 @@ export function NavUser() {
         ) : (
           <div className="flex w-full items-center justify-between">
             <div className="flex items-center gap-2">
-              {data && activeAccount ? (
+              {activeAccount ? (
                 <div
                   key={activeAccount.id}
                   onClick={handleAccountSwitch(activeAccount.id)}
@@ -429,13 +433,13 @@ export function NavUser() {
                     )}
                   </div>
                 </div>
-              ) : (
+              ) : isActiveConnectionPending ? (
                 <div className="flex cursor-pointer items-center">
                   <div className="relative">
                     <div className="bg-muted size-6 animate-pulse rounded-[5px]" />
                   </div>
                 </div>
-              )}
+              ) : null}
               {otherConnections.slice(0, 2).map((connection) => (
                 <Tooltip key={connection.id}>
                   <TooltipTrigger asChild>
@@ -629,16 +633,16 @@ export function NavUser() {
         )}
       </div>
 
-      {state !== 'collapsed' && (
+      {state !== 'collapsed' && activeAccount && (
         <div className="mt-2 flex items-center justify-between gap-2">
           <div className="mt-[2px] flex flex-col items-start gap-1 space-y-1">
             <div className="flex items-center gap-1 text-[13px] leading-none text-black dark:text-white">
               <p className={cn('max-w-[14.5ch] truncate text-[13px]')}>
-                {activeAccount?.name || session.user.name || fallbackUserName}
+                {activeAccount.name || activeAccount.email}
               </p>
             </div>
             <div className="h-5 max-w-[200px] overflow-hidden truncate text-xs font-normal leading-none text-[#898989]">
-              {activeAccount?.email || session.user.email}
+              {activeAccount.email}
             </div>
           </div>
         </div>
