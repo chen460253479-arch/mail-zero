@@ -383,7 +383,7 @@ export function NavUser() {
                   key={activeAccount.id}
                   onClick={handleAccountSwitch(activeAccount.id)}
                   className={`flex cursor-pointer items-center ${
-                    activeAccount.id === activeConnection?.id && data.connections.length > 1
+                    activeAccount.id === activeConnection?.id && connectedConnections.length > 1
                       ? 'outline-mainBlue rounded-[5px] outline outline-2'
                       : ''
                   }`}
@@ -404,9 +404,10 @@ export function NavUser() {
                           .slice(0, 2)}
                       </AvatarFallback>
                     </Avatar>
-                    {activeAccount.id === activeConnection?.id && data.connections.length > 1 && (
-                      <CircleCheck className="fill-mainBlue absolute -bottom-2 -right-2 size-4 rounded-full bg-white dark:bg-[#141414]" />
-                    )}
+                    {activeAccount.id === activeConnection?.id &&
+                      connectedConnections.length > 1 && (
+                        <CircleCheck className="fill-mainBlue absolute -bottom-2 -right-2 size-4 rounded-full bg-white dark:bg-[#141414]" />
+                      )}
                   </div>
                 </div>
               ) : isActiveConnectionPending ? (
