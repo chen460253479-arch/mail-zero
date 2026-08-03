@@ -12,13 +12,13 @@ describe('Docker self-hosted stack', () => {
       scripts: Record<string, string>;
     };
     const deployCommand = packageJson.scripts['docker:deploy'] ?? '';
-    const infrastructureCommand = packageJson.scripts['docker:db:up'] ?? '';
+    const infrastructureCommand = packageJson.scripts['docker:cache:up'] ?? '';
 
     expect(deployCommand).toBe('node scripts/docker-deploy.mjs');
     expect(deployCommand).not.toMatch(
       /install-dependencies|\bdown\b|--volumes|db:push|db:migrate|db:seed/,
     );
-    expect(infrastructureCommand).toBe('docker compose up -d db valkey upstash-proxy');
+    expect(infrastructureCommand).toBe('docker compose up -d valkey upstash-proxy');
   });
 
   it('requires exactly one supported service and builds only that service', async () => {
@@ -77,7 +77,7 @@ describe('Docker self-hosted stack', () => {
       ([, serviceName]) => serviceName,
     );
 
-    expect(serviceNames).toEqual(['mail', 'server', 'db', 'valkey', 'upstash-proxy']);
+    expect(serviceNames).toEqual(['mail', 'server', 'valkey', 'upstash-proxy']);
     expect(compose).not.toMatch(/^  protocol-worker:/m);
     expect(compose).not.toMatch(/^x-zero-development:/m);
     expect(compose).not.toContain('zerodotemail-protocol-worker');
@@ -89,6 +89,12 @@ describe('Docker self-hosted stack', () => {
     expect(compose).not.toContain('/app/node_modules');
     expect(compose).toContain('image: zero-mail-runtime');
     expect(compose).toContain('image: zero-server');
+    expect(compose).toContain("DATABASE_URL: '${DATABASE_URL:?DATABASE_URL is required}'");
+    expect(compose).not.toContain('zerodotemail-db');
+    expect(compose).not.toContain('postgres-data');
+    expect(compose).not.toContain('POSTGRES_USER');
+    expect(compose).not.toContain('POSTGRES_PASSWORD');
+    expect(compose).not.toContain('POSTGRES_DB');
     expect(compose).not.toContain('zero-mail-blobs');
     expect(compose).toContain('MAIL_BLOB_STORE: s3');
     expect(compose).toContain('MAIL_BLOB_S3_ENDPOINT: ${MAIL_BLOB_S3_ENDPOINT:-}');

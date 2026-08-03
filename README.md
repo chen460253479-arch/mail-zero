@@ -88,15 +88,16 @@ You can set up Zero in two ways:
    ```
 
    On PowerShell, use `Copy-Item .env.example .env`. Set at least
-   `CREDENTIAL_ENCRYPTION_KEY`, `BETTER_AUTH_SECRET`, every required `MAIL_BLOB_S3_*` value, and
-   any provider API keys you need. Prepare the private S3 bucket before starting Server.
+   `DATABASE_URL`, `CREDENTIAL_ENCRYPTION_KEY`, `BETTER_AUTH_SECRET`, every required
+   `MAIL_BLOB_S3_*` value, and any provider API keys you need. Prepare the external PostgreSQL
+   database and private S3 bucket before starting Server.
 
 2. **Initialize the database**
 
-   Start the infrastructure and apply the schema explicitly:
+   Start the local cache infrastructure and apply migrations to the external database:
 
    ```bash
-   docker compose up --detach db valkey upstash-proxy
+   pnpm docker:cache:up
    pnpm db:migrate
    ```
 
@@ -172,15 +173,16 @@ You can set up Zero in two ways:
    ```
    pnpm install
 
-   # Start the database locally
-   pnpm docker:db:up
+   # Start the local cache services
+   pnpm docker:cache:up
    ```
 
 2. **Set Up Environment**
    - Run `pnpm nizzy env` to setup your environment variables
    - Run `pnpm nizzy sync` to sync your environment variables and types
-   - Start the database with the provided docker compose setup: `pnpm docker:db:up`
-   - Initialize the database: `pnpm db:push`
+   - Configure `DATABASE_URL` to use the externally managed PostgreSQL database
+   - Start Valkey and its HTTP proxy: `pnpm docker:cache:up`
+   - Initialize or upgrade the database: `pnpm db:migrate`
 
 3. **Start The App**
    ```bash
@@ -239,6 +241,8 @@ You can set up Zero in two ways:
 
 For Docker development, copy `.env.example` to `.env` and edit the values before starting the
 stack. Docker Compose loads this file directly, so `pnpm nizzy sync` is not required.
+`DATABASE_URL` is required and must point to an externally managed PostgreSQL database; the Docker
+stack does not include PostgreSQL.
 The `ZERO_*_PORT` variables control the self-hosted containers. `MAIL_BLOB_S3_*` configures the
 private S3-compatible object store used for immutable complete MIME objects. Zero does not bundle
 an object-storage service. Endpoint, region, bucket, prefix, access key, and secret key are required
@@ -249,47 +253,36 @@ individual applications.
 
 ### Database Setup
 
-Zero uses PostgreSQL for storing data. Here's how to set it up:
+Zero uses an externally managed PostgreSQL database for storing data. The Docker stack does not
+start or persist PostgreSQL locally.
 
-1. **Start the Database**
+1. **Set Up Database Connection**
 
-   Start PostgreSQL, then apply the database schema explicitly:
+   Configure the external connection in `.env`:
+
+   ```env
+   DATABASE_URL="postgresql://zero:replace-me@db.example.com:5432/zerodotemail?sslmode=require"
+   ```
+
+   Docker Server and host-side database commands use this same value.
+
+2. **Initialize or Upgrade the Database**
+
+   Apply the committed migrations to the configured database:
 
    ```bash
-   docker compose up --detach db
-   pnpm db:push
-   ```
-
-   This creates a database with:
-   - Name: `zerodotemail`
-   - Username: `postgres`
-   - Password: `postgres`
-   - Port: `5432`
-
-2. **Set Up Database Connection**
-
-   Docker Compose constructs the container connection string from `POSTGRES_USER`,
-   `POSTGRES_PASSWORD`, and `POSTGRES_DB`. Keep `DATABASE_URL` pointed at `localhost` for commands
-   that you intentionally run on the host.
-
-   For local development use:
-
-   ```
-   DATABASE_URL="postgresql://postgres:postgres@localhost:5432/zerodotemail"
+   pnpm db:migrate
    ```
 
 3. **Database Commands**
-   - **Set up database tables**:
+   - **Synchronize a disposable development database directly**:
 
      ```bash
      pnpm db:push
      ```
 
-     On an empty development database this applies the declarative schema directly. If Zero
-     business schemas already exist, the command cancels by default and asks whether to clear and
-     recreate only the `auth`, `app`, `integration`, and `mail` schemas. For an intentional
-     non-interactive development reset, run `pnpm db:push -- --reset --yes`. Never use this command
-     for production deployments.
+     Do not use this command on a shared online test or production database. Use `pnpm db:migrate`
+     for those environments.
 
    - **Create migration files** (after schema changes):
 

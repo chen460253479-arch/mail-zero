@@ -16,11 +16,11 @@ This is a pnpm workspace monorepo with the following structure:
 ## Frequently Used Commands
 
 ### Development
-- `pnpm go` - Quick start: starts database and dev servers
+- `pnpm go` - Quick start: starts local cache services and dev servers
 - `pnpm dev` - Start all development servers (uses Turbo)
-- `pnpm docker:db:up` - Start PostgreSQL database in Docker
-- `pnpm docker:db:down` - Stop and remove database container
-- `pnpm docker:db:clean` - Stop and remove database with volumes
+- `pnpm docker:cache:up` - Start Valkey and its HTTP proxy in Docker
+- `pnpm docker:cache:stop` - Stop the local cache services
+- `pnpm docker:cache:down` - Stop and remove the local cache containers
 
 ### Build & Deploy
 - `pnpm build` - Build all packages (uses Turbo)
@@ -83,15 +83,16 @@ This is a pnpm workspace monorepo with the following structure:
 1. Install dependencies: `pnpm install`
 2. Setup environment: `pnpm nizzy env`
 3. Sync environment: `pnpm nizzy sync`
-4. Start database: `pnpm docker:db:up`
-5. Initialize database: `pnpm db:push`
-6. Start development: `pnpm dev`
+4. Configure `DATABASE_URL` for the externally managed PostgreSQL database
+5. Start cache services: `pnpm docker:cache:up`
+6. Initialize or upgrade the database: `pnpm db:migrate`
+7. Start development: `pnpm dev`
 
 ## Common Workflow
 
 1. Always run `pnpm check` before committing
 2. Use `pnpm nizzy sync` after environment variable changes
-3. Run `pnpm db:push` after schema changes
+3. Run `pnpm db:generate` after schema changes and `pnpm db:migrate` to apply migrations
 4. Use `pnpm go` for quick development startup
 
 ## Notes
