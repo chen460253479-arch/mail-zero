@@ -5,16 +5,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  HelpCircle,
-  LogOut,
-  MoonIcon,
-  Settings,
-  Plus,
-  CopyCheckIcon,
-  RefreshCcw,
-  Trash2,
-} from 'lucide-react';
+import { LogOut, MoonIcon, Settings, Plus, CopyCheckIcon, RefreshCcw, Trash2 } from 'lucide-react';
+import { listConnectedConnections } from '@/modules/mail-connections/connected-connections';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useActiveConnection, useConnections } from '@/hooks/use-connections';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -36,7 +28,6 @@ import { useQueryState } from 'nuqs';
 import { Button } from './button';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { listConnectedConnections } from '@/modules/mail-connections/connected-connections';
 
 const bytesToMB = (bytes: number) => (bytes / 1024 / 1024).toFixed(2);
 
@@ -368,21 +359,6 @@ export function NavUser() {
                       <p className="text-[13px] opacity-60">{m['common.navUser.appTheme']()}</p>
                     </div>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <a
-                      href="https://discord.gg/mail0"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full"
-                    >
-                      <div className="flex items-center gap-2">
-                        <HelpCircle size={16} className="opacity-60" />
-                        <p className="text-[13px] opacity-60">
-                          {m['common.navUser.customerSupport']()}
-                        </p>
-                      </div>
-                    </a>
-                  </DropdownMenuItem>
                   <DropdownMenuItem className="cursor-pointer" onSelect={() => handleLogout()}>
                     <div className="flex items-center gap-2">
                       <LogOut size={16} className="opacity-60" />
@@ -598,21 +574,6 @@ export function NavUser() {
                       )}
                       <p className="text-[13px] opacity-60">{m['common.navUser.appTheme']()}</p>
                     </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <a
-                      href="https://discord.gg/mail0"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="w-full"
-                    >
-                      <div className="flex items-center gap-2">
-                        <HelpCircle size={16} className="opacity-60" />
-                        <p className="text-[13px] opacity-60">
-                          {m['common.navUser.customerSupport']()}
-                        </p>
-                      </div>
-                    </a>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="cursor-pointer" onClick={handleLogout}>
                     <div className="flex items-center gap-2">
