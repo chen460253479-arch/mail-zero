@@ -28,6 +28,26 @@ export class OptimisticActionsManager {
   lastActionId: string | null = null;
 }
 
+type ImmediatePendingActionOptions = {
+  execute: () => Promise<void>;
+  onCommitted: () => Promise<void>;
+  onFailed: (error: unknown) => Promise<void>;
+};
+
+export const startImmediatePendingAction = ({
+  execute,
+  onCommitted,
+  onFailed,
+}: ImmediatePendingActionOptions): Promise<void> => {
+  let execution: Promise<void>;
+  try {
+    execution = Promise.resolve(execute());
+  } catch (error) {
+    execution = Promise.reject(error);
+  }
+  return execution.then(onCommitted, onFailed);
+};
+
 export const settlePendingAction = (
   manager: OptimisticActionsManager,
   actionId: string,
@@ -41,6 +61,9 @@ export const settlePendingAction = (
   const shouldRefresh = typeActions === undefined || typeActions.size === 0;
   if (typeActions?.size === 0) {
     manager.pendingActionsByType.delete(type);
+  }
+  if (manager.lastActionId === actionId) {
+    manager.lastActionId = null;
   }
 
   return { shouldRefresh };

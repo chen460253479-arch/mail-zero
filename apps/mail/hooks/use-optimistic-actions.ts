@@ -1,6 +1,7 @@
 import {
   optimisticActionsManager,
   settlePendingAction,
+  startImmediatePendingAction,
   type PendingAction,
 } from '@/lib/optimistic-actions-manager';
 import { addOptimisticActionAtom, removeOptimisticActionAtom } from '@/store/optimistic-updates';
@@ -120,7 +121,6 @@ export function useOptimisticActions() {
     queueKey,
     undo,
     toastMessage,
-    immediate = false,
   }: {
     type: PendingAction['type'];
     threadIds: string[];
@@ -131,11 +131,9 @@ export function useOptimisticActions() {
     queueKey?: string;
     undo: () => void;
     toastMessage: string;
-    immediate?: boolean;
     folders?: string[];
   }) {
     const pendingActionId = generatePendingActionId();
-    optimisticActionsManager.lastActionId = pendingActionId;
 
     if (!optimisticActionsManager.pendingActionsByType.has(type)) {
       optimisticActionsManager.pendingActionsByType.set(type, new Set());
@@ -160,32 +158,34 @@ export function useOptimisticActions() {
         ? m['common.actions.bulkAction']({ message: toastMessage, count: itemCount })
         : toastMessage;
 
-    async function doAction() {
+    async function handleCommitted() {
+      const { shouldRefresh } = settlePendingAction(
+        optimisticActionsManager,
+        pendingActionId,
+        type,
+      );
       try {
-        await execute();
-        const { shouldRefresh } = settlePendingAction(
-          optimisticActionsManager,
-          pendingActionId,
-          type,
-        );
-
         if (shouldRefresh) {
           await refreshData();
         }
+      } finally {
         removeOptimisticAction(optimisticId);
-      } catch (error) {
-        console.error('Action failed:', error);
-        removeOptimisticAction(optimisticId);
-        settlePendingAction(optimisticActionsManager, pendingActionId, type);
-        await refreshData();
-        toast.error(m['common.actions.actionFailed']());
       }
+    }
+
+    async function handleFailed(error: unknown) {
+      console.error('Action failed:', error);
+      removeOptimisticAction(optimisticId);
+      settlePendingAction(optimisticActionsManager, pendingActionId, type);
+      await refreshData();
+      toast.error(m['common.actions.actionFailed']());
     }
 
     if (revert || queueKey) {
       if (!revert || !queueKey) {
         throw new Error('REVERSIBLE_ACTION_CONFIGURATION_INVALID');
       }
+      optimisticActionsManager.lastActionId = pendingActionId;
 
       const reversibleAction = startImmediateReversibleAction({
         queue: reversibleActionQueue,
@@ -193,27 +193,8 @@ export function useOptimisticActions() {
         execute,
         revert,
         onUndoRequested: undo,
-        onCommitted: async () => {
-          const { shouldRefresh } = settlePendingAction(
-            optimisticActionsManager,
-            pendingActionId,
-            type,
-          );
-          try {
-            if (shouldRefresh) {
-              await refreshData();
-            }
-          } finally {
-            removeOptimisticAction(optimisticId);
-          }
-        },
-        onForwardFailed: async (error) => {
-          console.error('Action failed:', error);
-          removeOptimisticAction(optimisticId);
-          settlePendingAction(optimisticActionsManager, pendingActionId, type);
-          await refreshData();
-          toast.error(m['common.actions.actionFailed']());
-        },
+        onCommitted: handleCommitted,
+        onForwardFailed: handleFailed,
         onReverted: async () => {
           await refreshData();
         },
@@ -252,33 +233,14 @@ export function useOptimisticActions() {
       return pendingActionId;
     }
 
-    if (immediate) {
-      void doAction();
-      if (toastMessage.trim().length) {
-        toast(bulkActionMessage, { duration: 5000 });
-      }
-      return pendingActionId;
-    }
-
+    optimisticActionsManager.lastActionId = null;
+    void startImmediatePendingAction({
+      execute,
+      onCommitted: handleCommitted,
+      onFailed: handleFailed,
+    });
     if (toastMessage.trim().length) {
-      toast(bulkActionMessage, {
-        onAutoClose: () => {
-          doAction();
-        },
-        onDismiss: () => {
-          doAction();
-        },
-        action: {
-          label: m['common.actions.undo'](),
-          onClick: () => {
-            undo();
-            settlePendingAction(optimisticActionsManager, pendingActionId, type);
-          },
-        },
-        duration: 5000,
-      });
-    } else {
-      doAction();
+      toast(bulkActionMessage, { duration: 5000 });
     }
 
     return pendingActionId;
@@ -534,9 +496,6 @@ export function useOptimisticActions() {
         removeOptimisticAction(optimisticId);
       },
       toastMessage: successMessage,
-      immediate:
-        !archiveToggleOperations &&
-        (destination === 'archive' || currentFolder === 'archive' || currentFolder === 'snoozed'),
       folders: [currentFolder, destination],
     });
   }

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   OptimisticActionsManager,
   settlePendingAction,
+  startImmediatePendingAction,
   type PendingAction,
 } from './optimistic-actions-manager';
 
@@ -52,5 +53,62 @@ describe('settlePendingAction', () => {
 
     expect(settlePendingAction(manager, 'two', 'STAR')).toEqual({ shouldRefresh: true });
     expect(manager.pendingActionsByType.has('STAR')).toBe(false);
+  });
+
+  it('clears the global undo target when that action settles', () => {
+    const manager = new OptimisticActionsManager();
+    addPending(manager, pendingStarAction('one'));
+    manager.lastActionId = 'one';
+
+    settlePendingAction(manager, 'one', 'STAR');
+
+    expect(manager.lastActionId).toBeNull();
+  });
+});
+
+describe('startImmediatePendingAction', () => {
+  it('starts the write before returning control and commits after it resolves', async () => {
+    const events: string[] = [];
+    let releaseWrite!: () => void;
+    const writeBlocked = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
+    });
+
+    const completion = startImmediatePendingAction({
+      execute: async () => {
+        events.push('execute');
+        await writeBlocked;
+      },
+      onCommitted: async () => {
+        events.push('committed');
+      },
+      onFailed: async () => {
+        events.push('failed');
+      },
+    });
+
+    expect(events).toEqual(['execute']);
+    releaseWrite();
+    await completion;
+    expect(events).toEqual(['execute', 'committed']);
+  });
+
+  it('routes a synchronous write failure through the failure handler', async () => {
+    const failure = new Error('write failed');
+    const handled: unknown[] = [];
+
+    await startImmediatePendingAction({
+      execute: () => {
+        throw failure;
+      },
+      onCommitted: async () => {
+        throw new Error('must not commit');
+      },
+      onFailed: async (error) => {
+        handled.push(error);
+      },
+    });
+
+    expect(handled).toEqual([failure]);
   });
 });
