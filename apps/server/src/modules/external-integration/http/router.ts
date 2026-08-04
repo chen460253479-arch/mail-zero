@@ -4,6 +4,11 @@ import { ulid } from 'ulid';
 import { Hono } from 'hono';
 
 import {
+  disconnectExternalNangoConnection,
+  type ExternalNangoDisconnectInput,
+  type ExternalNangoDisconnectResult,
+} from '../application/disconnect-nango-connection';
+import {
   connectNangoMailbox,
   type ConnectNangoMailboxInput,
 } from '../../mail-accounts/application/connect-nango-mailbox';
@@ -19,11 +24,14 @@ import {
   createExternalMessageReader,
   type ExternalMessageReader,
 } from '../application/read-message';
+import { createPostgresConnectionRepository } from '../../mail-accounts/postgres/connection-repository';
+import { createMailboxLifecycleForDatabase } from '../../mail-accounts/runtime/lifecycle-environment';
 import { createPostgresManagedUserRepository } from '../postgres/managed-user-repository';
 import { NangoBindingError } from '../../mail-accounts/application/bind-nango-mailbox';
 import { accessGrantInputSchema, type AccessGrantInput } from '../contracts/access';
 import { handleExternalLaunch, type ConsumeManagedLaunch } from './launch';
 import { createMailCoreForEnvironment } from '../../../runtime/mail/core';
+import { externalDisconnectInputSchema } from '../contracts/disconnect';
 import { createAccessGrant } from '../application/create-access-grant';
 import type { RuntimeServices } from '../../../runtime/node/services';
 import { requireIntegrationServiceToken } from '../service-auth';
@@ -37,6 +45,10 @@ export type ExternalIntegrationRouterDependencies = {
     services: RuntimeServices,
   ): Promise<{ userId: string; created: boolean }>;
   connect(input: ConnectNangoMailboxInput, services: RuntimeServices): Promise<{ id: string }>;
+  disconnectNango(
+    input: ExternalNangoDisconnectInput,
+    services: RuntimeServices,
+  ): Promise<ExternalNangoDisconnectResult>;
   createMessageReader(services: RuntimeServices): ExternalMessageReader;
   createAccessGrant(
     input: AccessGrantInput,
@@ -56,6 +68,17 @@ const defaultDependencies: ExternalIntegrationRouterDependencies = {
     return await provisionManagedUser(input, dependencies);
   },
   connect: connectNangoMailbox,
+  disconnectNango: async (input, services) => {
+    const managedUsers = createPostgresManagedUserRepository(services.database.db);
+    const connections = createPostgresConnectionRepository(services.database.db);
+    const lifecycle = createMailboxLifecycleForDatabase(services.database.db, services);
+    return await disconnectExternalNangoConnection(input, {
+      findManagedUser: (externalUserId) => managedUsers.findByExternalUserId(externalUserId),
+      findNangoMailbox: (channelId, connectionId) =>
+        connections.findByNangoConnectionId(channelId, connectionId),
+      disconnect: (disconnectInput) => lifecycle.disconnect(disconnectInput),
+    });
+  },
   createMessageReader: (services) =>
     createExternalMessageReader({
       repository: createPostgresExternalMessageRepository(services.database.db),
@@ -143,6 +166,17 @@ export const createExternalIntegrationRouter = (
       }
       throw error;
     }
+  });
+
+  app.post('/nango/connections/disconnect', async (context) => {
+    const unauthorized = await authorize(context.req.header('Authorization'));
+    if (unauthorized !== null) return unauthorized;
+    const body = await context.req.json().catch(() => null);
+    const parsed = externalDisconnectInputSchema.safeParse(body);
+    if (!parsed.success) {
+      return context.json({ error: 'INVALID_REQUEST' }, 400);
+    }
+    return context.json(await dependencies.disconnectNango(parsed.data, services), 200);
   });
 
   app.post('/access-grants', async (context) => {
