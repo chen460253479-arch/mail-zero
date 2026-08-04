@@ -253,7 +253,63 @@ describe('PostgreSQL mail connection repository', () => {
       await expect(
         repository.findByNangoReference('gmail-primary', 'nango-connection-1'),
       ).resolves.toEqual({ connectionId: created.id, userId: 'user-1' });
+      await expect(
+        repository.findByNangoConnectionId('gmail', 'nango-connection-1'),
+      ).resolves.toEqual({ connectionId: created.id, userId: 'user-1' });
+      await expect(
+        repository.findByNangoConnectionId('outlook', 'nango-connection-1'),
+      ).resolves.toBeNull();
       await expect(repository.findByNangoReference('gmail-primary', 'missing')).resolves.toBeNull();
+    });
+  });
+
+  it('reuses retained local mailbox identity with a new Nango connection reference', async () => {
+    await withMailTestDatabase(async ({ db, sql }) => {
+      await insertUser(sql, 'user-1', 'user-1@example.com');
+      const repository = createPostgresConnectionRepository(db);
+      const nangoAuthorization = {
+        ...zeroOAuthAuthorization,
+        authSource: 'nango' as const,
+        encryptedCredentialSnapshot: 'encrypted-nango-access-token',
+        nangoConnectionId: 'nango-connection-1',
+        nangoProviderConfigKey: 'gmail-primary',
+      };
+      const created = await repository.saveBinding({
+        userId: 'user-1',
+        existingMailboxId: null,
+        mailbox: gmailMailbox,
+        authorization: nangoAuthorization,
+      });
+      await sql`
+        INSERT INTO mail.account (id, connection_id, user_id)
+        VALUES ('retained-account-1', ${created.id}, 'user-1')
+      `;
+      await repository.removeAuthorizationBinding('user-1', created.id);
+      await repository.markDisconnected('user-1', created.id, new Date('2026-07-27T12:00:00.000Z'));
+
+      const rebound = await repository.saveBinding({
+        userId: 'user-1',
+        existingMailboxId: null,
+        mailbox: gmailMailbox,
+        authorization: {
+          ...nangoAuthorization,
+          nangoConnectionId: 'nango-connection-2',
+        },
+      });
+
+      expect(rebound).toEqual({ id: created.id });
+      await expect(
+        repository.findByNangoReference('gmail-primary', 'nango-connection-2'),
+      ).resolves.toEqual({ connectionId: created.id, userId: 'user-1' });
+      const [retainedAccount] = await sql`
+        SELECT id, connection_id
+        FROM mail.account
+        WHERE id = 'retained-account-1'
+      `;
+      expect(retainedAccount).toMatchObject({
+        id: 'retained-account-1',
+        connection_id: created.id,
+      });
     });
   });
 

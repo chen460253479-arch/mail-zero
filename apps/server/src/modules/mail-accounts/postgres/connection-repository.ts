@@ -181,6 +181,25 @@ export const createPostgresConnectionRepository = (db: DB, options: RepositoryOp
       return binding ?? null;
     },
 
+    findByNangoConnectionId: async (channelId: MailChannelId, nangoConnectionId: string) => {
+      const [binding] = await db
+        .select({
+          connectionId: authorizationBinding.connectionId,
+          userId: connection.userId,
+        })
+        .from(authorizationBinding)
+        .innerJoin(connection, eq(connection.id, authorizationBinding.connectionId))
+        .where(
+          and(
+            eq(authorizationBinding.authSource, 'nango'),
+            eq(authorizationBinding.nangoConnectionId, nangoConnectionId),
+            eq(connection.channelId, channelId),
+          ),
+        )
+        .limit(1);
+      return binding ?? null;
+    },
+
     saveBinding: async (input: MailboxBindingInput): Promise<{ id: string }> => {
       try {
         return await db.transaction(async (transaction) => {
