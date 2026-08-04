@@ -44,6 +44,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLocation, useNavigate } from 'react-router';
 import { getDateLocale } from '@/lib/i18n/date-locale';
 import { navigationConfig } from '@/config/navigation';
+import { getAccountRole } from '@/lib/administrator';
+import { useSession } from '@/lib/auth-client';
 import { Separator } from '@/components/ui/separator';
 import { Calendar } from '@/components/ui/calendar';
 import { useThreads } from '@/hooks/use-threads';
@@ -174,6 +176,8 @@ const deleteSavedSearch = (id: string) => {
 
 export function CommandPalette({ children }: { children: React.ReactNode }) {
   const dateLocale = getDateLocale(getLocale());
+  const { data: session } = useSession();
+  const accountRole = getAccountRole(session);
   const [open, setOpen] = useQueryState('isCommandPaletteOpen');
   const [, setIsComposeOpen] = useQueryState('isComposeOpen');
   const [currentView, setCurrentView] = useState<CommandView>('main');
@@ -683,6 +687,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
       section?.sections.forEach((group) => {
         group.items.forEach((navItem) => {
           if (navItem.disabled) return;
+          if (navItem.requiredRole !== undefined && navItem.requiredRole !== accountRole) return;
           const item: CommandItem = {
             title: navItem.title,
             icon: navItem.icon,
@@ -739,7 +744,7 @@ export function CommandPalette({ children }: { children: React.ReactNode }) {
     });
 
     return result;
-  }, [pathname, setIsComposeOpen, quickFilterOptions]);
+  }, [accountRole, pathname, setIsComposeOpen, quickFilterOptions]);
 
   const hasMatchingCommands = useMemo(() => {
     if (!commandInputValue.trim()) return true;

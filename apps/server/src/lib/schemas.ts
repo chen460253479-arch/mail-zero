@@ -98,7 +98,7 @@ const categoriesSchema = z.array(mailCategorySchema).superRefine((cats, ctx) => 
 });
 
 export const userSettingsSchema = z.object({
-  language: z.string(),
+  language: z.enum(['zh', 'en']),
   timezone: z.string(),
   dynamicContent: z.boolean().optional(),
   externalImages: z.boolean(),
@@ -116,7 +116,7 @@ export const userSettingsSchema = z.object({
 export type UserSettings = z.infer<typeof userSettingsSchema>;
 
 export const defaultUserSettings: UserSettings = {
-  language: 'en',
+  language: 'zh',
   timezone: 'UTC',
   dynamicContent: false,
   externalImages: true,

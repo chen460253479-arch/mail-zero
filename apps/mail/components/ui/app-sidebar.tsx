@@ -8,7 +8,7 @@ import {
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from '@/components/ui/sidebar';
 import { navigationConfig, bottomNavItems } from '@/config/navigation';
 import { useActiveConnection } from '@/hooks/use-connections';
-import { isAdministrator } from '@/lib/administrator';
+import { getAccountRole } from '@/lib/administrator';
 import { useSidebar } from '@/components/ui/sidebar';
 import { CreateEmail } from '../create/create-email';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -26,6 +26,7 @@ import { useQueryState } from 'nuqs';
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation();
   const { data: session } = useSession();
+  const accountRole = getAccountRole(session);
   const { data: activeConnection } = useActiveConnection();
   const { currentSection, navItems } = useMemo(() => {
     // Find which section we're in based on the pathname
@@ -37,7 +38,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     if (navigationConfig[currentSection]) {
       const items = navigationConfig[currentSection].sections.map((section) => ({
         ...section,
-        items: section.items.filter((item) => !item.adminOnly || isAdministrator(session)),
+        items: section.items.filter(
+          (item) => item.requiredRole === undefined || item.requiredRole === accountRole,
+        ),
       }));
 
       return { currentSection, navItems: items };
@@ -47,7 +50,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         navItems: [],
       };
     }
-  }, [location.pathname, session]);
+  }, [accountRole, location.pathname]);
 
   const showComposeButton = currentSection === 'mail';
   const { state } = useSidebar();

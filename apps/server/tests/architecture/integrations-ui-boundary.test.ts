@@ -5,10 +5,16 @@ import { resolve } from 'node:path';
 const root = resolve(process.cwd(), '../..');
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 
-describe('administrator integrations UI boundary', () => {
-  it('hides its navigation item from non-administrators', () => {
-    expect(read('apps/mail/config/navigation.ts')).toContain('adminOnly: true');
-    expect(read('apps/mail/components/ui/app-sidebar.tsx')).toContain('item.adminOnly');
+describe('role-restricted settings UI boundary', () => {
+  it('keeps administrator and standard-user navigation items role-restricted', () => {
+    const navigation = read('apps/mail/config/navigation.ts');
+    const sidebar = read('apps/mail/components/ui/app-sidebar.tsx');
+    const commandPalette = read('apps/mail/components/context/command-palette-context.tsx');
+
+    expect(navigation).toContain("requiredRole: 'admin'");
+    expect(navigation).toContain("requiredRole: 'user'");
+    expect(sidebar).toContain('item.requiredRole === accountRole');
+    expect(commandPalette).toContain('navItem.requiredRole !== accountRole');
   });
 
   it('keeps Nango service credentials and configuration mutations out of the UI', () => {

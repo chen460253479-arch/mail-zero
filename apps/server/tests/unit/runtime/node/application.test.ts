@@ -180,6 +180,35 @@ describe('native Node application', () => {
     expect(deleteUser).not.toHaveBeenCalled();
   });
 
+  it('does not allow the administrator account to be deleted', async () => {
+    const services = createServices();
+    services.auth.api.getSession = vi.fn(async () => ({
+      user: {
+        id: 'admin-1',
+        role: 'admin',
+        mustChangePassword: false,
+      },
+      session: {
+        id: 'session-1',
+        userId: 'admin-1',
+        authMethod: 'password',
+      },
+    })) as never;
+    const deleteUser = vi.fn();
+    services.auth.api.deleteUser = deleteUser as never;
+    const app = createNodeApplication(services);
+
+    const response = await app.request('/api/trpc/user.delete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ json: null }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toContain('ADMIN_ACCOUNT_CANNOT_BE_DELETED');
+    expect(deleteUser).not.toHaveBeenCalled();
+  });
+
   it('lets a Launch Session use the same private procedures', async () => {
     const services = createServices();
     services.auth.api.getSession = vi.fn(async () => ({

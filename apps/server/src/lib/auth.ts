@@ -109,6 +109,9 @@ export const createAuth = (dependencies: AuthRuntimeDependencies) =>
         enabled: true,
         beforeDelete: async (user, request) => {
           if (!request) throw new APIError('BAD_REQUEST', { message: 'Request object is missing' });
+          if ((user as { role?: unknown }).role === 'admin') {
+            throw new APIError('FORBIDDEN', { message: 'ADMIN_ACCOUNT_CANNOT_BE_DELETED' });
+          }
           const connections = await dependencies.db
             .select({ id: connection.id })
             .from(connection)

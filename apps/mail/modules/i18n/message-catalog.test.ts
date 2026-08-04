@@ -19,12 +19,11 @@ function leafKeys(value: unknown, prefix = ''): string[] {
 }
 
 describe('Simplified Chinese catalog', () => {
-  it('uses zh while keeping English as the default locale', () => {
-    expect(settings.baseLocale).toBe('en');
-    expect(settings.locales).toContain('zh');
-    expect(settings.locales).not.toContain('zh-CN');
-    expect(settings.locales).not.toContain('zh-TW');
+  it('uses Simplified Chinese as the default and only keeps Chinese and English', () => {
+    expect(settings.baseLocale).toBe('zh');
+    expect(settings.locales).toEqual(['zh', 'en']);
     expect(locales.zh).toBe('简体中文');
+    expect(locales.en).toBe('English');
   });
 
   it('keeps the zh catalog structurally aligned with en', () => {

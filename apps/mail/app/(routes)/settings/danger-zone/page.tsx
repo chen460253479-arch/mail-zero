@@ -14,6 +14,9 @@ import { useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AlertTriangle } from 'lucide-react';
+import { getAccountRole } from '@/lib/administrator';
+import { useSession } from '@/lib/auth-client';
+import { Navigate } from 'react-router';
 
 import { useForm } from 'react-hook-form';
 import { m } from '@/paraglide/messages';
@@ -120,6 +123,11 @@ function DeleteAccountDialog() {
 }
 
 export default function DangerPage() {
+  const { data: session, isPending } = useSession();
+
+  if (isPending) return null;
+  if (getAccountRole(session) !== 'user') return <Navigate to="/settings/general" replace />;
+
   return (
     <div className="grid gap-6">
       <SettingsCard

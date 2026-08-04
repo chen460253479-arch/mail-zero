@@ -43,6 +43,12 @@ export const userRouter = router({
       return { success: true };
     }),
   delete: privateProcedure.mutation(async ({ ctx }) => {
+    if (ctx.sessionUser.role === 'admin') {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'ADMIN_ACCOUNT_CANNOT_BE_DELETED',
+      });
+    }
     const { success, message } = await ctx.c.var.auth.api.deleteUser({
       body: {},
       headers: ctx.c.req.raw.headers,

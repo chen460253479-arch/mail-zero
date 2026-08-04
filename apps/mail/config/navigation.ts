@@ -15,8 +15,9 @@ import {
   LockIcon,
   Clock,
 } from '@/components/icons/icons';
-import { MessageSquareIcon, PlugZap } from 'lucide-react';
+import { PlugZap } from 'lucide-react';
 import { m } from '@/paraglide/messages';
+import type { AccountRole } from '@/lib/administrator';
 
 export interface NavItem {
   id?: string;
@@ -29,7 +30,7 @@ export interface NavItem {
   disabled?: boolean;
   target?: string;
   shortcut?: string;
-  adminOnly?: boolean;
+  requiredRole?: AccountRole;
   isSettingsPage?: boolean;
 }
 
@@ -164,7 +165,7 @@ export const navigationConfig: Record<string, NavConfig> = {
             title: m['navigation.settings.integrations'](),
             url: '/settings/integrations',
             icon: PlugZap,
-            adminOnly: true,
+            requiredRole: 'admin' as const,
           },
           {
             title: m['navigation.settings.privacy'](),
@@ -187,23 +188,11 @@ export const navigationConfig: Record<string, NavConfig> = {
             icon: Tabs,
           },
           {
-            title: m['navigation.settings.signatures'](),
-            url: '/settings/signatures',
-            icon: MessageSquareIcon,
-            disabled: true,
-          },
-          {
             title: m['navigation.settings.shortcuts'](),
             url: '/settings/shortcuts',
             icon: Tabs,
             shortcut: '?',
           },
-          // {
-          //   title: 'navigation.settings.signatures',
-          //   url: '/settings/signatures',
-          //   icon: MessageSquareIcon,
-          //   disabled: true,
-          // },
           // {
           //   title: 'navigation.settings.shortcuts',
           //   url: '/settings/shortcuts',
@@ -219,6 +208,7 @@ export const navigationConfig: Record<string, NavConfig> = {
             title: m['navigation.settings.deleteAccount'](),
             url: '/settings/danger-zone',
             icon: Danger,
+            requiredRole: 'user' as const,
           },
         ].map((item) => ({
           ...item,

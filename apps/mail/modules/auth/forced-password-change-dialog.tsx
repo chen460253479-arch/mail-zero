@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 
 import {
   Dialog,
@@ -21,6 +22,52 @@ type ForcedPasswordChangeDependencies = {
   changePassword(input: PasswordChangeInput): Promise<unknown>;
   reloadInbox(): void;
 };
+
+type PasswordFieldProps = {
+  label: string;
+  value: string;
+  onChange(value: string): void;
+  autoComplete: 'current-password' | 'new-password';
+  minLength?: number;
+};
+
+function PasswordField({ label, value, onChange, autoComplete, minLength }: PasswordFieldProps) {
+  const [isVisible, setIsVisible] = useState(false);
+  const visibilityLabel = isVisible
+    ? m['pages.auth.changePassword.hidePassword']()
+    : m['pages.auth.changePassword.showPassword']();
+
+  return (
+    <label className="block space-y-2">
+      <span className="text-sm font-medium">{label}</span>
+      <div className="relative">
+        <input
+          autoComplete={autoComplete}
+          type={isVisible ? 'text' : 'password'}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          required
+          minLength={minLength}
+          className="border-input bg-background h-11 w-full rounded-lg border px-3 pr-11 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+        />
+        <button
+          type="button"
+          aria-label={visibilityLabel}
+          aria-pressed={isVisible}
+          title={visibilityLabel}
+          onClick={() => setIsVisible((visible) => !visible)}
+          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg outline-none transition-colors focus-visible:ring-2"
+        >
+          {isVisible ? (
+            <EyeOff aria-hidden="true" size={18} />
+          ) : (
+            <Eye aria-hidden="true" size={18} />
+          )}
+        </button>
+      </div>
+    </label>
+  );
+}
 
 export const submitForcedPasswordChange = async (
   input: PasswordChangeInput,
@@ -84,49 +131,28 @@ export function ForcedPasswordChangeDialog() {
         </DialogHeader>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
-          <label className="block space-y-2">
-            <span className="text-sm font-medium">
-              {m['pages.auth.changePassword.currentPassword']()}
-            </span>
-            <input
-              autoComplete="current-password"
-              type="password"
-              value={currentPassword}
-              onChange={(event) => setCurrentPassword(event.target.value)}
-              required
-              className="border-input bg-background h-11 w-full rounded-lg border px-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            />
-          </label>
+          <PasswordField
+            label={m['pages.auth.changePassword.currentPassword']()}
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={setCurrentPassword}
+          />
 
-          <label className="block space-y-2">
-            <span className="text-sm font-medium">
-              {m['pages.auth.changePassword.newPassword']()}
-            </span>
-            <input
-              autoComplete="new-password"
-              type="password"
-              value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-              required
-              minLength={12}
-              className="border-input bg-background h-11 w-full rounded-lg border px-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            />
-          </label>
+          <PasswordField
+            label={m['pages.auth.changePassword.newPassword']()}
+            autoComplete="new-password"
+            value={newPassword}
+            onChange={setNewPassword}
+            minLength={12}
+          />
 
-          <label className="block space-y-2">
-            <span className="text-sm font-medium">
-              {m['pages.auth.changePassword.confirmPassword']()}
-            </span>
-            <input
-              autoComplete="new-password"
-              type="password"
-              value={confirmation}
-              onChange={(event) => setConfirmation(event.target.value)}
-              required
-              minLength={12}
-              className="border-input bg-background h-11 w-full rounded-lg border px-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            />
-          </label>
+          <PasswordField
+            label={m['pages.auth.changePassword.confirmPassword']()}
+            autoComplete="new-password"
+            value={confirmation}
+            onChange={setConfirmation}
+            minLength={12}
+          />
 
           {error ? (
             <p
