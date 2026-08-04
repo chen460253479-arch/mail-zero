@@ -8,7 +8,6 @@ import {
 } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem } from '@/components/ui/form';
 import { SettingsCard } from '@/components/settings/settings-card';
-import { useSession, signOut } from '@/lib/auth-client';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTRPC } from '@/providers/query-provider';
 import { useMutation } from '@tanstack/react-query';
@@ -33,9 +32,8 @@ const formSchema = z.object({
 
 function DeleteAccountDialog() {
   const [isOpen, setIsOpen] = useState(false);
-  
+
   const trpc = useTRPC();
-  const { refetch } = useSession();
   const { mutateAsync: deleteAccount, isPending } = useMutation(trpc.user.delete.mutationOptions());
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -49,26 +47,26 @@ function DeleteAccountDialog() {
     if (values.confirmText !== CONFIRMATION_TEXT)
       return toast.error(m['pages.settings.dangerZone.confirmation']());
 
-    await deleteAccount(void 0, {
-      onSuccess: async ({ success, message }) => {
-        if (!success) return toast.error(message);
-        try {
-          await signOut();
-          refetch();
-          await clear();
-        } catch (error) {
-          console.error('Failed to delete account:', error);
-          toast.error(m['pages.settings.dangerZone.error']());
-        }
-        toast.success(m['pages.settings.dangerZone.deleted']());
-        window.location.href = '/';
-      },
-      onError: (error) => {
-        console.error('Failed to delete account:', error);
-        toast.error(m['pages.settings.dangerZone.error']());
-      },
-      onSettled: () => form.reset(),
-    });
+    try {
+      const { success, message } = await deleteAccount(void 0);
+      if (!success || message !== 'User deleted') {
+        toast.error(message || m['pages.settings.dangerZone.error']());
+        return;
+      }
+      try {
+        await clear();
+      } catch (error) {
+        console.error('Failed to clear deleted account cache:', error);
+      }
+      setIsOpen(false);
+      toast.success(m['pages.settings.dangerZone.deleted']());
+      window.location.replace('/login');
+    } catch (error) {
+      console.error('Failed to delete account:', error);
+      toast.error(m['pages.settings.dangerZone.error']());
+    } finally {
+      form.reset();
+    }
   }
 
   return (
