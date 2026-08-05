@@ -95,7 +95,13 @@ export interface IConnection {
   picture?: string;
   createdAt: Date;
   channelId: 'gmail' | 'outlook' | 'zoho_mail' | 'imap_smtp';
-  status: 'connected' | 'disconnected' | 'reconnect_required' | 'deleting';
+  status:
+    | 'pending_configuration'
+    | 'connected'
+    | 'disconnecting'
+    | 'disconnected'
+    | 'reconnect_required'
+    | 'deleting';
   authSource: 'zero_oauth' | 'nango' | 'manual' | null;
   bindingStatus: 'ready' | 'incomplete';
   pendingAuthorization: boolean;

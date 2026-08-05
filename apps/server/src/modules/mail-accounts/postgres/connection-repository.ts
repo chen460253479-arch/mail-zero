@@ -1,12 +1,13 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 
-import { authorizationBinding, connection, pendingNangoMailboxBinding } from '../../../db/schema';
+import { authorizationBinding, connection } from '../../../db/schema';
 import type { MailChannelId } from '../../../mail-channel/contracts';
 import { mailAccount } from '../../mail/postgres/schema/accounts';
 import { blob } from '../../mail/postgres/schema/blobs';
 import type { DB } from '../../../db';
 
 type ConnectionStatus =
+  | 'pending_configuration'
   | 'connected'
   | 'disconnecting'
   | 'disconnected'
@@ -16,7 +17,7 @@ type ConnectionStatus =
 type MailboxBindingInput = {
   userId: string;
   existingMailboxId: string | null;
-  pendingBindingId?: string | null;
+  connectionStatus?: Extract<ConnectionStatus, 'pending_configuration' | 'connected'>;
   mailbox: {
     email: string;
     normalizedEmail: string;
@@ -119,109 +120,123 @@ export const createPostgresConnectionRepository = (db: DB, options: RepositoryOp
         .from(connection)
         .leftJoin(authorizationBinding, eq(authorizationBinding.connectionId, connection.id)),
 
-    listPendingNangoBindings: async (userId: string) =>
-      await db
-        .select()
-        .from(pendingNangoMailboxBinding)
-        .where(eq(pendingNangoMailboxBinding.userId, userId))
-        .orderBy(asc(pendingNangoMailboxBinding.createdAt), asc(pendingNangoMailboxBinding.id)),
-
-    listAllPendingNangoBindings: async () =>
-      await db
-        .select()
-        .from(pendingNangoMailboxBinding)
-        .orderBy(asc(pendingNangoMailboxBinding.createdAt), asc(pendingNangoMailboxBinding.id)),
-
-    findPendingNangoBinding: async (bindingId: string) =>
-      (await db.query.pendingNangoMailboxBinding.findFirst({
-        where: eq(pendingNangoMailboxBinding.id, bindingId),
-      })) ?? null,
-
-    findOwnedPendingNangoBinding: async (userId: string, bindingId: string) =>
-      (await db.query.pendingNangoMailboxBinding.findFirst({
-        where: and(
-          eq(pendingNangoMailboxBinding.id, bindingId),
-          eq(pendingNangoMailboxBinding.userId, userId),
-        ),
-      })) ?? null,
-
-    findPendingByNangoReference: async (providerConfigKey: string, nangoConnectionId: string) =>
-      (await db.query.pendingNangoMailboxBinding.findFirst({
-        where: and(
-          eq(pendingNangoMailboxBinding.nangoProviderConfigKey, providerConfigKey),
-          eq(pendingNangoMailboxBinding.nangoConnectionId, nangoConnectionId),
-        ),
-      })) ?? null,
-
-    reservePendingNangoBinding: async (input: {
+    reservePendingNangoConnection: async (input: {
       userId: string;
       channelId: 'zoho_mail';
-      providerConfigKey: string;
-      nangoConnectionId: string;
+      providerKey: string;
+      authorization: {
+        credentialType: 'oauth2' | 'basic' | 'custom';
+        encryptedCredentialSnapshot: string;
+        accessTokenExpiresAt: Date | null;
+        credentialFetchedAt: Date;
+        nangoConnectionId: string;
+        nangoProviderConfigKey: string;
+      };
     }): Promise<{ id: string }> =>
       await db.transaction(async (transaction) => {
         await transaction.execute(
-          sql`select pg_advisory_xact_lock(hashtext(${pendingNangoLockKey(input.providerConfigKey, input.nangoConnectionId)}))`,
+          sql`select pg_advisory_xact_lock(hashtext(${pendingNangoLockKey(input.authorization.nangoProviderConfigKey, input.authorization.nangoConnectionId)}))`,
         );
-        const [completed] = await transaction
-          .select({ id: connection.id, userId: connection.userId, channelId: connection.channelId })
+        const [bound] = await transaction
+          .select({
+            id: connection.id,
+            userId: connection.userId,
+            channelId: connection.channelId,
+            authorizationId: authorizationBinding.id,
+          })
           .from(authorizationBinding)
           .innerJoin(connection, eq(connection.id, authorizationBinding.connectionId))
           .where(
             and(
               eq(authorizationBinding.authSource, 'nango'),
-              eq(authorizationBinding.nangoProviderConfigKey, input.providerConfigKey),
-              eq(authorizationBinding.nangoConnectionId, input.nangoConnectionId),
-            ),
-          )
-          .limit(1);
-        if (completed !== undefined) {
-          if (completed.userId !== input.userId || completed.channelId !== input.channelId) {
-            throw new MailConnectionRepositoryError('NANGO_CONNECTION_ALREADY_BOUND');
-          }
-          return { id: completed.id };
-        }
-        const [pending] = await transaction
-          .select()
-          .from(pendingNangoMailboxBinding)
-          .where(
-            and(
-              eq(pendingNangoMailboxBinding.nangoProviderConfigKey, input.providerConfigKey),
-              eq(pendingNangoMailboxBinding.nangoConnectionId, input.nangoConnectionId),
+              eq(
+                authorizationBinding.nangoProviderConfigKey,
+                input.authorization.nangoProviderConfigKey,
+              ),
+              eq(authorizationBinding.nangoConnectionId, input.authorization.nangoConnectionId),
             ),
           )
           .for('update')
           .limit(1);
-        if (pending !== undefined) {
-          if (pending.userId !== input.userId || pending.channelId !== input.channelId) {
+        const timestamp = now();
+        if (bound !== undefined) {
+          if (bound.userId !== input.userId || bound.channelId !== input.channelId) {
             throw new MailConnectionRepositoryError('NANGO_CONNECTION_ALREADY_BOUND');
           }
-          return { id: pending.id };
+          await transaction
+            .update(authorizationBinding)
+            .set({
+              credentialType: input.authorization.credentialType,
+              encryptedCredentialSnapshot: input.authorization.encryptedCredentialSnapshot,
+              accessTokenExpiresAt: input.authorization.accessTokenExpiresAt,
+              credentialFetchedAt: input.authorization.credentialFetchedAt,
+              updatedAt: timestamp,
+            })
+            .where(eq(authorizationBinding.id, bound.authorizationId));
+          return { id: bound.id };
         }
-        const timestamp = now();
-        const id = newId();
-        await transaction.insert(pendingNangoMailboxBinding).values({
-          id,
+        const [occupied] = await transaction
+          .select({ id: connection.id })
+          .from(connection)
+          .where(
+            and(
+              eq(connection.userId, input.userId),
+              eq(connection.channelId, input.channelId),
+              inArray(connection.status, [
+                'pending_configuration',
+                'connected',
+                'disconnecting',
+                'reconnect_required',
+                'deleting',
+              ]),
+            ),
+          )
+          .for('update')
+          .limit(1);
+        if (occupied !== undefined) {
+          throw new MailConnectionRepositoryError('MAILBOX_ALREADY_CONNECTED');
+        }
+        const connectionId = newId();
+        await transaction.insert(connection).values({
+          id: connectionId,
           userId: input.userId,
+          email: '',
+          normalizedEmail: '',
+          name: '',
+          picture: '',
           channelId: input.channelId,
-          nangoConnectionId: input.nangoConnectionId,
-          nangoProviderConfigKey: input.providerConfigKey,
+          status: 'pending_configuration',
+          disconnectedAt: null,
+          providerKey: input.providerKey,
           createdAt: timestamp,
           updatedAt: timestamp,
         });
-        return { id };
+        await transaction.insert(authorizationBinding).values({
+          id: newId(),
+          connectionId,
+          authSource: 'nango',
+          ...input.authorization,
+          externalData: null,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        });
+        return { id: connectionId };
       }),
 
-    deletePendingNangoBinding: async (userId: string, bindingId: string): Promise<boolean> => {
+    deletePendingNangoConnection: async (
+      userId: string,
+      connectionId: string,
+    ): Promise<boolean> => {
       const rows = await db
-        .delete(pendingNangoMailboxBinding)
+        .delete(connection)
         .where(
           and(
-            eq(pendingNangoMailboxBinding.id, bindingId),
-            eq(pendingNangoMailboxBinding.userId, userId),
+            eq(connection.id, connectionId),
+            eq(connection.userId, userId),
+            eq(connection.status, 'pending_configuration'),
           ),
         )
-        .returning({ id: pendingNangoMailboxBinding.id });
+        .returning({ id: connection.id });
       return rows.length === 1;
     },
 
@@ -279,6 +294,8 @@ export const createPostgresConnectionRepository = (db: DB, options: RepositoryOp
         .select({
           connectionId: authorizationBinding.connectionId,
           userId: connection.userId,
+          channelId: connection.channelId,
+          status: connection.status,
           externalData: authorizationBinding.externalData,
         })
         .from(authorizationBinding)
@@ -311,20 +328,7 @@ export const createPostgresConnectionRepository = (db: DB, options: RepositoryOp
         )
         .limit(1);
       if (binding !== undefined) return binding;
-      const [pending] = await db
-        .select({
-          connectionId: pendingNangoMailboxBinding.id,
-          userId: pendingNangoMailboxBinding.userId,
-        })
-        .from(pendingNangoMailboxBinding)
-        .where(
-          and(
-            eq(pendingNangoMailboxBinding.channelId, channelId),
-            eq(pendingNangoMailboxBinding.nangoConnectionId, nangoConnectionId),
-          ),
-        )
-        .limit(1);
-      return pending ?? null;
+      return null;
     },
 
     updateAuthorizationExternalData: async (
@@ -367,46 +371,7 @@ export const createPostgresConnectionRepository = (db: DB, options: RepositoryOp
               sql`select pg_advisory_xact_lock(hashtext(${pendingNangoLockKey(nangoReference.providerConfigKey, nangoReference.connectionId)}))`,
             );
           }
-          const pendingFilter =
-            input.pendingBindingId !== undefined && input.pendingBindingId !== null
-              ? eq(pendingNangoMailboxBinding.id, input.pendingBindingId)
-              : nangoReference === null
-                ? null
-                : and(
-                    eq(
-                      pendingNangoMailboxBinding.nangoProviderConfigKey,
-                      nangoReference.providerConfigKey,
-                    ),
-                    eq(
-                      pendingNangoMailboxBinding.nangoConnectionId,
-                      nangoReference.connectionId,
-                    ),
-                  );
-          const pendingBinding =
-            pendingFilter === null
-              ? undefined
-              : (
-                  await transaction
-                    .select()
-                    .from(pendingNangoMailboxBinding)
-                    .where(pendingFilter)
-                    .for('update')
-                    .limit(1)
-                )[0];
-          if (
-            (input.pendingBindingId !== undefined &&
-              input.pendingBindingId !== null &&
-              pendingBinding === undefined) ||
-            (pendingBinding !== undefined &&
-              (pendingBinding.userId !== input.userId ||
-                pendingBinding.channelId !== input.mailbox.channelId ||
-                input.authorization.authSource !== 'nango' ||
-                pendingBinding.nangoConnectionId !== input.authorization.nangoConnectionId ||
-                pendingBinding.nangoProviderConfigKey !==
-                  input.authorization.nangoProviderConfigKey))
-          ) {
-            throw new MailConnectionRepositoryError('NANGO_CONNECTION_ALREADY_BOUND');
-          }
+          const targetStatus = input.connectionStatus ?? 'connected';
           const occupied = await transaction
             .select({
               id: connection.id,
@@ -429,7 +394,11 @@ export const createPostgresConnectionRepository = (db: DB, options: RepositoryOp
             active.userId === input.userId &&
             active.status === 'reconnect_required' &&
             (input.existingMailboxId === null || input.existingMailboxId === active.id);
-          if (active !== undefined && !isOwnedReauthorization) {
+          const isSameExistingMailbox =
+            active !== undefined &&
+            active.userId === input.userId &&
+            input.existingMailboxId === active.id;
+          if (active !== undefined && !isOwnedReauthorization && !isSameExistingMailbox) {
             throw new MailConnectionRepositoryError('MAILBOX_ALREADY_CONNECTED');
           }
 
@@ -459,21 +428,32 @@ export const createPostgresConnectionRepository = (db: DB, options: RepositoryOp
               .where(and(eq(connection.id, connectionId), eq(connection.userId, input.userId)))
               .for('update')
               .limit(1);
+            if (existing === undefined || existing.channelId !== input.mailbox.channelId) {
+              throw new MailConnectionRepositoryError('MAILBOX_IDENTITY_MISMATCH');
+            }
             if (
-              existing === undefined ||
-              existing.channelId !== input.mailbox.channelId ||
+              existing.status !== 'pending_configuration' &&
               existing.normalizedEmail !== input.mailbox.normalizedEmail
             ) {
               throw new MailConnectionRepositoryError('MAILBOX_IDENTITY_MISMATCH');
             }
-            if (!['disconnected', 'reconnect_required'].includes(existing.status)) {
+            if (
+              ![
+                'pending_configuration',
+                'connected',
+                'disconnected',
+                'reconnect_required',
+              ].includes(existing.status)
+            ) {
               throw new MailConnectionRepositoryError('MAILBOX_ALREADY_CONNECTED');
             }
             const authorization = await transaction.query.authorizationBinding.findFirst({
               where: eq(authorizationBinding.connectionId, connectionId),
             });
             replaceAuthorization =
-              existing.status === 'reconnect_required' && authorization !== undefined;
+              ['pending_configuration', 'connected', 'reconnect_required'].includes(
+                existing.status,
+              ) && authorization !== undefined;
             if (existing.status === 'disconnected' && authorization !== undefined) {
               throw new MailConnectionRepositoryError('MAILBOX_AUTHORIZATION_ALREADY_EXISTS');
             }
@@ -481,18 +461,18 @@ export const createPostgresConnectionRepository = (db: DB, options: RepositoryOp
               .update(connection)
               .set({
                 ...input.mailbox,
-                status: 'connected',
+                status: targetStatus,
                 disconnectedAt: null,
                 updatedAt: timestamp,
               })
               .where(and(eq(connection.id, connectionId), eq(connection.userId, input.userId)));
           } else {
-            connectionId = pendingBinding?.id ?? newId();
+            connectionId = newId();
             await transaction.insert(connection).values({
               ...input.mailbox,
               id: connectionId,
               userId: input.userId,
-              status: 'connected',
+              status: targetStatus,
               disconnectedAt: null,
               createdAt: timestamp,
               updatedAt: timestamp,
@@ -519,15 +499,14 @@ export const createPostgresConnectionRepository = (db: DB, options: RepositoryOp
               createdAt: timestamp,
             });
           }
-          if (pendingBinding !== undefined) {
-            await transaction
-              .delete(pendingNangoMailboxBinding)
-              .where(eq(pendingNangoMailboxBinding.id, pendingBinding.id));
-          }
           return { id: connectionId };
         });
       } catch (error) {
-        if (constraintName(error) === 'connection_channel_email_active_uidx') {
+        if (
+          ['connection_channel_email_active_uidx', 'connection_user_zoho_active_uidx'].includes(
+            constraintName(error) ?? '',
+          )
+        ) {
           throw new MailConnectionRepositoryError('MAILBOX_ALREADY_CONNECTED');
         }
         throw error;

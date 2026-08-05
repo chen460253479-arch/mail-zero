@@ -8,12 +8,13 @@ import {
   type BindNangoMailboxInput,
 } from './bind-nango-mailbox';
 import { createChannelConfigRepository } from '../../../integrations/core/channel-config-repository';
+import { createNangoCredentialSnapshot, resolveFetchedNangoCredential } from '../credentials/nango';
 import type { MailChannelExternalData, MailChannelId } from '../../../mail-channel/contracts';
+import { encryptCredential } from '../../../infrastructure/security/credential-encryption';
 import { createIdentityMailChannelRegistry } from '../../../runtime/mail/channel-registry';
 import { provisionChannelMailboxInDatabase } from '../runtime/provision-channel-mailbox';
 import { NangoIntegrationError } from '../../../integrations/nango/errors';
 import type { RuntimeServices } from '../../../runtime/node/services';
-import { resolveFetchedNangoCredential } from '../credentials/nango';
 
 export type ConnectNangoMailboxInput = {
   userId: string;
@@ -24,6 +25,7 @@ export type ConnectNangoMailboxInput = {
 
 type ConnectedNangoMailbox = {
   id: string;
+  ready: boolean;
   identity: {
     email: string;
     name: string;
@@ -87,29 +89,46 @@ const createRuntimeDependencies = (services: RuntimeServices): ConnectNangoMailb
       ) {
         throw new NangoBindingError('NANGO_CONNECTION_INVALID');
       }
-      let credentialType;
+      let resolved;
       try {
-        credentialType = resolveFetchedNangoCredential(
+        resolved = resolveFetchedNangoCredential(
           connection.credentials,
           connection.connection_config,
-        ).credential.type;
+        );
       } catch {
         throw new NangoBindingError('NANGO_CONNECTION_INVALID');
       }
-      if (!channel.credentialTypes.has(credentialType)) {
+      if (!channel.credentialTypes.has(resolved.credential.type)) {
         throw new NangoBindingError('MAIL_CHANNEL_UNAVAILABLE');
       }
+      const credentialFetchedAt = new Date();
       try {
-        return await connectionRepository.reservePendingNangoBinding({
+        return await connectionRepository.reservePendingNangoConnection({
           userId: input.userId,
           channelId: input.channelId,
-          providerConfigKey: input.integrationId,
-          nangoConnectionId: input.connectionId,
+          providerKey: channel.providerKey,
+          authorization: {
+            credentialType:
+              resolved.credential.type === 'oauth2'
+                ? 'oauth2'
+                : resolved.credential.type === 'basic'
+                  ? 'basic'
+                  : 'custom',
+            encryptedCredentialSnapshot: await encryptCredential(
+              createNangoCredentialSnapshot(resolved.credential),
+              services.config.credentialEncryptionKey,
+            ),
+            accessTokenExpiresAt: resolved.expiresAt,
+            credentialFetchedAt,
+            nangoConnectionId: input.connectionId,
+            nangoProviderConfigKey: input.integrationId,
+          },
         });
       } catch (error) {
         if (
           error instanceof MailConnectionRepositoryError &&
-          error.code === 'NANGO_CONNECTION_ALREADY_BOUND'
+          (error.code === 'NANGO_CONNECTION_ALREADY_BOUND' ||
+            error.code === 'MAILBOX_ALREADY_CONNECTED')
         ) {
           throw new NangoBindingError(error.code);
         }
@@ -135,8 +154,6 @@ const createRuntimeDependencies = (services: RuntimeServices): ConnectNangoMailb
             connectionRepository.findMailboxByNormalizedEmail(userId, channelId, normalizedEmail),
           findByNangoReference: (integrationId, connectionId) =>
             connectionRepository.findByNangoReference(integrationId, connectionId),
-          findPendingByNangoReference: (integrationId, connectionId) =>
-            connectionRepository.findPendingByNangoReference(integrationId, connectionId),
           updateExternalData: ({ connectionId, externalData }) =>
             connectionRepository.updateAuthorizationExternalData(
               input.userId,
@@ -174,11 +191,13 @@ export const connectNangoMailbox = async (
     ...input,
     integrationId,
   });
-  await dependencies.provision({
-    userId: input.userId,
-    connectionId: binding.id,
-    channelId: input.channelId,
-    identity: binding.identity,
-  });
+  if (binding.ready) {
+    await dependencies.provision({
+      userId: input.userId,
+      connectionId: binding.id,
+      channelId: input.channelId,
+      identity: binding.identity,
+    });
+  }
   return { id: binding.id };
 };

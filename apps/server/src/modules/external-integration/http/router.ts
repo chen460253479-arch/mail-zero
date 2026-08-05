@@ -85,7 +85,7 @@ const defaultDependencies: ExternalIntegrationRouterDependencies = {
         connections.findByNangoConnectionId(channelId, connectionId),
       disconnect: async (disconnectInput) => {
         if (
-          await connections.deletePendingNangoBinding(
+          await connections.deletePendingNangoConnection(
             disconnectInput.userId,
             disconnectInput.connectionId,
           )

@@ -21,7 +21,13 @@ type AuthorizationCredentialRecord = {
 
 export type ConnectionCredentialRecord = {
   connection: {
-    status: 'connected' | 'disconnecting' | 'disconnected' | 'reconnect_required' | 'deleting';
+    status:
+      | 'pending_configuration'
+      | 'connected'
+      | 'disconnecting'
+      | 'disconnected'
+      | 'reconnect_required'
+      | 'deleting';
   };
   authorization: AuthorizationCredentialRecord | null;
 };

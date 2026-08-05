@@ -159,8 +159,6 @@ describe('managed external mail end-to-end flow', () => {
                   ),
                 findByNangoReference: (integrationId, connectionId) =>
                   connectionRepository.findByNangoReference(integrationId, connectionId),
-                findPendingByNangoReference: (integrationId, connectionId) =>
-                  connectionRepository.findPendingByNangoReference(integrationId, connectionId),
                 updateExternalData: ({ connectionId, externalData }) =>
                   connectionRepository.updateAuthorizationExternalData(
                     bindingInput.userId,

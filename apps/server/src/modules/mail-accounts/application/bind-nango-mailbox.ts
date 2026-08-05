@@ -4,6 +4,7 @@ import type {
   MailChannelPlugin,
 } from '../../../mail-channel/contracts';
 import { createNangoCredentialSnapshot, resolveFetchedNangoCredential } from '../credentials/nango';
+import { isCompleteZohoMailExternalData } from '../../../mail-channel/zoho-mail/external-data';
 import { encryptCredential } from '../../../infrastructure/security/credential-encryption';
 import type { NangoConnectionSummary } from '../../../integrations/nango/schemas';
 import type { NangoClient } from '../../../integrations/nango/client';
@@ -28,12 +29,18 @@ type ExistingMailbox = {
   id: string;
   userId: string;
   channelId: MailChannelId;
-  status: 'connected' | 'disconnecting' | 'disconnected' | 'reconnect_required' | 'deleting';
+  status:
+    | 'pending_configuration'
+    | 'connected'
+    | 'disconnecting'
+    | 'disconnected'
+    | 'reconnect_required'
+    | 'deleting';
 };
 
 export type SaveNangoBindingInput = {
   existingMailboxId: string | null;
-  pendingBindingId?: string | null;
+  connectionStatus?: 'pending_configuration' | 'connected';
   mailbox: {
     email: string;
     normalizedEmail: string;
@@ -66,15 +73,9 @@ export interface NangoBindingRepository {
   ): Promise<{
     connectionId: string;
     userId: string;
-    externalData: MailChannelExternalData | null;
-  } | null>;
-  findPendingByNangoReference(
-    integrationId: string,
-    connectionId: string,
-  ): Promise<{
-    id: string;
-    userId: string;
     channelId: MailChannelId;
+    status: ExistingMailbox['status'];
+    externalData: MailChannelExternalData | null;
   } | null>;
   updateExternalData(input: {
     connectionId: string;
@@ -117,6 +118,7 @@ export const bindNangoMailbox = async (
 ): Promise<{
   id: string;
   identity: { email: string; name: string; picture: string };
+  ready: boolean;
 }> => {
   const channel = getChannel(input.channelId, dependencies.getChannel);
   if (!(await dependencies.isIntegrationAvailable(input.channelId, input.integrationId))) {
@@ -126,19 +128,9 @@ export const bindNangoMailbox = async (
     input.integrationId,
     input.connectionId,
   );
-  if (boundReference !== null && boundReference.userId !== input.userId) {
-    throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
-  }
-  const pendingReference =
-    boundReference === null
-      ? await dependencies.repository.findPendingByNangoReference(
-          input.integrationId,
-          input.connectionId,
-        )
-      : null;
   if (
-    pendingReference !== null &&
-    (pendingReference.userId !== input.userId || pendingReference.channelId !== input.channelId)
+    boundReference !== null &&
+    (boundReference.userId !== input.userId || boundReference.channelId !== input.channelId)
   ) {
     throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
   }
@@ -204,6 +196,8 @@ export const bindNangoMailbox = async (
       throw new NangoBindingError('CHANNEL_EXTERNAL_DATA_INVALID');
     }
   }
+  const ready =
+    input.channelId !== 'zoho_mail' || isCompleteZohoMailExternalData(effectiveExternalData);
   const identity = binding.identity;
 
   let normalizedEmail: string;
@@ -221,8 +215,16 @@ export const bindNangoMailbox = async (
   if (existing && existing.channelId !== input.channelId) {
     throw new NangoBindingError('MAILBOX_IDENTITY_MISMATCH');
   }
-  if (boundReference !== null && boundReference.connectionId !== existing?.id) {
+  const pendingBoundReference = boundReference?.status === 'pending_configuration';
+  if (
+    boundReference !== null &&
+    !pendingBoundReference &&
+    boundReference.connectionId !== existing?.id
+  ) {
     throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
+  }
+  if (pendingBoundReference && existing !== null && existing.id !== boundReference.connectionId) {
+    throw new NangoBindingError('MAILBOX_ALREADY_CONNECTED');
   }
   if (
     existing &&
@@ -234,7 +236,7 @@ export const bindNangoMailbox = async (
         connectionId: existing.id,
         externalData: effectiveExternalData,
       });
-      return { id: existing.id, identity };
+      return { id: existing.id, identity, ready };
     }
     throw new NangoBindingError('MAILBOX_ALREADY_CONNECTED');
   }
@@ -243,8 +245,10 @@ export const bindNangoMailbox = async (
   let saved: { id: string };
   try {
     saved = await dependencies.repository.save({
-      existingMailboxId: existing?.id ?? null,
-      pendingBindingId: pendingReference?.id ?? null,
+      existingMailboxId: pendingBoundReference
+        ? boundReference.connectionId
+        : (existing?.id ?? null),
+      connectionStatus: ready ? 'connected' : 'pending_configuration',
       mailbox: {
         email: identity.email,
         normalizedEmail,
@@ -280,7 +284,17 @@ export const bindNangoMailbox = async (
     if (racedReference !== null && racedReference.userId !== input.userId) {
       throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
     }
-    if (racedReference !== null && racedReference.connectionId !== existing?.id) {
+    if (racedReference !== null && racedReference.channelId !== input.channelId) {
+      throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
+    }
+    const expectedConnectionId = pendingBoundReference
+      ? boundReference.connectionId
+      : (existing?.id ?? null);
+    if (
+      racedReference !== null &&
+      expectedConnectionId !== null &&
+      racedReference.connectionId !== expectedConnectionId
+    ) {
       throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
     }
     const racedMailbox = await dependencies.repository.findMailboxByNormalizedEmail(
@@ -300,7 +314,7 @@ export const bindNangoMailbox = async (
     }
     throw error;
   }
-  return { ...saved, identity };
+  return { ...saved, identity, ready };
 };
 
 export type SafeNangoConnection = {

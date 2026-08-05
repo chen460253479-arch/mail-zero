@@ -16,7 +16,13 @@ export type ManualMailboxBindingRepository = {
     id: string;
     userId: string;
     channelId: MailChannelId;
-    status: 'connected' | 'disconnecting' | 'disconnected' | 'reconnect_required' | 'deleting';
+    status:
+      | 'pending_configuration'
+      | 'connected'
+      | 'disconnecting'
+      | 'disconnected'
+      | 'reconnect_required'
+      | 'deleting';
   } | null>;
   save(input: {
     existingMailboxId: string | null;

@@ -18,6 +18,7 @@ describe('connectNangoMailbox', () => {
       reserve: vi.fn(),
       bind: vi.fn(async () => ({
         id: 'zero-connection-1',
+        ready: true,
         identity: {
           email: 'owner@example.test',
           name: 'Owner',
@@ -108,6 +109,35 @@ describe('connectNangoMailbox', () => {
       integrationId: 'zoho-mail-primary',
     });
     expect(bind).not.toHaveBeenCalled();
+    expect(provision).not.toHaveBeenCalled();
+  });
+
+  it('does not provision Zoho until accountId and folderIds are complete', async () => {
+    const provision = vi.fn();
+    const dependencies: ConnectNangoMailboxDependencies = {
+      assertNangoChannelAvailable: vi.fn(async () => 'zoho-mail-primary'),
+      reserve: vi.fn(),
+      bind: vi.fn(async () => ({
+        id: 'pending-zoho-1',
+        ready: false,
+        identity: { email: 'owner@example.test', name: 'Owner', picture: '' },
+      })),
+      provision,
+    };
+
+    await expect(
+      connectNangoMailbox(
+        {
+          userId: 'owner-1',
+          channelId: 'zoho_mail',
+          connectionId: 'nango-zoho-1',
+          externalData: { accountId: '100' },
+        },
+        {} as RuntimeServices,
+        dependencies,
+      ),
+    ).resolves.toEqual({ id: 'pending-zoho-1' });
+
     expect(provision).not.toHaveBeenCalled();
   });
 });

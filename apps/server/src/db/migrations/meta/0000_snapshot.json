@@ -1,5 +1,5 @@
 {
-  "id": "4fbc1aca-589e-44b0-8f12-c43414badae0",
+  "id": "047cbc25-b810-403b-bfcb-b849fbc1df35",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -509,6 +509,22 @@
           "method": "btree",
           "with": {}
         },
+        "connection_user_zoho_active_uidx": {
+          "name": "connection_user_zoho_active_uidx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"integration\".\"connection\".\"channel_id\" = 'zoho_mail' AND \"integration\".\"connection\".\"status\" IN ('pending_configuration', 'connected', 'disconnecting', 'reconnect_required', 'deleting')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "connection_provider_key_idx": {
           "name": "connection_provider_key_idx",
           "columns": [
@@ -565,7 +581,7 @@
       "checkConstraints": {
         "connection_status_chk": {
           "name": "connection_status_chk",
-          "value": "\"integration\".\"connection\".\"status\" IN ('connected', 'disconnecting', 'disconnected', 'reconnect_required', 'deleting')"
+          "value": "\"integration\".\"connection\".\"status\" IN ('pending_configuration', 'connected', 'disconnecting', 'disconnected', 'reconnect_required', 'deleting')"
         },
         "connection_channel_id_chk": {
           "name": "connection_channel_id_chk",
@@ -574,6 +590,10 @@
         "connection_provider_key_chk": {
           "name": "connection_provider_key_chk",
           "value": "\"integration\".\"connection\".\"provider_key\" ~ '^[a-z][a-z0-9]*([._-][a-z0-9]+)*$'"
+        },
+        "connection_pending_configuration_chk": {
+          "name": "connection_pending_configuration_chk",
+          "value": "(\n        \"integration\".\"connection\".\"status\" = 'pending_configuration'\n        AND \"integration\".\"connection\".\"channel_id\" = 'zoho_mail'\n      ) OR (\n        \"integration\".\"connection\".\"status\" <> 'pending_configuration'\n        AND length(trim(\"integration\".\"connection\".\"email\")) > 0\n        AND length(trim(\"integration\".\"connection\".\"normalized_email\")) > 0\n      )"
         }
       },
       "isRLSEnabled": false

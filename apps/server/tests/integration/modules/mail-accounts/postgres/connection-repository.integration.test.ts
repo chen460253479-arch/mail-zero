@@ -253,7 +253,7 @@ describe('PostgreSQL mail connection repository', () => {
 
       await expect(
         repository.findByNangoReference('gmail-primary', 'nango-connection-1'),
-      ).resolves.toEqual({
+      ).resolves.toMatchObject({
         connectionId: created.id,
         userId: 'user-1',
         externalData: { accountId: '100', folderIds: ['200'] },
@@ -286,7 +286,7 @@ describe('PostgreSQL mail connection repository', () => {
     });
   });
 
-  it('reserves a Zoho authorization idempotently and promotes it after account selection', async () => {
+  it('stores a pending Zoho connection and completes the same row after folder selection', async () => {
     await withMailTestDatabase(async ({ db, sql }) => {
       await insertUser(sql, 'user-1', 'user-1@example.com');
       await insertUser(sql, 'user-2', 'user-2@example.com');
@@ -298,22 +298,36 @@ describe('PostgreSQL mail connection repository', () => {
       const reference = {
         userId: 'user-1',
         channelId: 'zoho_mail' as const,
-        providerConfigKey: 'zoho-mail-primary',
-        nangoConnectionId: 'nango-zoho-1',
+        providerKey: 'zoho_mail',
+        authorization: {
+          credentialType: 'oauth2' as const,
+          encryptedCredentialSnapshot: 'encrypted-nango-access-token',
+          accessTokenExpiresAt: zeroOAuthAuthorization.accessTokenExpiresAt,
+          credentialFetchedAt: zeroOAuthAuthorization.credentialFetchedAt,
+          nangoProviderConfigKey: 'zoho-mail-primary',
+          nangoConnectionId: 'nango-zoho-1',
+        },
       };
 
-      const pending = await repository.reservePendingNangoBinding(reference);
-      await expect(repository.reservePendingNangoBinding(reference)).resolves.toEqual(pending);
+      const pending = await repository.reservePendingNangoConnection(reference);
+      await expect(repository.reservePendingNangoConnection(reference)).resolves.toEqual(pending);
       await expect(
-        repository.reservePendingNangoBinding({ ...reference, userId: 'user-2' }),
+        repository.reservePendingNangoConnection({ ...reference, userId: 'user-2' }),
       ).rejects.toMatchObject({ code: 'NANGO_CONNECTION_ALREADY_BOUND' });
       await expect(
-        repository.findByNangoConnectionId('zoho_mail', reference.nangoConnectionId),
+        repository.findByNangoConnectionId('zoho_mail', reference.authorization.nangoConnectionId),
       ).resolves.toEqual({ connectionId: pending.id, userId: 'user-1' });
+      await expect(repository.findOwnedConnection('user-1', pending.id)).resolves.toMatchObject({
+        id: pending.id,
+        email: '',
+        normalizedEmail: '',
+        status: 'pending_configuration',
+      });
 
-      const promoted = await repository.saveBinding({
+      const accountSelected = await repository.saveBinding({
         userId: 'user-1',
-        existingMailboxId: null,
+        existingMailboxId: pending.id,
+        connectionStatus: 'pending_configuration',
         mailbox: {
           ...gmailMailbox,
           channelId: 'zoho_mail',
@@ -322,16 +336,51 @@ describe('PostgreSQL mail connection repository', () => {
         authorization: {
           ...zeroOAuthAuthorization,
           authSource: 'nango',
-          nangoConnectionId: reference.nangoConnectionId,
-          nangoProviderConfigKey: reference.providerConfigKey,
+          nangoConnectionId: reference.authorization.nangoConnectionId,
+          nangoProviderConfigKey: reference.authorization.nangoProviderConfigKey,
           externalData: { accountId: '100' },
         },
       });
 
-      expect(promoted).toEqual({ id: pending.id });
-      await expect(repository.findPendingNangoBinding(pending.id)).resolves.toBeNull();
+      expect(accountSelected).toEqual({ id: pending.id });
+      await expect(repository.findOwnedConnection('user-1', pending.id)).resolves.toMatchObject({
+        id: pending.id,
+        email: 'Owner@Example.com',
+        normalizedEmail: 'owner@example.com',
+        status: 'pending_configuration',
+      });
+      await expect(repository.reservePendingNangoConnection(reference)).resolves.toEqual(pending);
       await expect(
-        repository.findByNangoReference(reference.providerConfigKey, reference.nangoConnectionId),
+        repository.findConnectionWithAuthorization('user-1', pending.id),
+      ).resolves.toMatchObject({ authorization: { externalData: { accountId: '100' } } });
+
+      const completed = await repository.saveBinding({
+        userId: 'user-1',
+        existingMailboxId: pending.id,
+        connectionStatus: 'connected',
+        mailbox: {
+          ...gmailMailbox,
+          channelId: 'zoho_mail',
+          providerKey: 'zoho_mail',
+        },
+        authorization: {
+          ...zeroOAuthAuthorization,
+          authSource: 'nango',
+          nangoConnectionId: reference.authorization.nangoConnectionId,
+          nangoProviderConfigKey: reference.authorization.nangoProviderConfigKey,
+          externalData: { accountId: '100', folderIds: ['200'] },
+        },
+      });
+
+      expect(completed).toEqual({ id: pending.id });
+      await expect(repository.findOwnedConnection('user-1', pending.id)).resolves.toMatchObject({
+        status: 'connected',
+      });
+      await expect(
+        repository.findByNangoReference(
+          reference.authorization.nangoProviderConfigKey,
+          reference.authorization.nangoConnectionId,
+        ),
       ).resolves.toMatchObject({ connectionId: pending.id, userId: 'user-1' });
     });
   });
@@ -373,7 +422,11 @@ describe('PostgreSQL mail connection repository', () => {
       expect(rebound).toEqual({ id: created.id });
       await expect(
         repository.findByNangoReference('gmail-primary', 'nango-connection-2'),
-      ).resolves.toEqual({ connectionId: created.id, userId: 'user-1', externalData: null });
+      ).resolves.toMatchObject({
+        connectionId: created.id,
+        userId: 'user-1',
+        externalData: null,
+      });
       const [retainedAccount] = await sql`
         SELECT id, connection_id
         FROM mail.account

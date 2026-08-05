@@ -50,7 +50,6 @@ const createChannel = () =>
 const createRepository = (): NangoBindingRepository => ({
   findMailboxByNormalizedEmail: vi.fn().mockResolvedValue(null),
   findByNangoReference: vi.fn().mockResolvedValue(null),
-  findPendingByNangoReference: vi.fn().mockResolvedValue(null),
   updateExternalData: vi.fn().mockResolvedValue(undefined),
   save: vi.fn().mockResolvedValue({ id: 'zero-mailbox-1' }),
 });
@@ -109,6 +108,7 @@ describe('Nango mailbox binding', () => {
     );
     expect(result).toEqual({
       id: 'zero-mailbox-1',
+      ready: true,
       identity: {
         email: 'Owner@Example.com',
         name: 'Mailbox Owner',
@@ -169,6 +169,8 @@ describe('Nango mailbox binding', () => {
     vi.mocked(repository.findByNangoReference).mockResolvedValue({
       connectionId: 'existing',
       userId: 'user-1',
+      channelId: 'gmail',
+      status: 'reconnect_required',
       externalData: null,
     });
 
@@ -200,6 +202,8 @@ describe('Nango mailbox binding', () => {
     vi.mocked(repository.findByNangoReference).mockResolvedValue({
       connectionId: 'other-mailbox',
       userId: 'user-2',
+      channelId: 'gmail',
+      status: 'connected',
       externalData: null,
     });
 
@@ -214,6 +218,8 @@ describe('Nango mailbox binding', () => {
     vi.mocked(repository.findByNangoReference).mockResolvedValueOnce(null).mockResolvedValueOnce({
       connectionId: 'other-mailbox',
       userId: 'user-2',
+      channelId: 'gmail',
+      status: 'connected',
       externalData: null,
     });
     vi.mocked(repository.save).mockRejectedValue(new Error('unique conflict'));
@@ -283,6 +289,7 @@ describe('Nango mailbox binding', () => {
     });
     expect(repository.save).toHaveBeenCalledWith(
       expect.objectContaining({
+        connectionStatus: 'connected',
         authorization: expect.objectContaining({ externalData }),
       }),
     );
@@ -318,17 +325,20 @@ describe('Nango mailbox binding', () => {
 
     expect(repository.save).toHaveBeenCalledWith(
       expect.objectContaining({
+        connectionStatus: 'pending_configuration',
         authorization: expect.objectContaining({ externalData }),
       }),
     );
   });
 
-  it('promotes a pending Zoho authorization when the account selection arrives', async () => {
+  it('updates the pending Zoho connection when the account selection arrives', async () => {
     const repository = createRepository();
-    vi.mocked(repository.findPendingByNangoReference).mockResolvedValue({
-      id: 'pending-zoho-1',
+    vi.mocked(repository.findByNangoReference).mockResolvedValue({
+      connectionId: 'pending-zoho-1',
       userId: 'user-1',
       channelId: 'zoho_mail',
+      status: 'pending_configuration',
+      externalData: null,
     });
     const externalData = { accountId: '100' };
     const channel = {
@@ -356,7 +366,10 @@ describe('Nango mailbox binding', () => {
     );
 
     expect(repository.save).toHaveBeenCalledWith(
-      expect.objectContaining({ pendingBindingId: 'pending-zoho-1' }),
+      expect.objectContaining({
+        existingMailboxId: 'pending-zoho-1',
+        connectionStatus: 'pending_configuration',
+      }),
     );
   });
 
@@ -379,6 +392,8 @@ describe('Nango mailbox binding', () => {
     vi.mocked(repository.findByNangoReference).mockResolvedValue({
       connectionId: 'existing',
       userId: 'user-1',
+      channelId: 'gmail',
+      status: 'connected',
       externalData: null,
     });
     vi.mocked(repository.findMailboxByNormalizedEmail).mockResolvedValue({
@@ -390,6 +405,7 @@ describe('Nango mailbox binding', () => {
 
     await expect(bindNangoMailbox(input, dependencies)).resolves.toEqual({
       id: 'existing',
+      ready: true,
       identity: {
         email: 'Owner@Example.com',
         name: 'Mailbox Owner',
@@ -425,6 +441,8 @@ describe('Nango mailbox binding', () => {
     vi.mocked(repository.findByNangoReference).mockResolvedValue({
       connectionId: 'existing',
       userId: 'user-1',
+      channelId: 'zoho_mail',
+      status: 'connected',
       externalData: { accountId: '100', folderIds: ['200'] },
     });
     vi.mocked(repository.findMailboxByNormalizedEmail).mockResolvedValue({
@@ -469,6 +487,8 @@ describe('Nango mailbox binding', () => {
     vi.mocked(repository.findByNangoReference).mockResolvedValue({
       connectionId: 'existing',
       userId: 'user-1',
+      channelId: 'zoho_mail',
+      status: 'connected',
       externalData: configured,
     });
     vi.mocked(repository.findMailboxByNormalizedEmail).mockResolvedValue({

@@ -3,7 +3,13 @@ import type { MailChannelId } from '../../../mail-channel/contracts';
 export type LifecycleConnection = {
   id: string;
   channelId: MailChannelId;
-  status: 'connected' | 'disconnecting' | 'disconnected' | 'reconnect_required' | 'deleting';
+  status:
+    | 'pending_configuration'
+    | 'connected'
+    | 'disconnecting'
+    | 'disconnected'
+    | 'reconnect_required'
+    | 'deleting';
 };
 
 export interface ConnectionLifecycleRepository {
@@ -50,6 +56,12 @@ export const disconnectAuthorization = async (
   dependencies: ConnectionLifecycleDependencies,
 ): Promise<{ status: 'disconnected' | 'deleted' }> => {
   const connection = await getConnection(input.userId, input.connectionId, dependencies.repository);
+
+  if (connection.status === 'pending_configuration') {
+    await dependencies.repository.removeAuthorizationBinding(input.userId, connection.id);
+    await dependencies.repository.deleteMailbox(input.userId, connection.id);
+    return { status: 'deleted' };
+  }
 
   if (input.deleteLocalData) {
     await dependencies.repository.markDeleting(input.userId, connection.id);

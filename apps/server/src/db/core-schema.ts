@@ -138,7 +138,14 @@ export const connection = createIntegrationTable(
     picture: text('picture'),
     channelId: text('channel_id').$type<MailChannelId>().notNull(),
     status: text('status')
-      .$type<'connected' | 'disconnecting' | 'disconnected' | 'reconnect_required' | 'deleting'>()
+      .$type<
+        | 'pending_configuration'
+        | 'connected'
+        | 'disconnecting'
+        | 'disconnected'
+        | 'reconnect_required'
+        | 'deleting'
+      >()
       .notNull()
       .default('connected'),
     disconnectedAt: timestamp('disconnected_at', { withTimezone: true }),
@@ -152,10 +159,15 @@ export const connection = createIntegrationTable(
     uniqueIndex('connection_channel_email_active_uidx')
       .on(t.channelId, t.normalizedEmail)
       .where(sql`${t.status} IN ('connected', 'disconnecting', 'reconnect_required', 'deleting')`),
+    uniqueIndex('connection_user_zoho_active_uidx')
+      .on(t.userId)
+      .where(
+        sql`${t.channelId} = 'zoho_mail' AND ${t.status} IN ('pending_configuration', 'connected', 'disconnecting', 'reconnect_required', 'deleting')`,
+      ),
     index('connection_provider_key_idx').on(t.providerKey),
     check(
       'connection_status_chk',
-      sql`${t.status} IN ('connected', 'disconnecting', 'disconnected', 'reconnect_required', 'deleting')`,
+      sql`${t.status} IN ('pending_configuration', 'connected', 'disconnecting', 'disconnected', 'reconnect_required', 'deleting')`,
     ),
     check(
       'connection_channel_id_chk',
@@ -164,6 +176,17 @@ export const connection = createIntegrationTable(
     check(
       'connection_provider_key_chk',
       sql`${t.providerKey} ~ '^[a-z][a-z0-9]*([._-][a-z0-9]+)*$'`,
+    ),
+    check(
+      'connection_pending_configuration_chk',
+      sql`(
+        ${t.status} = 'pending_configuration'
+        AND ${t.channelId} = 'zoho_mail'
+      ) OR (
+        ${t.status} <> 'pending_configuration'
+        AND length(trim(${t.email})) > 0
+        AND length(trim(${t.normalizedEmail})) > 0
+      )`,
     ),
   ],
 );
