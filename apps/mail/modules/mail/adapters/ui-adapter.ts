@@ -1,7 +1,8 @@
 import type { Attachment, Label, ParsedMessage, Sender } from '../../../types';
-import type { Email, EmailPart } from '../model/email';
+import type { CustomerMarker, Email, EmailPart } from '../model/email';
 import type { ThreadSummary } from '../model/thread';
 import type { Mailbox } from '../model/mailbox';
+import { m } from '@/paraglide/messages';
 
 export type MailDisplayOptions = {
   accountId: string;
@@ -50,11 +51,27 @@ const keywordTags = (keywords: Record<string, true>): Label[] =>
     return name ? [{ id: keyword, name, type: 'keyword' }] : [];
   });
 
+const customerTags = (markers: readonly CustomerMarker[]): Label[] =>
+  markers.map((marker) => ({
+    id: `crm/customer:${marker.customerId}`,
+    name: m['common.mail.customerEmail']({ customerName: marker.customerName }),
+    type: 'crm/customer',
+    color: {
+      backgroundColor: '#12341D',
+      textColor: '#D1F0D9',
+    },
+  }));
+
 const tagsFor = (
   mailboxIds: readonly string[],
   keywords: Record<string, true>,
   mailboxes: readonly Mailbox[],
-) => [...mailboxLabels(mailboxIds, mailboxes), ...keywordTags(keywords)];
+  customerMarkers: readonly CustomerMarker[],
+) => [
+  ...mailboxLabels(mailboxIds, mailboxes),
+  ...keywordTags(keywords),
+  ...customerTags(customerMarkers),
+];
 
 const participantSender = (participants: string | null): Sender => {
   const first = participants?.split(',')[0]?.trim() ?? '';
@@ -83,7 +100,7 @@ export function adaptThreadSummaryForList(
     threadId: summary.id,
     title: summary.subject,
     subject: summary.subject,
-    tags: tagsFor(summary.mailboxIds, summary.keywords, mailboxes),
+    tags: tagsFor(summary.mailboxIds, summary.keywords, mailboxes, summary.customerMarkers),
     sender: participantSender(summary.participants),
     to: [],
     cc: null,
@@ -142,7 +159,12 @@ export function adaptEmailForDisplay(
     threadId: email.threadId,
     title: email.subject,
     subject: email.subject,
-    tags: tagsFor(Object.keys(email.mailboxIds), email.keywords, mailboxes),
+    tags: tagsFor(
+      Object.keys(email.mailboxIds),
+      email.keywords,
+      mailboxes,
+      email.customerMarker ? [email.customerMarker] : [],
+    ),
     sender: { name: sender.name ?? sender.email, email: sender.email },
     to: email.to.map((address) => ({ name: address.name ?? undefined, email: address.email })),
     cc:

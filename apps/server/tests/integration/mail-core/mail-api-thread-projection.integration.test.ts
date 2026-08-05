@@ -14,7 +14,7 @@ import { withMailTestDatabase } from '../../helpers/mail-core/database';
 
 describe('Mail API PostgreSQL Thread projection', () => {
   it('returns a bounded summary page and binds cursors to the mailbox', () =>
-    withMailTestDatabase(async ({ db, unitOfWork }) => {
+    withMailTestDatabase(async ({ db, sql, unitOfWork }) => {
       const h = await createPostgresMailTestHarness(db, unitOfWork, 'mail-api-view');
       const now = new Date('2026-01-01T00:00:00.000Z');
       await unitOfWork.run(async (tx) => {
@@ -121,6 +121,13 @@ describe('Mail API PostgreSQL Thread projection', () => {
           }
         }
       });
+      await sql`
+        INSERT INTO integration.crm_customer_marker (
+          mail_account_id, email_id, customer_id, customer_name
+        ) VALUES (
+          ${h.accountId}, 'view-email-2', 'customer-123', '上海某某有限公司'
+        )
+      `;
       const projection = createPostgresMailViewProjection(db, 'thread-projection-cursor-key');
       const foreign = await createPostgresMailTestHarness(db, unitOfWork, 'mail-api-view-foreign');
       await expect(
@@ -169,7 +176,8 @@ describe('Mail API PostgreSQL Thread projection', () => {
       expect(first.items[0]).toMatchObject({
         id: 'view-thread-2',
         mailboxIds: { [h.inbox.id]: true, [h.drafts.id]: true },
-        keywords: { $seen: true, $flagged: true },
+        keywords: { $seen: true, $flagged: true, 'crm/customer': true },
+        customerMarkers: [{ customerId: 'customer-123', customerName: '上海某某有限公司' }],
         latestEmail: { id: 'view-email-2' },
       });
       expect(first.items[0]?.emailIds).not.toContain('view-email-2-unfiled');
@@ -182,5 +190,27 @@ describe('Mail API PostgreSQL Thread projection', () => {
           limit: 1,
         }),
       ).rejects.toMatchObject({ code: 'INVALID_CURSOR' });
+      await expect(
+        projection.threadPage({
+          accountId: h.accountId,
+          hasKeyword: 'crm/customer',
+          limit: 10,
+        }),
+      ).resolves.toMatchObject({
+        items: [{ id: 'view-thread-2' }],
+      });
+      await expect(
+        projection.threadDetail({
+          accountId: h.accountId,
+          threadId: 'view-thread-2',
+        }),
+      ).resolves.toMatchObject({
+        customerMarkers: {
+          'view-email-2': {
+            customerId: 'customer-123',
+            customerName: '上海某某有限公司',
+          },
+        },
+      });
     }));
 });

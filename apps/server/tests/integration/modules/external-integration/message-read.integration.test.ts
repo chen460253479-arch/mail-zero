@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { createPostgresExternalMessageRepository } from '../../../../src/modules/external-integration/postgres/repository';
+import {
+  createPostgresExternalCustomerMarkerRepository,
+  createPostgresExternalMessageRepository,
+} from '../../../../src/modules/external-integration/postgres/repository';
 import { withMailTestDatabase } from '../../../helpers/mail-core/database';
 
 describe('external message PostgreSQL scope', () => {
@@ -270,6 +273,89 @@ describe('external message PostgreSQL scope', () => {
           }),
         ).resolves.toBeNull();
       }
+
+      const markers = createPostgresExternalCustomerMarkerRepository(db);
+      await expect(
+        markers.setCustomerMarker({
+          messageId: 'email-managed-a',
+          marker: {
+            marked: true,
+            customerId: 'customer-123',
+            customerName: '上海某某有限公司',
+          },
+        }),
+      ).resolves.toEqual({
+        messageId: 'email-managed-a',
+        marked: true,
+        customerId: 'customer-123',
+        customerName: '上海某某有限公司',
+      });
+
+      const stored = await sql<Array<{ customer_id: string; customer_name: string }>>`
+        SELECT customer_id, customer_name
+        FROM integration.crm_customer_marker
+        WHERE email_id = 'email-managed-a'
+      `;
+      expect(stored).toEqual([{ customer_id: 'customer-123', customer_name: '上海某某有限公司' }]);
+
+      const stateAfterFirstMark = await sql<Array<{ state_version: string }>>`
+        SELECT state_version::text
+        FROM mail.account
+        WHERE id = 'account-managed-a'
+      `;
+      await markers.setCustomerMarker({
+        messageId: 'email-managed-a',
+        marker: {
+          marked: true,
+          customerId: 'customer-123',
+          customerName: '上海某某有限公司',
+        },
+      });
+      const stateAfterDuplicate = await sql<Array<{ state_version: string }>>`
+        SELECT state_version::text
+        FROM mail.account
+        WHERE id = 'account-managed-a'
+      `;
+      expect(stateAfterDuplicate[0]?.state_version).toBe(stateAfterFirstMark[0]?.state_version);
+
+      const changes = await sql<Array<{ collection: string; entity_id: string }>>`
+        SELECT collection, entity_id
+        FROM mail.change
+        WHERE mail_account_id = 'account-managed-a'
+        ORDER BY collection, entity_id
+      `;
+      expect(changes).toEqual([
+        { collection: 'email', entity_id: 'email-managed-a' },
+        { collection: 'thread', entity_id: 'thread-managed-a' },
+      ]);
+
+      await expect(
+        markers.setCustomerMarker({
+          messageId: 'email-managed-a',
+          marker: { marked: false },
+        }),
+      ).resolves.toEqual({
+        messageId: 'email-managed-a',
+        marked: false,
+        customerId: null,
+        customerName: null,
+      });
+      const removed = await sql<Array<{ count: number }>>`
+        SELECT count(*)::int AS count
+        FROM integration.crm_customer_marker
+        WHERE email_id = 'email-managed-a'
+      `;
+      expect(removed[0]?.count).toBe(0);
+      await expect(
+        markers.setCustomerMarker({
+          messageId: 'email-admin',
+          marker: {
+            marked: true,
+            customerId: 'forbidden',
+            customerName: 'Forbidden',
+          },
+        }),
+      ).resolves.toBeNull();
     });
   });
 });

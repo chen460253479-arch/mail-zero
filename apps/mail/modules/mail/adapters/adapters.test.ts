@@ -108,6 +108,7 @@ describe('mail API adapters', () => {
       latestReceivedAt: '2026-07-27T00:00:00.000Z',
       mailboxIds: ['mailbox-1'],
       keywords: { $seen: true },
+      customerMarkers: [],
       latestEmail: {
         id: 'email-1',
         lifecycle: 'received',

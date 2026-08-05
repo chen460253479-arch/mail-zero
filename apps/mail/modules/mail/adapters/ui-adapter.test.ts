@@ -96,6 +96,10 @@ const email: Email = {
       isTruncated: false,
     },
   },
+  customerMarker: {
+    customerId: 'customer-123',
+    customerName: 'Acme',
+  },
 };
 
 describe('mail UI adapters', () => {
@@ -111,7 +115,8 @@ describe('mail UI adapters', () => {
       participants: 'Ada <ada@example.com>, user@example.com',
       latestReceivedAt: '2026-07-27T00:00:00.000Z',
       mailboxIds: ['mailbox-inbox', 'label-customer'],
-      keywords: { $flagged: true },
+      keywords: { $flagged: true, 'crm/customer': true },
+      customerMarkers: [{ customerId: 'customer-123', customerName: 'Acme' }],
       latestEmail: {
         id: 'email-1',
         lifecycle: 'received',
@@ -133,6 +138,11 @@ describe('mail UI adapters', () => {
       tags: [
         { id: 'label-customer', name: 'Customer', type: 'label' },
         { id: '$flagged', name: 'STARRED', type: 'keyword' },
+        {
+          id: 'crm/customer:customer-123',
+          name: '客户邮件 · Acme',
+          type: 'crm/customer',
+        },
       ],
     });
   });
@@ -159,6 +169,12 @@ describe('mail UI adapters', () => {
           body: 'https://api.example.com/api/mail/accounts/account-1/blobs/blob-file/report.pdf',
         },
       ],
+      tags: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'crm/customer:customer-123',
+          name: '客户邮件 · Acme',
+        }),
+      ]),
     });
   });
 

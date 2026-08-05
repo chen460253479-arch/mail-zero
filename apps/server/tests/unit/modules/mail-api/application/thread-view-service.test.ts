@@ -21,6 +21,7 @@ describe('Thread view service', () => {
             latestReceivedAt: '2026-01-01T00:00:00.000Z',
             mailboxIds: { inbox: true as const },
             keywords: {},
+            customerMarkers: [],
             latestEmail: {
               id: 'email-1',
               lifecycle: 'received' as const,

@@ -1,7 +1,36 @@
-import { index, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { foreignKey, index, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { integrationSchema } from '../../../db/pg-schemas';
+import { email } from '../../mail/postgres/schema/emails';
 import { user } from '../../../db/core-schema';
+
+export const crmCustomerMarker = integrationSchema.table(
+  'crm_customer_marker',
+  {
+    mailAccountId: text('mail_account_id').notNull(),
+    emailId: text('email_id').notNull(),
+    customerId: text('customer_id').notNull(),
+    customerName: text('customer_name').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: 'crm_customer_marker_pk',
+      columns: [table.emailId, table.mailAccountId],
+    }),
+    foreignKey({
+      name: 'crm_customer_marker_email_account_fk',
+      columns: [table.emailId, table.mailAccountId],
+      foreignColumns: [email.id, email.mailAccountId],
+    }).onDelete('cascade'),
+    index('crm_customer_marker_account_customer_idx').on(
+      table.mailAccountId,
+      table.customerId,
+      table.emailId,
+    ),
+  ],
+);
 
 export const externalAccessGrant = integrationSchema.table(
   'external_access_grant',

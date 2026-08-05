@@ -1,4 +1,4 @@
-import type { Email, EmailKeywordMap, EmailLifecycle } from './email';
+import type { CustomerMarker, Email, EmailKeywordMap, EmailLifecycle } from './email';
 
 export type ThreadSummary = {
   id: string;
@@ -12,6 +12,7 @@ export type ThreadSummary = {
   latestReceivedAt: string;
   mailboxIds: string[];
   keywords: EmailKeywordMap;
+  customerMarkers: CustomerMarker[];
   latestEmail: {
     id: string;
     lifecycle: EmailLifecycle;

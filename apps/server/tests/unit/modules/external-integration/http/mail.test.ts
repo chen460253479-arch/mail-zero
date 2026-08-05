@@ -82,6 +82,24 @@ const createRouter = () =>
           };
         },
       })),
+      createCustomerMarkerWriter: vi.fn(() => ({
+        setCustomerMarker: async (
+          messageId: string,
+          marker: { marked: true; customerId: string; customerName: string } | { marked: false },
+        ) => {
+          if (messageId !== summary.messageId) {
+            throw new ExternalIntegrationError('MESSAGE_NOT_FOUND');
+          }
+          return marker.marked
+            ? { messageId, ...marker }
+            : {
+                messageId,
+                marked: false as const,
+                customerId: null,
+                customerName: null,
+              };
+        },
+      })),
     },
   );
 
@@ -92,6 +110,21 @@ const authorizedGet = async (
 ) =>
   await app.request(path, {
     headers: token === null ? {} : { authorization: `Bearer ${token}` },
+  });
+
+const authorizedPut = async (
+  app: ReturnType<typeof createExternalIntegrationRouter>,
+  path: string,
+  body: unknown,
+  token: string | null = 'fixed-token',
+) =>
+  await app.request(path, {
+    method: 'PUT',
+    headers: {
+      ...(token === null ? {} : { authorization: `Bearer ${token}` }),
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(body),
   });
 
 describe('external mail read HTTP contract', () => {
@@ -149,5 +182,58 @@ describe('external mail read HTTP contract', () => {
     expect(response.headers.get('content-type')).toBe('application/pdf');
     expect(response.headers.get('content-disposition')).toContain('invoice.pdf');
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3, 4]));
+  });
+});
+
+describe('external customer marker HTTP contract', () => {
+  it('marks and unmarks a message using the frozen request shape', async () => {
+    const app = createRouter();
+    const marked = await authorizedPut(app, '/mail/messages/local-email-1/customer-marker', {
+      marked: true,
+      customerId: 'customer-123',
+      customerName: '上海某某有限公司',
+    });
+    const unmarked = await authorizedPut(app, '/mail/messages/local-email-1/customer-marker', {
+      marked: false,
+    });
+
+    expect(marked.status).toBe(200);
+    await expect(marked.json()).resolves.toEqual({
+      messageId: 'local-email-1',
+      marked: true,
+      customerId: 'customer-123',
+      customerName: '上海某某有限公司',
+    });
+    expect(unmarked.status).toBe(200);
+    await expect(unmarked.json()).resolves.toEqual({
+      messageId: 'local-email-1',
+      marked: false,
+      customerId: null,
+      customerName: null,
+    });
+  });
+
+  it('rejects invalid, unauthorized and unknown-message writes', async () => {
+    const app = createRouter();
+    const invalid = await authorizedPut(app, '/mail/messages/local-email-1/customer-marker', {
+      marked: true,
+      customerId: '',
+      customerName: 'Customer',
+    });
+    const unauthorized = await authorizedPut(
+      app,
+      '/mail/messages/local-email-1/customer-marker',
+      { marked: false },
+      null,
+    );
+    const missing = await authorizedPut(app, '/mail/messages/missing/customer-marker', {
+      marked: false,
+    });
+
+    expect(invalid.status).toBe(400);
+    await expect(invalid.json()).resolves.toEqual({ error: 'INVALID_REQUEST' });
+    expect(unauthorized.status).toBe(401);
+    expect(missing.status).toBe(404);
+    await expect(missing.json()).resolves.toEqual({ error: 'MESSAGE_NOT_FOUND' });
   });
 });

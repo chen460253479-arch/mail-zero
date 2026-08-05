@@ -14,6 +14,7 @@ import {
   setErrorSchema,
   stateSchema,
 } from './common';
+import { customerMarkerSchema } from './customer-marker';
 
 export const emailLifecycleSchema = z.enum(['draft', 'received', 'sent']);
 
@@ -63,6 +64,7 @@ export const emailSchema = z.object({
   htmlBody: z.array(emailPartSchema),
   attachments: z.array(emailPartSchema),
   bodyValues: z.record(mailIdSchema, bodyValueSchema),
+  customerMarker: customerMarkerSchema.nullable().optional(),
 });
 
 const draftAttachmentSchema = z.object({

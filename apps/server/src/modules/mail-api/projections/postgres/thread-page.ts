@@ -9,8 +9,10 @@ import {
   mailbox,
   thread,
 } from '../../../mail/postgres/schema';
+import { CRM_CUSTOMER_KEYWORD } from '../../../external-integration/contracts/customer-marker';
 import { decodeSignedCursor, encodeSignedCursor, MailCoreError } from '@zero/mail-core';
 import type { ThreadPageProjectionInput, ThreadPageProjectionResult } from '../port';
+import { crmCustomerMarker } from '../../../external-integration/postgres/schema';
 import { threadSnooze } from '../../../mail-snooze/postgres/schema';
 import type { DB } from '../../../../db';
 import { z } from 'zod';
@@ -116,18 +118,30 @@ export async function queryThreadPage(
           input.lifecycle === undefined ? undefined : eq(email.lifecycle, input.lifecycle),
           input.hasKeyword === undefined
             ? undefined
-            : exists(
-                db
-                  .select({ one: sql`1` })
-                  .from(emailKeyword)
-                  .where(
-                    and(
-                      eq(emailKeyword.mailAccountId, input.accountId),
-                      eq(emailKeyword.emailId, email.id),
-                      eq(emailKeyword.keyword, input.hasKeyword),
+            : input.hasKeyword === CRM_CUSTOMER_KEYWORD
+              ? exists(
+                  db
+                    .select({ one: sql`1` })
+                    .from(crmCustomerMarker)
+                    .where(
+                      and(
+                        eq(crmCustomerMarker.mailAccountId, input.accountId),
+                        eq(crmCustomerMarker.emailId, email.id),
+                      ),
                     ),
-                  ),
-              ),
+                )
+              : exists(
+                  db
+                    .select({ one: sql`1` })
+                    .from(emailKeyword)
+                    .where(
+                      and(
+                        eq(emailKeyword.mailAccountId, input.accountId),
+                        eq(emailKeyword.emailId, email.id),
+                        eq(emailKeyword.keyword, input.hasKeyword),
+                      ),
+                    ),
+                ),
           input.text === undefined
             ? undefined
             : exists(
@@ -221,7 +235,7 @@ export async function queryThreadPage(
   }
   const allEmailIds = emails.map(({ id }) => id);
   const threadByEmailId = new Map(emails.map(({ id, threadId }) => [id, threadId]));
-  const [mailboxes, keywords] = await Promise.all([
+  const [mailboxes, keywords, customerMarkers] = await Promise.all([
     db
       .select({ emailId: emailMailbox.emailId, value: emailMailbox.mailboxId })
       .from(emailMailbox)
@@ -240,6 +254,19 @@ export async function queryThreadPage(
           inArray(emailKeyword.emailId, allEmailIds),
         ),
       ),
+    db
+      .select({
+        emailId: crmCustomerMarker.emailId,
+        customerId: crmCustomerMarker.customerId,
+        customerName: crmCustomerMarker.customerName,
+      })
+      .from(crmCustomerMarker)
+      .where(
+        and(
+          eq(crmCustomerMarker.mailAccountId, input.accountId),
+          inArray(crmCustomerMarker.emailId, allEmailIds),
+        ),
+      ),
   ]);
   const mapValues = (rows: Array<{ emailId: string; value: string }>, threadId: string) =>
     Object.fromEntries(
@@ -250,6 +277,13 @@ export async function queryThreadPage(
   const items = page.flatMap((row) => {
     const latestEmail = latest.get(row.id);
     if (latestEmail === undefined) return [];
+    const threadCustomerMarkers = Array.from(
+      new Map(
+        customerMarkers
+          .filter(({ emailId }) => threadByEmailId.get(emailId) === row.id)
+          .map(({ customerId, customerName }) => [customerId, { customerId, customerName }]),
+      ).values(),
+    );
     return [
       {
         id: row.id,
@@ -262,7 +296,11 @@ export async function queryThreadPage(
         participants: row.participantSummary,
         latestReceivedAt: row.latestReceivedAt.toISOString(),
         mailboxIds: mapValues(mailboxes, row.id),
-        keywords: mapValues(keywords, row.id),
+        keywords: {
+          ...mapValues(keywords, row.id),
+          ...(threadCustomerMarkers.length > 0 ? { [CRM_CUSTOMER_KEYWORD]: true as const } : {}),
+        },
+        customerMarkers: threadCustomerMarkers,
         latestEmail: {
           id: latestEmail.id,
           lifecycle: latestEmail.lifecycle,

@@ -1,6 +1,7 @@
 import type { EmailId, MailAccountId, MailCore } from '@zero/mail-core';
 import type { z } from 'zod';
 
+import { CRM_CUSTOMER_KEYWORD } from '../../external-integration/contracts/customer-marker';
 import { threadDetailInputSchema, threadPageInputSchema } from '../contracts/view';
 import type { MailViewProjection } from '../projections/port';
 import { MailApiError } from '../errors/mail-api-error';
@@ -34,7 +35,19 @@ export const createThreadViewService = (
     });
     const bodyReadBudget = { remainingBytes: 8_000_000 };
     const emails = await Promise.all(
-      records.map((email) => toEmailDto(core, accountId, email, { ...input, bodyReadBudget })),
+      records.map(async (email) => {
+        const dto = await toEmailDto(core, accountId, email, { ...input, bodyReadBudget });
+        const customerMarker = detail.customerMarkers[email.id] ?? null;
+        const keywords = (dto as { keywords: Record<string, true> }).keywords;
+        return {
+          ...dto,
+          customerMarker,
+          keywords:
+            customerMarker === null
+              ? keywords
+              : { ...keywords, [CRM_CUSTOMER_KEYWORD]: true as const },
+        };
+      }),
     );
     return {
       accountId: input.accountId,

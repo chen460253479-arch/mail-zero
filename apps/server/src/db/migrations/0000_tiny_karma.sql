@@ -32,6 +32,7 @@ CREATE TABLE "integration"."authorization_binding" (
 	"credential_fetched_at" timestamp with time zone,
 	"nango_connection_id" text,
 	"nango_provider_config_key" text,
+	"external_data" jsonb,
 	"created_at" timestamp with time zone NOT NULL,
 	"updated_at" timestamp with time zone NOT NULL,
 	CONSTRAINT "authorization_binding_connection_id_unique" UNIQUE("connection_id"),
@@ -751,6 +752,16 @@ CREATE TABLE "mail"."notification_outbox" (
       ))
 );
 --> statement-breakpoint
+CREATE TABLE "integration"."crm_customer_marker" (
+	"mail_account_id" text NOT NULL,
+	"email_id" text NOT NULL,
+	"customer_id" text NOT NULL,
+	"customer_name" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "crm_customer_marker_pk" PRIMARY KEY("email_id","mail_account_id")
+);
+--> statement-breakpoint
 CREATE TABLE "integration"."external_access_grant" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
@@ -826,6 +837,7 @@ ALTER TABLE "mail"."thread_snooze" ADD CONSTRAINT "thread_snooze_account_fk" FOR
 ALTER TABLE "mail"."thread_snooze" ADD CONSTRAINT "thread_snooze_thread_account_fk" FOREIGN KEY ("thread_id","mail_account_id") REFERENCES "mail"."thread"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."notification_outbox" ADD CONSTRAINT "notification_outbox_mail_account_id_account_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "mail"."account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail"."notification_outbox" ADD CONSTRAINT "mail_notification_email_account_fk" FOREIGN KEY ("message_id","mail_account_id") REFERENCES "mail"."email"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "integration"."crm_customer_marker" ADD CONSTRAINT "crm_customer_marker_email_account_fk" FOREIGN KEY ("email_id","mail_account_id") REFERENCES "mail"."email"("id","mail_account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration"."external_access_grant" ADD CONSTRAINT "external_access_grant_user_id_user_account_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."user_account"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "account_user_id_idx" ON "auth"."account" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "account_provider_user_id_idx" ON "auth"."account" USING btree ("provider_id","user_id");--> statement-breakpoint
@@ -887,7 +899,7 @@ CREATE INDEX "thread_reference_account_thread_idx" ON "mail"."thread_reference" 
 CREATE INDEX "thread_reference_account_email_idx" ON "mail"."thread_reference" USING btree ("mail_account_id","email_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "inbound_sync_account_provider_scope_uidx" ON "integration"."inbound_sync" USING btree ("account_id","provider","scope_key");--> statement-breakpoint
 CREATE INDEX "inbound_sync_subscription_external_idx" ON "integration"."inbound_sync" USING btree ("subscription_external_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "inbound_sync_subscription_endpoint_token_uidx" ON "integration"."inbound_sync" USING btree ("subscription_endpoint_token_hash");--> statement-breakpoint
+CREATE INDEX "inbound_sync_subscription_endpoint_token_idx" ON "integration"."inbound_sync" USING btree ("subscription_endpoint_token_hash");--> statement-breakpoint
 CREATE INDEX "inbound_sync_due_reconcile_idx" ON "integration"."inbound_sync" USING btree ("next_reconcile_at","id") WHERE "integration"."inbound_sync"."status" = 'active';--> statement-breakpoint
 CREATE INDEX "inbound_sync_due_renewal_idx" ON "integration"."inbound_sync" USING btree ("subscription_expires_at","id") WHERE "integration"."inbound_sync"."status" = 'active' AND "integration"."inbound_sync"."subscription_expires_at" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "inbound_sync_lease_idx" ON "integration"."inbound_sync" USING btree ("lease_expires_at","id") WHERE "integration"."inbound_sync"."lease_expires_at" IS NOT NULL;--> statement-breakpoint
@@ -911,5 +923,6 @@ CREATE INDEX "mail_notification_due_idx" ON "mail"."notification_outbox" USING b
 CREATE INDEX "mail_notification_lease_idx" ON "mail"."notification_outbox" USING btree ("lease_expires_at","event_id") WHERE "mail"."notification_outbox"."status" = 'running';--> statement-breakpoint
 CREATE INDEX "mail_notification_dead_idx" ON "mail"."notification_outbox" USING btree ("completed_at","event_id") WHERE "mail"."notification_outbox"."status" = 'dead';--> statement-breakpoint
 CREATE INDEX "mail_notification_message_idx" ON "mail"."notification_outbox" USING btree ("mail_account_id","message_id");--> statement-breakpoint
+CREATE INDEX "crm_customer_marker_account_customer_idx" ON "integration"."crm_customer_marker" USING btree ("mail_account_id","customer_id","email_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "external_access_grant_code_digest_uidx" ON "integration"."external_access_grant" USING btree ("code_digest");--> statement-breakpoint
 CREATE INDEX "external_access_grant_expires_idx" ON "integration"."external_access_grant" USING btree ("expires_at","id");

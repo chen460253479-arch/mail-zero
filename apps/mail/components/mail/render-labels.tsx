@@ -1,13 +1,14 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { useSearchValue } from '@/hooks/use-search-value';
+import type { MouseEvent } from 'react';
 import type { Label } from '@/types';
 import { cn } from '@/lib/utils';
-import * as React from 'react';
 
 export const RenderLabels = ({ count = 1, labels }: { count?: number; labels: Label[] }) => {
   const [searchValue, setSearchValue] = useSearchValue();
-  const handleFilterByLabel = (label: Label) => (event: any) => {
+  const handleFilterByLabel = (label: Label) => (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
+    if (label.type === 'crm/customer') return;
     const existingValue = searchValue.value;
     if (existingValue.includes(`label:${label.name}`)) {
       setSearchValue({
@@ -39,6 +40,7 @@ export const RenderLabels = ({ count = 1, labels }: { count?: number; labels: La
           className={cn(
             'inline-block overflow-hidden truncate rounded bg-[#E8DEFD] px-1.5 py-0.5 text-xs font-medium text-[#2C2241] dark:bg-[#2C2241] dark:text-[#E8DEFD]',
             searchValue.value.includes(`label:${label.name}`) && 'border-white',
+            label.type === 'crm/customer' && 'cursor-default',
           )}
           style={{
             background: label.color?.backgroundColor,
@@ -51,7 +53,10 @@ export const RenderLabels = ({ count = 1, labels }: { count?: number; labels: La
       {hiddenLabels.length > 0 && (
         <Tooltip>
           <TooltipTrigger asChild>
-+            <button type="button" className="text-foreground dark:bg-subtleBlack bg-subtleWhite inline-block overflow-hidden truncate rounded px-1.5 py-0.5 text-xs font-medium cursor-pointer">
+            <button
+              type="button"
+              className="text-foreground dark:bg-subtleBlack bg-subtleWhite inline-block cursor-pointer overflow-hidden truncate rounded px-1.5 py-0.5 text-xs font-medium"
+            >
               +{hiddenLabels.length}
             </button>
           </TooltipTrigger>
@@ -63,6 +68,7 @@ export const RenderLabels = ({ count = 1, labels }: { count?: number; labels: La
                 className={cn(
                   'inline-block overflow-hidden truncate rounded bg-[#E8DEFD] px-1.5 py-0.5 text-xs font-medium text-[#2C2241] dark:bg-[#2C2241] dark:text-[#E8DEFD]',
                   searchValue.value.includes(`label:${label.name}`) && 'border-white',
+                  label.type === 'crm/customer' && 'cursor-default',
                 )}
                 style={{
                   backgroundColor: label.color?.backgroundColor,

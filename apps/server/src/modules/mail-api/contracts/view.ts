@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { cursorSchema, mailAccountIdSchema, mailIdSchema, stateSchema } from './common';
 import { emailLifecycleSchema, emailSchema } from './email';
+import { customerMarkerSchema } from './customer-marker';
 
 export const threadPageInputSchema = z.object({
   accountId: mailAccountIdSchema,
@@ -26,6 +27,7 @@ export const threadSummarySchema = z.object({
   latestReceivedAt: z.string().datetime({ offset: true }),
   mailboxIds: z.record(mailIdSchema, z.literal(true)),
   keywords: z.record(z.string(), z.literal(true)),
+  customerMarkers: z.array(customerMarkerSchema).optional(),
   latestEmail: z.object({
     id: mailIdSchema,
     lifecycle: emailLifecycleSchema,

@@ -443,6 +443,7 @@
       "failedToSave": "Failed to save settings"
     },
     "mail": {
+      "customerEmail": "Customer email · {customerName}",
       "replies": [
         {
           "declarations": ["input count", "local countPlural = count: plural"],

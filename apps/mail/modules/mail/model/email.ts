@@ -8,6 +8,11 @@ export type EmailMailboxMap = Record<string, true>;
 
 export type EmailLifecycle = 'draft' | 'received' | 'sent';
 
+export type CustomerMarker = {
+  customerId: string;
+  customerName: string;
+};
+
 export type EmailPart = {
   id: string;
   parentPartId: string | null;
@@ -54,4 +59,5 @@ export type Email = {
   htmlBody: EmailPart[];
   attachments: EmailPart[];
   bodyValues: Record<string, EmailBodyValue>;
+  customerMarker?: CustomerMarker | null;
 };

@@ -23,6 +23,10 @@ export type ThreadSummaryProjection = {
   latestReceivedAt: string;
   mailboxIds: Record<string, true>;
   keywords: Record<string, true>;
+  customerMarkers: Array<{
+    customerId: string;
+    customerName: string;
+  }>;
   latestEmail: {
     id: string;
     lifecycle: EmailLifecycle;
@@ -37,8 +41,15 @@ export type ThreadPageProjectionResult = {
 
 export interface MailViewProjection {
   threadPage(input: ThreadPageProjectionInput): Promise<ThreadPageProjectionResult>;
-  threadDetail(input: {
-    accountId: string;
+  threadDetail(input: { accountId: string; threadId: string }): Promise<{
     threadId: string;
-  }): Promise<{ threadId: string; emailIds: string[] } | null>;
+    emailIds: string[];
+    customerMarkers: Record<
+      string,
+      {
+        customerId: string;
+        customerName: string;
+      }
+    >;
+  } | null>;
 }

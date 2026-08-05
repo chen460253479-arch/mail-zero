@@ -443,6 +443,7 @@
       "failedToSave": "保存设置失败"
     },
     "mail": {
+      "customerEmail": "客户邮件 · {customerName}",
       "replies": [
         {
           "declarations": ["input count", "local countPlural = count: plural"],

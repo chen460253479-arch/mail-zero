@@ -4,6 +4,11 @@ import { ulid } from 'ulid';
 import { Hono } from 'hono';
 
 import {
+  createPostgresExternalCustomerMarkerRepository,
+  createPostgresExternalAccessRepository,
+  createPostgresExternalMessageRepository,
+} from '../postgres/repository';
+import {
   disconnectExternalNangoConnection,
   type ExternalNangoDisconnectInput,
   type ExternalNangoDisconnectResult,
@@ -13,9 +18,9 @@ import {
   type ConnectNangoMailboxInput,
 } from '../../mail-accounts/application/connect-nango-mailbox';
 import {
-  createPostgresExternalAccessRepository,
-  createPostgresExternalMessageRepository,
-} from '../postgres/repository';
+  createExternalCustomerMarkerWriter,
+  type ExternalCustomerMarkerWriter,
+} from '../application/set-customer-marker';
 import {
   provisionManagedUser,
   type ProvisionManagedUserDependencies,
@@ -51,6 +56,7 @@ export type ExternalIntegrationRouterDependencies = {
     services: RuntimeServices,
   ): Promise<ExternalNangoDisconnectResult>;
   createMessageReader(services: RuntimeServices): ExternalMessageReader;
+  createCustomerMarkerWriter(services: RuntimeServices): ExternalCustomerMarkerWriter;
   createAccessGrant(
     input: AccessGrantInput,
     services: RuntimeServices,
@@ -87,6 +93,10 @@ const defaultDependencies: ExternalIntegrationRouterDependencies = {
         blobStore: services.blobStore,
         cursorSigningKey: services.config.betterAuthSecret,
       }),
+    }),
+  createCustomerMarkerWriter: (services) =>
+    createExternalCustomerMarkerWriter({
+      repository: createPostgresExternalCustomerMarkerRepository(services.database.db),
     }),
   createAccessGrant: async (input, services) =>
     await createAccessGrant(input, {
@@ -236,6 +246,7 @@ export const createExternalIntegrationRouter = (
   registerExternalMailRoutes(app, {
     authorize: async (context) => await authorize(context.req.header('Authorization')),
     createReader: () => dependencies.createMessageReader(services),
+    createCustomerMarkerWriter: () => dependencies.createCustomerMarkerWriter(services),
   });
   return app;
 };
