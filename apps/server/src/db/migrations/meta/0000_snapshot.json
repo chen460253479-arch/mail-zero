@@ -1,5 +1,5 @@
 {
-  "id": "047cbc25-b810-403b-bfcb-b849fbc1df35",
+  "id": "59d82dda-0dc4-44cb-8c7b-cbc40b71bb3d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -6606,7 +6606,7 @@
       "checkConstraints": {
         "mail_task_queue_chk": {
           "name": "mail_task_queue_chk",
-          "value": "\"mail\".\"task\".\"queue\" IN ('ingress', 'outbound')"
+          "value": "\"mail\".\"task\".\"queue\" IN ('ingress', 'outbound', 'external')"
         },
         "mail_task_type_chk": {
           "name": "mail_task_type_chk",
@@ -7076,6 +7076,311 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "integration.external_mail_submission": {
+      "name": "external_mail_submission",
+      "schema": "integration",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mail_account_id": {
+          "name": "mail_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "internal_connection_id": {
+          "name": "internal_connection_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "identity_id": {
+          "name": "identity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_user_id": {
+          "name": "external_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_connection_id": {
+          "name": "external_connection_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_fingerprint": {
+          "name": "request_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email_id": {
+          "name": "email_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "submission_id": {
+          "name": "submission_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_code": {
+          "name": "last_error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_message": {
+          "name": "last_error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "external_mail_submission_idempotency_uidx": {
+          "name": "external_mail_submission_idempotency_uidx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "external_connection_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "external_mail_submission_account_created_idx": {
+          "name": "external_mail_submission_account_created_idx",
+          "columns": [
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "external_mail_submission_status_updated_idx": {
+          "name": "external_mail_submission_status_updated_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "external_mail_submission_user_id_user_account_id_fk": {
+          "name": "external_mail_submission_user_id_user_account_id_fk",
+          "tableFrom": "external_mail_submission",
+          "tableTo": "user_account",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "external_mail_submission_connection_user_fk": {
+          "name": "external_mail_submission_connection_user_fk",
+          "tableFrom": "external_mail_submission",
+          "tableTo": "connection",
+          "schemaTo": "integration",
+          "columnsFrom": [
+            "internal_connection_id",
+            "user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "external_mail_submission_account_connection_fk": {
+          "name": "external_mail_submission_account_connection_fk",
+          "tableFrom": "external_mail_submission",
+          "tableTo": "account",
+          "schemaTo": "mail",
+          "columnsFrom": [
+            "mail_account_id",
+            "internal_connection_id"
+          ],
+          "columnsTo": [
+            "id",
+            "connection_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "external_mail_submission_identity_account_fk": {
+          "name": "external_mail_submission_identity_account_fk",
+          "tableFrom": "external_mail_submission",
+          "tableTo": "identity",
+          "schemaTo": "mail",
+          "columnsFrom": [
+            "identity_id",
+            "mail_account_id"
+          ],
+          "columnsTo": [
+            "id",
+            "mail_account_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "external_mail_submission_email_account_fk": {
+          "name": "external_mail_submission_email_account_fk",
+          "tableFrom": "external_mail_submission",
+          "tableTo": "email",
+          "schemaTo": "mail",
+          "columnsFrom": [
+            "email_id",
+            "mail_account_id"
+          ],
+          "columnsTo": [
+            "id",
+            "mail_account_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "external_mail_submission_submission_account_fk": {
+          "name": "external_mail_submission_submission_account_fk",
+          "tableFrom": "external_mail_submission",
+          "tableTo": "submission",
+          "schemaTo": "mail",
+          "columnsFrom": [
+            "submission_id",
+            "mail_account_id"
+          ],
+          "columnsTo": [
+            "id",
+            "mail_account_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "external_mail_submission_status_chk": {
+          "name": "external_mail_submission_status_chk",
+          "value": "\"integration\".\"external_mail_submission\".\"status\" IN ('accepted', 'preparing', 'submitted', 'failed')"
+        },
+        "external_mail_submission_fingerprint_chk": {
+          "name": "external_mail_submission_fingerprint_chk",
+          "value": "\"integration\".\"external_mail_submission\".\"request_fingerprint\" ~ '^[0-9a-f]{64}$'"
+        },
+        "external_mail_submission_link_chk": {
+          "name": "external_mail_submission_link_chk",
+          "value": "(\"integration\".\"external_mail_submission\".\"status\" = 'submitted' AND \"integration\".\"external_mail_submission\".\"email_id\" IS NOT NULL AND \"integration\".\"external_mail_submission\".\"submission_id\" IS NOT NULL) OR \"integration\".\"external_mail_submission\".\"status\" <> 'submitted'"
+        }
+      },
       "isRLSEnabled": false
     }
   },
