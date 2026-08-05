@@ -32,6 +32,7 @@ type MailboxBindingInput = {
     credentialFetchedAt: Date;
     nangoConnectionId?: string | null;
     nangoProviderConfigKey?: string | null;
+    externalData?: Record<string, unknown> | null;
   };
 };
 
@@ -167,6 +168,7 @@ export const createPostgresConnectionRepository = (db: DB, options: RepositoryOp
         .select({
           connectionId: authorizationBinding.connectionId,
           userId: connection.userId,
+          externalData: authorizationBinding.externalData,
         })
         .from(authorizationBinding)
         .innerJoin(connection, eq(connection.id, authorizationBinding.connectionId))
@@ -198,6 +200,29 @@ export const createPostgresConnectionRepository = (db: DB, options: RepositoryOp
         )
         .limit(1);
       return binding ?? null;
+    },
+
+    updateAuthorizationExternalData: async (
+      userId: string,
+      connectionId: string,
+      externalData: Record<string, unknown> | null,
+    ): Promise<void> => {
+      await db.transaction(async (transaction) => {
+        const [binding] = await transaction
+          .select({ id: authorizationBinding.id })
+          .from(authorizationBinding)
+          .innerJoin(connection, eq(connection.id, authorizationBinding.connectionId))
+          .where(and(eq(connection.id, connectionId), eq(connection.userId, userId)))
+          .for('update')
+          .limit(1);
+        if (binding === undefined) {
+          throw new MailConnectionRepositoryError('MAILBOX_NOT_FOUND');
+        }
+        await transaction
+          .update(authorizationBinding)
+          .set({ externalData, updatedAt: now() })
+          .where(eq(authorizationBinding.id, binding.id));
+      });
     },
 
     saveBinding: async (input: MailboxBindingInput): Promise<{ id: string }> => {
@@ -299,6 +324,7 @@ export const createPostgresConnectionRepository = (db: DB, options: RepositoryOp
             ...input.authorization,
             nangoConnectionId: input.authorization.nangoConnectionId ?? null,
             nangoProviderConfigKey: input.authorization.nangoProviderConfigKey ?? null,
+            externalData: input.authorization.externalData ?? null,
             updatedAt: timestamp,
           };
           if (replaceAuthorization) {

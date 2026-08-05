@@ -60,11 +60,71 @@ describe('Zoho Mail API client', () => {
 
     await expect(client.getMailboxContext()).resolves.toEqual({
       accountId: 'account-1',
-      inboxFolderId: 'folder-1',
+      folderIds: ['folder-1'],
       email: 'owner@example.com',
       name: 'Owner',
       picture: '',
     });
+  });
+
+  it('uses the exact account and folders selected by the external integration', async () => {
+    const request = vi
+      .fn<ZohoMailTransport['request']>()
+      .mockResolvedValueOnce({
+        status: 200,
+        json: {
+          status: { code: 200 },
+          data: [
+            { accountId: '100', primaryEmailAddress: 'first@example.com' },
+            { accountId: '200', primaryEmailAddress: 'selected@example.com' },
+          ],
+        },
+        bytes: new Uint8Array(),
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        json: {
+          status: { code: 200 },
+          data: [
+            { folderId: '300', folderName: 'Inbox' },
+            { folderId: '400', folderName: 'CRM' },
+          ],
+        },
+        bytes: new Uint8Array(),
+      });
+    const client = createZohoMailClient(
+      { request },
+      { accountId: '200', folderIds: ['400', '300'] },
+    );
+
+    await expect(client.getMailboxContext()).resolves.toMatchObject({
+      accountId: '200',
+      folderIds: ['400', '300'],
+      email: 'selected@example.com',
+    });
+    expect(request).toHaveBeenNthCalledWith(2, {
+      method: 'GET',
+      path: '/api/accounts/200/folders',
+    });
+  });
+
+  it('validates an account-only first stage without selecting or requesting folders', async () => {
+    const request = vi.fn<ZohoMailTransport['request']>().mockResolvedValueOnce({
+      status: 200,
+      json: {
+        status: { code: 200 },
+        data: [{ accountId: '200', primaryEmailAddress: 'selected@example.com' }],
+      },
+      bytes: new Uint8Array(),
+    });
+    const client = createZohoMailClient({ request }, { accountId: '200' });
+
+    await expect(client.getMailboxContext()).resolves.toMatchObject({
+      accountId: '200',
+      folderIds: [],
+      email: 'selected@example.com',
+    });
+    expect(request).toHaveBeenCalledTimes(1);
   });
 
   it('requests Inbox pages newest-first so incremental overlap can stop at its boundary', async () => {
@@ -75,9 +135,9 @@ describe('Zoho Mail API client', () => {
     });
     const client = createZohoMailClient({ request });
 
-    await client.listInboxMessages({
+    await client.listFolderMessages({
       accountId: 'account-1',
-      inboxFolderId: 'folder-1',
+      folderId: 'folder-1',
       start: 1,
       limit: 200,
     });

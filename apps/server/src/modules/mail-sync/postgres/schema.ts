@@ -59,9 +59,7 @@ export const inboundSync = createIntegrationTable(
     }).onDelete('cascade'),
     uniqueIndex('inbound_sync_account_provider_scope_uidx').on(t.accountId, t.provider, t.scopeKey),
     index('inbound_sync_subscription_external_idx').on(t.subscriptionExternalId),
-    uniqueIndex('inbound_sync_subscription_endpoint_token_uidx').on(
-      t.subscriptionEndpointTokenHash,
-    ),
+    index('inbound_sync_subscription_endpoint_token_idx').on(t.subscriptionEndpointTokenHash),
     check(
       'inbound_sync_status_chk',
       sql`${t.status} IN ('activating', 'active', 'paused', 'auth_error')`,

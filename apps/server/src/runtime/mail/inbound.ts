@@ -24,8 +24,10 @@ import { createPostgresMailSyncRepository } from '../../modules/mail-sync/postgr
 import { bootstrapLocalMailAccount } from '../../modules/mail-sync/application/bootstrap-account';
 import { createChannelConfigRepository } from '../../integrations/core/channel-config-repository';
 import { PostgresMailUnitOfWork } from '../../modules/mail/postgres/postgres-unit-of-work';
+import { createZohoMailIngressScopes } from '../../mail-channel/zoho-mail/inbound/scope';
 import { encryptCredential } from '../../infrastructure/security/credential-encryption';
 import type { MailIngressCommand } from '../../modules/mail-sync/application/commands';
+import { parseZohoMailExternalData } from '../../mail-channel/zoho-mail/external-data';
 import { activateInboundSync } from '../../modules/mail-sync/application/activate';
 import type { MailCredentialRuntimeResources } from './channel-credential-context';
 import { createMailChannelCredentialContext } from './channel-credential-context';
@@ -288,26 +290,48 @@ export const activateChannelInboundForAccount = async (
   const runtimeEnv = resources.environment;
   const adapterRuntime = createInboundAdapterRuntime(db, resources);
   adapterRuntime.registry.getInbound(input.channelId);
-  await activateInboundSync(
-    {
+  const zohoExternalData =
+    input.channelId === 'zoho_mail'
+      ? (await createMailChannelCredentialContext(db, resources, input.connectionId)).externalData
+      : null;
+  const scopes =
+    input.channelId === 'zoho_mail'
+      ? zohoExternalData === null
+        ? [{ scopeKey: 'inbox', scope: INBOX_SCOPE }]
+        : createZohoMailIngressScopes(parseZohoMailExternalData(zohoExternalData))
+      : [{ scopeKey: 'inbox', scope: INBOX_SCOPE }];
+  const repository = createPostgresMailSyncRepository(db);
+  if (input.channelId === 'zoho_mail' && zohoExternalData !== null) {
+    await repository.reconcileConfiguredScopes({
       accountId: input.accountId,
-      connectionId: input.connectionId,
       provider: input.channelId,
-      scopeKey: 'inbox',
-      scope: INBOX_SCOPE,
-      subscriptionTarget: await resolveSubscriptionTarget(
-        db,
-        runtimeEnv,
-        input.channelId,
-        new Date(),
-        input.accountId,
-      ),
-    },
-    {
-      adapterFactory: adapterRuntime.adapterFactory,
-      repository: createPostgresMailSyncRepository(db),
-    },
+      scopes,
+    });
+  }
+  if (scopes.length === 0) return;
+  const subscriptionTarget = await resolveSubscriptionTarget(
+    db,
+    runtimeEnv,
+    input.channelId,
+    new Date(),
+    input.accountId,
   );
+  for (const selectedScope of scopes) {
+    await activateInboundSync(
+      {
+        accountId: input.accountId,
+        connectionId: input.connectionId,
+        provider: input.channelId,
+        scopeKey: selectedScope.scopeKey,
+        scope: selectedScope.scope,
+        subscriptionTarget,
+      },
+      {
+        adapterFactory: adapterRuntime.adapterFactory,
+        repository,
+      },
+    );
+  }
 };
 
 export const activateChannelInboundForConnection = async (

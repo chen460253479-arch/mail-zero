@@ -2,8 +2,15 @@ import {
   createZohoMailClient,
   resolveZohoMailBaseUrl,
   type ZohoMailClient,
+  type ZohoMailboxContext,
 } from './shared/zoho-client';
-import type { MailChannelIdentity, MailChannelPlugin, ResolvedCredential } from '../contracts';
+import type {
+  MailChannelExternalData,
+  MailChannelIdentity,
+  MailChannelPlugin,
+  ResolvedCredential,
+} from '../contracts';
+import { mergeZohoMailExternalData, parseZohoMailExternalData } from './external-data';
 import { createZohoMailOutboundAdapter } from './outbound/adapter';
 import { createZohoMailTransport } from './shared/zoho-transport';
 import { createZohoMailIngressAdapter } from './inbound/adapter';
@@ -13,13 +20,23 @@ export type ZohoMailPluginDependencies = {
   createClient(input: {
     connectionId?: string;
     credential: ResolvedCredential;
+    externalData?: MailChannelExternalData;
   }): Promise<ZohoMailClient>;
 };
 
 const defaultDependencies: ZohoMailPluginDependencies = {
-  createClient: async ({ credential }) =>
-    createZohoMailClient(createZohoMailTransport(credential, resolveZohoMailBaseUrl('com'))),
+  createClient: async ({ credential, externalData }) =>
+    createZohoMailClient(
+      createZohoMailTransport(credential, resolveZohoMailBaseUrl('com')),
+      externalData === undefined ? undefined : parseZohoMailExternalData(externalData),
+    ),
 };
+
+const toIdentity = (context: ZohoMailboxContext): MailChannelIdentity => ({
+  email: context.email,
+  name: context.name,
+  picture: context.picture,
+});
 
 export const createZohoMailPlugin = (
   dependencies: ZohoMailPluginDependencies = defaultDependencies,
@@ -32,13 +49,28 @@ export const createZohoMailPlugin = (
   nangoProviders: zohoMailNangoProviders,
   syncModes: new Set(['scheduled', 'webhook']),
   webhookKind: 'zoho_mail',
+  parseExternalData: (value) => parseZohoMailExternalData(value),
+  mergeExternalData: ({ existing, incoming }) => mergeZohoMailExternalData(existing, incoming),
+  resolveBinding: async (input) => {
+    const externalData =
+      input.externalData === undefined ? undefined : parseZohoMailExternalData(input.externalData);
+    const context = await (
+      await dependencies.createClient({ ...input, externalData })
+    ).getMailboxContext();
+    return {
+      identity: toIdentity(context),
+      externalData:
+        externalData !== undefined && externalData.folderIds === undefined
+          ? { accountId: context.accountId }
+          : {
+              accountId: context.accountId,
+              folderIds: context.folderIds,
+            },
+    };
+  },
   resolveIdentity: async (input): Promise<MailChannelIdentity> => {
     const context = await (await dependencies.createClient(input)).getMailboxContext();
-    return {
-      email: context.email,
-      name: context.name,
-      picture: context.picture,
-    };
+    return toIdentity(context);
   },
   inbound: {
     createAdapter: async (input) => {

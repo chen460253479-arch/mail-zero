@@ -25,6 +25,7 @@ describe('provider-neutral inbound runtime helpers', () => {
     const context = {
       channelId: 'outlook',
       authSource: 'nango',
+      externalData: null,
       resolveCredential: async () => ({
         type: 'oauth2',
         accessToken: 'token',

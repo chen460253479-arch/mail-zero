@@ -29,6 +29,13 @@ export type MailChannelIdentity = {
   picture: string;
 };
 
+export type MailChannelExternalData = Record<string, unknown>;
+
+export type MailChannelBinding = {
+  identity: MailChannelIdentity;
+  externalData: MailChannelExternalData | null;
+};
+
 export type MailChannelDescriptor = {
   readonly id: MailChannelId;
   readonly providerKey: string;
@@ -55,6 +62,16 @@ export type MailChannelOutboundCapability = {
 };
 
 export interface MailChannelPlugin extends MailChannelDescriptor {
+  parseExternalData?(value: unknown): MailChannelExternalData;
+  mergeExternalData?(input: {
+    existing: MailChannelExternalData | null;
+    incoming: MailChannelExternalData | null;
+  }): MailChannelExternalData | null;
+  resolveBinding?(input: {
+    connectionId?: string;
+    credential: ResolvedCredential;
+    externalData?: MailChannelExternalData;
+  }): Promise<MailChannelBinding>;
   resolveIdentity(input: {
     connectionId?: string;
     credential: ResolvedCredential;

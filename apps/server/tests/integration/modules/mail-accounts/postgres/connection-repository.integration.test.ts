@@ -233,7 +233,7 @@ describe('PostgreSQL mail connection repository', () => {
     });
   });
 
-  it('finds an existing Nango authorization by its external reference', async () => {
+  it('finds a Nango authorization and updates its externalData only for its owner', async () => {
     await withMailTestDatabase(async ({ db, sql }) => {
       await insertUser(sql, 'user-1', 'user-1@example.com');
       const repository = createPostgresConnectionRepository(db);
@@ -247,12 +247,17 @@ describe('PostgreSQL mail connection repository', () => {
           encryptedCredentialSnapshot: 'encrypted-nango-access-token',
           nangoConnectionId: 'nango-connection-1',
           nangoProviderConfigKey: 'gmail-primary',
+          externalData: { accountId: '100', folderIds: ['200'] },
         },
       });
 
       await expect(
         repository.findByNangoReference('gmail-primary', 'nango-connection-1'),
-      ).resolves.toEqual({ connectionId: created.id, userId: 'user-1' });
+      ).resolves.toEqual({
+        connectionId: created.id,
+        userId: 'user-1',
+        externalData: { accountId: '100', folderIds: ['200'] },
+      });
       await expect(
         repository.findByNangoConnectionId('gmail', 'nango-connection-1'),
       ).resolves.toEqual({ connectionId: created.id, userId: 'user-1' });
@@ -260,6 +265,24 @@ describe('PostgreSQL mail connection repository', () => {
         repository.findByNangoConnectionId('outlook', 'nango-connection-1'),
       ).resolves.toBeNull();
       await expect(repository.findByNangoReference('gmail-primary', 'missing')).resolves.toBeNull();
+
+      await expect(
+        repository.updateAuthorizationExternalData('other-user', created.id, {
+          accountId: '100',
+          folderIds: ['300'],
+        }),
+      ).rejects.toMatchObject({ code: 'MAILBOX_NOT_FOUND' });
+      await repository.updateAuthorizationExternalData('user-1', created.id, {
+        accountId: '100',
+        folderIds: ['300'],
+      });
+      await expect(
+        repository.findConnectionWithAuthorization('user-1', created.id),
+      ).resolves.toMatchObject({
+        authorization: {
+          externalData: { accountId: '100', folderIds: ['300'] },
+        },
+      });
     });
   });
 
@@ -300,7 +323,7 @@ describe('PostgreSQL mail connection repository', () => {
       expect(rebound).toEqual({ id: created.id });
       await expect(
         repository.findByNangoReference('gmail-primary', 'nango-connection-2'),
-      ).resolves.toEqual({ connectionId: created.id, userId: 'user-1' });
+      ).resolves.toEqual({ connectionId: created.id, userId: 'user-1', externalData: null });
       const [retainedAccount] = await sql`
         SELECT id, connection_id
         FROM mail.account

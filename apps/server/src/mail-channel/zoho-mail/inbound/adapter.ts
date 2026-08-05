@@ -1,12 +1,9 @@
-import {
-  MailSyncError,
-  parseIngressScope,
-  type InboundMailAdapter,
-} from '../../../modules/mail-sync';
 import type { ZohoMailClient, ZohoMailboxContext, ZohoMessageSummary } from '../shared/zoho-client';
 import { createZohoMailSubscription, parseZohoMailSubscriptionTarget } from './subscription';
+import { MailSyncError, type InboundMailAdapter } from '../../../modules/mail-sync';
 import { createZohoMailCheckpoint, parseZohoMailCheckpoint } from './checkpoint';
 import { classifyZohoMailError } from '../shared/errors';
+import { resolveZohoMailIngressScope } from './scope';
 import { mapZohoMessages } from './message-mapper';
 
 const PAGE_SIZE = 200;
@@ -61,7 +58,7 @@ const selectOverlap = (
   messages: readonly ZohoMessageSummary[],
   checkpoint: Cursor,
   baselineReceivedTime: string,
-  inboxFolderId: string,
+  folderId: string,
 ): { messages: ZohoMessageSummary[]; reachedBoundary: boolean } => {
   const checkpointTime = BigInt(checkpoint.receivedTime);
   const boundary = checkpointTime > OVERLAP_MS ? checkpointTime - OVERLAP_MS : 0n;
@@ -73,7 +70,7 @@ const selectOverlap = (
     if (receivedTime < boundary) {
       return { messages: selected, reachedBoundary: true };
     }
-    if (receivedTime <= baseline || message.folderId !== inboxFolderId) continue;
+    if (receivedTime <= baseline || message.folderId !== folderId) continue;
     selected.push(message);
   }
   return { messages: selected, reachedBoundary: false };
@@ -87,11 +84,11 @@ export const createZohoMailIngressAdapter = (
   provider: 'zoho_mail',
 
   establishCheckpoint: async (scope) => {
-    parseIngressScope(scope);
+    const selection = resolveZohoMailIngressScope(scope, mailbox);
     const baselineAt = clock.now();
     return createZohoMailCheckpoint({
-      accountId: mailbox.accountId,
-      inboxFolderId: mailbox.inboxFolderId,
+      accountId: selection.accountId,
+      folderId: selection.folderId,
       receivedTime: String(baselineAt.getTime()),
       messageId: '\uffff',
       baselineReceivedTime: String(baselineAt.getTime()),
@@ -100,19 +97,19 @@ export const createZohoMailIngressAdapter = (
   },
 
   discover: async ({ scope, checkpoint, pageToken }) => {
-    parseIngressScope(scope);
+    const selection = resolveZohoMailIngressScope(scope, mailbox);
     const state = parseZohoMailCheckpoint(checkpoint);
-    if (state.accountId !== mailbox.accountId || state.inboxFolderId !== mailbox.inboxFolderId) {
+    if (state.accountId !== selection.accountId || state.folderId !== selection.folderId) {
       throw new MailSyncError('ZOHO_MAILBOX_CONTEXT_CHANGED', 'permanent');
     }
     const pageCursor = decodePageCursor(pageToken, state);
-    const messages = await client.listInboxMessages({
+    const messages = await client.listFolderMessages({
       accountId: state.accountId,
-      inboxFolderId: state.inboxFolderId,
+      folderId: state.folderId,
       start: pageCursor.start,
       limit: PAGE_SIZE,
     });
-    const overlap = selectOverlap(messages, state, state.baselineReceivedTime, state.inboxFolderId);
+    const overlap = selectOverlap(messages, state, state.baselineReceivedTime, state.folderId);
     const maximum = overlap.messages.reduce<Cursor>(
       (current, message) =>
         laterCursor(current, {
@@ -136,7 +133,7 @@ export const createZohoMailIngressAdapter = (
       checkpoint: finished
         ? createZohoMailCheckpoint({
             accountId: state.accountId,
-            inboxFolderId: state.inboxFolderId,
+            folderId: state.folderId,
             ...maximum,
             baselineReceivedTime: state.baselineReceivedTime,
             lastSuccessfulAt: clock.now(),
@@ -146,12 +143,12 @@ export const createZohoMailIngressAdapter = (
   },
 
   fetchRawMessage: async ({ scope, remoteMessageId }) => {
-    parseIngressScope(scope);
+    const selection = resolveZohoMailIngressScope(scope, mailbox);
     return {
       remoteMessageId,
       raw: await client.getOriginalMessage({
-        accountId: mailbox.accountId,
-        inboxFolderId: mailbox.inboxFolderId,
+        accountId: selection.accountId,
+        folderId: selection.folderId,
         messageId: remoteMessageId,
       }),
       receivedAt: null,
@@ -159,8 +156,11 @@ export const createZohoMailIngressAdapter = (
   },
 
   subscribe: async ({ scope, checkpoint, target }) => {
-    parseIngressScope(scope);
-    parseZohoMailCheckpoint(checkpoint);
+    const selection = resolveZohoMailIngressScope(scope, mailbox);
+    const state = parseZohoMailCheckpoint(checkpoint);
+    if (state.accountId !== selection.accountId || state.folderId !== selection.folderId) {
+      throw new MailSyncError('ZOHO_MAILBOX_CONTEXT_CHANGED', 'permanent');
+    }
     return createZohoMailSubscription(parseZohoMailSubscriptionTarget(target));
   },
 

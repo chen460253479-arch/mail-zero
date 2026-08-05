@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createZohoMailPlugin } from '../../../../src/mail-channel/zoho-mail/plugin';
 import type { OAuth2Credential } from '../../../../src/mail-channel/contracts';
@@ -18,7 +18,7 @@ describe('Zoho Mail channel plugin', () => {
         return {
           getMailboxContext: async () => ({
             accountId: 'account-1',
-            inboxFolderId: 'folder-1',
+            folderIds: ['folder-1'],
             email: 'owner@example.com',
             name: 'Owner',
             picture: '',
@@ -39,6 +39,58 @@ describe('Zoho Mail channel plugin', () => {
       email: 'owner@example.com',
       name: 'Owner',
       picture: '',
+    });
+  });
+
+  it('resolves and returns the selected Zoho account and folders as binding data', async () => {
+    const createClient = vi.fn(async () => ({
+      getMailboxContext: async () => ({
+        accountId: '100',
+        folderIds: ['201', '202'],
+        email: 'owner@example.com',
+        name: 'Owner',
+        picture: '' as const,
+      }),
+    })) as never;
+    const plugin = createZohoMailPlugin({ createClient });
+
+    await expect(
+      plugin.resolveBinding?.({
+        credential,
+        externalData: { accountId: '100', folderIds: ['201', '202'] },
+      }),
+    ).resolves.toEqual({
+      identity: {
+        email: 'owner@example.com',
+        name: 'Owner',
+        picture: '',
+      },
+      externalData: { accountId: '100', folderIds: ['201', '202'] },
+    });
+    expect(createClient).toHaveBeenCalledWith({
+      credential,
+      externalData: { accountId: '100', folderIds: ['201', '202'] },
+    });
+  });
+
+  it('preserves account-only externalData during the first binding stage', async () => {
+    const plugin = createZohoMailPlugin({
+      createClient: async () =>
+        ({
+          getMailboxContext: async () => ({
+            accountId: '100',
+            folderIds: [],
+            email: 'owner@example.com',
+            name: 'Owner',
+            picture: '',
+          }),
+        }) as never,
+    });
+
+    await expect(
+      plugin.resolveBinding?.({ credential, externalData: { accountId: '100' } }),
+    ).resolves.toMatchObject({
+      externalData: { accountId: '100' },
     });
   });
 });

@@ -1,6 +1,10 @@
+import type {
+  MailChannelExternalData,
+  MailChannelId,
+  MailChannelPlugin,
+} from '../../../mail-channel/contracts';
 import { createNangoCredentialSnapshot, resolveFetchedNangoCredential } from '../credentials/nango';
 import { encryptCredential } from '../../../infrastructure/security/credential-encryption';
-import type { MailChannelId, MailChannelPlugin } from '../../../mail-channel/contracts';
 import type { NangoConnectionSummary } from '../../../integrations/nango/schemas';
 import type { NangoClient } from '../../../integrations/nango/client';
 import { normalizeMailboxEmail } from './mailbox-identity';
@@ -10,7 +14,8 @@ export type NangoBindingErrorCode =
   | 'NANGO_CONNECTION_ALREADY_BOUND'
   | 'NANGO_CONNECTION_INVALID'
   | 'MAIL_CHANNEL_UNAVAILABLE'
-  | 'MAILBOX_IDENTITY_MISMATCH';
+  | 'MAILBOX_IDENTITY_MISMATCH'
+  | 'CHANNEL_EXTERNAL_DATA_INVALID';
 
 export class NangoBindingError extends Error {
   constructor(public readonly code: NangoBindingErrorCode) {
@@ -44,6 +49,7 @@ export type SaveNangoBindingInput = {
     credentialFetchedAt: Date;
     nangoConnectionId: string;
     nangoProviderConfigKey: string;
+    externalData: MailChannelExternalData | null;
   };
 };
 
@@ -56,7 +62,15 @@ export interface NangoBindingRepository {
   findByNangoReference(
     integrationId: string,
     connectionId: string,
-  ): Promise<{ connectionId: string; userId: string } | null>;
+  ): Promise<{
+    connectionId: string;
+    userId: string;
+    externalData: MailChannelExternalData | null;
+  } | null>;
+  updateExternalData(input: {
+    connectionId: string;
+    externalData: MailChannelExternalData | null;
+  }): Promise<void>;
   save(input: SaveNangoBindingInput): Promise<{ id: string }>;
 }
 
@@ -65,6 +79,7 @@ export type BindNangoMailboxInput = {
   channelId: MailChannelId;
   integrationId: string;
   connectionId: string;
+  externalData?: MailChannelExternalData;
 };
 
 type BindNangoMailboxDependencies = {
@@ -129,9 +144,45 @@ export const bindNangoMailbox = async (
     throw new NangoBindingError('MAIL_CHANNEL_UNAVAILABLE');
   }
 
-  const identity = await channel.resolveIdentity({ credential: resolved.credential }).catch(() => {
+  let parsedExternalData: MailChannelExternalData | undefined;
+  if (input.externalData !== undefined) {
+    if (channel.parseExternalData === undefined) {
+      throw new NangoBindingError('CHANNEL_EXTERNAL_DATA_INVALID');
+    }
+    try {
+      parsedExternalData = channel.parseExternalData(input.externalData);
+    } catch {
+      throw new NangoBindingError('CHANNEL_EXTERNAL_DATA_INVALID');
+    }
+  }
+
+  let binding;
+  try {
+    binding =
+      channel.resolveBinding === undefined
+        ? {
+            identity: await channel.resolveIdentity({ credential: resolved.credential }),
+            externalData: null,
+          }
+        : await channel.resolveBinding({
+            credential: resolved.credential,
+            ...(parsedExternalData === undefined ? {} : { externalData: parsedExternalData }),
+          });
+  } catch {
     throw new NangoBindingError('NANGO_CONNECTION_INVALID');
-  });
+  }
+  let effectiveExternalData = binding.externalData;
+  if (boundReference !== null && channel.mergeExternalData !== undefined) {
+    try {
+      effectiveExternalData = channel.mergeExternalData({
+        existing: boundReference.externalData,
+        incoming: binding.externalData,
+      });
+    } catch {
+      throw new NangoBindingError('CHANNEL_EXTERNAL_DATA_INVALID');
+    }
+  }
+  const identity = binding.identity;
 
   let normalizedEmail: string;
   try {
@@ -157,6 +208,10 @@ export const bindNangoMailbox = async (
     !(existing.status === 'reconnect_required' && existing.userId === input.userId)
   ) {
     if (boundReference?.connectionId === existing.id && existing.userId === input.userId) {
+      await dependencies.repository.updateExternalData({
+        connectionId: existing.id,
+        externalData: effectiveExternalData,
+      });
       return { id: existing.id, identity };
     }
     throw new NangoBindingError('MAILBOX_ALREADY_CONNECTED');
@@ -191,6 +246,7 @@ export const bindNangoMailbox = async (
         credentialFetchedAt: now,
         nangoConnectionId: input.connectionId,
         nangoProviderConfigKey: input.integrationId,
+        externalData: effectiveExternalData,
       },
     });
   } catch (error) {

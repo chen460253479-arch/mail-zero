@@ -4,17 +4,18 @@ import {
   type BindNangoMailboxInput,
 } from './bind-nango-mailbox';
 import { createChannelConfigRepository } from '../../../integrations/core/channel-config-repository';
+import type { MailChannelExternalData, MailChannelId } from '../../../mail-channel/contracts';
 import { createIdentityMailChannelRegistry } from '../../../runtime/mail/channel-registry';
 import { provisionChannelMailboxInDatabase } from '../runtime/provision-channel-mailbox';
 import { createPostgresConnectionRepository } from '../postgres/connection-repository';
 import { NangoIntegrationError } from '../../../integrations/nango/errors';
 import type { RuntimeServices } from '../../../runtime/node/services';
-import type { MailChannelId } from '../../../mail-channel/contracts';
 
 export type ConnectNangoMailboxInput = {
   userId: string;
   channelId: MailChannelId;
   connectionId: string;
+  externalData?: MailChannelExternalData;
 };
 
 type ConnectedNangoMailbox = {
@@ -76,6 +77,12 @@ const createRuntimeDependencies = (services: RuntimeServices): ConnectNangoMailb
             connectionRepository.findMailboxByNormalizedEmail(userId, channelId, normalizedEmail),
           findByNangoReference: (integrationId, connectionId) =>
             connectionRepository.findByNangoReference(integrationId, connectionId),
+          updateExternalData: ({ connectionId, externalData }) =>
+            connectionRepository.updateAuthorizationExternalData(
+              input.userId,
+              connectionId,
+              externalData,
+            ),
           save: (bindingInput) =>
             connectionRepository.saveBinding({
               userId: input.userId,

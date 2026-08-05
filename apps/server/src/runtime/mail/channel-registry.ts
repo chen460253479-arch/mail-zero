@@ -4,6 +4,7 @@ import {
 } from '../../mail-channel/zoho-mail/shared/zoho-client';
 import { createChannelConfigRepository } from '../../integrations/core/channel-config-repository';
 import { createZohoMailTransport } from '../../mail-channel/zoho-mail/shared/zoho-transport';
+import { parseZohoMailExternalData } from '../../mail-channel/zoho-mail/external-data';
 import { defaultZohoMailChannelConfig } from '../../mail-channel/zoho-mail/config';
 import { parseZohoMailChannelConfig } from '../../mail-channel/zoho-mail/config';
 import { createMailChannelRegistry } from '../../mail-channel/registry';
@@ -29,9 +30,10 @@ const readZohoDataCenter = async (db: DB): Promise<string> => {
 
 export const createZohoMailPluginForDatabase = (db: DB) =>
   createZohoMailPlugin({
-    createClient: async ({ credential }) =>
+    createClient: async ({ credential, externalData }) =>
       createZohoMailClient(
         createZohoMailTransport(credential, resolveZohoMailBaseUrl(await readZohoDataCenter(db))),
+        externalData === undefined ? undefined : parseZohoMailExternalData(externalData),
       ),
   });
 

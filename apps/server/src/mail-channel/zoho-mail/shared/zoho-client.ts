@@ -1,3 +1,4 @@
+import { parseZohoMailExternalData, type ZohoMailExternalData } from '../external-data';
 import type { ZohoMailTransport } from './zoho-transport';
 import { ZohoMailApiError } from './errors';
 
@@ -23,7 +24,7 @@ export const resolveZohoMailBaseUrl = (dataCenter: string): string => {
 
 export type ZohoMailboxContext = {
   accountId: string;
-  inboxFolderId: string;
+  folderIds: string[];
   email: string;
   name: string;
   picture: '';
@@ -44,15 +45,15 @@ export type ZohoUploadedAttachment = {
 
 export interface ZohoMailClient {
   getMailboxContext(): Promise<ZohoMailboxContext>;
-  listInboxMessages(input: {
+  listFolderMessages(input: {
     accountId: string;
-    inboxFolderId: string;
+    folderId: string;
     start: number;
     limit: number;
   }): Promise<ZohoMessageSummary[]>;
   getOriginalMessage(input: {
     accountId: string;
-    inboxFolderId: string;
+    folderId: string;
     messageId: string;
   }): Promise<Uint8Array>;
   uploadAttachment(input: {
@@ -104,8 +105,13 @@ const parseSendResult = (value: unknown): { messageId: string; mailId: string | 
   };
 };
 
-export const createZohoMailClient = (transport: ZohoMailTransport): ZohoMailClient => ({
+export const createZohoMailClient = (
+  transport: ZohoMailTransport,
+  externalData?: ZohoMailExternalData,
+): ZohoMailClient => ({
   getMailboxContext: async () => {
+    const selection =
+      externalData === undefined ? undefined : parseZohoMailExternalData(externalData);
     const accountsResponse = await transport.request({ method: 'GET', path: '/api/accounts' });
     const accounts = responseData(accountsResponse.json, 'ZOHO_INVALID_ACCOUNTS_RESPONSE');
     if (!Array.isArray(accounts)) throw new ZohoMailApiError('ZOHO_INVALID_ACCOUNTS_RESPONSE');
@@ -114,32 +120,14 @@ export const createZohoMailClient = (transport: ZohoMailTransport): ZohoMailClie
       .find(
         (value) =>
           typeof value.accountId === 'string' &&
+          (selection === undefined || value.accountId === selection.accountId) &&
           (typeof value.primaryEmailAddress === 'string' ||
             typeof value.mailboxAddress === 'string'),
       );
     if (account === undefined) throw new ZohoMailApiError('ZOHO_MAILBOX_ACCOUNT_MISSING');
     const accountId = String(account.accountId);
-    const foldersResponse = await transport.request({
-      method: 'GET',
-      path: `/api/accounts/${encodeURIComponent(accountId)}/folders`,
-    });
-    const folders = responseData(foldersResponse.json, 'ZOHO_INVALID_FOLDERS_RESPONSE');
-    if (!Array.isArray(folders)) throw new ZohoMailApiError('ZOHO_INVALID_FOLDERS_RESPONSE');
-    const inbox = folders
-      .map((value) => requireRecord(value, 'ZOHO_INVALID_FOLDER'))
-      .find(
-        (value) =>
-          typeof value.folderId === 'string' &&
-          [value.folderType, value.folderName, value.path].some(
-            (candidate) =>
-              typeof candidate === 'string' &&
-              candidate.toLocaleLowerCase('en-US').replace(/^\//u, '') === 'inbox',
-          ),
-      );
-    if (inbox === undefined) throw new ZohoMailApiError('ZOHO_INBOX_FOLDER_MISSING');
-    return {
+    const mailbox = {
       accountId,
-      inboxFolderId: String(inbox.folderId),
       email:
         typeof account.primaryEmailAddress === 'string'
           ? account.primaryEmailAddress
@@ -150,16 +138,58 @@ export const createZohoMailClient = (transport: ZohoMailTransport): ZohoMailClie
           : typeof account.accountDisplayName === 'string'
             ? account.accountDisplayName
             : '',
-      picture: '',
+      picture: '' as const,
+    };
+    if (selection !== undefined && selection.folderIds === undefined) {
+      return { ...mailbox, folderIds: [] };
+    }
+    const foldersResponse = await transport.request({
+      method: 'GET',
+      path: `/api/accounts/${encodeURIComponent(accountId)}/folders`,
+    });
+    const folders = responseData(foldersResponse.json, 'ZOHO_INVALID_FOLDERS_RESPONSE');
+    if (!Array.isArray(folders)) throw new ZohoMailApiError('ZOHO_INVALID_FOLDERS_RESPONSE');
+    const folderRecords = folders.map((value) => requireRecord(value, 'ZOHO_INVALID_FOLDER'));
+    let folderIds: string[];
+    if (selection === undefined) {
+      const inbox = folderRecords.find(
+        (value) =>
+          typeof value.folderId === 'string' &&
+          [value.folderType, value.folderName, value.path].some(
+            (candidate) =>
+              typeof candidate === 'string' &&
+              candidate.toLocaleLowerCase('en-US').replace(/^\//u, '') === 'inbox',
+          ),
+      );
+      if (inbox === undefined) throw new ZohoMailApiError('ZOHO_INBOX_FOLDER_MISSING');
+      folderIds = [String(inbox.folderId)];
+    } else {
+      const selectedFolderIds = selection.folderIds;
+      if (selectedFolderIds === undefined) {
+        throw new ZohoMailApiError('ZOHO_MAILBOX_FOLDER_MISSING');
+      }
+      const availableFolderIds = new Set(
+        folderRecords.flatMap((value) =>
+          typeof value.folderId === 'string' ? [value.folderId] : [],
+        ),
+      );
+      if (selectedFolderIds.some((folderId) => !availableFolderIds.has(folderId))) {
+        throw new ZohoMailApiError('ZOHO_MAILBOX_FOLDER_MISSING');
+      }
+      folderIds = [...selectedFolderIds];
+    }
+    return {
+      ...mailbox,
+      folderIds,
     };
   },
 
-  listInboxMessages: async ({ accountId, inboxFolderId, start, limit }) => {
+  listFolderMessages: async ({ accountId, folderId, start, limit }) => {
     const response = await transport.request({
       method: 'GET',
       path: `/api/accounts/${encodeURIComponent(accountId)}/messages/view`,
       query: {
-        folderId: inboxFolderId,
+        folderId,
         start: String(start),
         limit: String(limit),
         sortorder: 'true',
@@ -175,17 +205,17 @@ export const createZohoMailClient = (transport: ZohoMailTransport): ZohoMailClie
               messageId: message.messageId,
               threadId: typeof message.threadId === 'string' ? message.threadId : null,
               receivedTime: message.receivedTime,
-              folderId: typeof message.folderId === 'string' ? message.folderId : inboxFolderId,
+              folderId: typeof message.folderId === 'string' ? message.folderId : folderId,
             },
           ]
         : [];
     });
   },
 
-  getOriginalMessage: async ({ accountId, inboxFolderId, messageId }) => {
+  getOriginalMessage: async ({ accountId, folderId, messageId }) => {
     const response = await transport.request({
       method: 'GET',
-      path: `/api/accounts/${encodeURIComponent(accountId)}/folders/${encodeURIComponent(inboxFolderId)}/messages/${encodeURIComponent(messageId)}/originalmessage`,
+      path: `/api/accounts/${encodeURIComponent(accountId)}/folders/${encodeURIComponent(folderId)}/messages/${encodeURIComponent(messageId)}/originalmessage`,
       headers: { Accept: 'message/rfc822' },
     });
     if (response.bytes.byteLength === 0) throw new ZohoMailApiError('ZOHO_RAW_MESSAGE_MISSING');

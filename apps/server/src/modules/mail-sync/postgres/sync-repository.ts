@@ -1,4 +1,17 @@
-import { and, asc, eq, exists, gt, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  eq,
+  exists,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import type {
@@ -20,6 +33,7 @@ import type {
 import {
   parseIngressScope,
   parseVersionedProviderState,
+  type IngressScope,
   type VersionedProviderState,
 } from '../domain/sync-state';
 import { inboundSync, inboundSyncAttempt, inboundSyncItem } from './schema';
@@ -83,6 +97,51 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
     .where(and(eq(mailAccount.id, inboundSync.accountId), eq(connection.status, 'connected')));
 
   return {
+    reconcileConfiguredScopes: async (input: {
+      accountId: string;
+      provider: string;
+      scopes: Array<{ scopeKey: string; scope: IngressScope }>;
+    }): Promise<number> => {
+      const scopes = input.scopes.map(({ scopeKey, scope }) => ({
+        scopeKey,
+        scope: parseIngressScope(scope),
+      }));
+      return await db.transaction(async (transaction) => {
+        const configuredScopeKeys = scopes.map(({ scopeKey }) => scopeKey);
+        const stalePredicate =
+          configuredScopeKeys.length === 0
+            ? and(
+                eq(inboundSync.accountId, input.accountId),
+                eq(inboundSync.provider, input.provider),
+              )
+            : and(
+                eq(inboundSync.accountId, input.accountId),
+                eq(inboundSync.provider, input.provider),
+                notInArray(inboundSync.scopeKey, configuredScopeKeys),
+              );
+        const stale = await transaction
+          .delete(inboundSync)
+          .where(stalePredicate)
+          .returning({ id: inboundSync.id });
+        let removed = stale.length;
+        for (const configured of scopes) {
+          const changed = await transaction
+            .delete(inboundSync)
+            .where(
+              and(
+                eq(inboundSync.accountId, input.accountId),
+                eq(inboundSync.provider, input.provider),
+                eq(inboundSync.scopeKey, configured.scopeKey),
+                sql`${inboundSync.scope} IS DISTINCT FROM ${JSON.stringify(configured.scope)}::jsonb`,
+              ),
+            )
+            .returning({ id: inboundSync.id });
+          removed += changed.length;
+        }
+        return removed;
+      });
+    },
+
     createActivatingSync: async (input: CreateActivatingSyncInput): Promise<InboundSyncRecord> => {
       const scope = parseIngressScope(input.scope);
       const rows = await db

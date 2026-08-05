@@ -29,6 +29,7 @@ import { createMailboxLifecycleForDatabase } from '../../mail-accounts/runtime/l
 import { createPostgresManagedUserRepository } from '../postgres/managed-user-repository';
 import { NangoBindingError } from '../../mail-accounts/application/bind-nango-mailbox';
 import { accessGrantInputSchema, type AccessGrantInput } from '../contracts/access';
+import { defaultMailChannelRegistry } from '../../../mail-channel/registry';
 import { handleExternalLaunch, type ConsumeManagedLaunch } from './launch';
 import { createMailCoreForEnvironment } from '../../../runtime/mail/core';
 import { externalDisconnectInputSchema } from '../contracts/disconnect';
@@ -101,9 +102,19 @@ const defaultDependencies: ExternalIntegrationRouterDependencies = {
     }),
 };
 
-const bindingStatus = (error: NangoBindingError): 409 | 412 => {
+const bindingStatus = (error: NangoBindingError): 400 | 409 | 412 => {
+  if (error.code === 'CHANNEL_EXTERNAL_DATA_INVALID') return 400;
   const conflicts = new Set(['MAILBOX_ALREADY_CONNECTED', 'NANGO_CONNECTION_ALREADY_BOUND']);
   return conflicts.has(error.code) ? 409 : 412;
+};
+
+const parseExternalData = (channelId: ConnectNangoMailboxInput['channelId'], value: unknown) => {
+  const channel = defaultMailChannelRegistry.get(channelId);
+  if (channel.parseExternalData === undefined) {
+    if (value !== undefined) throw new Error('CHANNEL_EXTERNAL_DATA_UNSUPPORTED');
+    return undefined;
+  }
+  return channel.parseExternalData(value);
 };
 
 export const createExternalIntegrationRouter = (
@@ -140,6 +151,12 @@ export const createExternalIntegrationRouter = (
     if (!parsed.success) {
       return context.json({ error: 'INVALID_REQUEST' }, 400);
     }
+    let externalData;
+    try {
+      externalData = parseExternalData(parsed.data.channelId, parsed.data.externalData);
+    } catch {
+      return context.json({ error: 'INVALID_REQUEST' }, 400);
+    }
 
     try {
       const managedUser = await dependencies.provisionManagedUser(
@@ -152,6 +169,7 @@ export const createExternalIntegrationRouter = (
             userId: managedUser.userId,
             channelId: parsed.data.channelId,
             connectionId: parsed.data.connectionId,
+            ...(externalData === undefined ? {} : { externalData }),
           },
           services,
         ),

@@ -12,6 +12,7 @@ import type { DB } from '../../db';
 export type MailChannelCredentialContext = {
   channelId: MailChannelId;
   authSource: 'zero_oauth' | 'nango' | 'manual';
+  externalData: Record<string, unknown> | null;
   resolveCredential(forceRefresh: boolean): Promise<ResolvedCredential>;
   invalidateCredential(): Promise<void>;
   markReconnectRequired(): Promise<void>;
@@ -101,6 +102,7 @@ export const createMailChannelCredentialContext = async (
   return {
     channelId: record.connection.channelId,
     authSource: record.authorization.authSource,
+    externalData: record.authorization.externalData,
     resolveCredential,
     invalidateCredential: async () => {
       cachedCredential = null;

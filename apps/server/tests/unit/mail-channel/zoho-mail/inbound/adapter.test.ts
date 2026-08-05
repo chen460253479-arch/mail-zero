@@ -5,11 +5,12 @@ import type {
   ZohoMailboxContext,
 } from '../../../../../src/mail-channel/zoho-mail/shared/zoho-client';
 import { createZohoMailIngressAdapter } from '../../../../../src/mail-channel/zoho-mail/inbound/adapter';
+import { createZohoMailIngressScopes } from '../../../../../src/mail-channel/zoho-mail/inbound/scope';
 import { parseIngressScope } from '../../../../../src/modules/mail-sync';
 
 const context: ZohoMailboxContext = {
   accountId: 'account-1',
-  inboxFolderId: 'folder-1',
+  folderIds: ['folder-1'],
   email: 'owner@example.com',
   name: 'Owner',
   picture: '',
@@ -18,7 +19,7 @@ const context: ZohoMailboxContext = {
 const createClient = (overrides: Partial<ZohoMailClient> = {}): ZohoMailClient =>
   ({
     getMailboxContext: vi.fn(async () => context),
-    listInboxMessages: vi.fn(async () => []),
+    listFolderMessages: vi.fn(async () => []),
     getOriginalMessage: vi.fn(async () => new Uint8Array([0, 255, 1])),
     uploadAttachment: vi.fn(),
     sendMessage: vi.fn(),
@@ -34,19 +35,19 @@ describe('Zoho Mail inbound adapter', () => {
     });
 
     await expect(adapter.establishCheckpoint(parseIngressScope())).resolves.toEqual({
-      version: 1,
+      version: 2,
       accountId: 'account-1',
-      inboxFolderId: 'folder-1',
+      folderId: 'folder-1',
       receivedTime: '1785240000000',
       messageId: '\uffff',
       baselineReceivedTime: '1785240000000',
       lastSuccessfulAt: '2026-07-28T12:00:00.000Z',
     });
-    expect(client.listInboxMessages).not.toHaveBeenCalled();
+    expect(client.listFolderMessages).not.toHaveBeenCalled();
   });
 
   it('uses an overlap window and imports same-timestamp messages without losing IDs', async () => {
-    const listInboxMessages = vi.fn(async () => [
+    const listFolderMessages = vi.fn(async () => [
       {
         messageId: 'message-3',
         threadId: 'thread-1',
@@ -66,7 +67,7 @@ describe('Zoho Mail inbound adapter', () => {
         folderId: 'folder-1',
       },
     ]);
-    const adapter = createZohoMailIngressAdapter(createClient({ listInboxMessages }), context, {
+    const adapter = createZohoMailIngressAdapter(createClient({ listFolderMessages }), context, {
       now: () => new Date('2026-07-28T12:02:00.000Z'),
     });
 
@@ -74,9 +75,9 @@ describe('Zoho Mail inbound adapter', () => {
       adapter.discover({
         scope: parseIngressScope(),
         checkpoint: {
-          version: 1,
+          version: 2,
           accountId: 'account-1',
-          inboxFolderId: 'folder-1',
+          folderId: 'folder-1',
           receivedTime: '1785240000000',
           messageId: 'message-2',
           baselineReceivedTime: '1785239900000',
@@ -99,18 +100,18 @@ describe('Zoho Mail inbound adapter', () => {
       ],
       nextPageToken: null,
       checkpoint: {
-        version: 1,
+        version: 2,
         accountId: 'account-1',
-        inboxFolderId: 'folder-1',
+        folderId: 'folder-1',
         receivedTime: '1785240060000',
         messageId: 'message-3',
         baselineReceivedTime: '1785239900000',
         lastSuccessfulAt: '2026-07-28T12:02:00.000Z',
       },
     });
-    expect(listInboxMessages).toHaveBeenCalledWith({
+    expect(listFolderMessages).toHaveBeenCalledWith({
       accountId: 'account-1',
-      inboxFolderId: 'folder-1',
+      folderId: 'folder-1',
       start: 1,
       limit: 200,
     });
@@ -119,7 +120,7 @@ describe('Zoho Mail inbound adapter', () => {
   it('never imports messages at or before the binding baseline while retaining overlap', async () => {
     const adapter = createZohoMailIngressAdapter(
       createClient({
-        listInboxMessages: vi.fn(async () => [
+        listFolderMessages: vi.fn(async () => [
           {
             messageId: 'after-binding',
             threadId: null,
@@ -142,9 +143,9 @@ describe('Zoho Mail inbound adapter', () => {
       adapter.discover({
         scope: parseIngressScope(),
         checkpoint: {
-          version: 1,
+          version: 2,
           accountId: 'account-1',
-          inboxFolderId: 'folder-1',
+          folderId: 'folder-1',
           receivedTime: '1785240060000',
           messageId: 'after-binding',
           baselineReceivedTime: '1785240000000',
@@ -182,8 +183,42 @@ describe('Zoho Mail inbound adapter', () => {
     });
     expect(client.getOriginalMessage).toHaveBeenCalledWith({
       accountId: 'account-1',
-      inboxFolderId: 'folder-1',
+      folderId: 'folder-1',
       messageId: 'message-1',
+    });
+  });
+
+  it('uses the folder encoded in the durable scope for scheduled discovery', async () => {
+    const selectedContext: ZohoMailboxContext = {
+      accountId: '100',
+      folderIds: ['200', '300'],
+      email: 'owner@example.com',
+      name: 'Owner',
+      picture: '',
+    };
+    const listFolderMessages = vi.fn(async () => []);
+    const adapter = createZohoMailIngressAdapter(
+      createClient({ listFolderMessages }),
+      selectedContext,
+      { now: () => new Date('2026-07-28T12:00:00.000Z') },
+    );
+    const [selectedScope] = createZohoMailIngressScopes({
+      accountId: '100',
+      folderIds: ['300'],
+    });
+    const checkpoint = await adapter.establishCheckpoint(selectedScope!.scope);
+
+    await adapter.discover({
+      scope: selectedScope!.scope,
+      checkpoint,
+      pageToken: null,
+    });
+
+    expect(listFolderMessages).toHaveBeenCalledWith({
+      accountId: '100',
+      folderId: '300',
+      start: 1,
+      limit: 200,
     });
   });
 

@@ -9,7 +9,7 @@ import type { FrozenOutboundMessage } from '../../../../../src/mail-channel/cont
 
 const context: ZohoMailboxContext = {
   accountId: 'account-1',
-  inboxFolderId: 'folder-1',
+  folderIds: ['folder-1'],
   email: 'sender@example.test',
   name: 'Sender',
   picture: '',

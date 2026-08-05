@@ -58,7 +58,7 @@ describe('mail sync database schema', () => {
           'inbound_sync_due_dispatch_idx',
           'inbound_sync_dispatch_lease_idx',
           'inbound_sync_subscription_external_idx',
-          'inbound_sync_subscription_endpoint_token_uidx',
+          'inbound_sync_subscription_endpoint_token_idx',
           'inbound_sync_item_pending_idx',
           'inbound_sync_item_due_pending_idx',
           'inbound_sync_item_lease_idx',
@@ -231,6 +231,47 @@ describe('mail sync database schema', () => {
           )
         `,
       ).rejects.toThrow(/inbound_sync_item_processing_lease_chk/u);
+    });
+  });
+
+  it('allows one Zoho webhook endpoint to wake multiple selected folder streams', async () => {
+    await withMailSyncTestDatabase(async ({ sql }) => {
+      await insertMailSyncAccountFixture(sql);
+
+      await sql`
+        INSERT INTO integration.inbound_sync (
+          id, account_id, provider, scope_key, scope, checkpoint, status,
+          subscription_endpoint_token_hash
+        ) VALUES
+        (
+          'sync-folder-200',
+          'account-1',
+          'zoho_mail',
+          'folder:200',
+          '{"version":1,"mailboxRoles":["inbox"],"initialSync":"none","externalData":{"accountId":"100","folderIds":["200"]}}'::jsonb,
+          '{"version":2,"accountId":"100","folderId":"200"}'::jsonb,
+          'active',
+          'shared-endpoint-hash'
+        ),
+        (
+          'sync-folder-300',
+          'account-1',
+          'zoho_mail',
+          'folder:300',
+          '{"version":1,"mailboxRoles":["inbox"],"initialSync":"none","externalData":{"accountId":"100","folderIds":["300"]}}'::jsonb,
+          '{"version":2,"accountId":"100","folderId":"300"}'::jsonb,
+          'active',
+          'shared-endpoint-hash'
+        )
+      `;
+
+      const streams = await sql<{ id: string }[]>`
+        SELECT id
+        FROM integration.inbound_sync
+        WHERE subscription_endpoint_token_hash = 'shared-endpoint-hash'
+        ORDER BY id
+      `;
+      expect(streams.map(({ id }) => id)).toEqual(['sync-folder-200', 'sync-folder-300']);
     });
   });
 });

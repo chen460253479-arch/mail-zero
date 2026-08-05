@@ -6,6 +6,10 @@ import {
   NangoBindingError,
   type NangoBindingRepository,
 } from '../../../../../src/modules/mail-accounts/application/bind-nango-mailbox';
+import {
+  mergeZohoMailExternalData,
+  parseZohoMailExternalData,
+} from '../../../../../src/mail-channel/zoho-mail/external-data';
 import { decryptCredential } from '../../../../../src/infrastructure/security/credential-encryption';
 import type { MailChannelPlugin } from '../../../../../src/mail-channel/contracts';
 import type { NangoClient } from '../../../../../src/integrations/nango/client';
@@ -46,6 +50,7 @@ const createChannel = () =>
 const createRepository = (): NangoBindingRepository => ({
   findMailboxByNormalizedEmail: vi.fn().mockResolvedValue(null),
   findByNangoReference: vi.fn().mockResolvedValue(null),
+  updateExternalData: vi.fn().mockResolvedValue(undefined),
   save: vi.fn().mockResolvedValue({ id: 'zero-mailbox-1' }),
 });
 
@@ -163,6 +168,7 @@ describe('Nango mailbox binding', () => {
     vi.mocked(repository.findByNangoReference).mockResolvedValue({
       connectionId: 'existing',
       userId: 'user-1',
+      externalData: null,
     });
 
     await bindNangoMailbox(input, dependencies);
@@ -193,6 +199,7 @@ describe('Nango mailbox binding', () => {
     vi.mocked(repository.findByNangoReference).mockResolvedValue({
       connectionId: 'other-mailbox',
       userId: 'user-2',
+      externalData: null,
     });
 
     await expect(bindNangoMailbox(input, dependencies)).rejects.toMatchObject({
@@ -203,9 +210,11 @@ describe('Nango mailbox binding', () => {
 
   it('maps only a binding-write race to NANGO_CONNECTION_ALREADY_BOUND', async () => {
     const { repository, dependencies } = createDependencies();
-    vi.mocked(repository.findByNangoReference)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ connectionId: 'other-mailbox', userId: 'user-2' });
+    vi.mocked(repository.findByNangoReference).mockResolvedValueOnce(null).mockResolvedValueOnce({
+      connectionId: 'other-mailbox',
+      userId: 'user-2',
+      externalData: null,
+    });
     vi.mocked(repository.save).mockRejectedValue(new Error('unique conflict'));
 
     await expect(bindNangoMailbox(input, dependencies)).rejects.toMatchObject({
@@ -239,11 +248,100 @@ describe('Nango mailbox binding', () => {
     });
   });
 
-  it('returns the existing mailbox for the same user and Nango reference', async () => {
+  it('persists channel-resolved Zoho account and folder data with the authorization', async () => {
+    const repository = createRepository();
+    const resolveBinding = vi.fn().mockResolvedValue({
+      identity: {
+        email: 'owner@example.com',
+        name: 'Owner',
+        picture: '',
+      },
+      externalData: { accountId: '100', folderIds: ['200', '300'] },
+    });
+    const channel = {
+      ...createChannel(),
+      id: 'zoho_mail',
+      providerKey: 'zoho_mail',
+      parseExternalData: parseZohoMailExternalData,
+      resolveBinding,
+    } satisfies MailChannelPlugin;
+    const externalData = { accountId: '100', folderIds: ['200', '300'] };
+
+    await bindNangoMailbox(
+      { ...input, channelId: 'zoho_mail', externalData },
+      {
+        ...createDependencies().dependencies,
+        getChannel: vi.fn().mockReturnValue(channel),
+        repository,
+      },
+    );
+
+    expect(resolveBinding).toHaveBeenCalledWith({
+      credential: expect.objectContaining({ accessToken: 'nango-access-token' }),
+      externalData,
+    });
+    expect(repository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authorization: expect.objectContaining({ externalData }),
+      }),
+    );
+  });
+
+  it('persists account-only Zoho externalData during the first configuration stage', async () => {
+    const repository = createRepository();
+    const externalData = { accountId: '100' };
+    const channel = {
+      ...createChannel(),
+      id: 'zoho_mail',
+      providerKey: 'zoho_mail',
+      parseExternalData: parseZohoMailExternalData,
+      mergeExternalData: ({ existing, incoming }) => mergeZohoMailExternalData(existing, incoming),
+      resolveBinding: vi.fn().mockResolvedValue({
+        identity: {
+          email: 'owner@example.com',
+          name: 'Owner',
+          picture: '',
+        },
+        externalData,
+      }),
+    } satisfies MailChannelPlugin;
+
+    await bindNangoMailbox(
+      { ...input, channelId: 'zoho_mail', externalData },
+      {
+        ...createDependencies().dependencies,
+        getChannel: vi.fn().mockReturnValue(channel),
+        repository,
+      },
+    );
+
+    expect(repository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authorization: expect.objectContaining({ externalData }),
+      }),
+    );
+  });
+
+  it('rejects custom externalData for channels that do not define it', async () => {
+    const { repository, dependencies } = createDependencies();
+
+    await expect(
+      bindNangoMailbox(
+        { ...input, externalData: { accountId: '100', folderIds: ['200'] } },
+        dependencies,
+      ),
+    ).rejects.toMatchObject({
+      code: 'CHANNEL_EXTERNAL_DATA_INVALID',
+    } satisfies Partial<NangoBindingError>);
+    expect(repository.save).not.toHaveBeenCalled();
+  });
+
+  it('updates channel data and returns the existing mailbox for the same user and Nango reference', async () => {
     const { repository, dependencies } = createDependencies();
     vi.mocked(repository.findByNangoReference).mockResolvedValue({
       connectionId: 'existing',
       userId: 'user-1',
+      externalData: null,
     });
     vi.mocked(repository.findMailboxByNormalizedEmail).mockResolvedValue({
       id: 'existing',
@@ -261,6 +359,96 @@ describe('Nango mailbox binding', () => {
       },
     });
     expect(repository.save).not.toHaveBeenCalled();
+    expect(repository.updateExternalData).toHaveBeenCalledWith({
+      connectionId: 'existing',
+      externalData: null,
+    });
+  });
+
+  it('persists the latest Zoho externalData on an idempotent repeated callback', async () => {
+    const { repository, dependencies } = createDependencies();
+    const externalData = { accountId: '100', folderIds: ['300'] };
+    const channel = {
+      ...createChannel(),
+      id: 'zoho_mail',
+      providerKey: 'zoho_mail',
+      parseExternalData: parseZohoMailExternalData,
+      mergeExternalData: ({ existing, incoming }) => mergeZohoMailExternalData(existing, incoming),
+      resolveBinding: vi.fn().mockResolvedValue({
+        identity: {
+          email: 'Owner@Example.com',
+          name: 'Mailbox Owner',
+          picture: '',
+        },
+        externalData,
+      }),
+    } satisfies MailChannelPlugin;
+    vi.mocked(dependencies.getChannel).mockReturnValue(channel);
+    vi.mocked(repository.findByNangoReference).mockResolvedValue({
+      connectionId: 'existing',
+      userId: 'user-1',
+      externalData: { accountId: '100', folderIds: ['200'] },
+    });
+    vi.mocked(repository.findMailboxByNormalizedEmail).mockResolvedValue({
+      id: 'existing',
+      userId: 'user-1',
+      channelId: 'zoho_mail',
+      status: 'connected',
+    });
+
+    await expect(
+      bindNangoMailbox({ ...input, channelId: 'zoho_mail', externalData }, dependencies),
+    ).resolves.toMatchObject({ id: 'existing' });
+
+    expect(repository.updateExternalData).toHaveBeenCalledWith({
+      connectionId: 'existing',
+      externalData,
+    });
+    expect(repository.save).not.toHaveBeenCalled();
+  });
+
+  it('does not erase configured folders when the account-only first stage is retried', async () => {
+    const { repository, dependencies } = createDependencies();
+    const configured = { accountId: '100', folderIds: ['300'] };
+    const incoming = { accountId: '100' };
+    const channel = {
+      ...createChannel(),
+      id: 'zoho_mail',
+      providerKey: 'zoho_mail',
+      parseExternalData: parseZohoMailExternalData,
+      mergeExternalData: ({ existing, incoming: next }) =>
+        mergeZohoMailExternalData(existing, next),
+      resolveBinding: vi.fn().mockResolvedValue({
+        identity: {
+          email: 'Owner@Example.com',
+          name: 'Mailbox Owner',
+          picture: '',
+        },
+        externalData: incoming,
+      }),
+    } satisfies MailChannelPlugin;
+    vi.mocked(dependencies.getChannel).mockReturnValue(channel);
+    vi.mocked(repository.findByNangoReference).mockResolvedValue({
+      connectionId: 'existing',
+      userId: 'user-1',
+      externalData: configured,
+    });
+    vi.mocked(repository.findMailboxByNormalizedEmail).mockResolvedValue({
+      id: 'existing',
+      userId: 'user-1',
+      channelId: 'zoho_mail',
+      status: 'connected',
+    });
+
+    await bindNangoMailbox(
+      { ...input, channelId: 'zoho_mail', externalData: incoming },
+      dependencies,
+    );
+
+    expect(repository.updateExternalData).toHaveBeenCalledWith({
+      connectionId: 'existing',
+      externalData: configured,
+    });
   });
 
   it('binds generic-email BASIC credentials through the IMAP/SMTP plugin contract', async () => {

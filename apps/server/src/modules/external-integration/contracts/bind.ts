@@ -9,6 +9,7 @@ export const externalBindInputSchema = z
     externalUserId: externalUserIdSchema,
     channelId: z.enum(mailChannelIds),
     connectionId: z.string().trim().min(1),
+    externalData: z.unknown().optional(),
   })
   .strict();
 

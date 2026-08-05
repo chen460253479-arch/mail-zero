@@ -34,8 +34,13 @@ describe('inbound synchronization state schema', () => {
         'inbound_sync_due_dispatch_idx',
         'inbound_sync_dispatch_lease_idx',
         'inbound_sync_subscription_external_idx',
-        'inbound_sync_subscription_endpoint_token_uidx',
+        'inbound_sync_subscription_endpoint_token_idx',
       ]),
     );
+    expect(
+      config.indexes.find(
+        ({ config: index }) => index.name === 'inbound_sync_subscription_endpoint_token_idx',
+      )?.config.unique,
+    ).toBe(false);
   });
 });

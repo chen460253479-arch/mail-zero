@@ -15,6 +15,7 @@ export type IngressScope = {
   version: 1;
   mailboxRoles: ['inbox'];
   initialSync: 'none';
+  externalData?: JsonValue;
 };
 
 const DEFAULT_INGRESS_SCOPE: IngressScope = {
@@ -80,9 +81,15 @@ export const parseIngressScope = (value: unknown = DEFAULT_INGRESS_SCOPE): Ingre
     throw new Error('MAIL_SYNC_UNSUPPORTED_SCOPE');
   }
 
+  const externalData = (value as { externalData?: unknown }).externalData;
+  if (externalData !== undefined && !isJsonValue(externalData)) {
+    throw new Error('MAIL_SYNC_UNSUPPORTED_SCOPE');
+  }
+
   return {
     version: 1,
     mailboxRoles: ['inbox'],
     initialSync: 'none',
+    ...(externalData === undefined ? {} : { externalData }),
   };
 };

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { createPostgresMailSyncRepository } from '../../../src/modules/mail-sync/postgres/sync-repository';
 import {
   insertMailSyncAccountFixture,
   withMailSyncTestDatabase,
 } from '../../helpers/mail-sync/database';
+import { createPostgresMailSyncRepository } from '../../../src/modules/mail-sync/postgres/sync-repository';
 import type { IngressScope } from '../../../src/modules/mail-sync';
 
 const scope: IngressScope = {
@@ -73,6 +73,80 @@ describe('PostgreSQL mail sync repository', () => {
         subscriptionExpiresAt: new Date('2026-08-01T00:00:00.000Z'),
       });
       expect(repeated).toEqual(activated);
+    });
+  });
+
+  it('preserves matching configured streams and removes stale or changed Zoho scopes', async () => {
+    await withMailSyncTestDatabase(async ({ db, sql }) => {
+      await insertMailSyncAccountFixture(sql);
+      const repository = createRepository(db);
+      const selectedScope: IngressScope = {
+        ...scope,
+        externalData: { accountId: '100', folderIds: ['200'] },
+      };
+      const legacy = await repository.createActivatingSync({
+        accountId: 'account-1',
+        provider: 'zoho_mail',
+        scopeKey: 'inbox',
+        scope,
+      });
+      const selected = await repository.createActivatingSync({
+        accountId: 'account-1',
+        provider: 'zoho_mail',
+        scopeKey: 'folder:200',
+        scope: selectedScope,
+      });
+
+      await expect(
+        repository.reconcileConfiguredScopes({
+          accountId: 'account-1',
+          provider: 'zoho_mail',
+          scopes: [{ scopeKey: 'folder:200', scope: selectedScope }],
+        }),
+      ).resolves.toBe(1);
+      const afterStaleRemoval = await sql<{ id: string }[]>`
+        SELECT id
+        FROM integration.inbound_sync
+        WHERE account_id = 'account-1' AND provider = 'zoho_mail'
+      `;
+      expect(afterStaleRemoval).toEqual([{ id: selected.id }]);
+      expect(afterStaleRemoval).not.toContainEqual({ id: legacy.id });
+
+      await expect(
+        repository.reconcileConfiguredScopes({
+          accountId: 'account-1',
+          provider: 'zoho_mail',
+          scopes: [
+            {
+              scopeKey: 'folder:200',
+              scope: {
+                ...scope,
+                externalData: { accountId: '999', folderIds: ['200'] },
+              },
+            },
+          ],
+        }),
+      ).resolves.toBe(1);
+      const afterScopeChange = await sql<{ count: number }[]>`
+        SELECT count(*)::integer AS count
+        FROM integration.inbound_sync
+        WHERE account_id = 'account-1' AND provider = 'zoho_mail'
+      `;
+      expect(afterScopeChange).toEqual([{ count: 0 }]);
+
+      await repository.createActivatingSync({
+        accountId: 'account-1',
+        provider: 'zoho_mail',
+        scopeKey: 'folder:200',
+        scope: selectedScope,
+      });
+      await expect(
+        repository.reconcileConfiguredScopes({
+          accountId: 'account-1',
+          provider: 'zoho_mail',
+          scopes: [],
+        }),
+      ).resolves.toBe(1);
     });
   });
 

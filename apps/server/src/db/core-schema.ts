@@ -183,6 +183,7 @@ export const authorizationBinding = createIntegrationTable(
     credentialFetchedAt: timestamp('credential_fetched_at', { withTimezone: true }),
     nangoConnectionId: text('nango_connection_id'),
     nangoProviderConfigKey: text('nango_provider_config_key'),
+    externalData: jsonb('external_data').$type<Record<string, unknown>>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
