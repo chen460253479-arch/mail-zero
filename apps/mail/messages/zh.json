@@ -885,10 +885,10 @@
           "copied": "Webhook URL 已复制",
           "button": "Webhook",
           "title": "Zoho 收件箱监控",
-          "description": "在 Zoho Mail 开发者设置中将这个每邮箱 URL 添加为出站 Webhook。Zero 仅将回调用作同步信号，并从 Zoho 获取邮件。",
+          "description": "在 Zoho Mail 开发者设置中将这个固定 URL 添加为出站 Webhook。Zero 会验证回调、按文件夹路由，并从 Zoho 获取邮件。",
           "stepOpenSettings": "打开此邮箱的 Zoho Mail 出站 Webhook 设置。",
-          "stepCreate": "使用上方 URL 创建 HTTPS Webhook。",
-          "stepSave": "选择收件事件并保存，同时保持定时同步启用。",
+          "stepCreate": "使用上方 URL 创建 HTTPS Webhook，选择“邮件”，并关闭“有限数据列表”。",
+          "stepSave": "选择收件事件并保存；Zero 会返回 Zoho 要求的 HTTP 200 响应。",
           "disabledDescription": "全局 Zoho Mail 渠道已禁用收件箱监控。请先在集成中启用它，再配置此邮箱。"
         }
       },
@@ -1107,9 +1107,9 @@
           "zohoDataCenterDescription": "OAuth 和 Mail API 调用会保留在此固定的 Zoho 数据中心内。",
           "inboxWatchTitle": "{channel} 收件箱监控",
           "outlookInboxWatchDescription": "Zero 使用此固定端点创建和续订 Microsoft Graph 订阅。",
-          "zohoInboxWatchDescription": "使用已令牌化的 Zero URL，在 Zoho 中为每个已连接邮箱配置出站 Webhook。",
+          "zohoInboxWatchDescription": "使用此固定 Zero URL 配置 Zoho Mail 出站 Webhook。文件夹路由需要完整邮件数据。",
           "inboxWatchHelp": "Webhook 和定时任务会进入同一幂等增量流水线。",
-          "zohoWebhookHelp": "邮箱连接后，真实的每邮箱 URL 会替换 :endpointToken。",
+          "zohoWebhookHelp": "Zoho 将已配置邮箱的事件发送到此固定 URL；Zero 按 folderId 路由并验证 x-hook-signature。",
           "scheduledSyncDescription": "定期协调只会导入无历史绑定基线之后的更改。",
           "scheduledSyncHelp": "IMAP 当前仅支持定时增量同步。"
         }

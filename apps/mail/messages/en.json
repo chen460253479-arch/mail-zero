@@ -885,10 +885,10 @@
           "copied": "Webhook URL copied",
           "button": "Webhook",
           "title": "Zoho Inbox Watch",
-          "description": "Add this per-mailbox URL as an Outgoing Webhook in the Zoho Mail developer settings. Zero treats the callback only as a sync signal and fetches the message from Zoho.",
+          "description": "Add this fixed URL as an Outgoing Webhook in the Zoho Mail developer settings. Zero verifies the callback, routes it by folder, and fetches the message from Zoho.",
           "stepOpenSettings": "Open the Zoho Mail Outgoing Webhook settings for this mailbox.",
-          "stepCreate": "Create an HTTPS webhook using the URL above.",
-          "stepSave": "Choose incoming-message events, save it, and keep scheduled sync enabled.",
+          "stepCreate": "Create an HTTPS webhook using the URL above, choose Mail, and leave Limited Data List disabled.",
+          "stepSave": "Choose incoming-message events and save; Zero returns the HTTP 200 response Zoho requires.",
           "disabledDescription": "Inbox Watch is disabled for the global Zoho Mail channel. Enable it in Integrations before configuring this mailbox."
         }
       },
@@ -1107,9 +1107,9 @@
           "zohoDataCenterDescription": "OAuth and Mail API calls stay inside this fixed Zoho data center.",
           "inboxWatchTitle": "{channel} Inbox Watch",
           "outlookInboxWatchDescription": "Zero creates and renews a Microsoft Graph subscription using this fixed endpoint.",
-          "zohoInboxWatchDescription": "Configure each connected mailbox Outgoing Webhook in Zoho using its tokenized Zero URL.",
+          "zohoInboxWatchDescription": "Configure Zoho Mail Outgoing Webhooks using this fixed Zero URL. Full mail data is required for folder routing.",
           "inboxWatchHelp": "Webhook and schedule feed the same idempotent incremental pipeline.",
-          "zohoWebhookHelp": "The real per-mailbox URL replaces :endpointToken after the mailbox is connected.",
+          "zohoWebhookHelp": "Zoho posts configured mailboxes to this fixed URL; Zero routes by folderId and verifies x-hook-signature.",
           "scheduledSyncDescription": "Periodic reconciliation imports only changes after the no-history binding baseline.",
           "scheduledSyncHelp": "IMAP currently supports scheduled incremental synchronization only."
         }

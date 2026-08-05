@@ -98,7 +98,7 @@ export type IntegrationHealth = {
 export type RuntimeWebhookHandlers = {
   gmail(request: Request): Promise<Response>;
   outlook(request: Request): Promise<Response>;
-  zohoMail(request: Request, endpointToken: string): Promise<Response>;
+  zohoMail(request: Request): Promise<Response>;
 };
 
 export type RuntimeServices = {
@@ -323,13 +323,8 @@ export const createRuntimeServices = async ({
         await handleGmailWebhookForEnvironment(database.db, mailResources, request),
       outlook: async (request) =>
         await handleOutlookWebhookForEnvironment(database.db, mailResources, request),
-      zohoMail: async (request, endpointToken) =>
-        await handleZohoMailWebhookForEnvironment(
-          database.db,
-          mailResources,
-          request,
-          endpointToken,
-        ),
+      zohoMail: async (request) =>
+        await handleZohoMailWebhookForEnvironment(database.db, mailResources, request),
     },
     externalClients: {
       close: async () => undefined,

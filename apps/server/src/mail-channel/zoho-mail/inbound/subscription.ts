@@ -6,7 +6,6 @@ import type { InboundSubscriptionState } from '../../../modules/mail-sync';
 const targetSchema = z.object({
   version: z.literal(1),
   notificationUrl: z.string().url(),
-  endpointTokenHash: z.string().regex(/^[0-9a-f]{64}$/u),
   establishedAt: z.string().datetime(),
 });
 
@@ -15,7 +14,7 @@ export const parseZohoMailSubscriptionTarget = (value: VersionedProviderState) =
   const url = new URL(target.notificationUrl);
   if (
     url.protocol !== 'https:' ||
-    !/^\/api\/webhooks\/mail\/zoho\/[A-Za-z0-9_-]{43}$/u.test(url.pathname) ||
+    url.pathname !== '/api/webhooks/mail/zoho' ||
     url.search.length > 0 ||
     url.hash.length > 0
   ) {
@@ -29,7 +28,7 @@ export const createZohoMailSubscription = (
 ): InboundSubscriptionState => ({
   expiresAt: null,
   externalId: null,
-  endpointTokenHash: target.endpointTokenHash,
+  endpointTokenHash: null,
   encryptedSecret: null,
   establishedAt: new Date(target.establishedAt),
 });

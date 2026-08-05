@@ -373,7 +373,7 @@ export const connectionsRouter = router({
           message: 'ZOHO_MAIL_WEBHOOK_DISABLED',
         });
       }
-      const setup = await createZohoWebhookSetup(services.environment, account.id);
+      const setup = createZohoWebhookSetup(services.environment);
       return { webhookUrl: setup.webhookUrl };
     }),
   setDefault: mailSessionProcedure

@@ -193,9 +193,7 @@ export const createNodeApplication = (services: RuntimeServices) => {
     )
     .post('/api/mail/channels/gmail/push', (c) => services.webhooks.gmail(c.req.raw))
     .post('/api/webhooks/mail/outlook', (c) => services.webhooks.outlook(c.req.raw))
-    .post('/api/webhooks/mail/zoho/:endpointToken', (c) =>
-      services.webhooks.zohoMail(c.req.raw, c.req.param('endpointToken')),
-    )
+    .post('/api/webhooks/mail/zoho', (c) => services.webhooks.zohoMail(c.req.raw))
     .route('/api/integrations', createExternalIntegrationRouter(services))
     .route('/api', api)
     .get('/health', (c) =>

@@ -102,7 +102,7 @@ const parseRecord = (
 const webhookUrl = (backendUrl: string, channelId: ManagedChannelId): string | null => {
   const base = backendUrl.replace(/\/+$/u, '');
   if (channelId === 'outlook') return `${base}/api/webhooks/mail/outlook`;
-  if (channelId === 'zoho_mail') return `${base}/api/webhooks/mail/zoho/:endpointToken`;
+  if (channelId === 'zoho_mail') return `${base}/api/webhooks/mail/zoho`;
   return null;
 };
 

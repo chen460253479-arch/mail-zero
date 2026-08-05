@@ -222,7 +222,7 @@ describe('Zoho Mail inbound adapter', () => {
     });
   });
 
-  it('registers a tokenized manual webhook without trusting webhook message data', async () => {
+  it('registers the fixed signed Zoho webhook target', async () => {
     const adapter = createZohoMailIngressAdapter(createClient(), context);
     const checkpoint = await adapter.establishCheckpoint(fixedScope!.scope);
 
@@ -232,16 +232,14 @@ describe('Zoho Mail inbound adapter', () => {
         checkpoint,
         target: {
           version: 1,
-          notificationUrl:
-            'https://mail.example.test/api/webhooks/mail/zoho/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789',
-          endpointTokenHash: 'a'.repeat(64),
+          notificationUrl: 'https://mail.example.test/api/webhooks/mail/zoho',
           establishedAt: '2026-07-28T12:00:00.000Z',
         },
       }),
     ).resolves.toEqual({
       expiresAt: null,
       externalId: null,
-      endpointTokenHash: 'a'.repeat(64),
+      endpointTokenHash: null,
       encryptedSecret: null,
       establishedAt: new Date('2026-07-28T12:00:00.000Z'),
     });

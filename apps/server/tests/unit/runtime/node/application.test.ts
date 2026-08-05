@@ -113,12 +113,12 @@ describe('native Node application', () => {
 
     const gmail = await app.request('/api/mail/channels/gmail/push', { method: 'POST' });
     const outlook = await app.request('/api/webhooks/mail/outlook', { method: 'POST' });
-    const zoho = await app.request('/api/webhooks/mail/zoho/token-1', { method: 'POST' });
+    const zoho = await app.request('/api/webhooks/mail/zoho', { method: 'POST' });
 
     expect([gmail.status, outlook.status, zoho.status]).toEqual([202, 202, 202]);
     expect(services.webhooks.gmail).toHaveBeenCalledOnce();
     expect(services.webhooks.outlook).toHaveBeenCalledOnce();
-    expect(services.webhooks.zohoMail).toHaveBeenCalledWith(expect.any(Request), 'token-1');
+    expect(services.webhooks.zohoMail).toHaveBeenCalledWith(expect.any(Request));
   });
 
   it('routes mail blob HTTP requests without passing them to the tRPC handler', async () => {

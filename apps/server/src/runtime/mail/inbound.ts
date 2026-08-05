@@ -202,7 +202,6 @@ const resolveSubscriptionTarget = async (
   runtimeEnv: ZeroEnv,
   channelId: MailChannelId,
   now: Date,
-  accountId: string,
 ): Promise<VersionedProviderState | null> => {
   const settings = await readChannelSyncSettings(db, channelId);
   if (!settings.inboxWatchEnabled) return null;
@@ -217,7 +216,7 @@ const resolveSubscriptionTarget = async (
     return await createOutlookSubscriptionTarget(runtimeEnv, now);
   }
   if (channelId === 'zoho_mail') {
-    return await createZohoSubscriptionTarget(runtimeEnv, accountId, now);
+    return createZohoSubscriptionTarget(runtimeEnv, now);
   }
   return null;
 };
@@ -314,7 +313,6 @@ export const activateChannelInboundForAccount = async (
     runtimeEnv,
     input.channelId,
     new Date(),
-    input.accountId,
   );
   for (const selectedScope of scopes) {
     await activateInboundSync(
@@ -389,13 +387,7 @@ const createRuntime = (db: DB, resources: MailInboundRuntimeResources): MailIngr
     resolveImportContext: (syncId) => resolveImportContext(db, syncId),
     resolveSubscriptionTarget: async (syncId) => {
       const context = await resolveSyncContext(db, syncId);
-      return await resolveSubscriptionTarget(
-        db,
-        runtimeEnv,
-        context.provider,
-        new Date(),
-        context.accountId,
-      );
+      return await resolveSubscriptionTarget(db, runtimeEnv, context.provider, new Date());
     },
     resolveReconcileAfterMs: async (syncId) => {
       const context = await resolveSyncContext(db, syncId);

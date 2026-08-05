@@ -89,7 +89,7 @@ describe('managed mail-channel configuration', () => {
     ).rejects.toMatchObject({ code: 'MAIL_CHANNEL_AUTH_SOURCE_NOT_CONFIGURED' });
   });
 
-  it('persists Zoho data-center and exposes the fixed webhook template', async () => {
+  it('persists Zoho data-center and exposes the fixed webhook URL', async () => {
     const saved = await createMailChannelConfigService(dependencies).save({
       channelId: 'zoho_mail',
       authSource: 'nango',
@@ -103,7 +103,7 @@ describe('managed mail-channel configuration', () => {
     expect(saved).toMatchObject({
       channelId: 'zoho_mail',
       providerConfig: { dataCenter: 'eu' },
-      webhookUrl: 'https://mail.example.test/api/webhooks/mail/zoho/:endpointToken',
+      webhookUrl: 'https://mail.example.test/api/webhooks/mail/zoho',
       authorizationSources: {
         nango: { configured: true, state: 'available' },
       },
