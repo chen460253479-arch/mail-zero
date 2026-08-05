@@ -504,7 +504,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"integration\".\"connection\".\"status\" IN ('connected', 'disconnecting', 'reconnect_required', 'deleting')",
+          "where": "\"integration\".\"connection\".\"status\" IN ('connected', 'disconnecting', 'reconnect_required')",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -520,7 +520,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"integration\".\"connection\".\"channel_id\" = 'zoho_mail' AND \"integration\".\"connection\".\"status\" IN ('pending_configuration', 'connected', 'disconnecting', 'reconnect_required', 'deleting')",
+          "where": "\"integration\".\"connection\".\"channel_id\" = 'zoho_mail' AND \"integration\".\"connection\".\"status\" IN ('pending_configuration', 'connected', 'disconnecting', 'reconnect_required')",
           "concurrently": false,
           "method": "btree",
           "with": {}

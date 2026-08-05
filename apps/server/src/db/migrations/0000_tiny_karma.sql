@@ -850,8 +850,8 @@ ALTER TABLE "integration"."external_access_grant" ADD CONSTRAINT "external_acces
 CREATE INDEX "account_user_id_idx" ON "auth"."account" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "account_provider_user_id_idx" ON "auth"."account" USING btree ("provider_id","user_id");--> statement-breakpoint
 CREATE INDEX "account_expires_at_idx" ON "auth"."account" USING btree ("access_token_expires_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "connection_channel_email_active_uidx" ON "integration"."connection" USING btree ("channel_id","normalized_email") WHERE "integration"."connection"."status" IN ('connected', 'disconnecting', 'reconnect_required', 'deleting');--> statement-breakpoint
-CREATE UNIQUE INDEX "connection_user_zoho_active_uidx" ON "integration"."connection" USING btree ("user_id") WHERE "integration"."connection"."channel_id" = 'zoho_mail' AND "integration"."connection"."status" IN ('pending_configuration', 'connected', 'disconnecting', 'reconnect_required', 'deleting');--> statement-breakpoint
+CREATE UNIQUE INDEX "connection_channel_email_active_uidx" ON "integration"."connection" USING btree ("channel_id","normalized_email") WHERE "integration"."connection"."status" IN ('connected', 'disconnecting', 'reconnect_required');--> statement-breakpoint
+CREATE UNIQUE INDEX "connection_user_zoho_active_uidx" ON "integration"."connection" USING btree ("user_id") WHERE "integration"."connection"."channel_id" = 'zoho_mail' AND "integration"."connection"."status" IN ('pending_configuration', 'connected', 'disconnecting', 'reconnect_required');--> statement-breakpoint
 CREATE INDEX "connection_provider_key_idx" ON "integration"."connection" USING btree ("provider_key");--> statement-breakpoint
 CREATE INDEX "early_access_is_early_access_idx" ON "app"."early_access" USING btree ("is_early_access");--> statement-breakpoint
 CREATE INDEX "email_template_user_id_idx" ON "app"."email_template" USING btree ("user_id");--> statement-breakpoint

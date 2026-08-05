@@ -481,6 +481,59 @@ describe('PostgreSQL mail connection repository', () => {
     });
   });
 
+  it('allows an old disconnected Zoho connection to enter deleting while replacements exist', async () => {
+    await withMailTestDatabase(async ({ db, sql }) => {
+      await insertUser(sql, 'user-1', 'user-1@example.com');
+      await insertUser(sql, 'user-2', 'user-2@example.com');
+      const repository = createPostgresConnectionRepository(db);
+      const zohoMailbox = {
+        ...gmailMailbox,
+        channelId: 'zoho_mail' as const,
+        providerKey: 'zoho_mail',
+      };
+      const oldConnection = await repository.saveBinding({
+        userId: 'user-1',
+        existingMailboxId: null,
+        mailbox: zohoMailbox,
+        authorization: zeroOAuthAuthorization,
+      });
+      await repository.markDisconnected('user-1', oldConnection.id, new Date());
+
+      const replacementOwner = await repository.saveBinding({
+        userId: 'user-2',
+        existingMailboxId: null,
+        mailbox: zohoMailbox,
+        authorization: zeroOAuthAuthorization,
+      });
+      const pendingReplacement = await repository.reservePendingNangoConnection({
+        userId: 'user-1',
+        channelId: 'zoho_mail',
+        providerKey: 'zoho_mail',
+        authorization: {
+          credentialType: 'oauth2',
+          encryptedCredentialSnapshot: 'encrypted-nango-access-token',
+          accessTokenExpiresAt: null,
+          credentialFetchedAt: new Date(),
+          nangoConnectionId: 'nango-zoho-replacement',
+          nangoProviderConfigKey: 'zoho-mail-primary',
+        },
+      });
+
+      await expect(repository.markDeleting('user-1', oldConnection.id)).resolves.toBeUndefined();
+      const states = await sql<Array<{ id: string; status: string }>>`
+        SELECT id, status
+        FROM integration.connection
+        WHERE id IN (${oldConnection.id}, ${replacementOwner.id}, ${pendingReplacement.id})
+        ORDER BY id
+      `;
+      expect(Object.fromEntries(states.map(({ id, status }) => [id, status]))).toEqual({
+        [oldConnection.id]: 'deleting',
+        [replacementOwner.id]: 'connected',
+        [pendingReplacement.id]: 'pending_configuration',
+      });
+    });
+  });
+
   it('marks local mail data deleting, exposes Blob keys, and deletes by owned connection', async () => {
     await withMailTestDatabase(async ({ db, sql }) => {
       await insertUser(sql, 'user-1', 'user-1@example.com');

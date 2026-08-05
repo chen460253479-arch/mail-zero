@@ -158,11 +158,11 @@ export const connection = createIntegrationTable(
     unique('connection_id_user_id_uidx').on(t.id, t.userId),
     uniqueIndex('connection_channel_email_active_uidx')
       .on(t.channelId, t.normalizedEmail)
-      .where(sql`${t.status} IN ('connected', 'disconnecting', 'reconnect_required', 'deleting')`),
+      .where(sql`${t.status} IN ('connected', 'disconnecting', 'reconnect_required')`),
     uniqueIndex('connection_user_zoho_active_uidx')
       .on(t.userId)
       .where(
-        sql`${t.channelId} = 'zoho_mail' AND ${t.status} IN ('pending_configuration', 'connected', 'disconnecting', 'reconnect_required', 'deleting')`,
+        sql`${t.channelId} = 'zoho_mail' AND ${t.status} IN ('pending_configuration', 'connected', 'disconnecting', 'reconnect_required')`,
       ),
     index('connection_provider_key_idx').on(t.providerKey),
     check(
