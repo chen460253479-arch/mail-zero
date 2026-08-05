@@ -16,7 +16,7 @@ import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
 import { useHotkeys, useHotkeysContext } from 'react-hotkeys-hook';
 import { ThreadDisplay } from '@/components/mail/thread-display';
 import { LabelPicker } from '@/components/mailbox/label-picker';
-import { useActiveConnection } from '@/hooks/use-connections';
+import { useActiveConnection, useDefaultConnection } from '@/hooks/use-connections';
 import { Check, ChevronDown, RefreshCcw } from 'lucide-react';
 import { useMediaQuery } from '../../hooks/use-media-query';
 import * as CustomIcons from '@/components/icons/icons';
@@ -44,6 +44,11 @@ export function MailLayout() {
   const prevFolderRef = useRef(folder);
   const { enableScope, disableScope } = useHotkeysContext();
   const { data: activeConnection, isPending: isConnectionPending } = useActiveConnection();
+  const { data: defaultConnection, isPending: isDefaultConnectionPending } =
+    useDefaultConnection();
+  const zohoBindingIncomplete =
+    defaultConnection?.channelId === 'zoho_mail' &&
+    defaultConnection.bindingStatus === 'incomplete';
   const { activeFilters, clearAllFilters } = useCommandPalette();
   const [, setIsCommandPaletteOpen] = useQueryState('isCommandPaletteOpen');
 
@@ -282,9 +287,28 @@ export function MailLayout() {
               <div className="z-1 relative h-[calc(100dvh-(2px+2px))] overflow-hidden pt-0 md:h-[calc(100dvh-4rem)]">
                 {activeConnection ? (
                   <MailList />
-                ) : isConnectionPending ? (
+                ) : isConnectionPending || isDefaultConnectionPending ? (
                   <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
                     {m['common.mail.loading']()}
+                  </div>
+                ) : zohoBindingIncomplete ? (
+                  <div className="flex h-full flex-col items-center justify-center px-8 text-center">
+                    <div className="bg-destructive/10 mb-4 flex h-12 w-12 items-center justify-center rounded-full">
+                      <Mail className="fill-destructive h-5 w-5" />
+                    </div>
+                    <h2 className="text-base font-semibold">
+                      {m['common.mail.zohoBindingIncomplete']()}
+                    </h2>
+                    <p className="text-muted-foreground mt-2 max-w-sm text-sm leading-6">
+                      {m['common.mail.zohoBindingIncompleteDescription']()}
+                    </p>
+                    <Button
+                      className="mt-5"
+                      variant="outline"
+                      onClick={() => navigate('/settings/connections')}
+                    >
+                      {m['common.mail.manageConnections']()}
+                    </Button>
                   </div>
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center px-8 text-center">

@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, lte, or, sql, type SQLWrapper } from 'drizzle-orm';
 import { alias, type PgUpdateSetSource } from 'drizzle-orm/pg-core';
 
 import type {
@@ -19,9 +19,24 @@ import { emailSubmission } from '../../mail/postgres/schema/submissions';
 import { mailAccount } from '../../mail/postgres/schema/accounts';
 import { outboundDelivery, sendAttempt } from './schema';
 import { MailOutboundError } from '../domain/errors';
-import { connection } from '../../../db/schema';
+import { authorizationBinding, connection } from '../../../db/schema';
 
 const lockedConnection = alias(connection, 'locked_connection');
+
+const completeZohoBinding = (
+  channelId: SQLWrapper,
+  externalData: SQLWrapper,
+) =>
+  or(
+    sql`${channelId} <> 'zoho_mail'`,
+    and(
+      sql`jsonb_typeof(${externalData}) = 'object'`,
+      sql`jsonb_typeof(${externalData}->'accountId') = 'string'`,
+      sql`length(${externalData}->>'accountId') > 0`,
+      sql`jsonb_typeof(${externalData}->'folderIds') = 'array'`,
+      sql`${externalData}->'folderIds' <> '[]'::jsonb`,
+    ),
+  );
 
 export type InsertOutboundDelivery = {
   id: string;
@@ -244,7 +259,17 @@ export const createMailOutboundRepository = (
           mailAccount,
           and(eq(mailAccount.id, mailAccountId), eq(mailAccount.connectionId, lockedConnection.id)),
         )
-        .where(and(eq(lockedConnection.id, connectionId), eq(lockedConnection.status, 'connected')))
+        .leftJoin(
+          authorizationBinding,
+          eq(authorizationBinding.connectionId, lockedConnection.id),
+        )
+        .where(
+          and(
+            eq(lockedConnection.id, connectionId),
+            eq(lockedConnection.status, 'connected'),
+            completeZohoBinding(lockedConnection.channelId, authorizationBinding.externalData),
+          ),
+        )
         .limit(1)
         .for('update', { of: lockedConnection });
       return rows.length === 1;
@@ -313,9 +338,14 @@ export const createMailOutboundRepository = (
           .select({ id: outboundDelivery.id })
           .from(outboundDelivery)
           .innerJoin(connection, eq(connection.id, outboundDelivery.connectionId))
+          .leftJoin(
+            authorizationBinding,
+            eq(authorizationBinding.connectionId, connection.id),
+          )
           .where(
             and(
               eq(connection.status, 'connected'),
+              completeZohoBinding(connection.channelId, authorizationBinding.externalData),
               inArray(outboundDelivery.status, dueStatuses),
               lte(outboundDelivery.availableAt, now),
             ),
@@ -332,9 +362,14 @@ export const createMailOutboundRepository = (
           .select({ id: outboundDelivery.id })
           .from(outboundDelivery)
           .innerJoin(connection, eq(connection.id, outboundDelivery.connectionId))
+          .leftJoin(
+            authorizationBinding,
+            eq(authorizationBinding.connectionId, connection.id),
+          )
           .where(
             and(
               eq(connection.status, 'connected'),
+              completeZohoBinding(connection.channelId, authorizationBinding.externalData),
               eq(outboundDelivery.status, 'uncertain'),
               lte(outboundDelivery.availableAt, now),
             ),
@@ -368,7 +403,16 @@ export const createMailOutboundRepository = (
         .select({ status: lockedConnection.status })
         .from(outboundDelivery)
         .innerJoin(lockedConnection, eq(lockedConnection.id, outboundDelivery.connectionId))
-        .where(eq(outboundDelivery.id, input.deliveryId))
+        .leftJoin(
+          authorizationBinding,
+          eq(authorizationBinding.connectionId, lockedConnection.id),
+        )
+        .where(
+          and(
+            eq(outboundDelivery.id, input.deliveryId),
+            completeZohoBinding(lockedConnection.channelId, authorizationBinding.externalData),
+          ),
+        )
         .limit(1)
         .for('update', { of: lockedConnection });
       if (connectionRows[0]?.status !== 'connected') {

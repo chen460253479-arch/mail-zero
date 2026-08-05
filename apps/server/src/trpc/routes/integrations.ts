@@ -19,6 +19,7 @@ import type { RuntimeServices } from '../../runtime/node/services';
 import { mailChannelIds } from '../../mail-channel/contracts';
 import { mapIntegrationError } from './integration-errors';
 import { adminProcedure, router } from '../trpc';
+import { TRPCError } from '@trpc/server';
 
 type IntegrationServices = {
   gmail: GmailOAuthService;
@@ -233,6 +234,12 @@ export const integrationsRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        if (input.channelId === 'zoho_mail') {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'ZOHO_MAIL_REQUIRES_EXTERNAL_BINDING',
+          });
+        }
         return await withIntegrationServices(ctx.c.var.services!, (services) =>
           (input.channelId === 'outlook'
             ? services.outlookOAuth
@@ -244,6 +251,7 @@ export const integrationsRouter = router({
           }),
         );
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         mapIntegrationError(error);
       }
     }),

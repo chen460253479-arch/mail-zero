@@ -8,6 +8,11 @@ export const useConnections = () => {
   return connectionsQuery;
 };
 
+export const useDefaultConnection = () => {
+  const trpc = useTRPC();
+  return useQuery(trpc.connections.getDefault.queryOptions());
+};
+
 export const useActiveConnection = () => {
   const trpc = useTRPC();
   const connectionsQuery = useQuery(

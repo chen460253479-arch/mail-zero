@@ -150,6 +150,66 @@ describe('PostgreSQL mail sync repository', () => {
     });
   });
 
+  it('does not lease or dispatch Zoho syncs until CRM supplies account and folders', async () => {
+    await withMailSyncTestDatabase(async ({ db, sql }) => {
+      await insertMailSyncAccountFixture(sql);
+      await sql`
+        UPDATE integration.connection
+        SET channel_id = 'zoho_mail', provider_key = 'zoho_mail'
+        WHERE id = 'connection-1'
+      `;
+      await sql`
+        INSERT INTO integration.authorization_binding (
+          id, connection_id, auth_source, credential_type,
+          nango_connection_id, nango_provider_config_key, external_data,
+          created_at, updated_at
+        ) VALUES (
+          'authorization-1', 'connection-1', 'nango', 'oauth2',
+          'nango-connection-1', 'zoho-mail', '{"accountId":"100"}'::jsonb,
+          now(), now()
+        )
+      `;
+      const repository = createRepository(db);
+      const sync = await repository.createActivatingSync({
+        accountId: 'account-1',
+        provider: 'zoho_mail',
+        scopeKey: 'folder:200',
+        scope: {
+          ...scope,
+          externalData: { accountId: '100', folderIds: ['200'] },
+        },
+      });
+      await repository.storeActivationCheckpoint({
+        syncId: sync.id,
+        checkpoint: { version: 2, accountId: '100', folderId: '200', offset: 0 },
+      });
+      await repository.activate({ syncId: sync.id, subscriptionExpiresAt: null });
+
+      await expect(
+        repository.acquireSyncLease({ syncId: sync.id, owner: 'worker', leaseForMs: 60_000 }),
+      ).resolves.toBeNull();
+      await expect(
+        repository.claimDueDispatches({
+          owner: 'scheduler',
+          limit: 10,
+          leaseForMs: 60_000,
+          reconcileBefore: new Date('2100-01-01T00:00:00.000Z'),
+          renewalBefore: new Date('2100-01-01T00:00:00.000Z'),
+          importBefore: new Date('2100-01-01T00:00:00.000Z'),
+        }),
+      ).resolves.toEqual([]);
+
+      await sql`
+        UPDATE integration.authorization_binding
+        SET external_data = '{"accountId":"100","folderIds":["200"]}'::jsonb
+        WHERE id = 'authorization-1'
+      `;
+      await expect(
+        repository.acquireSyncLease({ syncId: sync.id, owner: 'worker', leaseForMs: 60_000 }),
+      ).resolves.toMatchObject({ id: sync.id, leaseOwner: 'worker' });
+    });
+  });
+
   it('grants one stream lease and permits takeover only after database expiry', async () => {
     await withMailSyncTestDatabase(async ({ db, sql }) => {
       await insertMailSyncAccountFixture(sql);

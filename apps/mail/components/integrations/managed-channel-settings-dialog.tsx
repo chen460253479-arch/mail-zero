@@ -313,7 +313,7 @@ export function ManagedChannelSettingsDialog({
                   }
                   className="grid gap-3 md:grid-cols-2"
                 >
-                  {channelId !== 'imap_smtp' && zeroOAuth ? (
+                  {channelId === 'outlook' && zeroOAuth ? (
                     <Label className="flex cursor-pointer items-start gap-3 rounded-lg border p-4">
                       <RadioGroupItem value="zero_oauth" />
                       <span>
@@ -375,7 +375,7 @@ export function ManagedChannelSettingsDialog({
                 </RadioGroup>
               </FormSection>
 
-              {form.authSource === 'zero_oauth' && zeroOAuth ? (
+              {channelId === 'outlook' && form.authSource === 'zero_oauth' && zeroOAuth ? (
                 <FormSection
                   title={m['pages.settings.integrations.managed.zeroManagedOAuth']()}
                   description={m['pages.settings.integrations.validateOAuthDescription']()}

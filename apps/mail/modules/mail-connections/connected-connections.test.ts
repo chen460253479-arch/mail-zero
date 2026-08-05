@@ -14,6 +14,12 @@ describe('connected mail connections', () => {
     expect(selectConnectedConnection(connected)).toBe(connected);
     expect(selectConnectedConnection(connection('disconnected', 'disconnected'))).toBeNull();
     expect(selectConnectedConnection(connection('reconnect', 'reconnect_required'))).toBeNull();
+    expect(
+      selectConnectedConnection({
+        ...connection('zoho-incomplete', 'connected'),
+        bindingStatus: 'incomplete',
+      }),
+    ).toBeNull();
     expect(selectConnectedConnection(null)).toBeNull();
   });
 
@@ -26,6 +32,7 @@ describe('connected mail connections', () => {
         first,
         connection('disconnected', 'disconnected'),
         connection('disconnecting', 'disconnecting'),
+        { ...connection('zoho-incomplete', 'connected'), bindingStatus: 'incomplete' as const },
         second,
       ]),
     ).toEqual([first, second]);

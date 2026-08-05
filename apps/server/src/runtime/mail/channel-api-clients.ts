@@ -12,7 +12,7 @@ import {
   resolveZohoMailBaseUrl,
 } from '../../mail-channel/zoho-mail/shared/zoho-client';
 import { createMicrosoftGraphClient } from '../../mail-channel/outlook/shared/graph-client';
-import { parseZohoMailExternalData } from '../../mail-channel/zoho-mail/external-data';
+import { requireCompleteZohoMailExternalData } from '../../mail-channel/zoho-mail/external-data';
 import { zohoMailErrorStatus } from '../../mail-channel/zoho-mail/shared/errors';
 import type { MailChannelCredentialContext } from './channel-credential-context';
 import { outlookErrorStatus } from '../../mail-channel/outlook/shared/errors';
@@ -57,8 +57,7 @@ export const createCredentialAwareZohoMailClient = async (
   const providerConfig = await readChannelOAuthProviderConfig(db, 'zoho_mail');
   const dataCenter =
     typeof providerConfig.dataCenter === 'string' ? providerConfig.dataCenter : 'com';
-  const externalData =
-    context.externalData === null ? undefined : parseZohoMailExternalData(context.externalData);
+  const externalData = requireCompleteZohoMailExternalData(context.externalData);
   return createZohoMailClient(
     {
       request: async (request: ZohoMailRequest) =>

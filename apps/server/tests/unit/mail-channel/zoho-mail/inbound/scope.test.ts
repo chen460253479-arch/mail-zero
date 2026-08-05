@@ -50,6 +50,19 @@ describe('Zoho Mail inbound scopes', () => {
     });
   });
 
+  it('rejects a legacy scope instead of selecting the first configured folder', () => {
+    expect(() =>
+      resolveZohoMailIngressScope(
+        {
+          version: 1,
+          mailboxRoles: ['inbox'],
+          initialSync: 'none',
+        },
+        mailbox,
+      ),
+    ).toThrow('ZOHO_INVALID_INGRESS_SCOPE');
+  });
+
   it('rejects a scope that no longer matches the bound mailbox context', () => {
     const [scope] = createZohoMailIngressScopes({ accountId: '999', folderIds: ['300'] });
 

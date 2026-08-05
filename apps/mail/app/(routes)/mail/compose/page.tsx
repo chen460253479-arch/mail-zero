@@ -6,7 +6,10 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { CreateEmail } from '@/components/create/create-email';
-import { useLoaderData } from 'react-router';
+import { useDefaultConnection } from '@/hooks/use-connections';
+import { Button } from '@/components/ui/button';
+import { Link, useLoaderData } from 'react-router';
+import { m } from '@/paraglide/messages';
 import type { Route } from './+types/page';
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
@@ -29,6 +32,23 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 
 export default function ComposePage() {
   const params = useLoaderData<typeof clientLoader>();
+  const { data: connection } = useDefaultConnection();
+  const zohoBindingIncomplete =
+    connection?.channelId === 'zoho_mail' && connection.bindingStatus === 'incomplete';
+
+  if (zohoBindingIncomplete) {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center px-8 text-center">
+        <h2 className="text-lg font-semibold">{m['common.mail.zohoBindingIncomplete']()}</h2>
+        <p className="text-muted-foreground mt-2 max-w-md text-sm">
+          {m['common.mail.zohoBindingIncompleteDescription']()}
+        </p>
+        <Button asChild className="mt-5" variant="outline">
+          <Link to="/settings/connections">{m['common.mail.manageConnections']()}</Link>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <Dialog open={true}>

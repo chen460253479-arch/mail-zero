@@ -112,6 +112,20 @@ describe('managed mail-channel configuration', () => {
     expect(refreshed).toEqual(['zoho_mail']);
   });
 
+  it('rejects Zero OAuth as a Zoho mailbox authorization source', async () => {
+    await expect(
+      createMailChannelConfigService(dependencies).save({
+        channelId: 'zoho_mail',
+        authSource: 'zero_oauth',
+        inboxWatchEnabled: false,
+        scheduledSyncEnabled: true,
+        syncIntervalMinutes: 15,
+        providerConfig: { dataCenter: 'com' },
+        updatedBy: 'admin-1',
+      }),
+    ).rejects.toMatchObject({ code: 'MAIL_CHANNEL_CONFIG_INVALID' });
+  });
+
   it('supports manual IMAP/SMTP only when the protocol worker is configured', async () => {
     dependencies.protocolAvailable = false;
     const input = {

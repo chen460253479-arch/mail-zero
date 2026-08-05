@@ -97,6 +97,7 @@ export interface IConnection {
   channelId: 'gmail' | 'outlook' | 'zoho_mail' | 'imap_smtp';
   status: 'connected' | 'disconnected' | 'reconnect_required' | 'deleting';
   authSource: 'zero_oauth' | 'nango' | 'manual' | null;
+  bindingStatus: 'ready' | 'incomplete';
   capabilities: Array<
     | 'read_messages'
     | 'send_messages'

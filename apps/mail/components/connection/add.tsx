@@ -60,6 +60,11 @@ export const AddConnectionDialog = ({
   };
 
   const connectChannel = async (channelId: ConnectableMailChannelId) => {
+    if (channelId === 'zoho_mail') {
+      setDialogOpen(false);
+      setNangoChannelId(channelId);
+      return;
+    }
     setPendingChannelId(channelId);
     try {
       const options = await queryClient.fetchQuery(

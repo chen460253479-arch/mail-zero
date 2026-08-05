@@ -18,7 +18,7 @@ export type ZohoMailChannelConfig = z.infer<typeof zohoMailChannelConfigInputSch
 
 export const defaultZohoMailChannelConfig: ZohoMailChannelConfig = {
   channelId: 'zoho_mail',
-  authSource: 'zero_oauth',
+  authSource: 'nango',
   inboxWatchEnabled: false,
   scheduledSyncEnabled: true,
   syncIntervalMinutes: 10,

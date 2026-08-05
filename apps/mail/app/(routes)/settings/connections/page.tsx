@@ -63,6 +63,9 @@ export default function ConnectionsPage() {
                 const Icon = emailProviders.find(
                   (provider) => provider.channelId === connection.channelId,
                 )?.icon;
+                const zohoBindingIncomplete =
+                  connection.channelId === 'zoho_mail' &&
+                  connection.bindingStatus === 'incomplete';
                 return (
                   <div
                     key={connection.id}
@@ -120,11 +123,18 @@ export default function ConnectionsPage() {
                                 : m['pages.settings.connections.zeroOAuth']()}
                             </Badge>
                           ) : null}
+                          {zohoBindingIncomplete ? (
+                            <Badge variant="destructive">
+                              {m['pages.settings.connections.zohoBindingIncomplete']()}
+                            </Badge>
+                          ) : null}
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
-                      {connection.channelId === 'zoho_mail' && connection.status === 'connected' ? (
+                      {connection.channelId === 'zoho_mail' &&
+                      connection.status === 'connected' &&
+                      !zohoBindingIncomplete ? (
                         <ZohoWebhookSetupDialog connectionId={connection.id} />
                       ) : null}
                       {connection.status === 'reconnect_required' ? (

@@ -23,6 +23,7 @@ import { createIdentityMailChannelRegistry } from '../../runtime/mail/channel-re
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import { mailChannelIds, type MailChannelId } from '../../mail-channel/contracts';
 import { createZohoWebhookSetup } from '../../runtime/mail/zoho-webhook-setup';
+import { isCompleteZohoMailExternalData } from '../../mail-channel/zoho-mail/external-data';
 import { mailAccount } from '../../modules/mail/postgres/schema/accounts';
 import { defaultMailChannelRegistry } from '../../mail-channel/registry';
 import { NangoIntegrationError } from '../../integrations/nango/errors';
@@ -103,7 +104,7 @@ const getChannelAuthorizationOptionsForDatabase = async (
     services.nangoChannels.getStatus(channelId),
   ]);
   const availability = {
-    zeroOAuthAvailable: zeroOAuth?.status === 'active',
+    zeroOAuthAvailable: channelId !== 'zoho_mail' && zeroOAuth?.status === 'active',
     nangoAvailable: nangoStatus.state === 'available',
     manualAvailable:
       channelId === 'imap_smtp' && defaultMailChannelRegistry.find('imap_smtp') !== undefined,
@@ -137,6 +138,14 @@ const getChannelAuthorizationOptions = async (
 
 const getGmailAuthorizationOptions = async (services: RuntimeServices) =>
   await getGmailAuthorizationOptionsForDatabase(services.database.db, services);
+
+const bindingStatus = (
+  channelId: MailChannelId,
+  externalData: Record<string, unknown> | null | undefined,
+): 'ready' | 'incomplete' =>
+  channelId === 'zoho_mail' && !isCompleteZohoMailExternalData(externalData)
+    ? 'incomplete'
+    : 'ready';
 
 const mapNangoBindingError = (error: unknown): never => {
   if (error instanceof NangoBindingError) {
@@ -219,6 +228,7 @@ export const connectionsRouter = router({
         channelId: connection.channelId,
         status: connection.status,
         authSource: authorization?.authSource ?? null,
+        bindingStatus: bindingStatus(connection.channelId, authorization?.externalData),
         capabilities: Array.from(
           defaultMailChannelRegistry.find(connection.channelId)?.capabilities ?? [],
         ),
@@ -254,6 +264,12 @@ export const connectionsRouter = router({
     .mutation(async ({ input, ctx }) => {
       const services = ctx.c.var.services!;
       try {
+        if (input.channelId === 'zoho_mail') {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'ZOHO_MAIL_REQUIRES_EXTERNAL_BINDING',
+          });
+        }
         return await connectNangoMailbox(
           {
             userId: ctx.sessionUser.id,
@@ -328,6 +344,20 @@ export const connectionsRouter = router({
         columns: { id: true },
       });
       if (!account) throw new TRPCError({ code: 'PRECONDITION_FAILED' });
+      const connectionWithAuthorization = await repository.findConnectionWithAuthorization(
+        connectionRecord.userId,
+        connectionRecord.id,
+      );
+      if (
+        !isCompleteZohoMailExternalData(
+          connectionWithAuthorization?.authorization?.externalData,
+        )
+      ) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'ZOHO_MAIL_BINDING_INCOMPLETE',
+        });
+      }
       const channelConfig = await createChannelConfigRepository(db).get('zoho_mail');
       if (!channelConfig?.inboxWatchEnabled) {
         throw new TRPCError({
@@ -427,6 +457,7 @@ export const connectionsRouter = router({
       channelId: connection.channelId,
       status: connection.status,
       authSource: authorization?.authSource ?? null,
+      bindingStatus: bindingStatus(connection.channelId, authorization?.externalData),
       capabilities: Array.from(
         defaultMailChannelRegistry.find(connection.channelId)?.capabilities ?? [],
       ),

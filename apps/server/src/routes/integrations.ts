@@ -194,6 +194,9 @@ integrationOAuthRouter.get('/:channelId/connect/start', async (c) => {
   const sessionUser = c.var.sessionUser;
   if (!channelId) return c.json({ error: 'MAIL_CHANNEL_UNAVAILABLE' }, 404);
   if (!sessionUser) return c.json({ error: 'UNAUTHORIZED' }, 401);
+  if (channelId === 'zoho_mail') {
+    return c.json({ error: 'ZOHO_MAIL_REQUIRES_EXTERNAL_BINDING' }, 412);
+  }
   const db = c.var.services!.database.db;
   try {
     await assertChannelZeroOAuthSelected(db, channelId);
@@ -222,6 +225,7 @@ integrationOAuthRouter.get('/:channelId/connect/callback', async (c) => {
         'error',
       ),
     );
+  if (channelId === 'zoho_mail') return failure();
   const sessionUser = c.var.sessionUser;
   const input = getOAuthInput(c.req.url);
   if (!sessionUser || !input) return failure();
@@ -262,6 +266,7 @@ integrationOAuthRouter.get('/:channelId/validation/callback', async (c) => {
         'error',
       ),
     );
+  if (channelId === 'zoho_mail') return failure();
   const sessionUser = c.var.sessionUser;
   const input = getOAuthInput(c.req.url);
   if (!sessionUser || !input) return failure();

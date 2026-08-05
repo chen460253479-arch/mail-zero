@@ -24,47 +24,12 @@ describe('Zoho Mail API client', () => {
     );
   });
 
-  it('resolves the first mailbox and its Inbox folder from provider APIs', async () => {
-    const request = vi
-      .fn<ZohoMailTransport['request']>()
-      .mockResolvedValueOnce({
-        status: 200,
-        json: {
-          status: { code: 200 },
-          data: [
-            {
-              accountId: 'account-1',
-              primaryEmailAddress: 'owner@example.com',
-              displayName: 'Owner',
-            },
-          ],
-        },
-        bytes: new Uint8Array(),
-      })
-      .mockResolvedValueOnce({
-        status: 200,
-        json: {
-          status: { code: 200 },
-          data: [
-            {
-              folderId: 'folder-1',
-              folderName: 'Inbox',
-              folderType: 'Inbox',
-              path: '/Inbox',
-            },
-          ],
-        },
-        bytes: new Uint8Array(),
-      });
+  it('does not call Zoho when CRM binding data is missing', async () => {
+    const request = vi.fn<ZohoMailTransport['request']>();
     const client = createZohoMailClient({ request });
 
-    await expect(client.getMailboxContext()).resolves.toEqual({
-      accountId: 'account-1',
-      folderIds: ['folder-1'],
-      email: 'owner@example.com',
-      name: 'Owner',
-      picture: '',
-    });
+    await expect(client.getMailboxContext()).rejects.toThrow('ZOHO_MAIL_BINDING_INCOMPLETE');
+    expect(request).not.toHaveBeenCalled();
   });
 
   it('uses the exact account and folders selected by the external integration', async () => {

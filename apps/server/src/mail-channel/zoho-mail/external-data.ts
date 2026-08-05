@@ -20,8 +20,29 @@ export const zohoMailExternalDataSchema = z
 
 export type ZohoMailExternalData = z.infer<typeof zohoMailExternalDataSchema>;
 
+export type CompleteZohoMailExternalData = ZohoMailExternalData & {
+  folderIds: [string, ...string[]];
+};
+
 export const parseZohoMailExternalData = (value: unknown): ZohoMailExternalData =>
   zohoMailExternalDataSchema.parse(value);
+
+export const isCompleteZohoMailExternalData = (
+  value: unknown,
+): value is CompleteZohoMailExternalData => {
+  const parsed = zohoMailExternalDataSchema.safeParse(value);
+  return parsed.success && parsed.data.folderIds !== undefined;
+};
+
+export const requireCompleteZohoMailExternalData = (
+  value: unknown,
+): CompleteZohoMailExternalData => {
+  const parsed = parseZohoMailExternalData(value);
+  if (parsed.folderIds === undefined) {
+    throw new Error('ZOHO_MAIL_BINDING_INCOMPLETE');
+  }
+  return parsed as CompleteZohoMailExternalData;
+};
 
 export const mergeZohoMailExternalData = (
   existing: unknown,

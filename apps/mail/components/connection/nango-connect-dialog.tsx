@@ -44,17 +44,22 @@ export function NangoConnectDialog({
 }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const requiresExternalBinding = channelId === 'zoho_mail';
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const connections = useQuery({
     ...trpc.connections.listNangoConnections.queryOptions({
       channelId: channelId ?? 'gmail',
     }),
-    enabled: open && channelId !== null,
+    enabled: open && channelId !== null && !requiresExternalBinding,
   });
   const bind = useMutation(trpc.connections.bindNango.mutationOptions());
 
   const save = async () => {
     if (!channelId || !selectedConnectionId) return;
+    if (requiresExternalBinding) {
+      toast.error(m['pages.settings.connections.nango.zohoExternalBindingRequired']());
+      return;
+    }
     try {
       await bind.mutateAsync({ channelId, connectionId: selectedConnectionId });
       await refreshMailboxConnectionQueries(queryClient, {
@@ -104,7 +109,11 @@ export function NangoConnectDialog({
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
-          {connections.isLoading ? (
+          {requiresExternalBinding ? (
+            <p className="text-muted-foreground py-8 text-center text-sm">
+              {m['pages.settings.connections.nango.zohoExternalBindingRequired']()}
+            </p>
+          ) : connections.isLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="text-muted-foreground size-5 animate-spin" />
             </div>
@@ -152,12 +161,12 @@ export function NangoConnectDialog({
             </p>
           )}
 
-          <div className="flex justify-end">
+          {!requiresExternalBinding ? <div className="flex justify-end">
             <Button onClick={save} disabled={!selectedConnectionId || bind.isPending}>
               {bind.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
               {m['pages.settings.connections.nango.connectSelectedMailbox']()}
             </Button>
-          </div>
+          </div> : null}
         </div>
       </DialogContent>
     </Dialog>

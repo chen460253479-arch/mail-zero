@@ -29,9 +29,7 @@ export const resolveZohoMailIngressScope = (
 ): { accountId: string; folderId: string } => {
   const scope = parseIngressScope(value);
   if (scope.externalData === undefined) {
-    const folderId = mailbox.folderIds[0];
-    if (folderId === undefined) throw new MailSyncError('ZOHO_MAILBOX_FOLDER_MISSING', 'permanent');
-    return { accountId: mailbox.accountId, folderId };
+    throw new MailSyncError('ZOHO_INVALID_INGRESS_SCOPE', 'permanent');
   }
 
   let externalData: ZohoMailExternalData;

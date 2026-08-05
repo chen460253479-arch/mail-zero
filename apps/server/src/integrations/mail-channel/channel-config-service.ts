@@ -150,7 +150,7 @@ export const createMailChannelConfigService = (
       webhookUrl: webhookUrl(dependencies.publicBackendUrl, channelId),
       authorizationSources: {
         zero_oauth:
-          integrationKey === null
+          integrationKey === null || channelId === 'zoho_mail'
             ? null
             : {
                 configured: zeroPublic !== null,
@@ -189,6 +189,9 @@ export const createMailChannelConfigService = (
       try {
         candidate = parseMailChannelConfig(channelId, input);
       } catch {
+        throw new MailChannelConfigError('MAIL_CHANNEL_CONFIG_INVALID');
+      }
+      if (channelId === 'zoho_mail' && candidate.authSource !== 'nango') {
         throw new MailChannelConfigError('MAIL_CHANNEL_CONFIG_INVALID');
       }
 

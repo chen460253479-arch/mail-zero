@@ -514,9 +514,11 @@
       "more": "More",
       "clear": "Clear",
       "loading": "Loading...",
-      "zeroReady": "Zero is ready",
-      "zeroReadyDescription": "Connect or select a mailbox when you are ready to sync, organize, and send email.",
-      "manageConnections": "Manage connections",
+        "zeroReady": "Zero is ready",
+        "zeroReadyDescription": "Connect or select a mailbox when you are ready to sync, organize, and send email.",
+        "zohoBindingIncomplete": "Zoho Mail binding is incomplete",
+        "zohoBindingIncompleteDescription": "The CRM must provide both the Zoho account and folder selection before Zero can read, sync, or send mail.",
+        "manageConnections": "Manage connections",
       "filterByLabels": "Filter by labels",
       "labelFilterOptions": "Label filter options",
       "selectAllConversations": "Select all conversations",
@@ -849,6 +851,7 @@
         "zeroOAuth": "Zero OAuth",
         "channelNotConfigured": "{channel} is not configured",
         "loadChannelConfigurationError": "Unable to load mail channel configuration",
+        "zohoBindingIncomplete": "Binding incomplete",
         "imapSmtp": {
           "title": "Connect IMAP/SMTP",
           "description": "Zero validates both endpoints before encrypting and storing these credentials locally.",
@@ -873,7 +876,8 @@
           "description": "Select an existing authorization stored by Nango.",
           "needsAttention": "Needs attention",
           "noAuthorizedMailboxes": "No authorized mailboxes are available for this channel.",
-          "connectSelectedMailbox": "Connect selected mailbox"
+          "connectSelectedMailbox": "Connect selected mailbox",
+          "zohoExternalBindingRequired": "Zoho Mail must be bound by the CRM with a fixed account and folder selection."
         },
         "zohoWebhook": {
           "copied": "Webhook URL copied",

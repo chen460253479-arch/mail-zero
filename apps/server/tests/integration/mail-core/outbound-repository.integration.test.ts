@@ -6,8 +6,51 @@ import { PostgresMailOutboundUnitOfWork } from '../../../src/modules/mail-outbou
 import { sendAttempt } from '../../../src/modules/mail-outbound/postgres/schema';
 import { createPostgresMailTestHarness } from '../../helpers/mail-core/harness';
 import { withMailTestDatabase } from '../../helpers/mail-core/database';
+import { authorizationBinding, connection } from '../../../src/db/schema';
 
 describe('PostgreSQL outbound repository', () => {
+  it('rejects Zoho delivery until CRM supplies account and folders', () =>
+    withMailTestDatabase(async ({ db }) => {
+      const unitOfWork = new PostgresMailOutboundUnitOfWork(db, {
+        nextId: () => 'outbound-readiness-id',
+        nextLeaseToken: () => 'outbound-readiness-lease',
+      });
+      const harness = await createPostgresMailTestHarness(
+        db,
+        unitOfWork.mailUnitOfWork,
+        'zoho-readiness',
+      );
+      const connectionId = 'postgres-connection-zoho-readiness';
+      const now = new Date('2026-01-01T00:00:00.000Z');
+      await db
+        .update(connection)
+        .set({ channelId: 'zoho_mail', providerKey: 'zoho_mail' })
+        .where(eq(connection.id, connectionId));
+      await db.insert(authorizationBinding).values({
+        id: 'authorization-zoho-readiness',
+        connectionId,
+        authSource: 'nango',
+        credentialType: 'oauth2',
+        nangoConnectionId: 'nango-zoho-readiness',
+        nangoProviderConfigKey: 'zoho-mail',
+        externalData: { accountId: '100' },
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await expect(
+        unitOfWork.run((tx) => tx.outbound.isConnectionReady(harness.accountId, connectionId)),
+      ).resolves.toBe(false);
+
+      await db
+        .update(authorizationBinding)
+        .set({ externalData: { accountId: '100', folderIds: ['200'] } })
+        .where(eq(authorizationBinding.id, 'authorization-zoho-readiness'));
+      await expect(
+        unitOfWork.run((tx) => tx.outbound.isConnectionReady(harness.accountId, connectionId)),
+      ).resolves.toBe(true);
+    }));
+
   it('atomically claims one due Delivery and creates one open Attempt', () =>
     withMailTestDatabase(async ({ db }) => {
       let sequence = 0;

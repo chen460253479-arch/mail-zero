@@ -110,8 +110,10 @@ export const createZohoMailClient = (
   externalData?: ZohoMailExternalData,
 ): ZohoMailClient => ({
   getMailboxContext: async () => {
-    const selection =
-      externalData === undefined ? undefined : parseZohoMailExternalData(externalData);
+    if (externalData === undefined) {
+      throw new ZohoMailApiError('ZOHO_MAIL_BINDING_INCOMPLETE');
+    }
+    const selection = parseZohoMailExternalData(externalData);
     const accountsResponse = await transport.request({ method: 'GET', path: '/api/accounts' });
     const accounts = responseData(accountsResponse.json, 'ZOHO_INVALID_ACCOUNTS_RESPONSE');
     if (!Array.isArray(accounts)) throw new ZohoMailApiError('ZOHO_INVALID_ACCOUNTS_RESPONSE');
@@ -120,7 +122,7 @@ export const createZohoMailClient = (
       .find(
         (value) =>
           typeof value.accountId === 'string' &&
-          (selection === undefined || value.accountId === selection.accountId) &&
+          value.accountId === selection.accountId &&
           (typeof value.primaryEmailAddress === 'string' ||
             typeof value.mailboxAddress === 'string'),
       );
@@ -140,7 +142,7 @@ export const createZohoMailClient = (
             : '',
       picture: '' as const,
     };
-    if (selection !== undefined && selection.folderIds === undefined) {
+    if (selection.folderIds === undefined) {
       return { ...mailbox, folderIds: [] };
     }
     const foldersResponse = await transport.request({
@@ -150,37 +152,18 @@ export const createZohoMailClient = (
     const folders = responseData(foldersResponse.json, 'ZOHO_INVALID_FOLDERS_RESPONSE');
     if (!Array.isArray(folders)) throw new ZohoMailApiError('ZOHO_INVALID_FOLDERS_RESPONSE');
     const folderRecords = folders.map((value) => requireRecord(value, 'ZOHO_INVALID_FOLDER'));
-    let folderIds: string[];
-    if (selection === undefined) {
-      const inbox = folderRecords.find(
-        (value) =>
-          typeof value.folderId === 'string' &&
-          [value.folderType, value.folderName, value.path].some(
-            (candidate) =>
-              typeof candidate === 'string' &&
-              candidate.toLocaleLowerCase('en-US').replace(/^\//u, '') === 'inbox',
-          ),
-      );
-      if (inbox === undefined) throw new ZohoMailApiError('ZOHO_INBOX_FOLDER_MISSING');
-      folderIds = [String(inbox.folderId)];
-    } else {
-      const selectedFolderIds = selection.folderIds;
-      if (selectedFolderIds === undefined) {
-        throw new ZohoMailApiError('ZOHO_MAILBOX_FOLDER_MISSING');
-      }
-      const availableFolderIds = new Set(
-        folderRecords.flatMap((value) =>
-          typeof value.folderId === 'string' ? [value.folderId] : [],
-        ),
-      );
-      if (selectedFolderIds.some((folderId) => !availableFolderIds.has(folderId))) {
-        throw new ZohoMailApiError('ZOHO_MAILBOX_FOLDER_MISSING');
-      }
-      folderIds = [...selectedFolderIds];
+    const selectedFolderIds = selection.folderIds;
+    const availableFolderIds = new Set(
+      folderRecords.flatMap((value) =>
+        typeof value.folderId === 'string' ? [value.folderId] : [],
+      ),
+    );
+    if (selectedFolderIds.some((folderId) => !availableFolderIds.has(folderId))) {
+      throw new ZohoMailApiError('ZOHO_MAILBOX_FOLDER_MISSING');
     }
     return {
       ...mailbox,
-      folderIds,
+      folderIds: [...selectedFolderIds],
     };
   },
 

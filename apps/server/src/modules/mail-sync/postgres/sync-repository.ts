@@ -38,7 +38,7 @@ import {
 } from '../domain/sync-state';
 import { inboundSync, inboundSyncAttempt, inboundSyncItem } from './schema';
 import { mailAccount } from '../../mail/postgres/schema/accounts';
-import { channelConfig, connection } from '../../../db/schema';
+import { authorizationBinding, channelConfig, connection } from '../../../db/schema';
 import { MailSyncError } from '../domain/errors';
 import type { DB } from '../../../db';
 
@@ -94,7 +94,26 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
     .select({ id: mailAccount.id })
     .from(mailAccount)
     .innerJoin(connection, eq(connection.id, mailAccount.connectionId))
-    .where(and(eq(mailAccount.id, inboundSync.accountId), eq(connection.status, 'connected')));
+    .leftJoin(
+      authorizationBinding,
+      eq(authorizationBinding.connectionId, connection.id),
+    )
+    .where(
+      and(
+        eq(mailAccount.id, inboundSync.accountId),
+        eq(connection.status, 'connected'),
+        or(
+          sql`${inboundSync.provider} <> 'zoho_mail'`,
+          and(
+            sql`jsonb_typeof(${authorizationBinding.externalData}) = 'object'`,
+            sql`jsonb_typeof(${authorizationBinding.externalData}->'accountId') = 'string'`,
+            sql`length(${authorizationBinding.externalData}->>'accountId') > 0`,
+            sql`jsonb_typeof(${authorizationBinding.externalData}->'folderIds') = 'array'`,
+            sql`${authorizationBinding.externalData}->'folderIds' <> '[]'::jsonb`,
+          ),
+        ),
+      ),
+    );
 
   return {
     reconcileConfiguredScopes: async (input: {
@@ -314,6 +333,7 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
             eq(inboundSync.status, 'active'),
             eq(inboundSync.leaseOwner, input.owner),
             gt(inboundSync.leaseExpiresAt, sql`now()`),
+            exists(connectedAccount),
           ),
         )
         .returning({ id: inboundSync.id });
@@ -477,6 +497,7 @@ export const createPostgresMailSyncRepository = (db: DB, options: RepositoryOpti
               eq(inboundSync.id, input.syncId),
               eq(inboundSync.status, 'active'),
               eq(connection.status, 'connected'),
+              exists(connectedAccount),
             ),
           );
         const candidates = await transaction

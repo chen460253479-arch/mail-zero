@@ -297,11 +297,11 @@ export const activateChannelInboundForAccount = async (
   const scopes =
     input.channelId === 'zoho_mail'
       ? zohoExternalData === null
-        ? [{ scopeKey: 'inbox', scope: INBOX_SCOPE }]
+        ? []
         : createZohoMailIngressScopes(parseZohoMailExternalData(zohoExternalData))
       : [{ scopeKey: 'inbox', scope: INBOX_SCOPE }];
   const repository = createPostgresMailSyncRepository(db);
-  if (input.channelId === 'zoho_mail' && zohoExternalData !== null) {
+  if (input.channelId === 'zoho_mail') {
     await repository.reconcileConfiguredScopes({
       accountId: input.accountId,
       provider: input.channelId,
