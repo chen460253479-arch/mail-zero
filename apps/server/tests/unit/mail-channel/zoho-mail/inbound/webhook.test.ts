@@ -61,7 +61,13 @@ const request = async (
 const dependencies = (
   overrides: Partial<ZohoMailWebhookDependencies> = {},
 ): ZohoMailWebhookDependencies => ({
-  resolveTarget: async () => ({ targetId: 'account-1', syncIds: ['sync-1'], secret: null }),
+  resolveTarget: async () => ({
+    targetId: 'account-1',
+    syncIds: ['sync-1'],
+    secrets: [],
+    secretBound: false,
+  }),
+  storeRegistrationSecret: async () => true,
   storeSecret: async () => undefined,
   recordSignal: async (syncIds) => syncIds,
   enqueueDiscover: async () => undefined,
@@ -93,7 +99,12 @@ describe('Zoho Mail webhook endpoint', () => {
               subject: payload.subject,
             },
           });
-          return { targetId: 'account-1', syncIds: ['sync-1'], secret: null };
+          return {
+            targetId: 'account-1',
+            syncIds: ['sync-1'],
+            secrets: [],
+            secretBound: false,
+          };
         },
         storeSecret: async (targetId, secret) => {
           calls.push({ store: [targetId, secret] });
@@ -132,7 +143,8 @@ describe('Zoho Mail webhook endpoint', () => {
         resolveTarget: async () => ({
           targetId: 'account-1',
           syncIds: ['sync-1'],
-          secret: 'hook-secret',
+          secrets: ['hook-secret'],
+          secretBound: true,
         }),
       }),
     );
@@ -156,10 +168,48 @@ describe('Zoho Mail webhook endpoint', () => {
     expect(recorded).toBe(false);
   });
 
-  it('requires a structurally valid Zoho mail payload', async () => {
+  it('accepts and stores the signed registration POST before any mail event exists', async () => {
+    const calls: unknown[] = [];
+    const response = await handleZohoMailWebhookRequest(
+      await request('hook-secret', { payload: '' }),
+      dependencies({
+        storeRegistrationSecret: async (secret) => {
+          calls.push(secret);
+          return true;
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(calls).toEqual(['hook-secret']);
+    await expect(response.json()).resolves.toEqual({ registered: true });
+  });
+
+  it('binds the matching pending registration secret to the routed mailbox', async () => {
+    const stored: unknown[] = [];
+    const response = await handleZohoMailWebhookRequest(
+      await request('hook-secret', { includeSecret: false }),
+      dependencies({
+        resolveTarget: async () => ({
+          targetId: 'account-1',
+          syncIds: ['sync-1'],
+          secrets: ['another-mailbox-secret', 'hook-secret'],
+          secretBound: false,
+        }),
+        storeSecret: async (targetId, secret) => {
+          stored.push([targetId, secret]);
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(stored).toEqual([['account-1', 'hook-secret']]);
+  });
+
+  it('requires a structurally valid Zoho mail payload outside registration', async () => {
     const payload = '{"event":"new_mail"}';
     const response = await handleZohoMailWebhookRequest(
-      await request('hook-secret', { payload }),
+      await request('hook-secret', { payload, includeSecret: false }),
       dependencies(),
     );
 
