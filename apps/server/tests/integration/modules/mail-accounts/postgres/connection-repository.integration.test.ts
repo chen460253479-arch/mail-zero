@@ -286,6 +286,56 @@ describe('PostgreSQL mail connection repository', () => {
     });
   });
 
+  it('reserves a Zoho authorization idempotently and promotes it after account selection', async () => {
+    await withMailTestDatabase(async ({ db, sql }) => {
+      await insertUser(sql, 'user-1', 'user-1@example.com');
+      await insertUser(sql, 'user-2', 'user-2@example.com');
+      let nextId = 0;
+      const repository = createPostgresConnectionRepository(db, {
+        newId: () => `generated-${++nextId}`,
+        now: () => new Date('2026-07-27T11:00:00.000Z'),
+      });
+      const reference = {
+        userId: 'user-1',
+        channelId: 'zoho_mail' as const,
+        providerConfigKey: 'zoho-mail-primary',
+        nangoConnectionId: 'nango-zoho-1',
+      };
+
+      const pending = await repository.reservePendingNangoBinding(reference);
+      await expect(repository.reservePendingNangoBinding(reference)).resolves.toEqual(pending);
+      await expect(
+        repository.reservePendingNangoBinding({ ...reference, userId: 'user-2' }),
+      ).rejects.toMatchObject({ code: 'NANGO_CONNECTION_ALREADY_BOUND' });
+      await expect(
+        repository.findByNangoConnectionId('zoho_mail', reference.nangoConnectionId),
+      ).resolves.toEqual({ connectionId: pending.id, userId: 'user-1' });
+
+      const promoted = await repository.saveBinding({
+        userId: 'user-1',
+        existingMailboxId: null,
+        mailbox: {
+          ...gmailMailbox,
+          channelId: 'zoho_mail',
+          providerKey: 'zoho_mail',
+        },
+        authorization: {
+          ...zeroOAuthAuthorization,
+          authSource: 'nango',
+          nangoConnectionId: reference.nangoConnectionId,
+          nangoProviderConfigKey: reference.providerConfigKey,
+          externalData: { accountId: '100' },
+        },
+      });
+
+      expect(promoted).toEqual({ id: pending.id });
+      await expect(repository.findPendingNangoBinding(pending.id)).resolves.toBeNull();
+      await expect(
+        repository.findByNangoReference(reference.providerConfigKey, reference.nangoConnectionId),
+      ).resolves.toMatchObject({ connectionId: pending.id, userId: 'user-1' });
+    });
+  });
+
   it('reuses retained local mailbox identity with a new Nango connection reference', async () => {
     await withMailTestDatabase(async ({ db, sql }) => {
       await insertUser(sql, 'user-1', 'user-1@example.com');

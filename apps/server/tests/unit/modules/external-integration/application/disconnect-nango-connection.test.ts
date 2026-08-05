@@ -10,10 +10,12 @@ const input = {
 
 const createDependencies = () => ({
   findManagedUser: vi.fn(async () => ({ userId: 'managed-user-1', role: 'user' })),
-  findNangoMailbox: vi.fn(async () => ({
-    connectionId: 'zero-connection-1',
-    userId: 'managed-user-1',
-  })),
+  findNangoMailbox: vi.fn(
+    async (): Promise<{ connectionId: string; userId: string } | null> => ({
+      connectionId: 'zero-connection-1',
+      userId: 'managed-user-1',
+    }),
+  ),
   disconnect: vi.fn(
     async (): Promise<{ status: 'disconnected' | 'deleted' }> => ({
       status: 'disconnected',

@@ -50,6 +50,7 @@ const createChannel = () =>
 const createRepository = (): NangoBindingRepository => ({
   findMailboxByNormalizedEmail: vi.fn().mockResolvedValue(null),
   findByNangoReference: vi.fn().mockResolvedValue(null),
+  findPendingByNangoReference: vi.fn().mockResolvedValue(null),
   updateExternalData: vi.fn().mockResolvedValue(undefined),
   save: vi.fn().mockResolvedValue({ id: 'zero-mailbox-1' }),
 });
@@ -319,6 +320,43 @@ describe('Nango mailbox binding', () => {
       expect.objectContaining({
         authorization: expect.objectContaining({ externalData }),
       }),
+    );
+  });
+
+  it('promotes a pending Zoho authorization when the account selection arrives', async () => {
+    const repository = createRepository();
+    vi.mocked(repository.findPendingByNangoReference).mockResolvedValue({
+      id: 'pending-zoho-1',
+      userId: 'user-1',
+      channelId: 'zoho_mail',
+    });
+    const externalData = { accountId: '100' };
+    const channel = {
+      ...createChannel(),
+      id: 'zoho_mail',
+      providerKey: 'zoho_mail',
+      parseExternalData: parseZohoMailExternalData,
+      resolveBinding: vi.fn().mockResolvedValue({
+        identity: {
+          email: 'owner@example.com',
+          name: 'Owner',
+          picture: '',
+        },
+        externalData,
+      }),
+    } satisfies MailChannelPlugin;
+
+    await bindNangoMailbox(
+      { ...input, channelId: 'zoho_mail', externalData },
+      {
+        ...createDependencies().dependencies,
+        getChannel: vi.fn().mockReturnValue(channel),
+        repository,
+      },
+    );
+
+    expect(repository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ pendingBindingId: 'pending-zoho-1' }),
     );
   });
 

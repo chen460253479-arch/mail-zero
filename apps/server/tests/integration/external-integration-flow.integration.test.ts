@@ -1,6 +1,4 @@
-import { randomBytes } from 'node:crypto';
-
-import type { MailAccountId, MailCore } from '@zero/mail-core';
+import type { MailAccountId } from '@zero/mail-core';
 import { describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -129,6 +127,9 @@ describe('managed external mail end-to-end flow', () => {
       ) =>
         await connectNangoMailbox(input, runtimeServices, {
           assertNangoChannelAvailable: async () => 'google-mail',
+          reserve: async () => {
+            throw new Error('Unexpected pending binding');
+          },
           bind: async (bindingInput) =>
             await bindNangoMailbox(bindingInput, {
               client: {
@@ -158,6 +159,8 @@ describe('managed external mail end-to-end flow', () => {
                   ),
                 findByNangoReference: (integrationId, connectionId) =>
                   connectionRepository.findByNangoReference(integrationId, connectionId),
+                findPendingByNangoReference: (integrationId, connectionId) =>
+                  connectionRepository.findPendingByNangoReference(integrationId, connectionId),
                 updateExternalData: ({ connectionId, externalData }) =>
                   connectionRepository.updateAuthorizationExternalData(
                     bindingInput.userId,

@@ -83,7 +83,17 @@ const defaultDependencies: ExternalIntegrationRouterDependencies = {
       findManagedUser: (externalUserId) => managedUsers.findByExternalUserId(externalUserId),
       findNangoMailbox: (channelId, connectionId) =>
         connections.findByNangoConnectionId(channelId, connectionId),
-      disconnect: (disconnectInput) => lifecycle.disconnect(disconnectInput),
+      disconnect: async (disconnectInput) => {
+        if (
+          await connections.deletePendingNangoBinding(
+            disconnectInput.userId,
+            disconnectInput.connectionId,
+          )
+        ) {
+          return { status: 'deleted' };
+        }
+        return await lifecycle.disconnect(disconnectInput);
+      },
     });
   },
   createMessageReader: (services) =>
@@ -120,9 +130,9 @@ const bindingStatus = (error: NangoBindingError): 400 | 409 | 412 => {
 
 const parseExternalData = (channelId: ConnectNangoMailboxInput['channelId'], value: unknown) => {
   const channel = defaultMailChannelRegistry.get(channelId);
+  if (value === undefined) return undefined;
   if (channel.parseExternalData === undefined) {
-    if (value !== undefined) throw new Error('CHANNEL_EXTERNAL_DATA_UNSUPPORTED');
-    return undefined;
+    throw new Error('CHANNEL_EXTERNAL_DATA_UNSUPPORTED');
   }
   return channel.parseExternalData(value);
 };
