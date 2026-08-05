@@ -2,6 +2,15 @@ import { Resend } from 'resend';
 import { ulid } from 'ulid';
 
 import {
+  createMailScheduler,
+  createMailTaskWorker,
+  createPostgresMailTaskRepository,
+  parseExternalMailTaskCommand,
+  type MailScheduler,
+  type MailTaskRepository,
+  type MailTaskWorker,
+} from '../../modules/mail-tasks';
+import {
   createDisabledMailNotificationWorker,
   createMailNotificationWorker,
   createPostgresMailNotificationRepository,
@@ -9,18 +18,11 @@ import {
   type MailNotificationWorker,
 } from '../../modules/mail-notifications';
 import {
-  createMailScheduler,
-  createMailTaskWorker,
-  createPostgresMailTaskRepository,
-  type MailScheduler,
-  type MailTaskRepository,
-  type MailTaskWorker,
-} from '../../modules/mail-tasks';
-import {
   createNangoIntegrationService,
   type NangoIntegrationService,
   type NangoRuntimeStatus,
 } from '../../integrations/nango/service';
+import { createPostgresExternalMailSubmissionRepository } from '../../modules/external-integration/postgres/mail-submission-repository';
 import {
   createNangoChannelIntegrationService,
   type NangoChannelIntegrationService,
@@ -42,6 +44,7 @@ import {
 import { enqueueDueMailOutboundWork, runMailOutboundCommand } from '../mail/outbound';
 import { createMailTaskQueuePort, type MailTaskQueuePort } from '../mail/task-queue';
 import { wakeDueMailSnoozes } from '../../modules/mail-snooze/runtime/environment';
+import { runExternalMailSubmissionCommand } from '../mail/external-submission';
 import { handleOutlookWebhookForEnvironment } from '../mail/outlook-inbound';
 import type { AdminCredentials } from '../../lib/admin-provisioning-policy';
 import { handleZohoMailWebhookForEnvironment } from '../mail/zoho-inbound';
@@ -192,6 +195,7 @@ export const createRuntimeServices = async ({
   const taskRepository = createPostgresMailTaskRepository(database.db, {
     nextId: () => ulid(),
   });
+  const externalMailSubmissions = createPostgresExternalMailSubmissionRepository(database.db);
   const taskWorkerReference: { current?: MailTaskWorker } = {};
   const taskQueue = createMailTaskQueuePort(taskRepository, () =>
     taskWorkerReference.current?.notify(),
@@ -208,6 +212,19 @@ export const createRuntimeServices = async ({
       await runMailIngressCommand(database.db, mailResources, command),
     processOutbound: async (command) =>
       await runMailOutboundCommand(database.db, mailResources, command),
+    processExternal: async (command) =>
+      await runExternalMailSubmissionCommand(database.db, mailResources, command),
+    onFailure: async (task, failure) => {
+      if (task.queue !== 'external') return;
+      const command = parseExternalMailTaskCommand(task.command);
+      await externalMailSubmissions.recordProcessingFailure({
+        id: command.submissionId,
+        code: failure.code,
+        message: failure.message,
+        final: !failure.willRetry,
+        now: new Date(),
+      });
+    },
     concurrency: 4,
     pollIntervalMs: 1_000,
     leaseForMs: 5 * 60_000,

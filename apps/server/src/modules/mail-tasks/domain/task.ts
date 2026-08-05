@@ -3,8 +3,29 @@ import {
   type MailIngressCommand,
 } from '../../mail-sync/application/commands';
 import { parseMailOutboundCommand, type MailOutboundCommand } from '../../mail-outbound';
+import { z } from 'zod';
 
-export type MailTaskQueue = 'ingress' | 'outbound';
+const externalMailTaskCommandSchema = z
+  .object({
+    type: z.literal('prepare_external_mail_submission'),
+    submissionId: z.string().min(1),
+  })
+  .strict();
+
+export type ExternalMailTaskCommand = z.infer<typeof externalMailTaskCommandSchema>;
+
+export class MailTaskProcessingError extends Error {
+  constructor(
+    public readonly code: string,
+    public readonly disposition: 'permanent' | 'retryable',
+    message: string = code,
+  ) {
+    super(message);
+    this.name = 'MailTaskProcessingError';
+  }
+}
+
+export type MailTaskQueue = 'ingress' | 'outbound' | 'external';
 export type MailTaskStatus = 'ready' | 'running' | 'retry' | 'dead';
 
 export type EnqueueMailTaskInput =
@@ -18,6 +39,13 @@ export type EnqueueMailTaskInput =
   | {
       queue: 'outbound';
       command: MailOutboundCommand;
+      dedupeKey: string;
+      runAt?: Date;
+      maxAttempts?: number;
+    }
+  | {
+      queue: 'external';
+      command: ExternalMailTaskCommand;
       dedupeKey: string;
       runAt?: Date;
       maxAttempts?: number;
@@ -62,7 +90,11 @@ export interface MailTaskRepository {
 
 export const parseClaimedMailTaskCommand = (
   task: ClaimedMailTask,
-): MailIngressCommand | MailOutboundCommand =>
-  task.queue === 'ingress'
-    ? parseMailIngressCommand(task.command)
-    : parseMailOutboundCommand(task.command);
+): MailIngressCommand | MailOutboundCommand | ExternalMailTaskCommand => {
+  if (task.queue === 'ingress') return parseMailIngressCommand(task.command);
+  if (task.queue === 'outbound') return parseMailOutboundCommand(task.command);
+  return externalMailTaskCommandSchema.parse(task.command);
+};
+
+export const parseExternalMailTaskCommand = (value: unknown): ExternalMailTaskCommand =>
+  externalMailTaskCommandSchema.parse(value);

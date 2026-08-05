@@ -26,11 +26,17 @@ import {
   type ProvisionManagedUserDependencies,
 } from '../application/provision-managed-user';
 import {
+  registerExternalMailSubmissionRoutes,
+  type ExternalMailSubmissionService,
+} from './mail-submission';
+import {
   createExternalMessageReader,
   type ExternalMessageReader,
 } from '../application/read-message';
 import { createPostgresConnectionRepository } from '../../mail-accounts/postgres/connection-repository';
+import { createPostgresExternalMailSubmissionRepository } from '../postgres/mail-submission-repository';
 import { createMailboxLifecycleForDatabase } from '../../mail-accounts/runtime/lifecycle-environment';
+import { getExternalMailSubmission, submitExternalMail } from '../application/mail-submission';
 import { createPostgresManagedUserRepository } from '../postgres/managed-user-repository';
 import { NangoBindingError } from '../../mail-accounts/application/bind-nango-mailbox';
 import { accessGrantInputSchema, type AccessGrantInput } from '../contracts/access';
@@ -57,6 +63,7 @@ export type ExternalIntegrationRouterDependencies = {
   ): Promise<ExternalNangoDisconnectResult>;
   createMessageReader(services: RuntimeServices): ExternalMessageReader;
   createCustomerMarkerWriter(services: RuntimeServices): ExternalCustomerMarkerWriter;
+  createMailSubmissionService(services: RuntimeServices): ExternalMailSubmissionService;
   createAccessGrant(
     input: AccessGrantInput,
     services: RuntimeServices,
@@ -108,6 +115,20 @@ const defaultDependencies: ExternalIntegrationRouterDependencies = {
     createExternalCustomerMarkerWriter({
       repository: createPostgresExternalCustomerMarkerRepository(services.database.db),
     }),
+  createMailSubmissionService: (services) => {
+    const repository = createPostgresExternalMailSubmissionRepository(services.database.db);
+    return {
+      submit: async (input) =>
+        await submitExternalMail(input, {
+          repository,
+          nextId: () => ulid(),
+          nextTaskId: () => ulid(),
+          clock: { now: () => new Date() },
+          notifyWorker: () => services.taskQueue.notify(),
+        }),
+      get: async (id) => await getExternalMailSubmission(id, repository),
+    };
+  },
   createAccessGrant: async (input, services) =>
     await createAccessGrant(input, {
       repository: createPostgresExternalAccessRepository(services.database.db),
@@ -257,6 +278,10 @@ export const createExternalIntegrationRouter = (
     authorize: async (context) => await authorize(context.req.header('Authorization')),
     createReader: () => dependencies.createMessageReader(services),
     createCustomerMarkerWriter: () => dependencies.createCustomerMarkerWriter(services),
+  });
+  registerExternalMailSubmissionRoutes(app, {
+    authorize: async (context) => await authorize(context.req.header('Authorization')),
+    createService: () => dependencies.createMailSubmissionService(services),
   });
   return app;
 };

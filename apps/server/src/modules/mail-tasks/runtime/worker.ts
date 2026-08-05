@@ -1,3 +1,8 @@
+import {
+  MailTaskProcessingError,
+  parseExternalMailTaskCommand,
+  type ExternalMailTaskCommand,
+} from '../domain/task';
 import { MailOutboundError, parseMailOutboundCommand } from '../../mail-outbound';
 import type { MailIngressCommand } from '../../mail-sync/application/commands';
 import { parseMailIngressCommand } from '../../mail-sync/application/commands';
@@ -23,6 +28,11 @@ export type CreateMailTaskWorkerDependencies = {
   repository: MailTaskRepository;
   processIngress(command: MailIngressCommand): Promise<void>;
   processOutbound(command: MailOutboundCommand): Promise<void>;
+  processExternal?(command: ExternalMailTaskCommand): Promise<void>;
+  onFailure?(
+    task: ClaimedMailTask,
+    failure: { code: string; message: string; willRetry: boolean },
+  ): Promise<void>;
   concurrency: number;
   pollIntervalMs: number;
   leaseForMs: number;
@@ -38,7 +48,11 @@ const requirePositiveInteger = (name: string, value: number): void => {
 };
 
 const errorCode = (error: unknown): string => {
-  if (error instanceof MailSyncError || error instanceof MailOutboundError) {
+  if (
+    error instanceof MailSyncError ||
+    error instanceof MailOutboundError ||
+    error instanceof MailTaskProcessingError
+  ) {
     return error.code;
   }
   return 'MAIL_TASK_PROCESSING_FAILED';
@@ -51,6 +65,7 @@ const errorMessage = (error: unknown): string => {
 
 const isPermanent = (error: unknown): boolean =>
   error instanceof TypeError ||
+  (error instanceof MailTaskProcessingError && error.disposition === 'permanent') ||
   (error instanceof MailSyncError && error.classification !== 'retryable') ||
   (error instanceof MailOutboundError && error.disposition === 'permanent');
 
@@ -85,16 +100,15 @@ export const createMailTaskWorker = (
   const waitForPoll = async (signal: AbortSignal, observedWakeVersion: number): Promise<void> => {
     if (signal.aborted || wakeVersion !== observedWakeVersion) return;
     await new Promise<void>((resolve) => {
-      let timer: ReturnType<typeof setTimeout> | undefined;
       const finish = () => {
-        if (timer !== undefined) clearTimeout(timer);
+        clearTimeout(timer);
         signal.removeEventListener('abort', finish);
         waiters.delete(finish);
         resolve();
       };
       waiters.add(finish);
       signal.addEventListener('abort', finish, { once: true });
-      timer = setTimeout(finish, dependencies.pollIntervalMs);
+      const timer = setTimeout(finish, dependencies.pollIntervalMs);
       if (signal.aborted || wakeVersion !== observedWakeVersion) finish();
     });
   };
@@ -103,8 +117,13 @@ export const createMailTaskWorker = (
     try {
       if (task.queue === 'ingress') {
         await dependencies.processIngress(parseMailIngressCommand(task.command));
-      } else {
+      } else if (task.queue === 'outbound') {
         await dependencies.processOutbound(parseMailOutboundCommand(task.command));
+      } else {
+        if (dependencies.processExternal === undefined) {
+          throw new MailTaskProcessingError('EXTERNAL_MAIL_PROCESSOR_NOT_CONFIGURED', 'permanent');
+        }
+        await dependencies.processExternal(parseExternalMailTaskCommand(task.command));
       }
       await dependencies.repository.complete({
         id: task.id,
@@ -121,13 +140,27 @@ export const createMailTaskWorker = (
         errorMessage: errorMessage(error),
       };
       if (isPermanent(error)) {
-        await dependencies.repository.failPermanently(failure);
+        const failed = await dependencies.repository.failPermanently(failure);
+        if (failed && dependencies.onFailure !== undefined) {
+          await dependencies.onFailure(task, {
+            code: failure.errorCode,
+            message: failure.errorMessage,
+            willRetry: false,
+          });
+        }
         return;
       }
-      await dependencies.repository.retry({
+      const outcome = await dependencies.repository.retry({
         ...failure,
         runAt: retryAt(now, task.attempts),
       });
+      if (outcome !== 'lost' && dependencies.onFailure !== undefined) {
+        await dependencies.onFailure(task, {
+          code: failure.errorCode,
+          message: failure.errorMessage,
+          willRetry: outcome === 'retry',
+        });
+      }
     }
   };
 
@@ -137,7 +170,10 @@ export const createMailTaskWorker = (
       try {
         const tasks = await dependencies.repository.claim({
           owner,
-          queues: ['ingress', 'outbound'],
+          queues:
+            dependencies.processExternal === undefined
+              ? ['ingress', 'outbound']
+              : ['ingress', 'outbound', 'external'],
           now: dependencies.clock.now(),
           limit: 1,
           leaseForMs: dependencies.leaseForMs,

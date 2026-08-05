@@ -25,7 +25,7 @@ export const mailTask = mailSchema.table(
     completedAt: timestamp('completed_at', { withTimezone: true }),
   },
   (t) => [
-    check('mail_task_queue_chk', sql`${t.queue} IN ('ingress', 'outbound')`),
+    check('mail_task_queue_chk', sql`${t.queue} IN ('ingress', 'outbound', 'external')`),
     check('mail_task_type_chk', sql`char_length(${t.type}) > 0`),
     check('mail_task_status_chk', sql`${t.status} IN ('ready', 'running', 'retry', 'dead')`),
     check('mail_task_attempts_chk', sql`${t.attempts} >= 0`),
