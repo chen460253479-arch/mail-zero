@@ -85,10 +85,10 @@ describe('Zoho Mail webhook endpoint', () => {
     expect(application).toContain('services.webhooks.zohoMail');
   });
 
-  it('stores the first Zoho secret, records the exact folder signal, and returns 200', async () => {
+  it('parses exact Zoho identifiers, records the folder signal, and returns 200', async () => {
     const calls: unknown[] = [];
     const response = await handleZohoMailWebhookRequest(
-      await request('hook-secret'),
+      await request('hook-secret', { includeSecret: false }),
       dependencies({
         resolveTarget: async (payload) => {
           calls.push({
@@ -102,12 +102,9 @@ describe('Zoho Mail webhook endpoint', () => {
           return {
             targetId: 'account-1',
             syncIds: ['sync-1'],
-            secrets: [],
-            secretBound: false,
+            secrets: ['hook-secret'],
+            secretBound: true,
           };
-        },
-        storeSecret: async (targetId, secret) => {
-          calls.push({ store: [targetId, secret] });
         },
         recordSignal: async (syncIds) => {
           calls.push({ record: syncIds });
@@ -129,7 +126,6 @@ describe('Zoho Mail webhook endpoint', () => {
           subject: 'Marketing - Product pitch',
         },
       },
-      { store: ['account-1', 'hook-secret'] },
       { record: ['sync-1'] },
       { enqueue: 'sync-1' },
     ]);
@@ -155,8 +151,17 @@ describe('Zoho Mail webhook endpoint', () => {
   it('rejects an invalid signature without recording a signal', async () => {
     let recorded = false;
     const response = await handleZohoMailWebhookRequest(
-      await request('hook-secret', { signatureSecret: 'wrong-secret' }),
+      await request('hook-secret', {
+        includeSecret: false,
+        signatureSecret: 'wrong-secret',
+      }),
       dependencies({
+        resolveTarget: async () => ({
+          targetId: 'account-1',
+          syncIds: ['sync-1'],
+          secrets: ['hook-secret'],
+          secretBound: true,
+        }),
         recordSignal: async () => {
           recorded = true;
           return [];
@@ -182,7 +187,38 @@ describe('Zoho Mail webhook endpoint', () => {
 
     expect(response.status).toBe(200);
     expect(calls).toEqual(['hook-secret']);
-    await expect(response.json()).resolves.toEqual({ registered: true });
+    await expect(response.text()).resolves.toBe('');
+  });
+
+  it('still returns 200 when registration secret persistence fails', async () => {
+    const response = await handleZohoMailWebhookRequest(
+      await request('hook-secret', { payload: '' }),
+      dependencies({
+        storeRegistrationSecret: async () => {
+          throw new Error('database unavailable');
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('');
+  });
+
+  it('returns 200 without storing a registration secret with an invalid signature', async () => {
+    let stored = false;
+    const response = await handleZohoMailWebhookRequest(
+      await request('hook-secret', { payload: '', signatureSecret: 'wrong-secret' }),
+      dependencies({
+        storeRegistrationSecret: async () => {
+          stored = true;
+          return true;
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(stored).toBe(false);
+    await expect(response.text()).resolves.toBe('');
   });
 
   it('binds the matching pending registration secret to the routed mailbox', async () => {
@@ -206,20 +242,20 @@ describe('Zoho Mail webhook endpoint', () => {
     expect(stored).toEqual([['account-1', 'hook-secret']]);
   });
 
-  it('requires a structurally valid Zoho mail payload outside registration', async () => {
+  it('returns 200 for a probe POST without a complete mail payload', async () => {
     const payload = '{"event":"new_mail"}';
     const response = await handleZohoMailWebhookRequest(
       await request('hook-secret', { payload, includeSecret: false }),
       dependencies(),
     );
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: 'ZOHO_WEBHOOK_PAYLOAD_INVALID' });
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('');
   });
 
   it('returns not found when the folder is not bound to an active Zoho sync', async () => {
     const response = await handleZohoMailWebhookRequest(
-      await request('hook-secret'),
+      await request('hook-secret', { includeSecret: false }),
       dependencies({ resolveTarget: async () => null }),
     );
 

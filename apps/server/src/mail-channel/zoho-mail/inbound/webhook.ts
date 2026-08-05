@@ -158,17 +158,18 @@ export const handleZohoMailWebhookRequest = async (
   const hookSecret = request.headers.get('x-hook-secret');
   const hookSignature = request.headers.get('x-hook-signature');
   const payload = parsePayload(body);
+  if (validHookSecret(hookSecret)) {
+    try {
+      if (hookSignature !== null && (await verifySignature(hookSecret, body, hookSignature))) {
+        await dependencies.storeRegistrationSecret(hookSecret);
+      }
+    } catch {
+      // Zoho only establishes the webhook after this registration probe receives 200.
+    }
+    return new Response(null, { status: 200 });
+  }
   if (payload === null) {
-    if (!validHookSecret(hookSecret) || hookSignature === null) {
-      return Response.json({ error: 'ZOHO_WEBHOOK_PAYLOAD_INVALID' }, { status: 400 });
-    }
-    if (!(await verifySignature(hookSecret, body, hookSignature))) {
-      return new Response(null, { status: 401 });
-    }
-    if (!(await dependencies.storeRegistrationSecret(hookSecret))) {
-      return Response.json({ error: 'ZOHO_WEBHOOK_REGISTRATION_TARGET_MISSING' }, { status: 409 });
-    }
-    return Response.json({ registered: true });
+    return new Response(null, { status: 200 });
   }
   const target = await dependencies.resolveTarget(payload);
   if (target === null || target.syncIds.length === 0) {
