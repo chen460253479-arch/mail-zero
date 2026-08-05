@@ -33,6 +33,7 @@ type ExistingMailbox = {
 
 export type SaveNangoBindingInput = {
   existingMailboxId: string | null;
+  pendingBindingId?: string | null;
   mailbox: {
     email: string;
     normalizedEmail: string;
@@ -66,6 +67,14 @@ export interface NangoBindingRepository {
     connectionId: string;
     userId: string;
     externalData: MailChannelExternalData | null;
+  } | null>;
+  findPendingByNangoReference(
+    integrationId: string,
+    connectionId: string,
+  ): Promise<{
+    id: string;
+    userId: string;
+    channelId: MailChannelId;
   } | null>;
   updateExternalData(input: {
     connectionId: string;
@@ -118,6 +127,19 @@ export const bindNangoMailbox = async (
     input.connectionId,
   );
   if (boundReference !== null && boundReference.userId !== input.userId) {
+    throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
+  }
+  const pendingReference =
+    boundReference === null
+      ? await dependencies.repository.findPendingByNangoReference(
+          input.integrationId,
+          input.connectionId,
+        )
+      : null;
+  if (
+    pendingReference !== null &&
+    (pendingReference.userId !== input.userId || pendingReference.channelId !== input.channelId)
+  ) {
     throw new NangoBindingError('NANGO_CONNECTION_ALREADY_BOUND');
   }
 
@@ -222,6 +244,7 @@ export const bindNangoMailbox = async (
   try {
     saved = await dependencies.repository.save({
       existingMailboxId: existing?.id ?? null,
+      pendingBindingId: pendingReference?.id ?? null,
       mailbox: {
         email: identity.email,
         normalizedEmail,

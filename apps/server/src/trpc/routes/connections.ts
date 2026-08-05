@@ -1,4 +1,7 @@
-import { mailSessionProcedure, privateProcedure, publicProcedure, router } from '../trpc';
+import {
+  isDefaultConnectionSelectable,
+  selectDefaultConnectionRecord,
+} from '../../modules/mail-accounts/application/select-default-connection';
 import {
   bindManualMailbox,
   ManualMailboxBindingError,
@@ -11,27 +14,24 @@ import { provisionChannelMailboxInDatabase } from '../../modules/mail-accounts/r
 import { createPostgresConnectionRepository } from '../../modules/mail-accounts/postgres/connection-repository';
 import { createMailboxLifecycleForDatabase } from '../../modules/mail-accounts/runtime/lifecycle-environment';
 import { resolveGmailConnectMode } from '../../modules/mail-accounts/application/gmail-connection-options';
-import {
-  isDefaultConnectionSelectable,
-  selectDefaultConnectionRecord,
-} from '../../modules/mail-accounts/application/select-default-connection';
 import { connectNangoMailbox } from '../../modules/mail-accounts/application/connect-nango-mailbox';
 import { createChannelConfigRepository } from '../../integrations/core/channel-config-repository';
 import { manualCredentialSnapshotSchema } from '../../modules/mail-accounts/credentials/manual';
 import { resolveFetchedNangoCredential } from '../../modules/mail-accounts/credentials/nango';
+import { isCompleteZohoMailExternalData } from '../../mail-channel/zoho-mail/external-data';
+import { mailSessionProcedure, privateProcedure, publicProcedure, router } from '../trpc';
 import { createIdentityMailChannelRegistry } from '../../runtime/mail/channel-registry';
 import { createSystemIntegrationRepository } from '../../integrations/core/repository';
 import { mailChannelIds, type MailChannelId } from '../../mail-channel/contracts';
 import { createZohoWebhookSetup } from '../../runtime/mail/zoho-webhook-setup';
-import { isCompleteZohoMailExternalData } from '../../mail-channel/zoho-mail/external-data';
 import { mailAccount } from '../../modules/mail/postgres/schema/accounts';
 import { defaultMailChannelRegistry } from '../../mail-channel/registry';
 import { NangoIntegrationError } from '../../integrations/nango/errors';
 import type { RuntimeServices } from '../../runtime/node/services';
 import { user as userTable } from '../../db/schema';
 import { TRPCError } from '@trpc/server';
-import { eq } from 'drizzle-orm';
 import type { DB } from '../../db';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 const withConfiguredNango = async <T>(
@@ -147,6 +147,24 @@ const bindingStatus = (
     ? 'incomplete'
     : 'ready';
 
+const pendingConnectionView = (pending: {
+  id: string;
+  channelId: MailChannelId;
+  createdAt: Date;
+}) => ({
+  id: pending.id,
+  email: '',
+  name: defaultMailChannelRegistry.find(pending.channelId)?.displayName ?? pending.channelId,
+  picture: '',
+  createdAt: pending.createdAt,
+  channelId: pending.channelId,
+  status: 'connected' as const,
+  authSource: 'nango' as const,
+  bindingStatus: 'incomplete' as const,
+  pendingAuthorization: true,
+  capabilities: Array.from(defaultMailChannelRegistry.find(pending.channelId)?.capabilities ?? []),
+});
+
 const mapNangoBindingError = (error: unknown): never => {
   if (error instanceof NangoBindingError) {
     const conflictCodes = new Set(['MAILBOX_ALREADY_CONNECTED', 'NANGO_CONNECTION_ALREADY_BOUND']);
@@ -210,29 +228,38 @@ const listChannelNangoConnections = async (services: RuntimeServices, channelId:
 export const connectionsRouter = router({
   list: mailSessionProcedure.query(async ({ ctx }) => {
     const repository = createPostgresConnectionRepository(ctx.c.var.services!.database.db);
-    const records = ctx.mailAccess.isAdministrator
-      ? await repository.listAllConnectionsWithAuthorization()
-      : await repository.listConnectionsWithAuthorization(ctx.mailAccess.userId);
+    const [records, pendingBindings] = await Promise.all([
+      ctx.mailAccess.isAdministrator
+        ? repository.listAllConnectionsWithAuthorization()
+        : repository.listConnectionsWithAuthorization(ctx.mailAccess.userId),
+      ctx.mailAccess.isAdministrator
+        ? repository.listAllPendingNangoBindings()
+        : repository.listPendingNangoBindings(ctx.mailAccess.userId),
+    ]);
 
     const disconnectedIds = records
       .filter(({ connection }) => connection.status === 'disconnected')
       .map(({ connection }) => connection.id);
 
     return {
-      connections: records.map(({ connection, authorization }) => ({
-        id: connection.id,
-        email: connection.email,
-        name: connection.name,
-        picture: connection.picture,
-        createdAt: connection.createdAt,
-        channelId: connection.channelId,
-        status: connection.status,
-        authSource: authorization?.authSource ?? null,
-        bindingStatus: bindingStatus(connection.channelId, authorization?.externalData),
-        capabilities: Array.from(
-          defaultMailChannelRegistry.find(connection.channelId)?.capabilities ?? [],
-        ),
-      })),
+      connections: [
+        ...records.map(({ connection, authorization }) => ({
+          id: connection.id,
+          email: connection.email,
+          name: connection.name,
+          picture: connection.picture,
+          createdAt: connection.createdAt,
+          channelId: connection.channelId,
+          status: connection.status,
+          authSource: authorization?.authSource ?? null,
+          bindingStatus: bindingStatus(connection.channelId, authorization?.externalData),
+          pendingAuthorization: false,
+          capabilities: Array.from(
+            defaultMailChannelRegistry.find(connection.channelId)?.capabilities ?? [],
+          ),
+        })),
+        ...pendingBindings.map(pendingConnectionView),
+      ],
       disconnectedIds,
     };
   }),
@@ -349,9 +376,7 @@ export const connectionsRouter = router({
         connectionRecord.id,
       );
       if (
-        !isCompleteZohoMailExternalData(
-          connectionWithAuthorization?.authorization?.externalData,
-        )
+        !isCompleteZohoMailExternalData(connectionWithAuthorization?.authorization?.externalData)
       ) {
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
@@ -400,7 +425,15 @@ export const connectionsRouter = router({
         ctx.sessionUser.role === 'admin'
           ? await repository.findConnection(input.connectionId)
           : await repository.findOwnedConnection(ctx.sessionUser.id, input.connectionId);
-      if (!targetConnection) throw new TRPCError({ code: 'NOT_FOUND' });
+      if (!targetConnection) {
+        const pendingBinding =
+          ctx.sessionUser.role === 'admin'
+            ? await repository.findPendingNangoBinding(input.connectionId)
+            : await repository.findOwnedPendingNangoBinding(ctx.sessionUser.id, input.connectionId);
+        if (!pendingBinding) throw new TRPCError({ code: 'NOT_FOUND' });
+        await repository.deletePendingNangoBinding(pendingBinding.userId, pendingBinding.id);
+        return { status: 'deleted' as const };
+      }
       const result = await createMailboxLifecycleForDatabase(
         services.database.db,
         services,
@@ -411,9 +444,7 @@ export const connectionsRouter = router({
       await services.database.db
         .update(userTable)
         .set({ defaultConnectionId: null, updatedAt: new Date() })
-        .where(
-          eq(userTable.defaultConnectionId, input.connectionId),
-        );
+        .where(eq(userTable.defaultConnectionId, input.connectionId));
       return result;
     }),
   deleteRetainedData: privateProcedure
@@ -442,11 +473,19 @@ export const connectionsRouter = router({
       where: eq(userTable.id, ctx.sessionUser.id),
     });
     const isAdministrator = ctx.sessionUser.role === 'admin';
-    const records = isAdministrator
-      ? await repository.listAllConnectionsWithAuthorization()
-      : await repository.listConnectionsWithAuthorization(ctx.sessionUser.id);
+    const [records, pendingBindings] = await Promise.all([
+      isAdministrator
+        ? repository.listAllConnectionsWithAuthorization()
+        : repository.listConnectionsWithAuthorization(ctx.sessionUser.id),
+      isAdministrator
+        ? repository.listAllPendingNangoBindings()
+        : repository.listPendingNangoBindings(ctx.sessionUser.id),
+    ]);
     const record = selectDefaultConnectionRecord(records, foundUser?.defaultConnectionId ?? null);
-    if (!record) return null;
+    if (!record) {
+      const pending = pendingBindings[0];
+      return pending === undefined ? null : pendingConnectionView(pending);
+    }
     const { connection, authorization } = record;
     return {
       id: connection.id,
@@ -458,6 +497,7 @@ export const connectionsRouter = router({
       status: connection.status,
       authSource: authorization?.authSource ?? null,
       bindingStatus: bindingStatus(connection.channelId, authorization?.externalData),
+      pendingAuthorization: false,
       capabilities: Array.from(
         defaultMailChannelRegistry.find(connection.channelId)?.capabilities ?? [],
       ),

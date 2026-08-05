@@ -1,8 +1,41 @@
-import { foreignKey, index, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  check,
+  foreignKey,
+  index,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
+import type { MailChannelId } from '../../../mail-channel/contracts';
 import { integrationSchema } from '../../../db/pg-schemas';
 import { email } from '../../mail/postgres/schema/emails';
 import { user } from '../../../db/core-schema';
+
+export const pendingNangoMailboxBinding = integrationSchema.table(
+  'pending_nango_mailbox_binding',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    channelId: text('channel_id').$type<MailChannelId>().notNull(),
+    nangoConnectionId: text('nango_connection_id').notNull(),
+    nangoProviderConfigKey: text('nango_provider_config_key').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('pending_nango_mailbox_binding_ref_uidx').on(
+      table.nangoProviderConfigKey,
+      table.nangoConnectionId,
+    ),
+    index('pending_nango_mailbox_binding_user_idx').on(table.userId, table.createdAt, table.id),
+    check('pending_nango_mailbox_binding_channel_chk', sql`${table.channelId} = 'zoho_mail'`),
+  ],
+);
 
 export const crmCustomerMarker = integrationSchema.table(
   'crm_customer_marker',

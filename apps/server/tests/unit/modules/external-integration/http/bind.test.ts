@@ -134,11 +134,34 @@ describe('external Nango connection binding HTTP contract', () => {
     );
   });
 
+  it('accepts the base Zoho authorization callback without externalData', async () => {
+    const { app, connect, provisionManagedUser } = createRouter();
+
+    const response = await requestBind(app, {
+      token: 'fixed-token',
+      body: {
+        externalUserId: '2039264814347653121',
+        channelId: 'zoho_mail',
+        connectionId: 'bd896d4c-4a28-4237-8a97-b144f3954411',
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(connect).toHaveBeenCalledWith(
+      {
+        userId: 'managed-user-1',
+        channelId: 'zoho_mail',
+        connectionId: 'bd896d4c-4a28-4237-8a97-b144f3954411',
+      },
+      expect.anything(),
+    );
+    expect(provisionManagedUser).toHaveBeenCalledOnce();
+  });
+
   it.each([
-    undefined,
     { accountId: '1', folderIds: [] },
     { accountId: '1', folderIds: ['2'], version: 1 },
-  ])('rejects missing, invalid, or extended Zoho externalData', async (externalData) => {
+  ])('rejects invalid or extended Zoho externalData', async (externalData) => {
     const { app, connect, provisionManagedUser } = createRouter();
 
     const response = await requestBind(app, {
@@ -147,7 +170,7 @@ describe('external Nango connection binding HTTP contract', () => {
         externalUserId: 'crm-user-01',
         channelId: 'zoho_mail',
         connectionId: 'nango-connection-01',
-        ...(externalData === undefined ? {} : { externalData }),
+        externalData,
       },
     });
 

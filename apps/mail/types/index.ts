@@ -98,6 +98,7 @@ export interface IConnection {
   status: 'connected' | 'disconnected' | 'reconnect_required' | 'deleting';
   authSource: 'zero_oauth' | 'nango' | 'manual' | null;
   bindingStatus: 'ready' | 'incomplete';
+  pendingAuthorization: boolean;
   capabilities: Array<
     | 'read_messages'
     | 'send_messages'

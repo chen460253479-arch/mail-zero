@@ -64,8 +64,7 @@ export default function ConnectionsPage() {
                   (provider) => provider.channelId === connection.channelId,
                 )?.icon;
                 const zohoBindingIncomplete =
-                  connection.channelId === 'zoho_mail' &&
-                  connection.bindingStatus === 'incomplete';
+                  connection.channelId === 'zoho_mail' && connection.bindingStatus === 'incomplete';
                 return (
                   <div
                     key={connection.id}
@@ -108,11 +107,17 @@ export default function ConnectionsPage() {
                                   }
                                 }}
                               >
-                                {connection.email}
+                                {connection.pendingAuthorization
+                                  ? m['pages.settings.connections.zohoWaitingForAccount']()
+                                  : connection.email}
                               </span>
                             </TooltipTrigger>
                             <TooltipContent side="bottom" align="start" className="select-all">
-                              <div className="font-mono">{connection.email}</div>
+                              <div className="font-mono">
+                                {connection.pendingAuthorization
+                                  ? m['pages.settings.connections.zohoWaitingForAccount']()
+                                  : connection.email}
+                              </div>
                             </TooltipContent>
                           </Tooltip>
                           {connection.authSource === 'nango' ||
