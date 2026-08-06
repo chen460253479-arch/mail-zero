@@ -175,7 +175,7 @@ export const createZohoMailClient = (
         folderId,
         start: String(start),
         limit: String(limit),
-        sortorder: 'true',
+        sortorder: 'false',
       },
     });
     const data = responseData(response.json, 'ZOHO_INVALID_MESSAGE_LIST_RESPONSE');

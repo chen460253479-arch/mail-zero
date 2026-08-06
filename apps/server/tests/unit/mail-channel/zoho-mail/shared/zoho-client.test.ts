@@ -109,7 +109,7 @@ describe('Zoho Mail API client', () => {
 
     expect(request).toHaveBeenCalledWith(
       expect.objectContaining({
-        query: expect.objectContaining({ sortorder: 'true' }),
+        query: expect.objectContaining({ sortorder: 'false' }),
       }),
     );
   });
