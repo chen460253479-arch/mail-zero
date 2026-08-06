@@ -11,6 +11,9 @@ describe('CustomerMarkerBadge', () => {
 
     expect(markup).toContain('data-customer-marker="true"');
     expect(markup).toContain('aria-label="Customer email · Acme"');
+    expect(markup).not.toContain('title=');
+    expect(markup).toContain('bg-transparent');
+    expect(markup).toContain('h-[12px]');
     expect(markup).toContain('<svg');
   });
 });
