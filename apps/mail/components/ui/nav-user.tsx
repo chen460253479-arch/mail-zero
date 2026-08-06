@@ -7,7 +7,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   ChevronDown,
-  ChevronRight,
   CopyCheckIcon,
   LogOut,
   MoonIcon,
@@ -28,6 +27,7 @@ import { signOut, useSession } from '@/lib/auth-client';
 import { AddConnectionDialog } from '../connection/add';
 import { CircleCheck, ThreeDots } from '../icons/icons';
 import { useTRPC } from '@/providers/query-provider';
+import { useMail } from '@/components/mail/use-mail';
 import { useSidebar } from '@/components/ui/sidebar';
 import { SunIcon } from '../icons/animated/sun';
 import { clear as idbClear } from 'idb-keyval';
@@ -98,7 +98,13 @@ export function NavUser() {
   const { state } = useSidebar();
   const trpc = useTRPC();
   const [, setThreadId] = useQueryState('threadId');
-  const { mutateAsync: setDefaultConnection } = useMutation(
+  const [, setComposeOpen] = useQueryState('isComposeOpen');
+  const [, setDraftId] = useQueryState('draftId');
+  const [, setTo] = useQueryState('to');
+  const [, setActiveReplyId] = useQueryState('activeReplyId');
+  const [, setMode] = useQueryState('mode');
+  const [, setMail] = useMail();
+  const { mutateAsync: setDefaultConnection, isPending: isSwitchingAccount } = useMutation(
     trpc.connections.setDefault.mutationOptions(),
   );
   const pathname = useLocation().pathname;
@@ -135,16 +141,26 @@ export function NavUser() {
   useEffect(() => setIsRendered(true), []);
 
   const handleAccountSwitch = (connectionId: string) => async () => {
-    if (connectionId === activeConnection?.id) return;
+    if (connectionId === activeConnection?.id || isSwitchingAccount) return;
 
     try {
       setLoading(true, m['common.navUser.switchingAccounts']());
       setThreadId(null);
+      setComposeOpen(null);
+      setDraftId(null);
+      setTo(null);
+      setActiveReplyId(null);
+      setMode(null);
+      setMail((current) => ({
+        ...current,
+        selected: null,
+        bulkSelected: [],
+        replyComposerOpen: false,
+        replyAllComposerOpen: false,
+        forwardComposerOpen: false,
+      }));
       await setDefaultConnection({ connectionId });
-      queryClient.clear();
-      await queryClient.refetchQueries({
-        queryKey: trpc.mail.view.threadPage.infiniteQueryKey(),
-      });
+      await refetchActiveConnection();
     } catch (error) {
       console.error('Error switching accounts:', error);
       toast.error(m['common.navUser.failedToSwitchAccount']());
@@ -186,16 +202,6 @@ export function NavUser() {
     () => listConnectedConnections(data?.connections ?? []),
     [data?.connections],
   );
-  const otherConnections = useMemo(() => {
-    if (!activeAccount) return [];
-    return connectedConnections.filter((connection) => connection.id !== activeAccount.id);
-  }, [activeAccount, connectedConnections]);
-  const orderedConnections = useMemo(
-    () => (activeAccount ? [activeAccount, ...otherConnections] : connectedConnections),
-    [activeAccount, connectedConnections, otherConnections],
-  );
-  const visibleConnections = orderedConnections.slice(0, 3);
-  const overflowConnections = orderedConnections.slice(3);
 
   const handleThemeToggle = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
@@ -393,9 +399,9 @@ export function NavUser() {
                   <span className="text-muted-foreground truncate text-[11px] font-medium">
                     {m['common.navUser.accounts']()}
                   </span>
-                  {orderedConnections.length > 0 && (
+                  {connectedConnections.length > 0 && (
                     <span className="bg-muted text-muted-foreground flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] tabular-nums">
-                      {orderedConnections.length}
+                      {connectedConnections.length}
                     </span>
                   )}
                 </div>
@@ -413,129 +419,100 @@ export function NavUser() {
               </div>
 
               {activeAccount ? (
-                <div className="space-y-1">
-                  {visibleConnections.map((connection) => {
-                    const isActive = connection.id === activeConnection?.id;
-
-                    return (
-                      <button
-                        type="button"
-                        key={connection.id}
-                        aria-current={isActive ? 'true' : undefined}
-                        onClick={handleAccountSwitch(connection.id)}
-                        className={cn(
-                          'group flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[#006FFE]/40',
-                          isActive
-                            ? 'bg-blue-50/90 text-blue-950 ring-1 ring-inset ring-blue-200/80 dark:bg-blue-500/10 dark:text-blue-50 dark:ring-blue-400/20'
-                            : 'hover:bg-muted/70 cursor-pointer',
-                        )}
-                      >
-                        <Avatar className="size-8 shrink-0 rounded-lg">
-                          <AvatarImage
-                            className="rounded-lg"
-                            src={connection.picture || undefined}
-                            alt={connection.name || connection.email}
-                          />
-                          <AvatarFallback className="rounded-lg text-[10px] font-medium">
-                            {(connection.name || connection.email)
-                              .split(' ')
-                              .map((namePart) => namePart[0])
-                              .join('')
-                              .toUpperCase()
-                              .slice(0, 2)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="min-w-0 flex-1">
-                          <span className="flex min-w-0 items-center gap-1.5">
-                            <span className="min-w-0 truncate text-[12px] font-medium leading-4">
-                              {connection.name || connection.email.split('@')[0]}
-                            </span>
-                            {isActive && (
-                              <span className="flex shrink-0 items-center gap-0.5 text-[10px] font-medium text-[#006FFE]">
-                                <CircleCheck className="size-3.5 fill-[#006FFE]" />
-                                {m['common.navUser.currentAccount']()}
-                              </span>
-                            )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={m['common.navUser.accounts']()}
+                      className="group flex w-full cursor-pointer items-center gap-2.5 rounded-lg bg-blue-50/90 px-2 py-2 text-left text-blue-950 outline-none ring-1 ring-inset ring-blue-200/80 transition-colors hover:bg-blue-100/90 focus-visible:ring-2 focus-visible:ring-[#006FFE]/40 dark:bg-blue-500/10 dark:text-blue-50 dark:ring-blue-400/20 dark:hover:bg-blue-500/15"
+                    >
+                      <Avatar className="size-8 shrink-0 rounded-lg">
+                        <AvatarImage
+                          className="rounded-lg"
+                          src={activeAccount.picture || undefined}
+                          alt={activeAccount.name || activeAccount.email}
+                        />
+                        <AvatarFallback className="rounded-lg text-[10px] font-medium">
+                          {(activeAccount.name || activeAccount.email)
+                            .split(' ')
+                            .map((namePart) => namePart[0])
+                            .join('')
+                            .toUpperCase()
+                            .slice(0, 2)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="min-w-0 truncate text-[12px] font-medium leading-4">
+                            {activeAccount.name || activeAccount.email.split('@')[0]}
                           </span>
-                          <span
-                            className={cn(
-                              'block truncate text-[11px] leading-4',
-                              isActive
-                                ? 'text-blue-700 dark:text-blue-300'
-                                : 'text-muted-foreground',
-                            )}
-                          >
-                            {connection.email}
+                          <span className="flex shrink-0 items-center gap-0.5 text-[10px] font-medium text-[#006FFE]">
+                            <CircleCheck className="size-3.5 fill-[#006FFE]" />
+                            {m['common.navUser.currentAccount']()}
                           </span>
                         </span>
-                        {!isActive && (
-                          <ChevronRight className="text-muted-foreground/60 size-3.5 shrink-0 transition-transform group-hover:translate-x-0.5" />
-                        )}
-                      </button>
-                    );
-                  })}
+                        <span className="block truncate text-[11px] leading-4 text-blue-700 dark:text-blue-300">
+                          {activeAccount.email}
+                        </span>
+                      </span>
+                      <ChevronDown className="text-muted-foreground size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    className="w-(--radix-dropdown-menu-trigger-width) min-w-64 bg-white p-1.5 font-medium dark:bg-[#131313]"
+                    align="start"
+                    side="bottom"
+                    sideOffset={6}
+                  >
+                    <p className="text-muted-foreground px-2 py-1 text-[11px] font-medium">
+                      {m['common.navUser.accounts']()}
+                    </p>
+                    {connectedConnections.map((connection) => {
+                      const isActive = connection.id === activeConnection?.id;
 
-                  {overflowConnections.length > 0 && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          className="text-muted-foreground hover:bg-muted/70 hover:text-foreground flex h-8 w-full items-center justify-between rounded-lg px-2 text-[11px] transition-colors"
+                      return (
+                        <DropdownMenuItem
+                          key={connection.id}
+                          disabled={isSwitchingAccount}
+                          onClick={handleAccountSwitch(connection.id)}
+                          className={cn(
+                            'flex cursor-pointer items-center gap-3 rounded-lg py-2',
+                            isActive && 'bg-blue-50/90 dark:bg-blue-500/10',
+                          )}
                         >
-                          <span>
-                            {m['common.navUser.moreAccounts']({
-                              count: overflowConnections.length,
-                            })}
-                          </span>
-                          <ChevronDown className="size-3.5" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        className="ml-3 min-w-64 bg-white font-medium dark:bg-[#131313]"
-                        align="start"
-                        side="bottom"
-                        sideOffset={6}
-                      >
-                        {overflowConnections.map((connection) => (
-                          <DropdownMenuItem
-                            key={connection.id}
-                            onClick={handleAccountSwitch(connection.id)}
-                            className="flex cursor-pointer items-center gap-3 py-2"
-                          >
-                            <Avatar className="size-8 rounded-lg">
-                              <AvatarImage
-                                className="rounded-lg"
-                                src={connection.picture || undefined}
-                                alt={connection.name || connection.email}
-                              />
-                              <AvatarFallback className="rounded-lg text-[10px]">
-                                {(connection.name || connection.email)
-                                  .split(' ')
-                                  .map((namePart) => namePart[0])
-                                  .join('')
-                                  .toUpperCase()
-                                  .slice(0, 2)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <p className="truncate text-[12px] font-medium">
-                                {connection.name || connection.email.split('@')[0]}
-                              </p>
-                              <p className="text-muted-foreground truncate text-[11px]">
-                                {connection.email}
-                              </p>
-                            </div>
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
+                          <Avatar className="size-8 shrink-0 rounded-lg">
+                            <AvatarImage
+                              className="rounded-lg"
+                              src={connection.picture || undefined}
+                              alt={connection.name || connection.email}
+                            />
+                            <AvatarFallback className="rounded-lg text-[10px]">
+                              {(connection.name || connection.email)
+                                .split(' ')
+                                .map((namePart) => namePart[0])
+                                .join('')
+                                .toUpperCase()
+                                .slice(0, 2)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[12px] font-medium">
+                              {connection.name || connection.email.split('@')[0]}
+                            </p>
+                            <p className="text-muted-foreground truncate text-[11px]">
+                              {connection.email}
+                            </p>
+                          </div>
+                          {isActive && (
+                            <CircleCheck className="size-4 shrink-0 fill-[#006FFE] text-[#006FFE]" />
+                          )}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               ) : isActiveConnectionPending ? (
-                <div className="space-y-1 px-1 pb-1">
-                  <div className="bg-muted h-12 animate-pulse rounded-lg" />
-                  <div className="bg-muted/70 h-12 animate-pulse rounded-lg" />
-                </div>
+                <div className="bg-muted mx-1 mb-1 h-12 animate-pulse rounded-lg" />
               ) : null}
             </div>
 
