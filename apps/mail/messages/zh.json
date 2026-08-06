@@ -275,6 +275,7 @@
     "mailCategories": {
       "primary": "主要",
       "allMail": "所有邮件",
+      "customerEmail": "客户邮件",
       "important": "重要",
       "personal": "个人",
       "updates": "动态",
@@ -445,6 +446,7 @@
     },
     "mail": {
       "customerEmail": "客户邮件 · {customerName}",
+      "conversationDetails": "会话详情",
       "replies": [
         {
           "declarations": ["input count", "local countPlural = count: plural"],

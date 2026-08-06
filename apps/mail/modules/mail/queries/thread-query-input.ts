@@ -9,6 +9,7 @@ export type ThreadCategoryFilter = {
 const legacyCategoryKeywords: Readonly<Record<string, string>> = {
   IMPORTANT: '$important',
   STARRED: '$flagged',
+  CUSTOMER: 'customer',
 };
 
 export function buildThreadCategoryFilter(searchValue: string): ThreadCategoryFilter {

@@ -35,4 +35,4 @@ export type CustomerMarkerResult =
       customerName: null;
     };
 
-export const CRM_CUSTOMER_KEYWORD = 'crm/customer';
+export const CRM_CUSTOMER_KEYWORD = 'customer';

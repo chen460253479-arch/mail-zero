@@ -275,6 +275,7 @@
     "mailCategories": {
       "primary": "Primary",
       "allMail": "All Mail",
+      "customerEmail": "Customer email",
       "important": "Important",
       "personal": "Personal",
       "updates": "Updates",
@@ -445,6 +446,7 @@
     },
     "mail": {
       "customerEmail": "Customer email · {customerName}",
+      "conversationDetails": "Conversation details",
       "replies": [
         {
           "declarations": ["input count", "local countPlural = count: plural"],

@@ -34,6 +34,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { applyOptimisticKeywordTags } from '@/components/mail/optimistic-keyword-tags';
 import { useOptimisticThreadState } from '@/components/mail/optimistic-thread-state';
+import { buildCustomerConversationUrl } from '@/modules/mail/customer-conversation';
 import { MoveToFolderMenu } from '@/components/mailbox/move-to-folder-menu';
 import { resolveMailboxRoute } from '@/modules/mail/routing/mailbox-route';
 import { useOptimisticActions } from '@/hooks/use-optimistic-actions';
@@ -49,6 +50,7 @@ import { getDateLocale } from '@/lib/i18n/date-locale';
 import { useAnimations } from '@/hooks/use-animations';
 import { AnimatePresence, motion } from 'motion/react';
 import { MailDisplaySkeleton } from './mail-skeleton';
+import { ContactRound, Inbox } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useMailDelivery } from '@/modules/mail';
 import { Button } from '@/components/ui/button';
@@ -60,7 +62,6 @@ import { cn, FOLDERS } from '@/lib/utils';
 import { m } from '@/paraglide/messages';
 import MailDisplay from './mail-display';
 import { useParams } from 'react-router';
-import { Inbox } from 'lucide-react';
 import { useQueryState } from 'nuqs';
 import { format } from 'date-fns';
 import { useAtom } from 'jotai';
@@ -194,6 +195,16 @@ export function ThreadDisplay() {
       return acc;
     }, []);
   }, [emailData?.messages]);
+  const customerConversationUrl = useMemo(
+    () =>
+      emailData?.customerMarker
+        ? buildCustomerConversationUrl(
+            import.meta.env.VITE_PUBLIC_CUSTOMER_CONVERSATION_URL,
+            emailData.customerMarker.customerId,
+          )
+        : null,
+    [emailData?.customerMarker],
+  );
 
   const [mode, setMode] = useQueryState('mode');
   const [activeReplyId, setActiveReplyId] = useQueryState('activeReplyId');
@@ -837,6 +848,21 @@ export function ThreadDisplay() {
                 />
               </div>
               <div className="flex items-center gap-2">
+                {customerConversationUrl && emailData.customerMarker ? (
+                  <a
+                    href={customerConversationUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={emailData.customerMarker.customerName}
+                    aria-label={`${m['common.mail.conversationDetails']()}: ${emailData.customerMarker.customerName}`}
+                    className="inline-flex h-7 cursor-pointer items-center justify-center gap-1.5 overflow-hidden rounded-lg border border-[#D1F0D9] bg-[#EDF8F0] px-2 text-[#12341D] transition-colors hover:bg-[#D1F0D9] dark:border-[#285C36] dark:bg-[#12341D] dark:text-[#D1F0D9] dark:hover:bg-[#1B4A29]"
+                  >
+                    <ContactRound className="h-3.5 w-3.5 shrink-0" />
+                    <span className="hidden whitespace-nowrap text-sm leading-none xl:inline">
+                      {m['common.mail.conversationDetails']()}
+                    </span>
+                  </a>
+                ) : null}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

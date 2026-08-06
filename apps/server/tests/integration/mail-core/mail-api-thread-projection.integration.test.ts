@@ -176,7 +176,7 @@ describe('Mail API PostgreSQL Thread projection', () => {
       expect(first.items[0]).toMatchObject({
         id: 'view-thread-2',
         mailboxIds: { [h.inbox.id]: true, [h.drafts.id]: true },
-        keywords: { $seen: true, $flagged: true, 'crm/customer': true },
+        keywords: { $seen: true, $flagged: true, customer: true },
         customerMarkers: [{ customerId: 'customer-123', customerName: '上海某某有限公司' }],
         latestEmail: { id: 'view-email-2' },
       });
@@ -193,7 +193,7 @@ describe('Mail API PostgreSQL Thread projection', () => {
       await expect(
         projection.threadPage({
           accountId: h.accountId,
-          hasKeyword: 'crm/customer',
+          hasKeywords: ['customer'],
           limit: 10,
         }),
       ).resolves.toMatchObject({

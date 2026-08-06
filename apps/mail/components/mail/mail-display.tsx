@@ -32,10 +32,11 @@ import { cn, formatDate, formatTime, shouldShowSeparateTime } from '@/lib/utils'
 import { memo, useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import type { Sender, ParsedMessage, Attachment, Label } from '@/types';
 import { EmailVerificationBadge } from './email-verification-badge';
-import type { Sender, ParsedMessage, Attachment } from '@/types';
 import { useMailboxLabels } from '@/hooks/use-mailbox-labels';
 import { useActiveConnection } from '@/hooks/use-connections';
+import { CustomerMarkerBadge } from './customer-marker-badge';
 import { getDateLocale } from '@/lib/i18n/date-locale';
 import { getLocale } from '@/paraglide/runtime';
 import { useThread } from '@/hooks/use-threads';
@@ -98,9 +99,9 @@ type Props = {
   threadAttachments?: Attachment[];
 };
 
-const MailDisplayLabels = ({ labels }: { labels: string[] }) => {
+const MailDisplayLabels = ({ labels }: { labels: Label[] }) => {
   const visibleLabels = labels.filter(
-    (label) => !['unread', 'inbox'].includes(label.toLowerCase()),
+    (label) => !['unread', 'inbox'].includes(label.name.toLowerCase()),
   );
 
   if (!visibleLabels.length) return null;
@@ -108,7 +109,13 @@ const MailDisplayLabels = ({ labels }: { labels: string[] }) => {
   return (
     <div className="flex">
       {visibleLabels.map((label, index) => {
-        const normalizedLabel = label.toLowerCase().replace(/^category_/i, '');
+        if (label.type === 'crm/customer') {
+          return (
+            <CustomerMarkerBadge key={label.id} label={label} className="-ml-1.5 first:ml-0" />
+          );
+        }
+
+        const normalizedLabel = label.name.toLowerCase().replace(/^category_/i, '');
 
         let icon = null;
         let bgColor = '';
@@ -160,10 +167,10 @@ const MailDisplayLabels = ({ labels }: { labels: string[] }) => {
         }
 
         return (
-          <Tooltip key={`${label}-${index}`}>
+          <Tooltip key={`${label.id}-${index}`}>
             <TooltipTrigger>
               <Badge
-                key={`${label}-${index}`}
+                key={`${label.id}-${index}`}
                 className={`rounded-md p-1 ${bgColor} dark:border-panelDark -ml-1.5 border-2 border-white transition-transform first:ml-0`}
               >
                 {icon}
@@ -1000,9 +1007,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                 </span>
 
                 <div className="mt-2 flex items-center gap-2">
-                  {emailData?.tags?.length ? (
-                    <MailDisplayLabels labels={emailData?.tags.map((t) => t.name) || []} />
-                  ) : null}
+                  {emailData?.tags?.length ? <MailDisplayLabels labels={emailData.tags} /> : null}
                   {emailData?.tags?.length ? (
                     <div className="bg-iconLight dark:bg-iconDark/20 relative h-3 w-0.5 rounded-full" />
                   ) : null}

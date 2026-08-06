@@ -115,7 +115,7 @@ describe('mail UI adapters', () => {
       participants: 'Ada <ada@example.com>, user@example.com',
       latestReceivedAt: '2026-07-27T00:00:00.000Z',
       mailboxIds: ['mailbox-inbox', 'label-customer'],
-      keywords: { $flagged: true, 'crm/customer': true },
+      keywords: { $flagged: true, customer: true },
       customerMarkers: [{ customerId: 'customer-123', customerName: 'Acme' }],
       latestEmail: {
         id: 'email-1',
@@ -194,6 +194,10 @@ describe('mail UI adapters', () => {
         backendBaseUrl: 'https://api.example.com',
       }),
     ).toMatchObject({
+      customerMarker: {
+        customerId: 'customer-123',
+        customerName: 'Acme',
+      },
       hasUnread: true,
       totalReplies: 1,
       isLatestDraft: true,

@@ -37,9 +37,9 @@ describe('external mail integration contract', () => {
     expect(notificationContractShape).toEqual(['eventId', 'messageId']);
   });
 
-  it('defines the CRM customer marker as one explicit namespaced business keyword', () => {
+  it('defines the CRM customer marker as one explicit business keyword', () => {
     const markerContract = readSource('modules/external-integration/contracts/customer-marker.ts');
-    expect(markerContract).toContain("CRM_CUSTOMER_KEYWORD = 'crm/customer'");
+    expect(markerContract).toContain("CRM_CUSTOMER_KEYWORD = 'customer'");
   });
 
   it('defines no webhook signature contract', () => {

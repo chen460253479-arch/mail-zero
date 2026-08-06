@@ -4,9 +4,14 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
+import {
+  CUSTOMER_CATEGORY_ID,
+  useCategorySettings,
+  useDefaultCategoryId,
+} from '@/hooks/use-categories';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Bell, Lightning, Mail, ScanEye, Tag, User, X, Search } from '../icons/icons';
-import { useCategorySettings, useDefaultCategoryId } from '@/hooks/use-categories';
+import { useActiveConnection, useDefaultConnection } from '@/hooks/use-connections';
 import { ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { MoveToFolderMenu } from '@/components/mailbox/move-to-folder-menu';
 import { resolveMailboxRoute } from '@/modules/mail/routing/mailbox-route';
@@ -16,8 +21,7 @@ import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
 import { useHotkeys, useHotkeysContext } from 'react-hotkeys-hook';
 import { ThreadDisplay } from '@/components/mail/thread-display';
 import { LabelPicker } from '@/components/mailbox/label-picker';
-import { useActiveConnection, useDefaultConnection } from '@/hooks/use-connections';
-import { Check, ChevronDown, RefreshCcw } from 'lucide-react';
+import { Check, ChevronDown, ContactRound, RefreshCcw } from 'lucide-react';
 import { useMediaQuery } from '../../hooks/use-media-query';
 import * as CustomIcons from '@/components/icons/icons';
 import { MailList } from '@/components/mail/mail-list';
@@ -44,8 +48,7 @@ export function MailLayout() {
   const prevFolderRef = useRef(folder);
   const { enableScope, disableScope } = useHotkeysContext();
   const { data: activeConnection, isPending: isConnectionPending } = useActiveConnection();
-  const { data: defaultConnection, isPending: isDefaultConnectionPending } =
-    useDefaultConnection();
+  const { data: defaultConnection, isPending: isDefaultConnectionPending } = useDefaultConnection();
   const zohoBindingIncomplete =
     defaultConnection?.channelId === 'zoho_mail' &&
     defaultConnection.bindingStatus === 'incomplete';
@@ -277,7 +280,7 @@ export function MailLayout() {
               <div className="px-4 pt-2">
                 <div
                   className={cn(
-                    `${category === 'Important' ? 'bg-[#F59E0D]' : category === 'All Mail' ? 'bg-[#006FFE]' : category === 'Personal' ? 'bg-[#39ae4a]' : category === 'Updates' ? 'bg-[#8B5CF6]' : category === 'Promotions' ? 'bg-[#F43F5E]' : category === 'Unread' ? 'bg-[#FF4800]' : 'bg-[#F59E0D]'}`,
+                    `${category === 'Important' ? 'bg-[#F59E0D]' : category === 'All Mail' ? 'bg-[#006FFE]' : category === 'Personal' ? 'bg-[#39ae4a]' : category === 'Updates' ? 'bg-[#8B5CF6]' : category === 'Promotions' ? 'bg-[#F43F5E]' : category === 'Unread' ? 'bg-[#FF4800]' : category === CUSTOMER_CATEGORY_ID ? 'bg-[#12341D]' : 'bg-[#F59E0D]'}`,
                     'h-0.5 w-full rounded-full transition-opacity',
                     isFetching ? 'opacity-100' : 'opacity-0',
                   )}
@@ -491,6 +494,7 @@ function CategoryDropdown({ isMultiSelectMode }: CategoryDropdownProps) {
   const params = useParams<{ folder: string }>();
   const folder = params?.folder ?? 'inbox';
   const [isOpen, setIsOpen] = useState(false);
+  const selectedCategory = categorySettings.find((category) => category.id === activeCategory);
 
   useHotkeys(
     ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
@@ -521,8 +525,7 @@ function CategoryDropdown({ isMultiSelectMode }: CategoryDropdownProps) {
           aria-haspopup="menu"
         >
           <span className="text-sm font-medium">
-            {categorySettings.find((category) => category.id === activeCategory)?.name ??
-              m['navigation.settings.categories']()}
+            {selectedCategory?.name ?? m['navigation.settings.categories']()}
           </span>
           <ChevronDown
             className={cn(
@@ -550,6 +553,9 @@ function CategoryDropdown({ isMultiSelectMode }: CategoryDropdownProps) {
             role="menuitemcheckbox"
             aria-checked={activeCategory === category.id}
           >
+            {category.id === CUSTOMER_CATEGORY_ID ? (
+              <ContactRound className="h-4 w-4 text-[#12341D] dark:text-[#D1F0D9]" />
+            ) : null}
             <span className="text-foreground font-medium capitalize">
               {category.name.toLowerCase()}
             </span>

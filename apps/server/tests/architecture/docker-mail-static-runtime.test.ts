@@ -52,6 +52,7 @@ describe('Docker Mail static runtime', () => {
     expect(Object.keys(buildArgs).sort()).toEqual([
       'VITE_PUBLIC_APP_URL',
       'VITE_PUBLIC_BACKEND_URL',
+      'VITE_PUBLIC_CUSTOMER_CONVERSATION_URL',
       'VITE_PUBLIC_IMAGE_API_URL',
       'VITE_PUBLIC_IMAGE_PROXY',
     ]);

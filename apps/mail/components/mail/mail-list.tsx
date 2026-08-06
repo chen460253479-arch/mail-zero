@@ -21,7 +21,7 @@ import { focusedIndexAtom, useMailNavigation } from '@/hooks/use-mail-navigation
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { MoveToFolderMenu } from '@/components/mailbox/move-to-folder-menu';
 import { resolveMailboxRoute } from '@/modules/mail/routing/mailbox-route';
-import type { MailSelectMode, ParsedMessage, ThreadProps } from '@/types';
+import type { Label, MailSelectMode, ParsedMessage, ThreadProps } from '@/types';
 import { useMailChanges } from '@/modules/mail/queries/use-mail-changes';
 import { ThreadContextMenu } from '@/components/context/thread-context';
 import { useOptimisticActions } from '@/hooks/use-optimistic-actions';
@@ -31,6 +31,7 @@ import { useMail, type Config } from '@/components/mail/use-mail';
 import { getSystemMailLabelIcon } from './system-mail-label-icon';
 import { LabelPicker } from '@/components/mailbox/label-picker';
 import { useMailboxLabels } from '@/hooks/use-mailbox-labels';
+import { CustomerMarkerBadge } from './customer-marker-badge';
 import { useSearchValue } from '@/hooks/use-search-value';
 import { EmptyStateIcon } from '../icons/empty-state-svg';
 import { highlightText } from '@/lib/email-utils.client';
@@ -1062,7 +1063,7 @@ export const MailList = memo(
 );
 
 export const MailLabels = memo(
-  function MailListLabels({ labels }: { labels: { id: string; name: string }[] }) {
+  function MailListLabels({ labels }: { labels: Label[] }) {
     if (!labels?.length) return null;
 
     const visibleLabels = labels.filter(
@@ -1074,6 +1075,10 @@ export const MailLabels = memo(
     return (
       <div className={cn('flex select-none items-center')}>
         {visibleLabels.map((label) => {
+          if (label.type === 'crm/customer') {
+            return <CustomerMarkerBadge key={label.id} label={label} />;
+          }
+
           const style = getDefaultBadgeStyle(label.name);
           if (label.name.toLowerCase() === 'notes') {
             return (

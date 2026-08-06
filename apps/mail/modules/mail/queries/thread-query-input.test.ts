@@ -42,6 +42,9 @@ describe('thread query input', () => {
     expect(buildThreadCategoryFilter('IMPORTANT')).toEqual({
       hasKeywords: ['$important'],
     });
+    expect(buildThreadCategoryFilter('CUSTOMER')).toEqual({
+      hasKeywords: ['customer'],
+    });
     expect(buildThreadCategoryFilter('UNREAD')).toEqual({ unreadOnly: true });
   });
 
