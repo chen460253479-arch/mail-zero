@@ -195,14 +195,20 @@ export const createZohoMailClient = (
     });
   },
 
-  getOriginalMessage: async ({ accountId, folderId, messageId }) => {
+  getOriginalMessage: async ({ accountId, messageId }) => {
     const response = await transport.request({
       method: 'GET',
-      path: `/api/accounts/${encodeURIComponent(accountId)}/folders/${encodeURIComponent(folderId)}/messages/${encodeURIComponent(messageId)}/originalmessage`,
-      headers: { Accept: 'message/rfc822' },
+      path: `/api/accounts/${encodeURIComponent(accountId)}/messages/${encodeURIComponent(messageId)}/originalmessage`,
+      headers: { Accept: 'application/json' },
     });
-    if (response.bytes.byteLength === 0) throw new ZohoMailApiError('ZOHO_RAW_MESSAGE_MISSING');
-    return response.bytes;
+    const data = requireRecord(
+      responseData(response.json, 'ZOHO_INVALID_ORIGINAL_MESSAGE_RESPONSE'),
+      'ZOHO_INVALID_ORIGINAL_MESSAGE_RESPONSE',
+    );
+    if (typeof data.content !== 'string' || data.content.length === 0) {
+      throw new ZohoMailApiError('ZOHO_RAW_MESSAGE_MISSING');
+    }
+    return new TextEncoder().encode(data.content);
   },
 
   uploadAttachment: async ({ accountId, filename, bytes }) => {

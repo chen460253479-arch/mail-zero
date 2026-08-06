@@ -113,4 +113,56 @@ describe('Zoho Mail API client', () => {
       }),
     );
   });
+
+  it('extracts RFC 822 bytes from the account-scoped original-message response', async () => {
+    const rawMessage = [
+      'From: sender@example.com',
+      'To: owner@example.com',
+      'Subject: Imported from Zoho',
+      '',
+      'Hello',
+    ].join('\r\n');
+    const request = vi.fn<ZohoMailTransport['request']>().mockResolvedValue({
+      status: 200,
+      json: {
+        status: { code: 200, description: 'success' },
+        data: { messageId: 123, content: rawMessage },
+      },
+      bytes: new TextEncoder().encode('{}'),
+    });
+    const client = createZohoMailClient({ request });
+
+    await expect(
+      client.getOriginalMessage({
+        accountId: 'account/1',
+        folderId: 'folder/1',
+        messageId: 'message/1',
+      }),
+    ).resolves.toEqual(new TextEncoder().encode(rawMessage));
+    expect(request).toHaveBeenCalledWith({
+      method: 'GET',
+      path: '/api/accounts/account%2F1/messages/message%2F1/originalmessage',
+      headers: { Accept: 'application/json' },
+    });
+  });
+
+  it('rejects an original-message response without MIME content', async () => {
+    const request = vi.fn<ZohoMailTransport['request']>().mockResolvedValue({
+      status: 200,
+      json: {
+        status: { code: 200, description: 'success' },
+        data: { messageId: 123 },
+      },
+      bytes: new TextEncoder().encode('{}'),
+    });
+    const client = createZohoMailClient({ request });
+
+    await expect(
+      client.getOriginalMessage({
+        accountId: 'account-1',
+        folderId: 'folder-1',
+        messageId: 'message-1',
+      }),
+    ).rejects.toThrow('ZOHO_RAW_MESSAGE_MISSING');
+  });
 });
