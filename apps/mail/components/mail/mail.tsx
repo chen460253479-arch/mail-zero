@@ -21,7 +21,7 @@ import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
 import { useHotkeys, useHotkeysContext } from 'react-hotkeys-hook';
 import { ThreadDisplay } from '@/components/mail/thread-display';
 import { LabelPicker } from '@/components/mailbox/label-picker';
-import { Check, ChevronDown, ContactRound, RefreshCcw } from 'lucide-react';
+import { Check, ChevronDown, RefreshCcw } from 'lucide-react';
 import { useMediaQuery } from '../../hooks/use-media-query';
 import * as CustomIcons from '@/components/icons/icons';
 import { MailList } from '@/components/mail/mail-list';
@@ -553,9 +553,6 @@ function CategoryDropdown({ isMultiSelectMode }: CategoryDropdownProps) {
             role="menuitemcheckbox"
             aria-checked={activeCategory === category.id}
           >
-            {category.id === CUSTOMER_CATEGORY_ID ? (
-              <ContactRound className="h-4 w-4 text-[#12341D] dark:text-[#D1F0D9]" />
-            ) : null}
             <span className="text-foreground font-medium capitalize">
               {category.name.toLowerCase()}
             </span>

@@ -310,6 +310,9 @@
       "print": "Print",
       "printThreadTitle": "Print Thread - {subject}",
       "printEmailTitle": "Print Email - {subject}",
+      "expandEmailContent": "Expand email content",
+      "collapseEmailContent": "Collapse email content",
+      "emailContentCollapsed": "Email content is collapsed. Click to expand.",
       "unknownPerson": "Unknown",
       "noEmail": "No email",
       "additionalPeople": [

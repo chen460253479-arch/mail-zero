@@ -26,7 +26,7 @@ import {
   Users,
   Lock,
   HardDriveDownload,
-  CopyIcon,
+  ChevronDown,
 } from 'lucide-react';
 import { cn, formatDate, formatTime, shouldShowSeparateTime } from '@/lib/utils';
 import { memo, useEffect, useMemo, useState, useRef, useCallback } from 'react';
@@ -34,6 +34,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import type { Sender, ParsedMessage, Attachment, Label } from '@/types';
 import { EmailVerificationBadge } from './email-verification-badge';
+import { MailParticipant } from './mail-participant';
 import { useMailboxLabels } from '@/hooks/use-mailbox-labels';
 import { useActiveConnection } from '@/hooks/use-connections';
 import { CustomerMarkerBadge } from './customer-marker-badge';
@@ -452,17 +453,8 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
         // - All other emails should be collapsed
         setIsCollapsed(!isLastEmail);
       }
-      // Set all emails to collapsed by default except the last one
-      if (totalEmails && index === totalEmails - 1) {
-        if (totalEmails > 5) {
-          setTimeout(() => {
-            const element = document.getElementById(`mail-${emailData.id}`);
-            element?.scrollIntoView({ behavior: 'smooth' });
-          }, 100);
-        }
-      }
     }
-  }, [demo, emailData.id, isLastEmail, activeReplyId]);
+  }, [activeReplyId, demo, emailData.id, isLastEmail]);
 
   //   const listUnsubscribeAction = useMemo(
   //     () =>
@@ -522,17 +514,9 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
   const toggleCollapse = useCallback(() => {
     // Only toggle if we're not in prevention mode
     if (!preventCollapse && !openDetailsPopover) {
-      setIsCollapsed(!isCollapsed);
+      setIsCollapsed((collapsed) => !collapsed);
     }
-  }, [isCollapsed, preventCollapse, openDetailsPopover]);
-
-  // Handle email copy of senders
-  const handleCopySenderEmail = useCallback(async (personEmail: string) => {
-    if (!personEmail) return;
-
-    await navigator.clipboard.writeText(personEmail || '');
-    toast.success(m['common.mail.emailCopied']());
-  }, []);
+  }, [preventCollapse, openDetailsPopover]);
 
   // email printing
   const printMail = () => {
@@ -918,51 +902,8 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
     }
   };
 
-  const renderPerson = useCallback(
-    (person: Sender) => (
-      <Popover key={person.email}>
-        <PopoverTrigger asChild>
-          <div
-            key={person.email}
-            className="dark:bg-panelDark inline-flex items-center justify-start gap-1.5 overflow-hidden rounded-full border bg-white p-1 pr-2"
-          >
-            <BimiAvatar
-              email={person.email}
-              name={person.name || person.email}
-              className="h-5 w-5"
-            />
-            <div className="text-panelDark justify-start text-sm font-medium leading-none dark:text-white">
-              {person.name || person.email}
-            </div>
-          </div>
-        </PopoverTrigger>
-        <PopoverContent className="min-w-fit text-sm">
-          <div className="flex items-center gap-2">
-            <BimiAvatar
-              email={person.email}
-              name={person.name || person.email}
-              className="h-12 w-12"
-            />
-            <div>
-              <p className="font-medium">
-                {person.name || m['common.mailDisplay.unknownPerson']()}
-              </p>
-              <div className="group flex items-center gap-2">
-                <p>{person.email || m['common.mailDisplay.noEmail']()}</p>
-                <span className="opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                  <CopyIcon
-                    size={14}
-                    className="cursor-pointer"
-                    onClick={() => handleCopySenderEmail(person.email)}
-                  />
-                </span>
-              </div>
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
-    ),
-    [],
+  const renderPerson = (person: Sender) => (
+    <MailParticipant key={person.email} person={person} />
   );
 
   const people = useMemo(() => {
@@ -980,7 +921,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
         p.name !== 'No Sender Name' &&
         p === allPeople.find((other) => other?.email === p?.email),
     );
-  }, [emailData, activeConnection]);
+  }, [emailData, activeConnection, folder]);
 
   return (
     <div
@@ -1006,7 +947,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                   </span>
                 </span>
 
-                <div className="mt-2 flex items-center gap-2">
+                <div className="mt-2 flex flex-wrap items-center gap-2">
                   {emailData?.tags?.length ? <MailDisplayLabels labels={emailData.tags} /> : null}
                   {emailData?.tags?.length ? (
                     <div className="bg-iconLight dark:bg-iconDark/20 relative h-3 w-0.5 rounded-full" />
@@ -1015,7 +956,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                   {threadLabels.length ? (
                     <div className="bg-iconLight dark:bg-iconDark/20 relative h-3 w-0.5 rounded-full" />
                   ) : null}
-                  <div className="text-muted-foreground flex items-center gap-2 text-sm dark:text-[#8C8C8C]">
+                  <div className="text-muted-foreground flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm dark:text-[#8C8C8C]">
                     {(() => {
                       if (people.length <= 2) {
                         return people.map(renderPerson);
@@ -1058,7 +999,11 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
               </>
             )}
           </div>
-          <div className="flex cursor-pointer flex-col pb-2 duration-200" onClick={toggleCollapse}>
+          <div
+            className="flex cursor-pointer flex-col pb-2 duration-200"
+            data-mail-content-collapsed={isCollapsed}
+            onClick={toggleCollapse}
+          >
             <div className="mt-3 flex w-full items-start justify-between gap-4 px-4">
               <div className="flex w-full justify-center gap-4">
                 <BimiAvatar
@@ -1221,6 +1166,34 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                             )}
                           </div>
 
+                          <button
+                            type="button"
+                            aria-expanded={!isCollapsed}
+                            aria-label={
+                              isCollapsed
+                                ? m['common.mailDisplay.expandEmailContent']()
+                                : m['common.mailDisplay.collapseEmailContent']()
+                            }
+                            title={
+                              isCollapsed
+                                ? m['common.mailDisplay.expandEmailContent']()
+                                : m['common.mailDisplay.collapseEmailContent']()
+                            }
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              toggleCollapse();
+                            }}
+                            className="hover:bg-accent/50 mr-1 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md transition-colors"
+                          >
+                            <ChevronDown
+                              aria-hidden="true"
+                              className={cn(
+                                'text-muted-foreground h-4 w-4 transition-transform duration-200',
+                                !isCollapsed && 'rotate-180',
+                              )}
+                            />
+                          </button>
+
                           {/* options menu */}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -1281,11 +1254,6 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                                 ...(emailData?.cc || []),
                               ];
 
-                              // If you're the only recipient
-                              if (allRecipients.length === 1 && folder !== 'sent') {
-                                return <span key="you">{m['common.mail.you']()}</span>;
-                              }
-
                               // Show first 3 recipients + count of others
                               const visibleRecipients = allRecipients.slice(0, 3);
                               const remainingCount = allRecipients.length - 3;
@@ -1293,9 +1261,8 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                               return (
                                 <>
                                   {visibleRecipients.map((recipient, index) => (
-                                    <span key={recipient.email}>
-                                      {cleanNameDisplay(recipient.name) ||
-                                        cleanEmailDisplay(recipient.email)}
+                                    <span key={recipient.email} className="inline">
+                                      <MailParticipant person={recipient} />
                                       {index < visibleRecipients.length - 1 ? ', ' : ''}
                                     </span>
                                   ))}
@@ -1314,9 +1281,8 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                             <p className="text-muted-foreground text-sm font-medium dark:text-[#8C8C8C]">
                               {m['common.mail.bcc']()}{' '}
                               {emailData?.bcc?.map((recipient, index) => (
-                                <span key={recipient.email}>
-                                  {cleanNameDisplay(recipient.name) ||
-                                    cleanEmailDisplay(recipient.email)}
+                                <span key={recipient.email} className="inline">
+                                  <MailParticipant person={recipient} />
                                   {index < (emailData?.bcc?.length || 0) - 1 ? ', ' : ''}
                                 </span>
                               ))}
@@ -1324,6 +1290,12 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                           )}
                         </div>
                       </div>
+                      {isCollapsed && (
+                        <div className="text-muted-foreground mt-1 flex items-center gap-1 text-xs">
+                          <ChevronDown aria-hidden="true" className="h-3.5 w-3.5" />
+                          <span>{m['common.mailDisplay.emailContentCollapsed']()}</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Pending, needs a storage to make the unsubscribe status consitent */}

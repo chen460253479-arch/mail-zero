@@ -7,8 +7,8 @@ import DOMPurify from 'dompurify';
 
 export const getFirstLetterCharacter = (name?: string) => {
   if (!name) return '';
-  const match = name.match(/[a-zA-Z]/);
-  return match ? match[0].toUpperCase() : '';
+  const match = name.trim().match(/[\p{L}\p{N}]/u);
+  return match ? match[0].toLocaleUpperCase() : '';
 };
 
 interface BimiAvatarProps {
@@ -68,17 +68,10 @@ export const BimiAvatar = ({
           className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-white dark:bg-[#373737]"
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(bimiData.logo.svgContent) }}
         />
-      ) : fallbackImageSrc && !useDefaultFallback ? (
+      ) : fallbackImageSrc ? (
         <AvatarImage
           className="rounded-full bg-[#FFFFFF] dark:bg-[#373737]"
           src={fallbackImageSrc}
-          alt={name || email}
-          onError={handleFallbackImageError}
-        />
-      ) : getEmailLogo(email) ? (
-        <AvatarImage
-          className="rounded-full bg-[#FFFFFF] dark:bg-[#373737]"
-          src={getEmailLogo(email)}
           alt={name || email}
           onError={handleFallbackImageError}
         />

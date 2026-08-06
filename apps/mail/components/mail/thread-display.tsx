@@ -35,6 +35,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { applyOptimisticKeywordTags } from '@/components/mail/optimistic-keyword-tags';
 import { useOptimisticThreadState } from '@/components/mail/optimistic-thread-state';
 import { buildCustomerConversationUrl } from '@/modules/mail/customer-conversation';
+import { sortMessagesNewestFirst } from '@/modules/mail/message-order';
 import { MoveToFolderMenu } from '@/components/mailbox/move-to-folder-menu';
 import { resolveMailboxRoute } from '@/modules/mail/routing/mailbox-route';
 import { useOptimisticActions } from '@/hooks/use-optimistic-actions';
@@ -233,13 +234,15 @@ export function ThreadDisplay() {
   const displayImportant = optimisticState.optimisticImportant ?? isImportant;
   const displayMessages = useMemo(
     () =>
-      emailData?.messages.map((message) => ({
-        ...message,
-        tags: applyOptimisticKeywordTags(message.tags, {
-          important: optimisticState.optimisticImportant,
-          starred: optimisticState.optimisticStarred,
-        }),
-      })) ?? [],
+      sortMessagesNewestFirst(
+        emailData?.messages.map((message) => ({
+          ...message,
+          tags: applyOptimisticKeywordTags(message.tags, {
+            important: optimisticState.optimisticImportant,
+            starred: optimisticState.optimisticStarred,
+          }),
+        })) ?? [],
+      ),
     [emailData?.messages, optimisticState.optimisticImportant, optimisticState.optimisticStarred],
   );
 
@@ -1052,6 +1055,7 @@ export function ThreadDisplay() {
                       allThreadAttachments={allThreadAttachments}
                       mode={mode || undefined}
                       activeReplyId={activeReplyId || undefined}
+                      stickyReplyMessageId={displayMessages[0]?.id}
                       isMobile={isMobile}
                     />
                   </motion.div>
@@ -1064,13 +1068,14 @@ export function ThreadDisplay() {
                   allThreadAttachments={allThreadAttachments}
                   mode={mode || undefined}
                   activeReplyId={activeReplyId || undefined}
+                  stickyReplyMessageId={displayMessages[0]?.id}
                   isMobile={isMobile}
                 />
               )}
 
               {mode &&
                 activeReplyId &&
-                activeReplyId === emailData.messages[emailData.messages.length - 1]?.id && (
+                activeReplyId === displayMessages[0]?.id && (
                   <div
                     className="border-border bg-panelLight dark:bg-panelDark sticky bottom-0 z-10 border-t px-4 py-2"
                     id={`reply-composer-${activeReplyId}`}
@@ -1093,6 +1098,7 @@ interface MessageListProps {
   allThreadAttachments?: Attachment[];
   mode?: string;
   activeReplyId?: string;
+  stickyReplyMessageId?: string;
   isMobile: boolean;
 }
 
@@ -1103,12 +1109,12 @@ const MessageList = ({
   allThreadAttachments,
   mode,
   activeReplyId,
+  stickyReplyMessageId,
   isMobile,
 }: MessageListProps) => (
   <ScrollArea className={cn('flex-1', isMobile ? 'h-[calc(100%-1px)]' : 'h-full')} type="auto">
     <div className="pb-4">
       {(messages || []).map((message, index) => {
-        const isLastMessage = index === messages.length - 1;
         const isReplyingToThisMessage = mode && activeReplyId === message.id;
 
         return (
@@ -1125,7 +1131,7 @@ const MessageList = ({
               totalEmails={totalReplies}
               threadAttachments={index === 0 ? allThreadAttachments : undefined}
             />
-            {isReplyingToThisMessage && !isLastMessage && (
+            {isReplyingToThisMessage && message.id !== stickyReplyMessageId && (
               <div className="px-4 py-2" id={`reply-composer-${message.id}`}>
                 <ReplyCompose messageId={message.id} />
               </div>

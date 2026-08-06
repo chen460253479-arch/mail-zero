@@ -310,6 +310,9 @@
       "print": "打印",
       "printThreadTitle": "打印会话 - {subject}",
       "printEmailTitle": "打印邮件 - {subject}",
+      "expandEmailContent": "展开邮件内容",
+      "collapseEmailContent": "折叠邮件内容",
+      "emailContentCollapsed": "邮件内容已折叠，点击展开",
       "unknownPerson": "未知联系人",
       "noEmail": "无邮箱地址",
       "additionalPeople": [
