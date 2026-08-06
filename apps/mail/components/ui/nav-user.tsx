@@ -5,7 +5,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LogOut, MoonIcon, Settings, Plus, CopyCheckIcon, RefreshCcw, Trash2 } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  CopyCheckIcon,
+  LogOut,
+  MoonIcon,
+  Plus,
+  RefreshCcw,
+  Settings,
+  Trash2,
+} from 'lucide-react';
 import { listConnectedConnections } from '@/modules/mail-connections/connected-connections';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useActiveConnection, useConnections } from '@/hooks/use-connections';
@@ -180,6 +190,12 @@ export function NavUser() {
     if (!activeAccount) return [];
     return connectedConnections.filter((connection) => connection.id !== activeAccount.id);
   }, [activeAccount, connectedConnections]);
+  const orderedConnections = useMemo(
+    () => (activeAccount ? [activeAccount, ...otherConnections] : connectedConnections),
+    [activeAccount, connectedConnections, otherConnections],
+  );
+  const visibleConnections = orderedConnections.slice(0, 3);
+  const overflowConnections = orderedConnections.slice(3);
 
   const handleThemeToggle = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
@@ -365,155 +381,165 @@ export function NavUser() {
                       <p className="text-[13px] opacity-60">{m['common.actions.logout']()}</p>
                     </div>
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator className="mt-1" />
-                  <div className="text-muted-foreground/60 flex items-center justify-center gap-1 px-2 pb-2 pt-1 text-[10px]">
-                    <a href="/terms" className="hover:underline">
-                      {m['common.navUser.terms']()}
-                    </a>
-                  </div>
                 </>
               </DropdownMenuContent>
             </DropdownMenu>
           )
         ) : (
-          <div className="flex w-full items-center justify-between">
-            <div className="flex items-center gap-2">
-              {activeAccount ? (
-                <div
-                  key={activeAccount.id}
-                  onClick={handleAccountSwitch(activeAccount.id)}
-                  className={`flex cursor-pointer items-center ${
-                    activeAccount.id === activeConnection?.id && connectedConnections.length > 1
-                      ? 'outline-mainBlue rounded-[5px] outline outline-2'
-                      : ''
-                  }`}
-                >
-                  <div className="relative">
-                    <Avatar className="size-7 rounded-[5px]">
-                      <AvatarImage
-                        className="rounded-[5px]"
-                        src={activeAccount.picture || undefined}
-                        alt={activeAccount.name || activeAccount.email}
-                      />
-                      <AvatarFallback className="rounded-[5px] text-[10px]">
-                        {(activeAccount.name || activeAccount.email)
-                          .split(' ')
-                          .map((n) => n[0])
-                          .join('')
-                          .toUpperCase()
-                          .slice(0, 2)}
-                      </AvatarFallback>
-                    </Avatar>
-                    {activeAccount.id === activeConnection?.id &&
-                      connectedConnections.length > 1 && (
-                        <CircleCheck className="fill-mainBlue absolute -bottom-2 -right-2 size-4 rounded-full bg-white dark:bg-[#141414]" />
-                      )}
-                  </div>
+          <div className="relative w-full">
+            <div className="border-border/70 bg-background/60 min-w-0 rounded-xl border p-1.5 shadow-sm">
+              <div className="mb-1 flex h-7 items-center justify-between px-1">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="text-muted-foreground truncate text-[11px] font-medium">
+                    {m['common.navUser.accounts']()}
+                  </span>
+                  {orderedConnections.length > 0 && (
+                    <span className="bg-muted text-muted-foreground flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] tabular-nums">
+                      {orderedConnections.length}
+                    </span>
+                  )}
                 </div>
-              ) : isActiveConnectionPending ? (
-                <div className="flex cursor-pointer items-center">
-                  <div className="relative">
-                    <div className="bg-muted size-6 animate-pulse rounded-[5px]" />
-                  </div>
-                </div>
-              ) : null}
-              {otherConnections.slice(0, 2).map((connection) => (
-                <Tooltip key={connection.id}>
-                  <TooltipTrigger asChild>
-                    <div
-                      onClick={handleAccountSwitch(connection.id)}
-                      className={`flex cursor-pointer items-center ${
-                        connection.id === activeConnection?.id && otherConnections.length > 1
-                          ? 'outline-mainBlue rounded-[5px] outline outline-2'
-                          : ''
-                      }`}
-                    >
-                      <div className="relative">
-                        <Avatar className="size-7 rounded-[5px]">
-                          <AvatarImage
-                            className="rounded-[5px]"
-                            src={connection.picture || undefined}
-                            alt={connection.name || connection.email}
-                          />
-                          <AvatarFallback className="rounded-[5px] text-[10px]">
-                            {(connection.name || connection.email)
-                              .split(' ')
-                              .map((n) => n[0])
-                              .join('')
-                              .toUpperCase()
-                              .slice(0, 2)}
-                          </AvatarFallback>
-                        </Avatar>
-                        {connection.id === activeConnection?.id && otherConnections.length > 1 && (
-                          <CircleCheck className="fill-mainBlue absolute -bottom-2 -right-2 size-4 rounded-full bg-white dark:bg-black" />
-                        )}
-                      </div>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent className="text-muted-foreground text-xs">
-                    {connection.email}
-                  </TooltipContent>
-                </Tooltip>
-              ))}
-
-              {otherConnections.length > 3 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="hover:bg-muted flex h-7 w-7 cursor-pointer items-center justify-center rounded-[5px]">
-                      <span className="text-[10px]">+{otherConnections.length - 3}</span>
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    className="ml-3 min-w-56 bg-white font-medium dark:bg-[#131313]"
-                    align="end"
-                    side={'bottom'}
-                    sideOffset={8}
+                <AddConnectionDialog>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    aria-label={m['pages.settings.connections.addEmail']()}
+                    title={m['pages.settings.connections.addEmail']()}
+                    className="text-muted-foreground hover:text-foreground mr-7 size-7 rounded-md p-0"
                   >
-                    {otherConnections.slice(3).map((connection) => (
-                      <DropdownMenuItem
+                    <Plus className="size-4" />
+                  </Button>
+                </AddConnectionDialog>
+              </div>
+
+              {activeAccount ? (
+                <div className="space-y-1">
+                  {visibleConnections.map((connection) => {
+                    const isActive = connection.id === activeConnection?.id;
+
+                    return (
+                      <button
+                        type="button"
                         key={connection.id}
+                        aria-current={isActive ? 'true' : undefined}
                         onClick={handleAccountSwitch(connection.id)}
-                        className="flex cursor-pointer items-center gap-3 py-1"
+                        className={cn(
+                          'group flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[#006FFE]/40',
+                          isActive
+                            ? 'bg-blue-50/90 text-blue-950 ring-1 ring-inset ring-blue-200/80 dark:bg-blue-500/10 dark:text-blue-50 dark:ring-blue-400/20'
+                            : 'hover:bg-muted/70 cursor-pointer',
+                        )}
                       >
-                        <Avatar className="size-7 rounded-lg">
+                        <Avatar className="size-8 shrink-0 rounded-lg">
                           <AvatarImage
                             className="rounded-lg"
                             src={connection.picture || undefined}
                             alt={connection.name || connection.email}
                           />
-                          <AvatarFallback className="rounded-lg text-[10px]">
+                          <AvatarFallback className="rounded-lg text-[10px] font-medium">
                             {(connection.name || connection.email)
                               .split(' ')
-                              .map((n) => n[0])
+                              .map((namePart) => namePart[0])
                               .join('')
                               .toUpperCase()
                               .slice(0, 2)}
                           </AvatarFallback>
                         </Avatar>
-                        <div className="-space-y-0.5">
-                          <p className="text-[12px]">{connection.name || connection.email}</p>
-                          {connection.name && (
-                            <p className="text-muted-foreground text-[11px]">
-                              {connection.email.length > 25
-                                ? `${connection.email.slice(0, 25)}...`
-                                : connection.email}
-                            </p>
-                          )}
-                        </div>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+                        <span className="min-w-0 flex-1">
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <span className="min-w-0 truncate text-[12px] font-medium leading-4">
+                              {connection.name || connection.email.split('@')[0]}
+                            </span>
+                            {isActive && (
+                              <span className="flex shrink-0 items-center gap-0.5 text-[10px] font-medium text-[#006FFE]">
+                                <CircleCheck className="size-3.5 fill-[#006FFE]" />
+                                {m['common.navUser.currentAccount']()}
+                              </span>
+                            )}
+                          </span>
+                          <span
+                            className={cn(
+                              'block truncate text-[11px] leading-4',
+                              isActive
+                                ? 'text-blue-700 dark:text-blue-300'
+                                : 'text-muted-foreground',
+                            )}
+                          >
+                            {connection.email}
+                          </span>
+                        </span>
+                        {!isActive && (
+                          <ChevronRight className="text-muted-foreground/60 size-3.5 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                        )}
+                      </button>
+                    );
+                  })}
 
-              <AddConnectionDialog>
-                <Button className="hover:bg-offsetLight/80 dark:hover:bg-offsetDark/80 flex h-7 w-7 cursor-pointer items-center justify-center rounded-[5px] border border-dashed bg-transparent px-0 text-black dark:bg-[#262626] dark:text-[#929292]">
-                  <Plus className="size-4" />
-                </Button>
-              </AddConnectionDialog>
+                  {overflowConnections.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:bg-muted/70 hover:text-foreground flex h-8 w-full items-center justify-between rounded-lg px-2 text-[11px] transition-colors"
+                        >
+                          <span>
+                            {m['common.navUser.moreAccounts']({
+                              count: overflowConnections.length,
+                            })}
+                          </span>
+                          <ChevronDown className="size-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        className="ml-3 min-w-64 bg-white font-medium dark:bg-[#131313]"
+                        align="start"
+                        side="bottom"
+                        sideOffset={6}
+                      >
+                        {overflowConnections.map((connection) => (
+                          <DropdownMenuItem
+                            key={connection.id}
+                            onClick={handleAccountSwitch(connection.id)}
+                            className="flex cursor-pointer items-center gap-3 py-2"
+                          >
+                            <Avatar className="size-8 rounded-lg">
+                              <AvatarImage
+                                className="rounded-lg"
+                                src={connection.picture || undefined}
+                                alt={connection.name || connection.email}
+                              />
+                              <AvatarFallback className="rounded-lg text-[10px]">
+                                {(connection.name || connection.email)
+                                  .split(' ')
+                                  .map((namePart) => namePart[0])
+                                  .join('')
+                                  .toUpperCase()
+                                  .slice(0, 2)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="truncate text-[12px] font-medium">
+                                {connection.name || connection.email.split('@')[0]}
+                              </p>
+                              <p className="text-muted-foreground truncate text-[11px]">
+                                {connection.email}
+                              </p>
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+              ) : isActiveConnectionPending ? (
+                <div className="space-y-1 px-1 pb-1">
+                  <div className="bg-muted h-12 animate-pulse rounded-lg" />
+                  <div className="bg-muted/70 h-12 animate-pulse rounded-lg" />
+                </div>
+              ) : null}
             </div>
 
-            <div className="flex items-center justify-center gap-1">
+            <div className="absolute right-1.5 top-1.5 flex items-center justify-center gap-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn('md:h-fit md:px-2')}>
@@ -582,33 +608,12 @@ export function NavUser() {
                       <p className="text-[13px] opacity-60">{m['common.actions.logout']()}</p>
                     </div>
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator className="mt-1" />
-                  <div className="text-muted-foreground/60 flex items-center justify-center gap-1 px-2 pb-2 pt-1 text-[10px]">
-                    <a href="/terms" className="hover:underline">
-                      {m['common.navUser.terms']()}
-                    </a>
-                  </div>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           </div>
         )}
       </div>
-
-      {state !== 'collapsed' && activeAccount && (
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <div className="mt-[2px] flex flex-col items-start gap-1 space-y-1">
-            <div className="flex items-center gap-1 text-[13px] leading-none text-black dark:text-white">
-              <p className={cn('max-w-[14.5ch] truncate text-[13px]')}>
-                {activeAccount.name || activeAccount.email}
-              </p>
-            </div>
-            <div className="h-5 max-w-[200px] overflow-hidden truncate text-xs font-normal leading-none text-[#898989]">
-              {activeAccount.email}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

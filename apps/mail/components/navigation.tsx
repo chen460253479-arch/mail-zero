@@ -12,10 +12,10 @@ import { Separator } from '@/components/ui/separator';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/lib/auth-client';
+import { m } from '@/paraglide/messages';
 import { Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
-import { m } from '@/paraglide/messages';
 
 const resources = [
   {
@@ -49,11 +49,6 @@ const aboutLinks = [
     title: m['navigation.public.about'](),
     href: '/about',
     description: m['navigation.public.aboutDescription'](),
-  },
-  {
-    title: m['navigation.public.terms'](),
-    href: '/terms',
-    description: m['navigation.public.termsDescription'](),
   },
 ];
 

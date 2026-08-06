@@ -255,6 +255,8 @@
     "navUser": {
       "appTheme": "切换主题",
       "accounts": "账号",
+      "currentAccount": "当前",
+      "moreAccounts": "更多账号（{count}）",
       "switchingAccounts": "正在切换账号...",
       "failedToSwitchAccount": "账号切换失败，请重试。",
       "syncingEmails": "正在同步邮件...",
@@ -268,8 +270,7 @@
       "copyConnectionId": "复制连接 ID",
       "clearLocalCache": "清除本地缓存",
       "refreshLocalMailbox": "刷新本地邮箱",
-      "shards": "分片：{count}",
-      "terms": "条款"
+      "shards": "分片：{count}"
     },
     "mailCategories": {
       "primary": "主要",
@@ -574,13 +575,11 @@
       "discord": "Discord",
       "beta": "测试版",
       "about": "关于",
-      "terms": "服务条款",
       "githubDescription": "查看我们的开源项目和贡献。",
       "twitterDescription": "关注我们的最新动态和公告。",
       "linkedinDescription": "与我们建立专业联系并了解最新动态。",
       "discordDescription": "加入社区并与团队交流。",
       "aboutDescription": "进一步了解 Zero 和我们的使命。",
-      "termsDescription": "查看我们的服务条款和使用规范。",
       "zeroEmailLogo": "Zero Email 标志"
     },
     "sidebar": {
@@ -619,30 +618,6 @@
       "signingIn": "正在登录...",
       "signIn": "登录",
       "registrationDisabled": "此私有实例已关闭公开注册。",
-      "loginTitle": "登录 Zero",
-      "loginDescription": "在下方输入 Zero 邮箱以登录账号",
-      "email": "邮箱",
-      "emailPlaceholder": "name@0.email",
-      "forgotPassword": "忘记密码？",
-      "login": "登录",
-      "noAccount": "还没有账号？",
-      "signUp": "注册",
-      "terms": "服务条款",
-      "signupTitle": "注册 Zero",
-      "signupDescription": "在下方输入信息以创建账号",
-      "name": "姓名",
-      "namePlaceholder": "你的姓名",
-      "usernamePlaceholder": "用户名",
-      "signup": "注册",
-      "haveAccount": "已经有账号？",
-      "validEmail": "请输入有效的邮箱地址",
-      "minimumPassword": "密码至少需要 {count} 个字符",
-      "minimumName": "姓名至少需要 {count} 个字符",
-      "minimumUsername": "用户名至少需要 {count} 个字符",
-      "loginAttempt": "正在尝试使用 {email} 登录",
-      "loginAttemptDescription": "登录尝试",
-      "signupAttempt": "正在尝试使用 {email} 注册",
-      "signupAttemptDescription": "注册尝试",
       "changePassword": {
         "title": "设置新密码",
         "description": "继续使用前必须修改初始密码。",
@@ -658,44 +633,6 @@
         "saving": "正在保存...",
         "save": "修改密码"
       }
-    },
-    "developer": {
-      "title": "开发者资源",
-      "apiTitle": "API 文档",
-      "apiDescription": "完整的 API 参考和指南",
-      "apiDetails": "探索 REST API、WebSocket 端点和集成指南。",
-      "viewDocumentation": "查看文档",
-      "githubTitle": "GitHub",
-      "githubDescription": "开源代码仓库",
-      "githubDetails": "访问源代码、参与贡献并跟踪问题。",
-      "viewRepository": "查看代码仓库",
-      "contributingTitle": "参与贡献",
-      "contributingDescription": "加入我们的社区",
-      "contributingDetails": "了解如何为我们的开源项目做出贡献。",
-      "contribute": "参与贡献",
-      "cliTitle": "CLI 工具",
-      "cliDescription": "命令行实用工具",
-      "cliDetails": "下载并安装我们的命令行工具。",
-      "viewCliDocs": "查看 CLI 文档",
-      "sdksTitle": "SDK",
-      "sdksDescription": "开发工具包",
-      "sdksDetails": "查找适用于你所用编程语言的 SDK。",
-      "viewSdks": "查看 SDK",
-      "webhooksTitle": "Webhook",
-      "webhooksDescription": "事件通知",
-      "webhooksDetails": "设置和管理 Webhook 集成。",
-      "configure": "配置",
-      "back": "返回",
-      "heroDescription": "使用 0.email API 和工具进行开发所需的一切。",
-      "needHelp": "需要帮助？",
-      "needHelpDescription": "没有找到所需内容？请联系我们的开发者支持团队。",
-      "contactSupport": "联系支持"
-    },
-    "underConstruction": {
-      "title": "正在建设",
-      "description": "{path} 页面正在建设中。",
-      "checkBack": "请稍后再来！",
-      "goBack": "返回"
     },
     "home": {
       "getStarted": "开始使用",
@@ -713,7 +650,6 @@
         "about": "关于",
         "github": "GitHub",
         "copyright": "© 2025 Zero Email Inc，保留所有权利",
-        "terms": "条款与条件",
         "logo": "Zero Email 标志"
       }
     },
@@ -741,68 +677,12 @@
       "contactIntro": "想进一步了解 Zero？欢迎联系我们：",
       "openGithubIssue": "在 GitHub 上提交问题"
     },
-    "terms": {
-      "back": "返回",
-      "title": "服务条款",
-      "lastUpdated": "最后更新：{date}",
-      "lastUpdatedDate": "2025年2月13日",
-      "copySectionLink": "复制“{section}”章节的链接",
-      "overviewTitle": "概述",
-      "overview": "0.email 是一套开源邮件解决方案，用户可以自行托管邮件服务，也可以与外部邮件服务商集成。使用 0.email 即表示你同意这些条款。",
-      "serviceTitle": "服务说明",
-      "selfHostedTitle": "自托管服务",
-      "selfHostedDeploy": "0.email 提供可由用户部署在自有基础设施上的软件",
-      "selfHostedResponsibility": "用户自行负责托管、维护和合规",
-      "selfHostedLicense": "软件依据 MIT 许可证按“原样”提供",
-      "externalIntegrationTitle": "外部邮箱集成",
-      "externalIntegrationProviders": "0.email 可以与第三方邮件服务商集成",
-      "externalIntegrationTerms": "用户必须遵守第三方服务商的服务条款",
-      "externalIntegrationDisruptions": "我们不对第三方服务中断负责",
-      "responsibilitiesTitle": "用户责任",
-      "responsibilitiesIntro": "用户同意：",
-      "responsibilityLaws": "遵守所有适用的法律法规",
-      "responsibilitySecurity": "保障自有实例的安全",
-      "responsibilityNoSpam": "不将服务用于垃圾邮件或恶意用途",
-      "responsibilityIntellectualProperty": "尊重知识产权",
-      "responsibilityReportSecurity": "以负责任的方式报告安全漏洞",
-      "licenseTitle": "软件许可证",
-      "licenseIntro": "0.email 采用 MIT 许可证：",
-      "licenseUse": "用户可以自由使用、修改和分发软件",
-      "licenseWarranty": "软件不提供任何担保",
-      "licenseNotice": "用户必须保留原始许可证和版权声明",
-      "communityTitle": "社区准则",
-      "communityIntro": "参与社区的用户同意：",
-      "communityConduct": "遵守行为准则",
-      "communityConstructive": "以建设性的方式参与讨论",
-      "communityRespect": "尊重其他社区成员",
-      "communityReport": "报告不当行为",
-      "contactTitle": "联系信息",
-      "contactIntro": "如对这些条款有疑问：",
-      "openGithubIssue": "在 GitHub 上提交问题"
-    },
-    "hr": {
-      "title": "员工时区与工作时间管理",
-      "baseTimezone": "基准时区",
-      "baseStartTime": "基准开始时间",
-      "baseEndTime": "基准结束时间",
-      "addEmployee": "添加员工",
-      "employeeName": "员工姓名",
-      "selectTimezone": "选择时区",
-      "add": "添加",
-      "overlapTitle": "团队重叠时间段",
-      "overlapDescription": "所有团队成员在基准时区的 {start} 至 {end} 均有空",
-      "currentTime": "当前时间",
-      "overlap": "重叠时间",
-      "noOverlap": "无重叠时间",
-      "empty": "尚未添加员工。添加员工后即可查看时区对比和工作时间重叠情况。"
-    },
     "error": {
       "notFound": {
         "title": "找不到页面",
         "description": "抱歉，你访问的页面不存在或已被移动。",
         "goBack": "返回"
-      },
-      "settingsNotFound": "404 - 找不到设置页面"
+      }
     },
     "settings": {
       "general": {
@@ -891,14 +771,6 @@
           "stepSave": "选择收件事件并保存；Zero 会返回 Zoho 要求的 HTTP 200 响应。",
           "disabledDescription": "全局 Zoho Mail 渠道已禁用收件箱监控。请先在集成中启用它，再配置此邮箱。"
         }
-      },
-      "security": {
-        "title": "安全",
-        "description": "管理安全偏好和账号保护。",
-        "twoFactorAuth": "双重身份验证",
-        "twoFactorAuthDescription": "为账号增加一层安全保护",
-        "loginNotifications": "登录通知",
-        "loginNotificationsDescription": "在出现新的登录尝试时接收通知"
       },
       "appearance": {
         "title": "外观",
@@ -995,18 +867,6 @@
         "resetFailed": "恢复默认分类失败",
         "unsavedChanges": "未保存的更改",
         "addCategory": "添加分类"
-      },
-      "notifications": {
-        "title": "通知",
-        "description": "选择你想接收的通知。",
-        "newMail": "新邮件通知",
-        "selectLevel": "选择通知级别",
-        "none": "无",
-        "importantOnly": "仅重要邮件",
-        "allMessages": "所有邮件",
-        "newMailDescription": "选择你希望接收哪些邮件的通知。",
-        "marketing": "营销通讯",
-        "marketingDescription": "接收有关新功能的更新。"
       },
       "integrations": {
         "title": "邮件集成",

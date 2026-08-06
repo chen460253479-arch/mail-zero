@@ -255,6 +255,8 @@
     "navUser": {
       "appTheme": "Toggle Theme",
       "accounts": "Accounts",
+      "currentAccount": "Current",
+      "moreAccounts": "More accounts ({count})",
       "switchingAccounts": "Switching accounts...",
       "failedToSwitchAccount": "Failed to switch accounts. Please try again.",
       "syncingEmails": "Syncing emails...",
@@ -268,8 +270,7 @@
       "copyConnectionId": "Copy Connection ID",
       "clearLocalCache": "Clear Local Cache",
       "refreshLocalMailbox": "Refresh local mailbox",
-      "shards": "Shards: {count}",
-      "terms": "Terms"
+      "shards": "Shards: {count}"
     },
     "mailCategories": {
       "primary": "Primary",
@@ -574,13 +575,11 @@
       "discord": "Discord",
       "beta": "beta",
       "about": "About",
-      "terms": "Terms of Service",
       "githubDescription": "Check out our open-source projects and contributions.",
       "twitterDescription": "Follow us for the latest updates and announcements.",
       "linkedinDescription": "Connect with us professionally and stay updated.",
       "discordDescription": "Join our community and chat with the team.",
       "aboutDescription": "Learn more about Zero and our mission.",
-      "termsDescription": "Review our terms of service and usage guidelines.",
       "zeroEmailLogo": "Zero Email logo"
     },
     "sidebar": {
@@ -619,30 +618,6 @@
       "signingIn": "Signing in...",
       "signIn": "Sign in",
       "registrationDisabled": "Public registration remains disabled for this private instance.",
-      "loginTitle": "Login with Zero",
-      "loginDescription": "Enter your Zero email below to log in to your account",
-      "email": "Email",
-      "emailPlaceholder": "name@0.email",
-      "forgotPassword": "Forgot your password?",
-      "login": "Login",
-      "noAccount": "Don't have an account?",
-      "signUp": "Sign up",
-      "terms": "Terms of Service",
-      "signupTitle": "Sign up with Zero",
-      "signupDescription": "Enter your details below to create your account",
-      "name": "Name",
-      "namePlaceholder": "Your name",
-      "usernamePlaceholder": "username",
-      "signup": "Sign up",
-      "haveAccount": "Already have an account?",
-      "validEmail": "Please enter a valid email address",
-      "minimumPassword": "Password must be at least {count} characters",
-      "minimumName": "Name must be at least {count} character",
-      "minimumUsername": "Username must be at least {count} character",
-      "loginAttempt": "Trying to log in with {email}",
-      "loginAttemptDescription": "Login attempt",
-      "signupAttempt": "Trying to sign up with {email}",
-      "signupAttemptDescription": "Signup attempt",
       "changePassword": {
         "title": "Set a new password",
         "description": "You must change the initial password before continuing.",
@@ -658,44 +633,6 @@
         "saving": "Saving...",
         "save": "Change password"
       }
-    },
-    "developer": {
-      "title": "Developer Resources",
-      "apiTitle": "API Documentation",
-      "apiDescription": "Comprehensive API references and guides",
-      "apiDetails": "Explore our REST APIs, WebSocket endpoints, and integration guides.",
-      "viewDocumentation": "View Documentation",
-      "githubTitle": "GitHub",
-      "githubDescription": "Open source repositories",
-      "githubDetails": "Access our source code, contribute, and track issues.",
-      "viewRepository": "View Repository",
-      "contributingTitle": "Contributing",
-      "contributingDescription": "Join our community",
-      "contributingDetails": "Learn how to contribute to our open-source projects.",
-      "contribute": "Contribute",
-      "cliTitle": "CLI Tools",
-      "cliDescription": "Command line utilities",
-      "cliDetails": "Download and install our command line tools.",
-      "viewCliDocs": "View CLI Docs",
-      "sdksTitle": "SDKs",
-      "sdksDescription": "Development kits",
-      "sdksDetails": "Find SDKs for your preferred programming language.",
-      "viewSdks": "View SDKs",
-      "webhooksTitle": "Webhooks",
-      "webhooksDescription": "Event notifications",
-      "webhooksDetails": "Set up and manage webhook integrations.",
-      "configure": "Configure",
-      "back": "Back",
-      "heroDescription": "Everything you need to build with 0.email APIs and tools.",
-      "needHelp": "Need Help?",
-      "needHelpDescription": "Can't find what you're looking for? Get in touch with our developer support team.",
-      "contactSupport": "Contact Support"
-    },
-    "underConstruction": {
-      "title": "Under Construction",
-      "description": "The {path} page is currently under construction.",
-      "checkBack": "Check back soon!",
-      "goBack": "Go Back"
     },
     "home": {
       "getStarted": "Get Started",
@@ -713,7 +650,6 @@
         "about": "About",
         "github": "GitHub",
         "copyright": "© 2025 Zero Email Inc, All Rights Reserved",
-        "terms": "Terms & Conditions",
         "logo": "Zero Email logo"
       }
     },
@@ -741,68 +677,12 @@
       "contactIntro": "Want to learn more about Zero? Get in touch:",
       "openGithubIssue": "Open an issue on GitHub"
     },
-    "terms": {
-      "back": "Back",
-      "title": "Terms of Service",
-      "lastUpdated": "Last updated: {date}",
-      "lastUpdatedDate": "February 13, 2025",
-      "copySectionLink": "Copy link to the {section} section",
-      "overviewTitle": "Overview",
-      "overview": "0.email is an open-source email solution that enables users to self-host their email service or integrate with external email providers. By using 0.email, you agree to these terms.",
-      "serviceTitle": "Service Description",
-      "selfHostedTitle": "Self-Hosted Service",
-      "selfHostedDeploy": "0.email provides software that users can deploy on their own infrastructure",
-      "selfHostedResponsibility": "Users are responsible for their own hosting, maintenance, and compliance",
-      "selfHostedLicense": "The software is provided “as is” under the MIT License",
-      "externalIntegrationTitle": "External Email Integration",
-      "externalIntegrationProviders": "0.email can integrate with third-party email providers",
-      "externalIntegrationTerms": "Users must comply with third-party providers' terms of service",
-      "externalIntegrationDisruptions": "We are not responsible for third-party service disruptions",
-      "responsibilitiesTitle": "User Responsibilities",
-      "responsibilitiesIntro": "Users agree to:",
-      "responsibilityLaws": "Comply with all applicable laws and regulations",
-      "responsibilitySecurity": "Maintain the security of their instance",
-      "responsibilityNoSpam": "Not use the service for spam or malicious purposes",
-      "responsibilityIntellectualProperty": "Respect intellectual property rights",
-      "responsibilityReportSecurity": "Report security vulnerabilities responsibly",
-      "licenseTitle": "Software License",
-      "licenseIntro": "0.email is licensed under the MIT License:",
-      "licenseUse": "Users can freely use, modify, and distribute the software",
-      "licenseWarranty": "The software comes with no warranties",
-      "licenseNotice": "Users must include the original license and copyright notice",
-      "communityTitle": "Community Guidelines",
-      "communityIntro": "Users participating in our community agree to:",
-      "communityConduct": "Follow our code of conduct",
-      "communityConstructive": "Contribute constructively to discussions",
-      "communityRespect": "Respect other community members",
-      "communityReport": "Report inappropriate behavior",
-      "contactTitle": "Contact Information",
-      "contactIntro": "For questions about these terms:",
-      "openGithubIssue": "Open an issue on GitHub"
-    },
-    "hr": {
-      "title": "Employee Timezone & Working Hours Manager",
-      "baseTimezone": "Base Timezone",
-      "baseStartTime": "Base Start Time",
-      "baseEndTime": "Base End Time",
-      "addEmployee": "Add Employee",
-      "employeeName": "Employee Name",
-      "selectTimezone": "Select timezone",
-      "add": "Add",
-      "overlapTitle": "Team Overlap Window",
-      "overlapDescription": "All team members are available from {start} to {end} in the base timezone",
-      "currentTime": "Current Time",
-      "overlap": "Overlap",
-      "noOverlap": "No overlap",
-      "empty": "No employees added yet. Add employees to see timezone comparisons and working hour overlaps."
-    },
     "error": {
       "notFound": {
         "title": "Page Not Found",
         "description": "Oops! The page you're looking for doesn't exist or has been moved.",
         "goBack": "Go Back"
-      },
-      "settingsNotFound": "404 - Settings page not found"
+      }
     },
     "settings": {
       "general": {
@@ -891,14 +771,6 @@
           "stepSave": "Choose incoming-message events and save; Zero returns the HTTP 200 response Zoho requires.",
           "disabledDescription": "Inbox Watch is disabled for the global Zoho Mail channel. Enable it in Integrations before configuring this mailbox."
         }
-      },
-      "security": {
-        "title": "Security",
-        "description": "Manage your security preferences and account protection.",
-        "twoFactorAuth": "Two-Factor Authentication",
-        "twoFactorAuthDescription": "Add an extra layer of security to your account",
-        "loginNotifications": "Login Notifications",
-        "loginNotificationsDescription": "Get notified about new login attempts"
       },
       "appearance": {
         "title": "Appearance",
@@ -995,18 +867,6 @@
         "resetFailed": "Failed to reset categories",
         "unsavedChanges": "Unsaved changes",
         "addCategory": "Add category"
-      },
-      "notifications": {
-        "title": "Notifications",
-        "description": "Choose which notifications you want to receive.",
-        "newMail": "New mail notifications",
-        "selectLevel": "Select notification level",
-        "none": "None",
-        "importantOnly": "Important only",
-        "allMessages": "All messages",
-        "newMailDescription": "Choose which messages you want to receive notifications for.",
-        "marketing": "Marketing communications",
-        "marketingDescription": "Receive updates about new features."
       },
       "integrations": {
         "title": "Email integrations",

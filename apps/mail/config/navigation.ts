@@ -15,9 +15,9 @@ import {
   LockIcon,
   Clock,
 } from '@/components/icons/icons';
-import { PlugZap } from 'lucide-react';
-import { m } from '@/paraglide/messages';
 import type { AccountRole } from '@/lib/administrator';
+import { m } from '@/paraglide/messages';
+import { PlugZap } from 'lucide-react';
 
 export interface NavItem {
   id?: string;
@@ -193,17 +193,6 @@ export const navigationConfig: Record<string, NavConfig> = {
             icon: Tabs,
             shortcut: '?',
           },
-          // {
-          //   title: 'navigation.settings.shortcuts',
-          //   url: '/settings/shortcuts',
-          //   icon: Tabs,
-          //   disabled: true,
-          // },
-          // {
-          //   title: "Notifications",
-          //   url: "/settings/notifications",
-          //   icon: BellIcon,
-          // },
           {
             title: m['navigation.settings.deleteAccount'](),
             url: '/settings/danger-zone',

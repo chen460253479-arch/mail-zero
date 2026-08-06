@@ -1,9 +1,9 @@
 import { LinkedIn, Twitter, Discord } from '../icons/icons';
+import { m } from '@/paraglide/messages';
 import { motion } from 'motion/react';
 import { Button } from '../ui/button';
 import { Link } from 'react-router';
 import { useRef } from 'react';
-import { m } from '@/paraglide/messages';
 
 const socialLinks = [
   {
@@ -198,14 +198,6 @@ export default function Footer() {
                 className="justify-start text-nowrap text-sm font-normal leading-tight text-white/70 opacity-80 transition-opacity hover:opacity-100"
               >
                 {m['pages.home.footer.about']()}
-              </Link>
-              <div className="h-5 w-0 outline outline-1 outline-offset-[-0.50px] outline-white/20" />
-
-              <Link
-                to="/terms"
-                className="justify-start text-nowrap text-sm font-normal leading-tight text-white/70 opacity-80 transition-opacity hover:opacity-100"
-              >
-                {m['pages.home.footer.terms']()}
               </Link>
             </div>
           </div>

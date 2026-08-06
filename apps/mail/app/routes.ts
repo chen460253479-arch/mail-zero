@@ -5,27 +5,17 @@ export default [
 
   route('/api/mailto-handler', 'mailto-handler.ts'),
 
-  layout('(full-width)/layout.tsx', [
-    route('/about', '(full-width)/about.tsx'),
-    route('/terms', '(full-width)/terms.tsx'),
-    route('/hr', '(full-width)/hr.tsx'),
-  ]),
+  layout('(full-width)/layout.tsx', [route('/about', '(full-width)/about.tsx')]),
 
   route('/login', '(auth)/login/page.tsx'),
 
-  // Enable this when we have a zero signup page
-  // route('/zero/signup', '(auth)/zero/signup/page.tsx'),
-  // route('/zero/login', '(auth)/zero/login/page.tsx'),
-
   layout('(routes)/layout.tsx', [
-    route('/developer', '(routes)/developer/page.tsx'),
     layout(
       '(routes)/mail/layout.tsx',
       prefix('/mail', [
         index('(routes)/mail/page.tsx'),
         route('/create', '(routes)/mail/create/page.tsx'),
         route('/compose', '(routes)/mail/compose/page.tsx'),
-        route('/under-construction/:path', '(routes)/mail/under-construction/[path]/page.tsx'),
         route('/:folder', '(routes)/mail/[folder]/page.tsx'),
       ]),
     ),
@@ -46,11 +36,8 @@ export default [
         ]),
         route('/mailboxes', '(routes)/settings/mailboxes/page.tsx'),
         route('/categories', '(routes)/settings/categories/page.tsx'),
-        route('/notifications', '(routes)/settings/notifications/page.tsx'),
         route('/privacy', '(routes)/settings/privacy/page.tsx'),
-        route('/security', '(routes)/settings/security/page.tsx'),
         route('/shortcuts', '(routes)/settings/shortcuts/page.tsx'),
-        route('/*', '(routes)/settings/[...settings]/page.tsx'),
       ]),
     ),
     route('/*', 'meta-files/not-found.ts'),
