@@ -2,6 +2,9 @@ export type ThreadPageFilter = {
   mailboxId?: string;
   text?: string;
   hasKeyword?: string;
+  hasKeywords?: string[];
+  hasMailboxIds?: string[];
+  unreadOnly?: boolean;
   lifecycle?: string;
   snoozed?: boolean;
   limit?: number;
@@ -11,6 +14,11 @@ const normalizeThreadPageFilter = (filter: ThreadPageFilter = {}) => ({
   ...(filter.mailboxId ? { mailboxId: filter.mailboxId } : {}),
   ...(filter.text?.trim() ? { text: filter.text.trim() } : {}),
   ...(filter.hasKeyword ? { hasKeyword: filter.hasKeyword } : {}),
+  ...(filter.hasKeywords?.length ? { hasKeywords: [...new Set(filter.hasKeywords)].sort() } : {}),
+  ...(filter.hasMailboxIds?.length
+    ? { hasMailboxIds: [...new Set(filter.hasMailboxIds)].sort() }
+    : {}),
+  ...(filter.unreadOnly ? { unreadOnly: true as const } : {}),
   ...(filter.lifecycle ? { lifecycle: filter.lifecycle } : {}),
   ...(filter.snoozed ? { snoozed: true as const } : {}),
   ...(filter.limit === undefined ? {} : { limit: filter.limit }),

@@ -5,6 +5,9 @@ export type ThreadPageProjectionInput = {
   mailboxId?: string;
   text?: string;
   hasKeyword?: string;
+  hasKeywords?: string[];
+  hasMailboxIds?: string[];
+  unreadOnly?: true;
   lifecycle?: EmailLifecycle;
   snoozed?: boolean;
   cursor?: string;

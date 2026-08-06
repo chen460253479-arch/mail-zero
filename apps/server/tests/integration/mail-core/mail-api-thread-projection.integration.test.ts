@@ -200,6 +200,18 @@ describe('Mail API PostgreSQL Thread projection', () => {
         items: [{ id: 'view-thread-2' }],
       });
       await expect(
+        projection.threadPage({
+          accountId: h.accountId,
+          mailboxId: h.inbox.id,
+          hasMailboxIds: [h.drafts.id],
+          hasKeywords: ['$flagged'],
+          unreadOnly: true,
+          limit: 10,
+        }),
+      ).resolves.toMatchObject({
+        items: [{ id: 'view-thread-2' }],
+      });
+      await expect(
         projection.threadDetail({
           accountId: h.accountId,
           threadId: 'view-thread-2',

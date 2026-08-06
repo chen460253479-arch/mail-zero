@@ -96,6 +96,18 @@ vi.mock('@/hooks/use-search-value', () => ({
   useSearchValue: () => [{ value: '' }],
 }));
 
+vi.mock('@/hooks/use-categories', () => ({
+  useCategorySettings: () => [
+    {
+      id: 'All Mail',
+      name: 'All Mail',
+      searchValue: '',
+      order: 0,
+      isDefault: true,
+    },
+  ],
+}));
+
 vi.mock('nuqs', () => ({
   useQueryState: () => [null],
 }));

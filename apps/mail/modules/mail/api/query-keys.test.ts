@@ -37,4 +37,24 @@ describe('mailQueryKeys', () => {
       }),
     );
   });
+
+  it('normalizes category filter arrays while keeping unread pages isolated', () => {
+    expect(
+      mailQueryKeys.threadPage('account-a', {
+        hasMailboxIds: ['label-b', 'label-a', 'label-a'],
+        hasKeywords: ['$flagged', '$important'],
+        unreadOnly: true,
+      }),
+    ).toEqual(
+      mailQueryKeys.threadPage('account-a', {
+        hasKeywords: ['$important', '$flagged'],
+        hasMailboxIds: ['label-a', 'label-b'],
+        unreadOnly: true,
+      }),
+    );
+
+    expect(mailQueryKeys.threadPage('account-a', { unreadOnly: true })).not.toEqual(
+      mailQueryKeys.threadPage('account-a'),
+    );
+  });
 });

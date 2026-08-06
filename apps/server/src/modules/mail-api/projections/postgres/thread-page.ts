@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, exists, inArray, isNull, lt, ne, not, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, gt, inArray, isNull, lt, ne, not, or, sql } from 'drizzle-orm';
 
 import {
   email,
@@ -33,6 +33,9 @@ const signature = (input: ThreadPageProjectionInput) =>
     mailboxId: input.mailboxId ?? null,
     text: input.text?.trim().toLocaleLowerCase('und') ?? null,
     hasKeyword: input.hasKeyword ?? null,
+    hasKeywords: [...new Set(input.hasKeywords ?? [])].sort(),
+    hasMailboxIds: [...new Set(input.hasMailboxIds ?? [])].sort(),
+    unreadOnly: input.unreadOnly ?? null,
     lifecycle: input.lifecycle ?? null,
     snoozed: input.snoozed ?? null,
   });
@@ -59,39 +62,78 @@ export async function queryThreadPage(
   signingKey: string,
 ): Promise<ThreadPageProjectionResult> {
   const cursor = input.cursor === undefined ? null : decode(input.cursor, input, signingKey);
-  if (input.mailboxId !== undefined) {
+  const requiredMailboxIds = [
+    ...new Set([
+      ...(input.mailboxId === undefined ? [] : [input.mailboxId]),
+      ...(input.hasMailboxIds ?? []),
+    ]),
+  ];
+  if (requiredMailboxIds.length > 0) {
     const owned = await db
       .select({ id: mailbox.id })
       .from(mailbox)
       .where(
         and(
           eq(mailbox.mailAccountId, input.accountId),
-          eq(mailbox.id, input.mailboxId),
+          inArray(mailbox.id, requiredMailboxIds),
           isNull(mailbox.deletedAt),
         ),
-      )
-      .limit(1);
-    if (owned.length === 0) {
+      );
+    const ownedIds = new Set(owned.map(({ id }) => id));
+    const unresolvedIds = requiredMailboxIds.filter((id) => !ownedIds.has(id));
+    if (unresolvedIds.length > 0) {
       const outside = await db
         .select({ id: mailbox.id })
         .from(mailbox)
-        .where(and(eq(mailbox.id, input.mailboxId), ne(mailbox.mailAccountId, input.accountId)))
+        .where(and(inArray(mailbox.id, unresolvedIds), ne(mailbox.mailAccountId, input.accountId)))
         .limit(1);
       throw new MailCoreError(outside.length > 0 ? 'CROSS_ACCOUNT_REFERENCE' : 'MAILBOX_NOT_FOUND');
     }
   }
-  const membership =
-    input.mailboxId === undefined
-      ? undefined
+  const membership = and(
+    ...requiredMailboxIds.map((mailboxId) =>
+      exists(
+        db
+          .select({ one: sql`1` })
+          .from(mailboxThread)
+          .where(
+            and(
+              eq(mailboxThread.mailAccountId, input.accountId),
+              eq(mailboxThread.mailboxId, mailboxId),
+              eq(mailboxThread.threadId, thread.id),
+            ),
+          ),
+      ),
+    ),
+  );
+  const requiredKeywords = [
+    ...new Set([
+      ...(input.hasKeyword === undefined ? [] : [input.hasKeyword]),
+      ...(input.hasKeywords ?? []),
+    ]),
+  ];
+  const hasKeyword = (keyword: string) =>
+    keyword === CRM_CUSTOMER_KEYWORD
+      ? exists(
+          db
+            .select({ one: sql`1` })
+            .from(crmCustomerMarker)
+            .where(
+              and(
+                eq(crmCustomerMarker.mailAccountId, input.accountId),
+                eq(crmCustomerMarker.emailId, email.id),
+              ),
+            ),
+        )
       : exists(
           db
             .select({ one: sql`1` })
-            .from(mailboxThread)
+            .from(emailKeyword)
             .where(
               and(
-                eq(mailboxThread.mailAccountId, input.accountId),
-                eq(mailboxThread.mailboxId, input.mailboxId),
-                eq(mailboxThread.threadId, thread.id),
+                eq(emailKeyword.mailAccountId, input.accountId),
+                eq(emailKeyword.emailId, email.id),
+                eq(emailKeyword.keyword, keyword),
               ),
             ),
         );
@@ -116,32 +158,7 @@ export async function queryThreadPage(
               ),
           ),
           input.lifecycle === undefined ? undefined : eq(email.lifecycle, input.lifecycle),
-          input.hasKeyword === undefined
-            ? undefined
-            : input.hasKeyword === CRM_CUSTOMER_KEYWORD
-              ? exists(
-                  db
-                    .select({ one: sql`1` })
-                    .from(crmCustomerMarker)
-                    .where(
-                      and(
-                        eq(crmCustomerMarker.mailAccountId, input.accountId),
-                        eq(crmCustomerMarker.emailId, email.id),
-                      ),
-                    ),
-                )
-              : exists(
-                  db
-                    .select({ one: sql`1` })
-                    .from(emailKeyword)
-                    .where(
-                      and(
-                        eq(emailKeyword.mailAccountId, input.accountId),
-                        eq(emailKeyword.emailId, email.id),
-                        eq(emailKeyword.keyword, input.hasKeyword),
-                      ),
-                    ),
-                ),
+          ...requiredKeywords.map(hasKeyword),
           input.text === undefined
             ? undefined
             : exists(
@@ -189,6 +206,7 @@ export async function queryThreadPage(
         eq(thread.mailAccountId, input.accountId),
         membership,
         matchingEmail,
+        input.unreadOnly ? gt(thread.unreadCount, 0) : undefined,
         position,
         input.snoozed === undefined ? undefined : input.snoozed ? activeSnooze : not(activeSnooze),
       ),

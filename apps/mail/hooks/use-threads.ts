@@ -16,18 +16,29 @@ import {
 import { useMailAccountContext } from '@/modules/mail/providers/mail-account-provider';
 import { resolveMailboxRoute } from '@/modules/mail/routing/mailbox-route';
 import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
+import { useCategorySettings } from '@/hooks/use-categories';
 import { useSearchValue } from '@/hooks/use-search-value';
 import { useTRPC } from '@/providers/query-provider';
 
 export const useThreads = ({ enabled = true }: { enabled?: boolean } = {}) => {
   const { folder = 'inbox' } = useParams<{ folder: string }>();
   const [searchValue] = useSearchValue();
+  const categories = useCategorySettings();
+  const defaultCategoryId = categories.find((category) => category.isDefault)?.id ?? 'All Mail';
+  const [activeCategory] = useQueryState('category', { defaultValue: defaultCategoryId });
   const trpc = useTRPC();
   const { account, status } = useMailAccountContext();
   const mailboxQuery = useMailboxes({ enabled });
   const route = useMemo(
     () => resolveMailboxRoute(folder, mailboxQuery.mailboxes),
     [folder, mailboxQuery.mailboxes],
+  );
+  const categorySearchValue = useMemo(
+    () =>
+      folder === 'inbox'
+        ? (categories.find((category) => category.id === activeCategory)?.searchValue ?? '')
+        : '',
+    [activeCategory, categories, folder],
   );
   const canQuery =
     enabled &&
@@ -40,6 +51,7 @@ export const useThreads = ({ enabled = true }: { enabled?: boolean } = {}) => {
         accountId: account!.id,
         route,
         text: searchValue.value,
+        categorySearchValue,
       })
     : skipToken;
   const threadsQuery = useInfiniteQuery(
