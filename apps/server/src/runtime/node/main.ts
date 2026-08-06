@@ -10,6 +10,7 @@ import {
 import { parseRuntimeConfig, type RuntimeConfig, type RuntimeEnvironmentSource } from './config';
 import { createAwsS3ObjectClient, S3BlobStore } from '../../modules/mail';
 import { createRuntimeDatabase, type RuntimeDatabase } from './database';
+import { createLogger } from '../../infrastructure/logging/logger';
 import { createNodeApplication } from './application';
 import type { BlobStore } from '@zero/mail-core';
 
@@ -113,6 +114,15 @@ export const startZeroServer = async (
   dependencies: NodeServerLifecycleDependencies = defaultDependencies,
 ): Promise<{ close(): Promise<void> }> => {
   const config = dependencies.parseConfig(source);
+  const logger = createLogger({
+    level: config.logLevel ?? (config.nodeEnv === 'production' ? 'info' : 'debug'),
+  });
+  logger.info('server.starting', {
+    nodeEnv: config.nodeEnv,
+    host: config.host,
+    port: config.port,
+    logLevel: logger.level,
+  });
   let database: RuntimeDatabase | undefined;
   let blobStore: BlobStoreLifecycle | undefined;
   let services: RuntimeServices | undefined;
@@ -125,6 +135,7 @@ export const startZeroServer = async (
 
   const close = (): Promise<void> => {
     closePromise ??= (async () => {
+      logger.info('server.stopping');
       disposeSignals.splice(0).forEach((dispose) => dispose());
       if (listener) await listener.close();
       if (schedulerStarted && services) await services.scheduler.stop();
@@ -135,6 +146,7 @@ export const startZeroServer = async (
       if (services) await services.externalClients.close();
       blobStore?.close();
       if (database) await database.close();
+      logger.info('server.stopped');
     })();
     return closePromise;
   };
@@ -143,14 +155,14 @@ export const startZeroServer = async (
     database = await dependencies.createDatabase(config);
     blobStore = dependencies.createBlobStore(config);
     await blobStore.initialize();
-    services = await dependencies.createServices({ config, database, blobStore });
+    services = await dependencies.createServices({ config, database, blobStore, logger });
     markReady(services, 'database');
     markReady(services, 'blobStore');
 
     try {
       await services.integrationHealth.initialize();
     } catch (error) {
-      console.error('Nango runtime validation failed', error);
+      logger.warn('integration.nango.validation_failed', { error });
     }
 
     services.taskWorker.start();
@@ -165,10 +177,11 @@ export const startZeroServer = async (
     const application = dependencies.createApplication(services);
     listener = await dependencies.listen(application, config);
     markReady(services, 'http');
+    logger.info('server.started', { host: config.host, port: config.port });
 
     const handleSignal = () => {
       void close().catch((error) => {
-        console.error('Zero Server shutdown failed', error);
+        logger.error('server.shutdown_failed', { error });
         process.exitCode = 1;
       });
     };
@@ -179,8 +192,9 @@ export const startZeroServer = async (
 
     return { close };
   } catch (error) {
+    logger.error('server.startup_failed', { error });
     await close().catch((closeError) => {
-      console.error('Zero Server startup cleanup failed', closeError);
+      logger.error('server.startup_cleanup_failed', { error: closeError });
     });
     throw error;
   }
@@ -191,7 +205,7 @@ const isDirectExecution =
 
 if (isDirectExecution) {
   startZeroServer().catch((error) => {
-    console.error('Zero Server failed to start', error);
+    createLogger({ level: 'error' }).error('server.failed_to_start', { error });
     process.exitCode = 1;
   });
 }

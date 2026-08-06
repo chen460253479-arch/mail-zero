@@ -104,7 +104,27 @@ describe('parseRuntimeConfig', () => {
       host: '0.0.0.0',
       port: 8787,
       shutdownGraceMs: 30_000,
+      logLevel: 'info',
     });
+  });
+
+  it('defaults development logging to debug and production logging to info', () => {
+    expect(parseRuntimeConfig({ ...validEnvironment(), NODE_ENV: 'development' }).logLevel).toBe(
+      'debug',
+    );
+    expect(parseRuntimeConfig(validEnvironment()).logLevel).toBe('info');
+  });
+
+  it('accepts an explicit structured logging level', () => {
+    expect(parseRuntimeConfig({ ...validEnvironment(), ZERO_LOG_LEVEL: 'warn' }).logLevel).toBe(
+      'warn',
+    );
+  });
+
+  it('rejects an invalid structured logging level', () => {
+    expect(() => parseRuntimeConfig({ ...validEnvironment(), ZERO_LOG_LEVEL: 'verbose' })).toThrow(
+      /ZERO_LOG_LEVEL/u,
+    );
   });
 
   it('does not require a duplicate Better Auth URL', () => {

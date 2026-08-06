@@ -1,13 +1,24 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fromByteArray } from 'base64-js';
 
 import {
   handleZohoMailWebhookRequest,
   type ZohoMailWebhookDependencies,
 } from '../../../../../src/mail-channel/zoho-mail/inbound/webhook';
+import type { Logger } from '../../../../../src/infrastructure/logging/logger';
+
+const createLogger = (): Logger =>
+  ({
+    level: 'debug',
+    child: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  }) as unknown as Logger;
 
 const folderId = '3881227000000013000';
 const messageId = '1560840837125110000';
@@ -87,9 +98,11 @@ describe('Zoho Mail webhook endpoint', () => {
 
   it('parses exact Zoho identifiers, records the folder signal, and returns 200', async () => {
     const calls: unknown[] = [];
+    const logger = createLogger();
     const response = await handleZohoMailWebhookRequest(
       await request('hook-secret', { includeSecret: false }),
       dependencies({
+        logger,
         resolveTarget: async (payload) => {
           calls.push({
             resolve: {
@@ -130,6 +143,19 @@ describe('Zoho Mail webhook endpoint', () => {
       { enqueue: 'sync-1' },
     ]);
     await expect(response.json()).resolves.toEqual({ matched: 1, queued: 1 });
+    expect(logger.info).toHaveBeenCalledWith('mail.webhook.signal_completed', {
+      provider: 'zoho_mail',
+      targetId: 'account-1',
+      syncIds: ['sync-1'],
+      matched: 1,
+      queued: 1,
+      failedWakeups: 0,
+      secretBound: true,
+      status: 200,
+    });
+    expect(JSON.stringify(vi.mocked(logger.info).mock.calls)).not.toContain(
+      'Marketing - Product pitch',
+    );
   });
 
   it('verifies later requests with the stored secret', async () => {
@@ -260,5 +286,28 @@ describe('Zoho Mail webhook endpoint', () => {
     );
 
     expect(response.status).toBe(404);
+  });
+
+  it('logs registration diagnostics without exposing the secret or payload', async () => {
+    const logger = createLogger();
+    const response = await handleZohoMailWebhookRequest(
+      await request('private-hook-secret', { payload: '' }),
+      dependencies({ logger, requestId: 'request-1' }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(logger.info).toHaveBeenCalledWith('mail.webhook.registration_completed', {
+      provider: 'zoho_mail',
+      requestId: 'request-1',
+      signatureValid: true,
+      secretStored: true,
+      status: 200,
+    });
+    const calls = JSON.stringify([
+      ...vi.mocked(logger.debug).mock.calls,
+      ...vi.mocked(logger.info).mock.calls,
+    ]);
+    expect(calls).not.toContain('private-hook-secret');
+    expect(calls).not.toContain('Marketing - Product pitch');
   });
 });

@@ -24,6 +24,14 @@ const createServices = (
       cookieDomain: 'mail.local',
       ...config,
     },
+    logger: {
+      level: 'debug',
+      child: vi.fn(),
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    },
     database: {
       db: {},
     },
@@ -118,7 +126,35 @@ describe('native Node application', () => {
     expect([gmail.status, outlook.status, zoho.status]).toEqual([202, 202, 202]);
     expect(services.webhooks.gmail).toHaveBeenCalledOnce();
     expect(services.webhooks.outlook).toHaveBeenCalledOnce();
-    expect(services.webhooks.zohoMail).toHaveBeenCalledWith(expect.any(Request));
+    expect(services.webhooks.zohoMail).toHaveBeenCalledWith(
+      expect.any(Request),
+      expect.any(String),
+    );
+  });
+
+  it('logs request metadata without query parameters or authorization values', async () => {
+    const services = createServices();
+    const app = createNodeApplication(services);
+
+    const response = await app.request('/health?access_token=private', {
+      headers: {
+        authorization: 'Bearer private',
+        'x-request-id': 'crm-request-1',
+        'x-trace-id': 'crm-trace-1',
+      },
+    });
+
+    expect(response.headers.get('x-request-id')).toBe('crm-request-1');
+    expect(response.headers.get('x-trace-id')).toBe('crm-trace-1');
+    expect(services.logger.debug).toHaveBeenCalledWith('http.request_completed', {
+      requestId: 'crm-request-1',
+      traceId: 'crm-trace-1',
+      method: 'GET',
+      path: '/health',
+      status: 200,
+      durationMs: expect.any(Number),
+    });
+    expect(JSON.stringify(vi.mocked(services.logger.debug).mock.calls)).not.toContain('private');
   });
 
   it('routes mail blob HTTP requests without passing them to the tRPC handler', async () => {

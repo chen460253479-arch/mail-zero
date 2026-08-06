@@ -39,6 +39,7 @@ import { createChannelInboundAdapterFactory } from './channel-inbound';
 import { createGmailPlugin } from '../../mail-channel/gmail/plugin';
 import { createZohoMailPlugin } from '../../mail-channel/zoho-mail';
 import { createZohoSubscriptionTarget } from './zoho-webhook-setup';
+import type { Logger } from '../../infrastructure/logging/logger';
 import type { MailChannelId } from '../../mail-channel/contracts';
 import { createOutlookPlugin } from '../../mail-channel/outlook';
 import { preprocessEmailHtml } from '../../lib/email-processor';
@@ -66,6 +67,7 @@ type ChannelSyncSettings = {
 export type MailInboundRuntimeResources = MailCredentialRuntimeResources & {
   blobStore: BlobStore;
   taskQueue: MailTaskQueuePort;
+  logger?: Logger;
 };
 
 const readChannelSyncSettings = async (
@@ -409,6 +411,7 @@ const createRuntime = (db: DB, resources: MailInboundRuntimeResources): MailIngr
     enqueue,
     newLeaseOwner: () => crypto.randomUUID(),
     clock: { now: () => new Date() },
+    ...(resources.logger === undefined ? {} : { logger: resources.logger }),
   });
 };
 
@@ -424,21 +427,35 @@ export const enqueueDueMailIngressWork = async (
   db: DB,
   resources: MailInboundRuntimeResources,
 ): Promise<{ reconciliations: number; renewals: number; imports: number }> => {
+  const startedAt = Date.now();
   const now = new Date();
-  return await dispatchDueMailSyncWork(
-    {
-      owner: crypto.randomUUID(),
-      limit: 100,
-      claimLeaseForMs: 30_000,
-      confirmedLeaseForMs: 120_000,
-      retryAfterMs: 5_000,
-      reconcileBefore: now,
-      renewalBefore: new Date(now.getTime() + 24 * 60 * 60_000),
-      importBefore: now,
-    },
-    {
-      repository: createPostgresMailSyncRepository(db),
-      enqueue: (command) => resources.taskQueue.enqueueIngress(command),
-    },
-  );
+  try {
+    const result = await dispatchDueMailSyncWork(
+      {
+        owner: crypto.randomUUID(),
+        limit: 100,
+        claimLeaseForMs: 30_000,
+        confirmedLeaseForMs: 120_000,
+        retryAfterMs: 5_000,
+        reconcileBefore: now,
+        renewalBefore: new Date(now.getTime() + 24 * 60 * 60_000),
+        importBefore: now,
+      },
+      {
+        repository: createPostgresMailSyncRepository(db),
+        enqueue: (command) => resources.taskQueue.enqueueIngress(command),
+      },
+    );
+    const total = result.reconciliations + result.renewals + result.imports;
+    const fields = { ...result, total, durationMs: Date.now() - startedAt };
+    if (total > 0) resources.logger?.info('mail.scheduler.ingress_scan.completed', fields);
+    else resources.logger?.debug('mail.scheduler.ingress_scan.completed', fields);
+    return result;
+  } catch (error) {
+    resources.logger?.error('mail.scheduler.ingress_scan.failed', {
+      durationMs: Date.now() - startedAt,
+      error,
+    });
+    throw error;
+  }
 };

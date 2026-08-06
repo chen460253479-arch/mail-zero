@@ -7,12 +7,14 @@ import type { PostgresMailSyncRepository } from '../postgres/sync-repository';
 import { renewInboundSubscription } from '../application/renew-subscription';
 import { discoverIncremental } from '../application/discover-incremental';
 import type { ImportPendingResult } from '../application/import-pending';
+import type { Logger } from '../../../infrastructure/logging/logger';
 import { receiveInboundSignal } from '../application/receive-signal';
 import type { MailIngressCommand } from '../application/commands';
 import { MailSyncError } from '../domain/errors';
 
 export type MailIngressRuntime = {
   importBatchSize?: number;
+  logger?: Logger;
   receiveSignal(
     command: Extract<MailIngressCommand, { type: 'signal' }>,
   ): Promise<{ matched: number }>;
@@ -44,8 +46,10 @@ export const createMailIngressRuntime = (dependencies: {
   newLeaseOwner(): string;
   clock: { now(): Date };
   resolveReconcileAfterMs(syncId: string): Promise<number>;
+  logger?: Logger;
 }): MailIngressRuntime => ({
   importBatchSize: 25,
+  ...(dependencies.logger === undefined ? {} : { logger: dependencies.logger }),
   enqueue: dependencies.enqueue,
   receiveSignal: (command) =>
     receiveInboundSignal(command, {
@@ -79,6 +83,7 @@ export const createMailIngressRuntime = (dependencies: {
         repository: dependencies.repository,
         mailCore: dependencies.mailCore,
         onAuthenticationError: dependencies.onAuthenticationError,
+        ...(dependencies.logger === undefined ? {} : { logger: dependencies.logger }),
       },
     ),
   renew: async (command) => {
@@ -100,28 +105,70 @@ export const processMailIngressCommand = async (
   command: MailIngressCommand,
   runtime: MailIngressRuntime,
 ): Promise<void> => {
-  switch (command.type) {
-    case 'signal':
-      await runtime.receiveSignal(command);
-      return;
-    case 'discover':
-    case 'reconcile': {
-      const result = await runtime.discover(command);
-      if (result.inserted > 0) {
-        await runtime.enqueue({ type: 'import', syncId: command.syncId });
+  const startedAt = Date.now();
+  const commonFields = {
+    commandType: command.type,
+    ...(command.type === 'signal' ? { provider: command.provider } : { syncId: command.syncId }),
+  };
+  runtime.logger?.debug('mail.sync.command.started', commonFields);
+  try {
+    switch (command.type) {
+      case 'signal': {
+        const result = await runtime.receiveSignal(command);
+        runtime.logger?.info('mail.sync.signal.completed', {
+          ...commonFields,
+          matched: result.matched,
+          durationMs: Date.now() - startedAt,
+        });
+        return;
       }
-      return;
-    }
-    case 'import': {
-      const result = await runtime.importPending(command);
-      const batchSize = runtime.importBatchSize ?? 25;
-      if (result.claimed === batchSize) {
-        await runtime.enqueue({ type: 'import', syncId: command.syncId });
+      case 'discover':
+      case 'reconcile': {
+        const result = await runtime.discover(command);
+        const importQueued = result.inserted > 0;
+        if (importQueued) {
+          await runtime.enqueue({ type: 'import', syncId: command.syncId });
+        }
+        runtime.logger?.info('mail.sync.discovery.completed', {
+          ...commonFields,
+          status: result.status,
+          inserted: result.inserted,
+          importQueued,
+          durationMs: Date.now() - startedAt,
+        });
+        return;
       }
-      return;
+      case 'import': {
+        const result = await runtime.importPending(command);
+        const batchSize = runtime.importBatchSize ?? 25;
+        const nextBatchQueued = result.claimed === batchSize;
+        if (nextBatchQueued) {
+          await runtime.enqueue({ type: 'import', syncId: command.syncId });
+        }
+        runtime.logger?.info('mail.sync.import.completed', {
+          ...commonFields,
+          ...result,
+          nextBatchQueued,
+          durationMs: Date.now() - startedAt,
+        });
+        return;
+      }
+      case 'renew': {
+        const result = await runtime.renew(command);
+        runtime.logger?.info('mail.sync.subscription.completed', {
+          ...commonFields,
+          status: result.status,
+          durationMs: Date.now() - startedAt,
+        });
+      }
     }
-    case 'renew':
-      await runtime.renew(command);
+  } catch (error) {
+    runtime.logger?.error('mail.sync.command.failed', {
+      ...commonFields,
+      durationMs: Date.now() - startedAt,
+      error,
+    });
+    throw error;
   }
 };
 

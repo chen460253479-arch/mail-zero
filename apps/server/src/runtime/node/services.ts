@@ -44,6 +44,7 @@ import {
 import { enqueueDueMailOutboundWork, runMailOutboundCommand } from '../mail/outbound';
 import { createMailTaskQueuePort, type MailTaskQueuePort } from '../mail/task-queue';
 import { wakeDueMailSnoozes } from '../../modules/mail-snooze/runtime/environment';
+import { createLogger, type Logger } from '../../infrastructure/logging/logger';
 import { runExternalMailSubmissionCommand } from '../mail/external-submission';
 import { handleOutlookWebhookForEnvironment } from '../mail/outlook-inbound';
 import type { AdminCredentials } from '../../lib/admin-provisioning-policy';
@@ -96,13 +97,14 @@ export type IntegrationHealth = {
 };
 
 export type RuntimeWebhookHandlers = {
-  gmail(request: Request): Promise<Response>;
-  outlook(request: Request): Promise<Response>;
-  zohoMail(request: Request): Promise<Response>;
+  gmail(request: Request, requestId?: string): Promise<Response>;
+  outlook(request: Request, requestId?: string): Promise<Response>;
+  zohoMail(request: Request, requestId?: string): Promise<Response>;
 };
 
 export type RuntimeServices = {
   config: RuntimeConfig;
+  logger: Logger;
   environment: ZeroEnv;
   database: RuntimeDatabase;
   blobStore: BlobStore;
@@ -127,6 +129,7 @@ export type CreateRuntimeServicesInput = {
   config: RuntimeConfig;
   database: RuntimeDatabase;
   blobStore: BlobStore;
+  logger?: Logger;
 };
 
 const MAIL_NOTIFICATION_LEASE_FOR_MS = 5 * 60_000;
@@ -136,6 +139,7 @@ const MAIL_NOTIFICATION_SHUTDOWN_BUFFER_MS = 250;
 const createCompatibilityEnvironment = (config: RuntimeConfig): ZeroEnv =>
   ({
     NODE_ENV: config.nodeEnv,
+    ZERO_LOG_LEVEL: config.logLevel,
     JWT_SECRET: config.jwtSecret,
     BASE_URL: config.baseUrl ?? config.publicBackendUrl,
     VITE_PUBLIC_APP_URL: config.publicAppUrl,
@@ -165,12 +169,12 @@ const createCompatibilityEnvironment = (config: RuntimeConfig): ZeroEnv =>
     GITHUB_CLIENT_SECRET: config.github.clientSecret ?? '',
   }) as ZeroEnv;
 
-const createEmailSender = (config: RuntimeConfig) => {
+const createEmailSender = (config: RuntimeConfig, logger: Logger) => {
   const client = config.resendApiKey ? new Resend(config.resendApiKey) : null;
   return {
     async send(input: { from: string; to: string; subject: string; html: string }) {
       if (client) return await client.emails.send(input);
-      console.info('[EMAIL_DISABLED]', { to: input.to, subject: input.subject });
+      logger.warn('system_email.delivery_skipped', { reason: 'resend_not_configured' });
       return { data: null, error: null };
     },
   };
@@ -180,7 +184,9 @@ export const createRuntimeServices = async ({
   config,
   database,
   blobStore,
+  logger: providedLogger,
 }: CreateRuntimeServicesInput): Promise<RuntimeServices> => {
+  const logger = providedLogger ?? createLogger({ level: config.logLevel });
   const environment = createCompatibilityEnvironment(config);
   const readiness = createRuntimeReadiness();
   const userWorkspace = createUserWorkspaceService({ db: database.db });
@@ -205,6 +211,7 @@ export const createRuntimeServices = async ({
     nango,
     blobStore,
     taskQueue,
+    logger,
   };
   const taskWorker = createMailTaskWorker({
     repository: taskRepository,
@@ -230,6 +237,9 @@ export const createRuntimeServices = async ({
     leaseForMs: 5 * 60_000,
     clock: { now: () => new Date() },
     newOwner: () => crypto.randomUUID(),
+    logger: {
+      error: (_message, error) => logger.error('mail.task.worker.loop_failed', { error }),
+    },
   });
   taskWorkerReference.current = taskWorker;
   const notificationRepository = createPostgresMailNotificationRepository(database.db, {
@@ -273,6 +283,10 @@ export const createRuntimeServices = async ({
     intervalMs: 60_000,
     expiredRecoveryLimit: 100,
     clock: { now: () => new Date() },
+    logger: {
+      error: (operation, error) =>
+        logger.error('mail.scheduler.operation_failed', { operation, error }),
+    },
   });
 
   const nangoChannels = createNangoChannelIntegrationService({
@@ -289,7 +303,7 @@ export const createRuntimeServices = async ({
     getStatus: () => nango.getStatus(),
   };
 
-  const email = createEmailSender(config);
+  const email = createEmailSender(config, logger);
   const auth = createAuth({
     db: database.db,
     config,
@@ -302,6 +316,7 @@ export const createRuntimeServices = async ({
 
   return {
     config,
+    logger,
     environment,
     database,
     blobStore,
@@ -323,8 +338,8 @@ export const createRuntimeServices = async ({
         await handleGmailWebhookForEnvironment(database.db, mailResources, request),
       outlook: async (request) =>
         await handleOutlookWebhookForEnvironment(database.db, mailResources, request),
-      zohoMail: async (request) =>
-        await handleZohoMailWebhookForEnvironment(database.db, mailResources, request),
+      zohoMail: async (request, requestId) =>
+        await handleZohoMailWebhookForEnvironment(database.db, mailResources, request, requestId),
     },
     externalClients: {
       close: async () => undefined,

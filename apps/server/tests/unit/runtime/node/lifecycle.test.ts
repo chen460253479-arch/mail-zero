@@ -87,7 +87,7 @@ const createHarness = () => {
   const dependencies = {
     parseConfig: vi.fn(() => {
       events.push('config');
-      return { shutdownGraceMs: 30_000 } as never;
+      return { shutdownGraceMs: 30_000, logLevel: 'silent' } as never;
     }),
     createDatabase: vi.fn(() => {
       events.push('database');

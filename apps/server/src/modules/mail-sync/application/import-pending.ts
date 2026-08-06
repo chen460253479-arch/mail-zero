@@ -1,6 +1,7 @@
 import type { MailAccountId, MailboxId, MailCore } from '@zero/mail-core';
 
 import type { InboundMailAdapterFactory, IngressScope } from '../domain/ingress-adapter';
+import type { Logger } from '../../../infrastructure/logging/logger';
 import { MailSyncError } from '../domain/errors';
 
 export type ImportContext = {
@@ -86,6 +87,7 @@ export const importPendingMessages = async (
       errorCode: string;
       errorMessage: string;
     }): Promise<void>;
+    logger?: Logger;
   },
 ): Promise<ImportPendingResult> => {
   requirePositiveInteger(input.limit, 'MAIL_SYNC_INVALID_CLAIM_LIMIT');
@@ -155,6 +157,14 @@ export const importPendingMessages = async (
           errorCode: 'MAIL_SYNC_IMPORT_RETRYABLE',
         });
         result.retried += 1;
+        dependencies.logger?.warn('mail.sync.import.item_failed', {
+          syncId: input.syncId,
+          itemId: item.id,
+          remoteMessageId: item.remoteMessageId,
+          attempt: item.attemptCount,
+          classification,
+          outcome: 'retry_scheduled',
+        });
         continue;
       }
 
@@ -176,6 +186,14 @@ export const importPendingMessages = async (
           errorMessage,
         });
         result.retried += 1;
+        dependencies.logger?.warn('mail.sync.import.item_failed', {
+          syncId: input.syncId,
+          itemId: item.id,
+          remoteMessageId: item.remoteMessageId,
+          attempt: item.attemptCount,
+          classification,
+          outcome: 'authentication_error',
+        });
         break;
       }
       await dependencies.repository.markFailed({
@@ -183,6 +201,14 @@ export const importPendingMessages = async (
         errorCode,
       });
       result.failed += 1;
+      dependencies.logger?.error('mail.sync.import.item_failed', {
+        syncId: input.syncId,
+        itemId: item.id,
+        remoteMessageId: item.remoteMessageId,
+        attempt: item.attemptCount,
+        classification,
+        outcome: 'permanent_failure',
+      });
       continue;
     }
 
@@ -193,6 +219,11 @@ export const importPendingMessages = async (
       startedAt,
     });
     result.imported += 1;
+    dependencies.logger?.debug('mail.sync.import.item_completed', {
+      syncId: input.syncId,
+      itemId: item.id,
+      remoteMessageId: item.remoteMessageId,
+    });
   }
 
   return result;

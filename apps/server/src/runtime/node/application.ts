@@ -28,13 +28,18 @@ const hashIpAddress = (ip: string | undefined): string | undefined => {
 const coreIsReady = (services: RuntimeServices): boolean =>
   Object.values(services.readiness.snapshot).every(Boolean);
 
+const correlationId = (configured: string | undefined): string => {
+  const normalized = configured?.trim().slice(0, 128);
+  return normalized && normalized.length > 0 ? normalized : crypto.randomUUID();
+};
+
 const createApi = (services: RuntimeServices) => {
   const api = new Hono<HonoContext>()
     .use(contextStorage())
     .use('*', async (c, next) => {
       c.set('services', services);
-      const traceId = c.req.header('X-Trace-ID') || crypto.randomUUID();
-      const requestId = c.req.header('X-Request-Id') || crypto.randomUUID();
+      const traceId = c.var.traceId ?? correlationId(c.req.header('X-Trace-ID'));
+      const requestId = c.var.requestId ?? correlationId(c.req.header('X-Request-Id'));
       c.header('X-Trace-ID', traceId);
       c.header('X-Request-ID', requestId);
       c.set('traceId', traceId);
@@ -51,7 +56,7 @@ const createApi = (services: RuntimeServices) => {
         'authentication',
         {
           method: c.req.method,
-          url: c.req.url,
+          path: new URL(c.req.url).pathname,
           hasAuthHeader: !!c.req.header('Authorization'),
         },
         {
@@ -146,12 +151,22 @@ const createApi = (services: RuntimeServices) => {
           requestId: c.var.requestId,
         }),
         allowMethodOverride: true,
-        onError: ({ error }) => console.error('Error in TRPC handler:', error),
+        onError: ({ error, path }) =>
+          services.logger.error('http.handler_failed', {
+            handler: 'trpc',
+            procedurePath: path,
+            error,
+          }),
       }),
     )
     .onError(async (error, c) => {
       if (error instanceof Response) return error;
-      console.error('Error in Hono handler:', error);
+      services.logger.error('http.handler_failed', {
+        handler: 'hono',
+        requestId: c.var.requestId,
+        traceId: c.var.traceId,
+        error,
+      });
       return c.json(
         {
           error: 'Internal Server Error',
@@ -170,7 +185,39 @@ export const createNodeApplication = (services: RuntimeServices) => {
   return new Hono<HonoContext>()
     .use('*', async (c, next) => {
       c.set('services', services);
-      await next();
+      const traceId = correlationId(c.req.header('X-Trace-ID'));
+      const requestId = correlationId(c.req.header('X-Request-Id'));
+      c.set('traceId', traceId);
+      c.set('requestId', requestId);
+      c.header('X-Trace-ID', traceId);
+      c.header('X-Request-ID', requestId);
+      const startedAt = Date.now();
+      let requestError: unknown;
+      try {
+        await next();
+      } catch (error) {
+        requestError = error;
+        throw error;
+      } finally {
+        const fields = {
+          requestId,
+          traceId,
+          method: c.req.method,
+          path: new URL(c.req.url).pathname,
+          status: c.res.status,
+          durationMs: Date.now() - startedAt,
+          ...(requestError === undefined ? {} : { error: requestError }),
+        };
+        if (requestError !== undefined || c.res.status >= 500) {
+          services.logger.error('http.request_completed', fields);
+        } else if (c.res.status >= 400) {
+          services.logger.warn('http.request_completed', fields);
+        } else if (fields.path === '/health') {
+          services.logger.debug('http.request_completed', fields);
+        } else {
+          services.logger.info('http.request_completed', fields);
+        }
+      }
     })
     .use(
       '*',
@@ -187,13 +234,17 @@ export const createNodeApplication = (services: RuntimeServices) => {
           return cookieDomainMatchesHostname(hostname, cookieDomain) ? origin : null;
         },
         credentials: true,
-        allowHeaders: ['Content-Type', 'Authorization'],
-        exposeHeaders: ['X-Zero-Redirect'],
+        allowHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Trace-ID'],
+        exposeHeaders: ['X-Zero-Redirect', 'X-Request-ID', 'X-Trace-ID'],
       }),
     )
-    .post('/api/mail/channels/gmail/push', (c) => services.webhooks.gmail(c.req.raw))
-    .post('/api/webhooks/mail/outlook', (c) => services.webhooks.outlook(c.req.raw))
-    .post('/api/webhooks/mail/zoho', (c) => services.webhooks.zohoMail(c.req.raw))
+    .post('/api/mail/channels/gmail/push', (c) =>
+      services.webhooks.gmail(c.req.raw, c.var.requestId),
+    )
+    .post('/api/webhooks/mail/outlook', (c) =>
+      services.webhooks.outlook(c.req.raw, c.var.requestId),
+    )
+    .post('/api/webhooks/mail/zoho', (c) => services.webhooks.zohoMail(c.req.raw, c.var.requestId))
     .route('/api/integrations', createExternalIntegrationRouter(services))
     .route('/api', api)
     .get('/health', (c) =>

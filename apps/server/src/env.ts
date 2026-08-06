@@ -1,5 +1,6 @@
 export type ZeroEnv = {
   NODE_ENV: 'local' | 'development' | 'production';
+  ZERO_LOG_LEVEL?: 'silent' | 'error' | 'warn' | 'info' | 'debug';
   JWT_SECRET: string;
   BASE_URL: string;
   VITE_PUBLIC_APP_URL: string;

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { LOG_LEVELS, type LogLevel } from '../../infrastructure/logging/logger';
+
 const optionalString = z.preprocess(
   (value) => (typeof value === 'string' && value.trim().length === 0 ? undefined : value),
   z.string().trim().min(1).optional(),
@@ -51,6 +53,7 @@ const credentialEncryptionKey = z.string().refine((value) => {
 const environmentSchema = z
   .object({
     NODE_ENV: z.enum(['local', 'development', 'production']).default('development'),
+    ZERO_LOG_LEVEL: z.enum(LOG_LEVELS).optional(),
     ZERO_SERVER_HOST: z.string().trim().min(1).default('0.0.0.0'),
     ZERO_SERVER_PORT: integerFromEnvironment(8787, 1, 65_535),
     ZERO_SHUTDOWN_GRACE_MS: integerFromEnvironment(30_000, 1_000, 300_000),
@@ -112,6 +115,7 @@ const environmentSchema = z
 
 export type RuntimeConfig = {
   nodeEnv: 'local' | 'development' | 'production';
+  logLevel: LogLevel;
   host: string;
   port: number;
   databaseUrl: string;
@@ -176,6 +180,7 @@ export const parseRuntimeConfig = (source: RuntimeEnvironmentSource): RuntimeCon
   const parsed = environmentSchema.parse(source);
   return {
     nodeEnv: parsed.NODE_ENV,
+    logLevel: parsed.ZERO_LOG_LEVEL ?? (parsed.NODE_ENV === 'production' ? 'info' : 'debug'),
     host: parsed.ZERO_SERVER_HOST,
     port: parsed.ZERO_SERVER_PORT,
     databaseUrl: parsed.DATABASE_URL,

@@ -29,8 +29,11 @@ export const handleZohoMailWebhookForEnvironment = async (
   db: DB,
   resources: MailInboundRuntimeResources,
   request: Request,
+  requestId?: string,
 ): Promise<Response> =>
   await handleZohoMailWebhookRequest(request, {
+    ...(resources.logger === undefined ? {} : { logger: resources.logger }),
+    ...(requestId === undefined ? {} : { requestId }),
     resolveTarget: async ({ folderId }) => {
       const matches = await db
         .select({

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   createMailIngressRuntime,
@@ -9,6 +9,17 @@ import {
 import type { PostgresMailSyncRepository } from '../../../../../src/modules/mail-sync/postgres/sync-repository';
 import type { CompleteDiscoveryRunInput } from '../../../../../src/modules/mail-sync/postgres/types';
 import { parseMailIngressCommand } from '../../../../../src/modules/mail-sync/application/commands';
+import type { Logger } from '../../../../../src/infrastructure/logging/logger';
+
+const createLogger = (): Logger =>
+  ({
+    level: 'debug',
+    child: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  }) as unknown as Logger;
 
 const createRuntime = (overrides: Partial<MailIngressRuntime> = {}): MailIngressRuntime => ({
   receiveSignal: async () => ({ matched: 0 }),
@@ -167,6 +178,53 @@ describe('mail ingress queue command processor', () => {
     await processMailIngressCommand({ type: 'renew', syncId: 'sync-1' }, runtime);
 
     expect(calls).toEqual(['signal', 'discover', 'renew']);
+  });
+
+  it('records command outcomes without logging the external mailbox identity', async () => {
+    const logger = createLogger();
+
+    await processMailIngressCommand(
+      {
+        type: 'signal',
+        provider: 'zoho_mail',
+        externalAccount: 'private@example.test',
+      },
+      createRuntime({
+        logger,
+        receiveSignal: async () => ({ matched: 2 }),
+      }),
+    );
+
+    expect(logger.info).toHaveBeenCalledWith('mail.sync.signal.completed', {
+      commandType: 'signal',
+      provider: 'zoho_mail',
+      matched: 2,
+      durationMs: expect.any(Number),
+    });
+    expect(JSON.stringify(vi.mocked(logger.info).mock.calls)).not.toContain('private@example.test');
+  });
+
+  it('records failed commands and preserves the original failure', async () => {
+    const logger = createLogger();
+    const failure = new Error('provider unavailable');
+
+    await expect(
+      processMailIngressCommand(
+        { type: 'discover', syncId: 'sync-1' },
+        createRuntime({
+          logger,
+          discover: async () => {
+            throw failure;
+          },
+        }),
+      ),
+    ).rejects.toBe(failure);
+    expect(logger.error).toHaveBeenCalledWith('mail.sync.command.failed', {
+      commandType: 'discover',
+      syncId: 'sync-1',
+      durationMs: expect.any(Number),
+      error: failure,
+    });
   });
 });
 
