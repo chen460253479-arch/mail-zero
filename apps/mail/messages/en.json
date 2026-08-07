@@ -313,6 +313,8 @@
       "expandEmailContent": "Expand email content",
       "collapseEmailContent": "Collapse email content",
       "emailContentCollapsed": "Email content is collapsed. Click to expand.",
+      "directionSent": "Sent",
+      "directionReceived": "Received",
       "unknownPerson": "Unknown",
       "noEmail": "No email",
       "additionalPeople": [

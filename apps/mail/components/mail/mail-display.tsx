@@ -14,12 +14,6 @@ import {
   Printer,
 } from '../icons/icons';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../ui/dropdown-menu';
-import {
   Briefcase,
   Star,
   StickyNote,
@@ -27,18 +21,27 @@ import {
   Lock,
   HardDriveDownload,
   ChevronDown,
+  Inbox,
+  SendHorizontal,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
 import { cn, formatDate, formatTime, shouldShowSeparateTime } from '@/lib/utils';
 import { memo, useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import type { Sender, ParsedMessage, Attachment, Label } from '@/types';
 import { EmailVerificationBadge } from './email-verification-badge';
-import { MailParticipant } from './mail-participant';
+import type { ThreadHeader } from '@/modules/mail/thread-header';
 import { useMailboxLabels } from '@/hooks/use-mailbox-labels';
 import { useActiveConnection } from '@/hooks/use-connections';
 import { CustomerMarkerBadge } from './customer-marker-badge';
 import { getDateLocale } from '@/lib/i18n/date-locale';
+import { MailParticipant } from './mail-participant';
 import { getLocale } from '@/paraglide/runtime';
 import { useThread } from '@/hooks/use-threads';
 import { BimiAvatar } from '../ui/bimi-avatar';
@@ -98,6 +101,7 @@ type Props = {
   onReplyAll?: () => void;
   onForward?: () => void;
   threadAttachments?: Attachment[];
+  threadHeader?: ThreadHeader;
 };
 
 const MailDisplayLabels = ({ labels }: { labels: Label[] }) => {
@@ -411,7 +415,14 @@ const openAttachment = async (attachment: {
   }
 };
 
-const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }: Props) => {
+const MailDisplay = ({
+  emailData,
+  index,
+  totalEmails,
+  demo,
+  threadAttachments,
+  threadHeader,
+}: Props) => {
   const dateLocale = getDateLocale(getLocale());
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   const { data: threadData } = useThread(emailData.threadId ?? null);
@@ -431,10 +442,15 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
   const collapseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [activeReplyId, setActiveReplyId] = useQueryState('activeReplyId');
+  const headerLabels = threadHeader?.labels ?? emailData.tags ?? [];
   const { labels: threadLabels } = useMailboxLabels({
-    ids: emailData.tags ? emailData.tags.map((label) => label.id) : [],
+    ids: headerLabels.map((label) => label.id),
   });
   const { data: activeConnection } = useActiveConnection();
+  const activeEmail = activeConnection?.email?.trim().toLowerCase();
+  const senderEmail = emailData.sender?.email?.trim().toLowerCase();
+  const hasMailDirection = Boolean(activeEmail && senderEmail);
+  const isOutgoing = hasMailDirection && activeEmail === senderEmail;
   const isLastEmail = useMemo(
     () => emailData.id === threadData?.latest?.id,
     [emailData.id, threadData?.latest?.id],
@@ -902,9 +918,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
     }
   };
 
-  const renderPerson = (person: Sender) => (
-    <MailParticipant key={person.email} person={person} />
-  );
+  const renderPerson = (person: Sender) => <MailParticipant key={person.email} person={person} />;
 
   const people = useMemo(() => {
     if (!activeConnection) return [];
@@ -940,7 +954,7 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
               <>
                 <span className="inline-flex items-center gap-2 font-medium text-black dark:text-white">
                   <span>
-                    {emailData.subject}{' '}
+                    {threadHeader?.subject || emailData.subject || m['common.mail.noSubject']()}{' '}
                     <span className="text-muted-foreground dark:text-[#8C8C8C]">
                       {totalEmails && totalEmails > 1 && `[${totalEmails}]`}
                     </span>
@@ -948,8 +962,8 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                 </span>
 
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  {emailData?.tags?.length ? <MailDisplayLabels labels={emailData.tags} /> : null}
-                  {emailData?.tags?.length ? (
+                  {headerLabels.length ? <MailDisplayLabels labels={headerLabels} /> : null}
+                  {headerLabels.length ? (
                     <div className="bg-iconLight dark:bg-iconDark/20 relative h-3 w-0.5 rounded-full" />
                   ) : null}
                   <RenderLabels labels={threadLabels} />
@@ -1000,7 +1014,17 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
             )}
           </div>
           <div
-            className="flex cursor-pointer flex-col pb-2 duration-200"
+            className={cn(
+              'flex cursor-pointer flex-col border-l-[3px] pb-2 duration-200',
+              !hasMailDirection && 'border-l-transparent',
+              hasMailDirection &&
+                (isOutgoing
+                  ? 'border-l-blue-500 bg-blue-50/70 dark:bg-blue-950/20'
+                  : 'border-l-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/20'),
+            )}
+            data-mail-direction={
+              hasMailDirection ? (isOutgoing ? 'outgoing' : 'incoming') : undefined
+            }
             data-mail-content-collapsed={isCollapsed}
             onClick={toggleCollapse}
           >
@@ -1009,7 +1033,11 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                 <BimiAvatar
                   email={emailData?.sender?.email}
                   name={emailData?.sender?.name}
-                  className="mt-3 h-8 w-8"
+                  className={cn(
+                    'mt-3 h-8 w-8 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-[#1f1f1f]',
+                    !hasMailDirection && 'ring-transparent',
+                    hasMailDirection && (isOutgoing ? 'ring-blue-400' : 'ring-emerald-400'),
+                  )}
                 />
 
                 <div className="flex w-full items-center justify-between">
@@ -1022,6 +1050,25 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
                               {cleanNameDisplay(emailData?.sender?.name)}
                             </span>
                             <EmailVerificationBadge messageId={emailData?.id} />
+                            {hasMailDirection && (
+                              <span
+                                className={cn(
+                                  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium',
+                                  isOutgoing
+                                    ? 'border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
+                                    : 'border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
+                                )}
+                              >
+                                {isOutgoing ? (
+                                  <SendHorizontal aria-hidden="true" className="h-3 w-3" />
+                                ) : (
+                                  <Inbox aria-hidden="true" className="h-3 w-3" />
+                                )}
+                                {isOutgoing
+                                  ? m['common.mailDisplay.directionSent']()
+                                  : m['common.mailDisplay.directionReceived']()}
+                              </span>
+                            )}
                           </div>
 
                           <Popover open={openDetailsPopover} onOpenChange={handlePopoverChange}>
@@ -1351,7 +1398,9 @@ const MailDisplay = ({ emailData, index, totalEmails, demo, threadAttachments }:
 
           <div
             className={cn(
-              'grid overflow-hidden duration-200',
+              'grid overflow-hidden border-l-[3px] duration-200',
+              !hasMailDirection && 'border-l-transparent',
+              hasMailDirection && (isOutgoing ? 'border-l-blue-500' : 'border-l-emerald-500'),
               isCollapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]',
             )}
             onClick={(e) => e.stopPropagation()}

@@ -36,6 +36,7 @@ import { applyOptimisticKeywordTags } from '@/components/mail/optimistic-keyword
 import { useOptimisticThreadState } from '@/components/mail/optimistic-thread-state';
 import { buildCustomerConversationUrl } from '@/modules/mail/customer-conversation';
 import { sortMessagesNewestFirst } from '@/modules/mail/message-order';
+import { buildThreadHeader, type ThreadHeader } from '@/modules/mail/thread-header';
 import { MoveToFolderMenu } from '@/components/mailbox/move-to-folder-menu';
 import { resolveMailboxRoute } from '@/modules/mail/routing/mailbox-route';
 import { useOptimisticActions } from '@/hooks/use-optimistic-actions';
@@ -244,6 +245,10 @@ export function ThreadDisplay() {
         })) ?? [],
       ),
     [emailData?.messages, optimisticState.optimisticImportant, optimisticState.optimisticStarred],
+  );
+  const threadHeader = useMemo(
+    () => buildThreadHeader(emailData?.messages ?? []),
+    [emailData?.messages],
   );
 
   const handleNext = useCallback(() => {
@@ -1056,6 +1061,7 @@ export function ThreadDisplay() {
                       mode={mode || undefined}
                       activeReplyId={activeReplyId || undefined}
                       stickyReplyMessageId={displayMessages[0]?.id}
+                      threadHeader={threadHeader}
                       isMobile={isMobile}
                     />
                   </motion.div>
@@ -1069,6 +1075,7 @@ export function ThreadDisplay() {
                   mode={mode || undefined}
                   activeReplyId={activeReplyId || undefined}
                   stickyReplyMessageId={displayMessages[0]?.id}
+                  threadHeader={threadHeader}
                   isMobile={isMobile}
                 />
               )}
@@ -1099,6 +1106,7 @@ interface MessageListProps {
   mode?: string;
   activeReplyId?: string;
   stickyReplyMessageId?: string;
+  threadHeader: ThreadHeader;
   isMobile: boolean;
 }
 
@@ -1110,6 +1118,7 @@ const MessageList = ({
   mode,
   activeReplyId,
   stickyReplyMessageId,
+  threadHeader,
   isMobile,
 }: MessageListProps) => (
   <ScrollArea className={cn('flex-1', isMobile ? 'h-[calc(100%-1px)]' : 'h-full')} type="auto">
@@ -1130,6 +1139,7 @@ const MessageList = ({
               index={index}
               totalEmails={totalReplies}
               threadAttachments={index === 0 ? allThreadAttachments : undefined}
+              threadHeader={index === 0 ? threadHeader : undefined}
             />
             {isReplyingToThisMessage && message.id !== stickyReplyMessageId && (
               <div className="px-4 py-2" id={`reply-composer-${message.id}`}>
