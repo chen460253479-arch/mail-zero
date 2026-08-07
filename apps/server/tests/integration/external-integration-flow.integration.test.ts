@@ -138,7 +138,10 @@ describe('managed external mail end-to-end flow', () => {
                   provider_config_key: providerConfigKey,
                   provider: 'google-mail',
                   metadata: null,
-                  tags: {},
+                  tags:
+                    bindingInput.expectedEndUserId === null
+                      ? {}
+                      : { end_user_id: bindingInput.expectedEndUserId },
                   errors: [],
                   credentials: {
                     type: 'OAUTH2',

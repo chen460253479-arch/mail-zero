@@ -208,6 +208,7 @@ export const createExternalIntegrationRouter = (
         await dependencies.connect(
           {
             userId: managedUser.userId,
+            expectedEndUserId: parsed.data.externalUserId,
             channelId: parsed.data.channelId,
             connectionId: parsed.data.connectionId,
             ...(externalData === undefined ? {} : { externalData }),

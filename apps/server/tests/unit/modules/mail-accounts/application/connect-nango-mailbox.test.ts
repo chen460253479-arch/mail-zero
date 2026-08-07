@@ -37,6 +37,7 @@ describe('connectNangoMailbox', () => {
     const result = await connectNangoMailbox(
       {
         userId: 'owner-1',
+        expectedEndUserId: 'crm-owner-1',
         channelId: 'gmail',
         connectionId: 'connect-gmail-1',
       },
@@ -69,6 +70,7 @@ describe('connectNangoMailbox', () => {
       connectNangoMailbox(
         {
           userId: 'owner-1',
+          expectedEndUserId: 'crm-owner-1',
           channelId: 'gmail',
           connectionId: 'connect-gmail-1',
         },
@@ -94,6 +96,7 @@ describe('connectNangoMailbox', () => {
       connectNangoMailbox(
         {
           userId: 'owner-1',
+          expectedEndUserId: 'crm-owner-1',
           channelId: 'zoho_mail',
           connectionId: 'nango-zoho-1',
         },
@@ -104,6 +107,7 @@ describe('connectNangoMailbox', () => {
 
     expect(reserve).toHaveBeenCalledWith({
       userId: 'owner-1',
+      expectedEndUserId: 'crm-owner-1',
       channelId: 'zoho_mail',
       connectionId: 'nango-zoho-1',
       integrationId: 'zoho-mail-primary',
@@ -129,6 +133,7 @@ describe('connectNangoMailbox', () => {
       connectNangoMailbox(
         {
           userId: 'owner-1',
+          expectedEndUserId: 'crm-owner-1',
           channelId: 'zoho_mail',
           connectionId: 'nango-zoho-1',
           externalData: { accountId: '100' },

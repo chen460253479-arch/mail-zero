@@ -7,7 +7,7 @@ const connectionSummary = {
   provider_config_key: 'gmail-primary',
   provider: 'google-mail',
   metadata: { email: 'owner@example.com' },
-  tags: { end_user_email: 'owner@example.com' },
+  tags: { end_user_id: 'crm-user-1', end_user_email: 'owner@example.com' },
   errors: [],
 };
 
@@ -124,6 +124,38 @@ describe('Nango client', () => {
       headers: { Authorization: 'Bearer nango-secret' },
       signal: expect.any(AbortSignal),
     });
+  });
+
+  it('filters connections at Nango by end-user tag on every page', async () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({
+      ...connectionSummary,
+      connection_id: `mailbox-${index}`,
+    }));
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ connections: firstPage }))
+      .mockResolvedValueOnce(Response.json({ connections: [] }));
+
+    await createClient(fetchMock).listConnections('gmail-primary', {
+      end_user_id: 'crm/user 1',
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://api.nango.dev/connections?limit=100&page=0&tags%5Bend_user_id%5D=crm%2Fuser+1',
+      {
+        headers: { Authorization: 'Bearer nango-secret' },
+        signal: expect.any(AbortSignal),
+      },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://api.nango.dev/connections?limit=100&page=1&tags%5Bend_user_id%5D=crm%2Fuser+1',
+      {
+        headers: { Authorization: 'Bearer nango-secret' },
+        signal: expect.any(AbortSignal),
+      },
+    );
   });
 
   it('finds integration connections beyond the first API page', async () => {

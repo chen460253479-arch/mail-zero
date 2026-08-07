@@ -18,6 +18,7 @@ import type { RuntimeServices } from '../../../runtime/node/services';
 
 export type ConnectNangoMailboxInput = {
   userId: string;
+  expectedEndUserId: string | null;
   channelId: MailChannelId;
   connectionId: string;
   externalData?: MailChannelExternalData;
@@ -37,6 +38,7 @@ export type ConnectNangoMailboxDependencies = {
   assertNangoChannelAvailable(channelId: MailChannelId): Promise<string>;
   reserve(input: {
     userId: string;
+    expectedEndUserId: string | null;
     channelId: 'zoho_mail';
     connectionId: string;
     integrationId: string;
@@ -85,7 +87,9 @@ const createRuntimeDependencies = (services: RuntimeServices): ConnectNangoMailb
       if (
         connection.connection_id !== input.connectionId ||
         connection.provider_config_key !== input.integrationId ||
-        !channel.nangoProviders?.includes(connection.provider)
+        !channel.nangoProviders?.includes(connection.provider) ||
+        (input.expectedEndUserId !== null &&
+          connection.tags.end_user_id !== input.expectedEndUserId)
       ) {
         throw new NangoBindingError('NANGO_CONNECTION_INVALID');
       }
@@ -182,6 +186,7 @@ export const connectNangoMailbox = async (
   if (input.channelId === 'zoho_mail' && input.externalData === undefined) {
     return await dependencies.reserve({
       userId: input.userId,
+      expectedEndUserId: input.expectedEndUserId,
       channelId: input.channelId,
       connectionId: input.connectionId,
       integrationId,

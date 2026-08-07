@@ -21,7 +21,7 @@ const connection = {
   provider_config_key: 'gmail-primary',
   provider: 'google-mail',
   metadata: null,
-  tags: {},
+  tags: { end_user_id: 'crm-user-1' },
   errors: [],
   credentials: {
     type: 'OAUTH2' as const,
@@ -73,12 +73,34 @@ const createDependencies = () => {
 
 const input = {
   userId: 'user-1',
+  expectedEndUserId: 'crm-user-1',
   channelId: 'gmail' as const,
   integrationId: 'gmail-primary',
   connectionId: 'nango-1',
 };
 
 describe('Nango mailbox binding', () => {
+  it('rejects a connection owned by another CRM user', async () => {
+    const { repository, dependencies } = createDependencies();
+    vi.mocked(dependencies.client.getConnection).mockResolvedValue({
+      ...connection,
+      tags: { end_user_id: 'another-crm-user' },
+    });
+
+    await expect(bindNangoMailbox(input, dependencies)).rejects.toMatchObject({
+      code: 'NANGO_CONNECTION_INVALID',
+    } satisfies Partial<NangoBindingError>);
+    expect(repository.save).not.toHaveBeenCalled();
+  });
+
+  it('allows an administrator binding to bypass CRM end-user ownership', async () => {
+    const { dependencies } = createDependencies();
+
+    await expect(
+      bindNangoMailbox({ ...input, expectedEndUserId: null }, dependencies),
+    ).resolves.toMatchObject({ id: 'zero-mailbox-1' });
+  });
+
   it('verifies the mailbox identity through the selected channel', async () => {
     const { channel, repository, dependencies } = createDependencies();
 
@@ -545,6 +567,7 @@ describe('Nango mailbox binding', () => {
     await bindNangoMailbox(
       {
         userId: 'user-1',
+        expectedEndUserId: 'crm-user-1',
         channelId: 'imap_smtp',
         integrationId: 'generic-email-primary',
         connectionId: 'nango-1',
@@ -593,7 +616,7 @@ describe('safe Nango connection summaries', () => {
       ]),
     } as unknown as NangoClient;
 
-    const result = await listSafeNangoConnections('gmail-primary', client, vi.fn());
+    const result = await listSafeNangoConnections('gmail-primary', client, vi.fn(), null);
 
     expect(result).toEqual([
       {
@@ -616,7 +639,7 @@ describe('safe Nango connection summaries', () => {
       displayName: 'Resolved Owner',
     });
 
-    const result = await listSafeNangoConnections('gmail-primary', client, resolveIdentity);
+    const result = await listSafeNangoConnections('gmail-primary', client, resolveIdentity, null);
 
     expect(resolveIdentity).toHaveBeenCalledWith('nango-1');
     expect(result[0]).toEqual({
@@ -626,5 +649,24 @@ describe('safe Nango connection summaries', () => {
       displayName: 'Resolved Owner',
       authorizationStatus: 'valid',
     });
+  });
+
+  it('requests and returns only the current CRM user connections', async () => {
+    const listConnections = vi.fn().mockResolvedValue([
+      connection,
+      {
+        ...connection,
+        connection_id: 'other-nango-connection',
+        tags: { end_user_id: 'another-crm-user' },
+      },
+    ]);
+    const client = { listConnections } as unknown as NangoClient;
+
+    const result = await listSafeNangoConnections('gmail-primary', client, vi.fn(), 'crm-user-1');
+
+    expect(listConnections).toHaveBeenCalledWith('gmail-primary', {
+      end_user_id: 'crm-user-1',
+    });
+    expect(result.map(({ connectionId }) => connectionId)).toEqual(['nango-1']);
   });
 });

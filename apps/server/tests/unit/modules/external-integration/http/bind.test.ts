@@ -67,6 +67,7 @@ describe('external Nango connection binding HTTP contract', () => {
     expect(connect).toHaveBeenCalledWith(
       {
         userId: 'managed-user-1',
+        expectedEndUserId: 'user_200',
         channelId: 'gmail',
         connectionId: 'connect-gmail-1',
       },
@@ -99,6 +100,7 @@ describe('external Nango connection binding HTTP contract', () => {
     expect(connect).toHaveBeenCalledWith(
       {
         userId: 'managed-user-1',
+        expectedEndUserId: 'crm-user-01',
         channelId: 'zoho_mail',
         connectionId: 'nango-connection-01',
         externalData,
@@ -126,6 +128,7 @@ describe('external Nango connection binding HTTP contract', () => {
     expect(connect).toHaveBeenCalledWith(
       {
         userId: 'managed-user-1',
+        expectedEndUserId: 'crm-user-01',
         channelId: 'zoho_mail',
         connectionId: 'nango-connection-01',
         externalData,
@@ -150,6 +153,7 @@ describe('external Nango connection binding HTTP contract', () => {
     expect(connect).toHaveBeenCalledWith(
       {
         userId: 'managed-user-1',
+        expectedEndUserId: '2039264814347653121',
         channelId: 'zoho_mail',
         connectionId: 'bd896d4c-4a28-4237-8a97-b144f3954411',
       },

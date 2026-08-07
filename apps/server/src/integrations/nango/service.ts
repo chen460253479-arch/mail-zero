@@ -155,9 +155,12 @@ export class NangoIntegrationService {
     }
   }
 
-  async listConnections(integrationId?: string): Promise<NangoConnectionSummary[]> {
+  async listConnections(
+    integrationId?: string,
+    tags?: Readonly<Record<string, string>>,
+  ): Promise<NangoConnectionSummary[]> {
     try {
-      return await (await this.getValidatedClient()).listConnections(integrationId);
+      return await (await this.getValidatedClient()).listConnections(integrationId, tags);
     } catch (error) {
       if (error instanceof NangoIntegrationError) throw error;
       throw mapNangoClientError(error);

@@ -166,7 +166,26 @@ const mapNangoBindingError = (error: unknown): never => {
 
 const mailChannelIdSchema = z.enum(mailChannelIds);
 
-const listChannelNangoConnections = async (services: RuntimeServices, channelId: MailChannelId) => {
+const nangoEndUserIdForSession = (sessionUser: {
+  role?: string | null;
+  username?: string | null;
+}): string | null => {
+  if (sessionUser.role === 'admin') return null;
+  const endUserId = sessionUser.username?.trim();
+  if (!endUserId) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'NANGO_END_USER_ID_REQUIRED',
+    });
+  }
+  return endUserId;
+};
+
+const listChannelNangoConnections = async (
+  services: RuntimeServices,
+  channelId: MailChannelId,
+  endUserId: string | null,
+) => {
   if ((await getChannelAuthorizationOptions(services, channelId)).mode !== 'nango') {
     throw new TRPCError({
       code: 'PRECONDITION_FAILED',
@@ -197,6 +216,7 @@ const listChannelNangoConnections = async (services: RuntimeServices, channelId:
         });
         return { email: identity.email, displayName: identity.name };
       },
+      endUserId,
     );
     return connections.map(({ connectionId, email, displayName, authorizationStatus }) => ({
       connectionId,
@@ -250,13 +270,22 @@ export const connectionsRouter = router({
         await getChannelAuthorizationOptions(ctx.c.var.services!, input.channelId),
     ),
   listNangoGmailConnections: privateProcedure.query(
-    async ({ ctx }) => await listChannelNangoConnections(ctx.c.var.services!, 'gmail'),
+    async ({ ctx }) =>
+      await listChannelNangoConnections(
+        ctx.c.var.services!,
+        'gmail',
+        nangoEndUserIdForSession(ctx.sessionUser),
+      ),
   ),
   listNangoConnections: privateProcedure
     .input(z.object({ channelId: mailChannelIdSchema }))
     .query(
       async ({ input, ctx }) =>
-        await listChannelNangoConnections(ctx.c.var.services!, input.channelId),
+        await listChannelNangoConnections(
+          ctx.c.var.services!,
+          input.channelId,
+          nangoEndUserIdForSession(ctx.sessionUser),
+        ),
     ),
   bindNango: privateProcedure
     .input(
@@ -277,6 +306,7 @@ export const connectionsRouter = router({
         return await connectNangoMailbox(
           {
             userId: ctx.sessionUser.id,
+            expectedEndUserId: nangoEndUserIdForSession(ctx.sessionUser),
             channelId: input.channelId,
             connectionId: input.connectionId,
           },

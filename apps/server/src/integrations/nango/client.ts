@@ -68,13 +68,16 @@ export class NangoClient {
     return this.parse(integrationListSchema, payload, operation).data;
   }
 
-  async listConnections(integrationId?: string): Promise<NangoConnectionSummary[]> {
+  async listConnections(
+    integrationId?: string,
+    tags?: Readonly<Record<string, string>>,
+  ): Promise<NangoConnectionSummary[]> {
     const pageSize = 100;
     const connections: NangoConnectionSummary[] = [];
     const seen = new Set<string>();
 
     for (let page = 0; ; page++) {
-      const pageConnections = await this.listConnectionsPage(pageSize, page);
+      const pageConnections = await this.listConnectionsPage(pageSize, page, tags);
       let added = 0;
 
       for (const connection of pageConnections) {
@@ -140,9 +143,13 @@ export class NangoClient {
   private async listConnectionsPage(
     limit: number,
     page: number,
+    tags?: Readonly<Record<string, string>>,
   ): Promise<NangoConnectionSummary[]> {
     const operation = 'list_connections';
     const query = new URLSearchParams({ limit: String(limit), page: String(page) });
+    for (const [key, value] of Object.entries(tags ?? {})) {
+      query.append(`tags[${key}]`, value);
+    }
     const payload = await this.request(`/connections?${query.toString()}`, operation);
     const result = this.parse(connectionListSchema, payload, operation);
     return 'data' in result ? result.data : result.connections;

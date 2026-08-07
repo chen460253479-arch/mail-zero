@@ -86,6 +86,7 @@ export interface NangoBindingRepository {
 
 export type BindNangoMailboxInput = {
   userId: string;
+  expectedEndUserId: string | null;
   channelId: MailChannelId;
   integrationId: string;
   connectionId: string;
@@ -143,7 +144,8 @@ export const bindNangoMailbox = async (
   if (
     connection.connection_id !== input.connectionId ||
     connection.provider_config_key !== input.integrationId ||
-    !channel.nangoProviders?.includes(connection.provider)
+    !channel.nangoProviders?.includes(connection.provider) ||
+    (input.expectedEndUserId !== null && connection.tags.end_user_id !== input.expectedEndUserId)
   ) {
     throw new NangoBindingError('NANGO_CONNECTION_INVALID');
   }
@@ -339,8 +341,14 @@ export const listSafeNangoConnections = async (
   integrationId: string,
   client: Pick<NangoClient, 'listConnections'>,
   resolveIdentity: (connectionId: string) => Promise<{ email: string; displayName: string }>,
+  endUserId: string | null,
 ): Promise<SafeNangoConnection[]> => {
-  const summaries = await client.listConnections(integrationId);
+  const summaries = (
+    await client.listConnections(
+      integrationId,
+      endUserId === null ? undefined : { end_user_id: endUserId },
+    )
+  ).filter((summary) => endUserId === null || summary.tags.end_user_id === endUserId);
   const result = new Array<SafeNangoConnection>(summaries.length);
   let nextIndex = 0;
 
