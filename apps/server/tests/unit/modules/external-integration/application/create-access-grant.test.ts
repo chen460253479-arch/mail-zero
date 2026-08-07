@@ -11,12 +11,12 @@ const createDependencies = (
     userId: 'managed-user-1',
     role: 'user',
   },
-  hasActiveMailbox = true,
 ) => {
   const repository = {
     findManagedUser: vi.fn(async () => managedUser),
-    hasActiveMailbox: vi.fn(async () => hasActiveMailbox),
-    createGrant: vi.fn(async (_input: CreateExternalAccessGrantRecord) => undefined),
+    createGrant: vi.fn<(input: CreateExternalAccessGrantRecord) => Promise<void>>(
+      async () => undefined,
+    ),
   };
   return {
     repository,
@@ -51,7 +51,6 @@ describe('createAccessGrant', () => {
 
     expect(result).toEqual({ launchCode: expect.any(String) });
     expect(repository.findManagedUser).toHaveBeenCalledWith('user_200');
-    expect(repository.hasActiveMailbox).toHaveBeenCalledWith('managed-user-1');
     expect(repository.createGrant).toHaveBeenCalledWith({
       id: 'grant-1',
       userId: 'managed-user-1',
@@ -79,13 +78,5 @@ describe('createAccessGrant', () => {
     await expect(
       createAccessGrant({ externalUserId: 'admin_user' }, dependencies),
     ).rejects.toMatchObject({ code: 'EXTERNAL_USER_NOT_FOUND' });
-  });
-
-  it('rejects a user without an active mailbox', async () => {
-    const { dependencies } = createDependencies({ userId: 'managed-user-1', role: 'user' }, false);
-
-    await expect(
-      createAccessGrant({ externalUserId: 'user_200' }, dependencies),
-    ).rejects.toMatchObject({ code: 'ACTIVE_MAILBOX_NOT_FOUND' });
   });
 });

@@ -192,6 +192,40 @@ describe('managed external mail end-to-end flow', () => {
         });
 
       const integration = createExternalIntegrationRouter(services, { connect });
+      const autoRegisteredGrantResponse = await integration.request('/access-grants', {
+        method: 'POST',
+        headers: serviceHeaders,
+        body: JSON.stringify({ externalUserId: 'user_201' }),
+      });
+      expect(autoRegisteredGrantResponse.status).toBe(201);
+      const autoRegisteredGrant = (await autoRegisteredGrantResponse.json()) as {
+        launchCode: string;
+      };
+      const autoRegisteredLaunchResponse = await integration.request('/launch', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ launchCode: autoRegisteredGrant.launchCode }),
+      });
+      expect(autoRegisteredLaunchResponse.status).toBe(303);
+      const autoRegisteredUser = await db.query.user.findFirst({
+        where: eq(user.username, 'user_201'),
+      });
+      expect(autoRegisteredUser).toMatchObject({
+        role: 'user',
+        mustChangePassword: true,
+      });
+      await expect(
+        connectionRepository.listConnectionsWithAuthorization(autoRegisteredUser!.id),
+      ).resolves.toEqual([]);
+      await expect(
+        auth.api.getSession({
+          headers: new Headers({ cookie: cookiePair(autoRegisteredLaunchResponse) }),
+        }),
+      ).resolves.toMatchObject({
+        user: { id: autoRegisteredUser!.id, username: 'user_201' },
+        session: { authMethod: 'launch' },
+      });
+
       const bind = async (externalUserId: string) =>
         await integration.request('/nango/connections/bind', {
           method: 'POST',

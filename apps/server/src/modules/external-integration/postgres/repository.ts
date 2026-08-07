@@ -224,25 +224,6 @@ export const createPostgresExternalAccessRepository = (
     return record ?? null;
   },
 
-  hasActiveMailbox: async (userId) => {
-    const [record] = await db
-      .select({ id: mailAccount.id })
-      .from(connection)
-      .innerJoin(
-        mailAccount,
-        and(eq(mailAccount.connectionId, connection.id), eq(mailAccount.userId, connection.userId)),
-      )
-      .where(
-        and(
-          eq(connection.userId, userId),
-          eq(connection.status, 'connected'),
-          eq(mailAccount.status, 'active'),
-        ),
-      )
-      .limit(1);
-    return record !== undefined;
-  },
-
   createGrant: async (input: CreateExternalAccessGrantRecord) => {
     await db.insert(externalAccessGrant).values(input);
   },

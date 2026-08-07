@@ -1,11 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createExternalIntegrationRouter } from '../../../../../src/modules/external-integration/http/router';
+import { ExternalIntegrationError } from '../../../../../src/modules/external-integration/errors';
 import type { RuntimeServices } from '../../../../../src/runtime/node/services';
 
 const createRouter = () => {
   const createAccessGrant = vi.fn(async () => ({
     launchCode: 'one-time-code',
+  }));
+  const provisionManagedUser = vi.fn(async () => ({
+    userId: 'managed-user-1',
+    created: true,
   }));
   const services = {
     config: {
@@ -20,7 +25,9 @@ const createRouter = () => {
     createAccessGrant,
     app: createExternalIntegrationRouter(services, {
       createAccessGrant,
+      provisionManagedUser,
     }),
+    provisionManagedUser,
   };
 };
 
@@ -39,8 +46,8 @@ const requestGrant = async (
   });
 
 describe('external access grant HTTP contract', () => {
-  it('accepts only externalUserId and returns only launchCode', async () => {
-    const { app, createAccessGrant } = createRouter();
+  it('auto-registers externalUserId and returns only launchCode', async () => {
+    const { app, createAccessGrant, provisionManagedUser } = createRouter();
 
     const response = await requestGrant(app, {
       externalUserId: 'user_200',
@@ -56,10 +63,14 @@ describe('external access grant HTTP contract', () => {
       },
       expect.anything(),
     );
+    expect(provisionManagedUser).toHaveBeenCalledWith(
+      { externalUserId: 'user_200' },
+      expect.anything(),
+    );
   });
 
   it('rejects additional identity and navigation fields', async () => {
-    const { app, createAccessGrant } = createRouter();
+    const { app, createAccessGrant, provisionManagedUser } = createRouter();
 
     const response = await requestGrant(app, {
       externalUserId: 'user_200',
@@ -67,11 +78,27 @@ describe('external access grant HTTP contract', () => {
     });
 
     expect(response.status).toBe(400);
+    expect(provisionManagedUser).not.toHaveBeenCalled();
+    expect(createAccessGrant).not.toHaveBeenCalled();
+  });
+
+  it('rejects a collision with a non-user account', async () => {
+    const { app, createAccessGrant, provisionManagedUser } = createRouter();
+    provisionManagedUser.mockRejectedValueOnce(
+      new ExternalIntegrationError('EXTERNAL_USER_INVALID'),
+    );
+
+    const response = await requestGrant(app, {
+      externalUserId: 'admin_user',
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ error: 'EXTERNAL_USER_INVALID' });
     expect(createAccessGrant).not.toHaveBeenCalled();
   });
 
   it('requires the fixed integration token', async () => {
-    const { app, createAccessGrant } = createRouter();
+    const { app, createAccessGrant, provisionManagedUser } = createRouter();
 
     const response = await requestGrant(
       app,
@@ -82,6 +109,7 @@ describe('external access grant HTTP contract', () => {
     );
 
     expect(response.status).toBe(401);
+    expect(provisionManagedUser).not.toHaveBeenCalled();
     expect(createAccessGrant).not.toHaveBeenCalled();
   });
 });

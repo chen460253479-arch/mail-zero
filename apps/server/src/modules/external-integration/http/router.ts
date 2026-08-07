@@ -253,15 +253,19 @@ export const createExternalIntegrationRouter = (
       return context.json({ error: 'INVALID_REQUEST' }, 400);
     }
     try {
+      await dependencies.provisionManagedUser(
+        { externalUserId: parsed.data.externalUserId },
+        services,
+      );
       return context.json(await dependencies.createAccessGrant(parsed.data, services), 201);
     } catch (error) {
       if (
         error instanceof ExternalIntegrationError &&
-        (error.code === 'EXTERNAL_USER_NOT_FOUND' || error.code === 'ACTIVE_MAILBOX_NOT_FOUND')
+        (error.code === 'EXTERNAL_USER_INVALID' || error.code === 'EXTERNAL_USER_NOT_FOUND')
       ) {
         return context.json(
           { error: error.code },
-          error.code === 'EXTERNAL_USER_NOT_FOUND' ? 404 : 412,
+          error.code === 'EXTERNAL_USER_INVALID' ? 409 : 404,
         );
       }
       throw error;

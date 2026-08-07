@@ -16,7 +16,6 @@ export type CreateExternalAccessGrantRecord = {
 
 export interface ExternalAccessGrantWriter {
   findManagedUser(externalUserId: string): Promise<{ userId: string; role: string } | null>;
-  hasActiveMailbox(userId: string): Promise<boolean>;
   createGrant(input: CreateExternalAccessGrantRecord): Promise<void>;
 }
 
@@ -47,9 +46,6 @@ export const createAccessGrant = async (
   const managedUser = await dependencies.repository.findManagedUser(input.externalUserId);
   if (managedUser === null || managedUser.role !== 'user') {
     throw new ExternalIntegrationError('EXTERNAL_USER_NOT_FOUND');
-  }
-  if (!(await dependencies.repository.hasActiveMailbox(managedUser.userId))) {
-    throw new ExternalIntegrationError('ACTIVE_MAILBOX_NOT_FOUND');
   }
 
   const launchCode = generateExternalSecret(dependencies.randomBytes);
