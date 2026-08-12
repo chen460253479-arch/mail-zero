@@ -13,6 +13,7 @@ describe('unified local Mail API facade', () => {
       'submission',
       'view',
       'action',
+      'crm',
     ]);
   });
 });

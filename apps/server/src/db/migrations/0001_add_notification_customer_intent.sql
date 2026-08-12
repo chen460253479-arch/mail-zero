@@ -1,0 +1,1 @@
+ALTER TABLE "mail"."notification_outbox" ADD COLUMN "create_customer_if_missing" boolean DEFAULT false NOT NULL;

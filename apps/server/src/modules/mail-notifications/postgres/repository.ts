@@ -26,6 +26,7 @@ export const createPostgresMailNotificationRepository = (
         message_id,
         mail_account_id,
         kind,
+        create_customer_if_missing,
         status,
         run_at,
         attempts,
@@ -38,6 +39,7 @@ export const createPostgresMailNotificationRepository = (
         candidate.id,
         candidate.mail_account_id,
         ${input.kind},
+        ${input.createCustomerIfMissing},
         'ready',
         ${sql.param(input.createdAt, mailNotificationOutbox.runAt)},
         0,
@@ -110,6 +112,7 @@ export const createPostgresMailNotificationRepository = (
         messageId: row.messageId,
         accountId: row.mailAccountId,
         kind: row.kind,
+        createCustomerIfMissing: row.createCustomerIfMissing,
         attempts: row.attempts,
         leaseOwner: input.owner,
       }));

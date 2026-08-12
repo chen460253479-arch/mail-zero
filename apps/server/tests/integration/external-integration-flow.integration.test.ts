@@ -292,7 +292,11 @@ describe('managed external mail end-to-end flow', () => {
         leaseForMs: 30_000,
       });
       expect(claimed).toHaveLength(1);
-      expect(claimed[0]).toMatchObject({ messageId: imported.emailId, kind: 'received' });
+      expect(claimed[0]).toMatchObject({
+        messageId: imported.emailId,
+        kind: 'received',
+        createCustomerIfMissing: false,
+      });
       const deliveredPayloads: unknown[] = [];
       await deliverPendingEvent(claimed[0]!, {
         webhookUrl: config.externalIntegration.webhook.url!,
@@ -308,6 +312,7 @@ describe('managed external mail end-to-end flow', () => {
         {
           eventId: claimed[0]!.eventId,
           messageId: imported.emailId,
+          createCustomerIfMissing: false,
         },
       ]);
 

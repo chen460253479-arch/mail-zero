@@ -1,4 +1,4 @@
-import { check, foreignKey, index, integer, text, timestamp } from 'drizzle-orm/pg-core';
+import { boolean, check, foreignKey, index, integer, text, timestamp } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 import { mailAccount } from '../../mail/postgres/schema/accounts';
@@ -14,6 +14,7 @@ export const mailNotificationOutbox = mailSchema.table(
       .notNull()
       .references(() => mailAccount.id, { onDelete: 'cascade' }),
     kind: text('kind').$type<'received' | 'sent'>().notNull(),
+    createCustomerIfMissing: boolean('create_customer_if_missing').notNull().default(false),
     status: text('status')
       .$type<'ready' | 'running' | 'retry' | 'dead'>()
       .notNull()

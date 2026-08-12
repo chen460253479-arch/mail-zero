@@ -63,6 +63,7 @@ export const deliverPendingEvent = async (
       body: JSON.stringify({
         eventId: event.eventId,
         messageId: event.messageId,
+        createCustomerIfMissing: event.createCustomerIfMissing,
       }),
       signal: controller.signal,
     });

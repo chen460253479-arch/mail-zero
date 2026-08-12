@@ -6,6 +6,7 @@ import { threadRouter } from './routers/thread';
 import { actionRouter } from './routers/action';
 import { emailRouter } from './routers/email';
 import { viewRouter } from './routers/view';
+import { crmRouter } from './routers/crm';
 import { router } from '../../trpc/trpc';
 
 export const mailApiRouter = router({
@@ -17,4 +18,5 @@ export const mailApiRouter = router({
   submission: submissionRouter,
   view: viewRouter,
   action: actionRouter,
+  crm: crmRouter,
 });

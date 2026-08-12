@@ -17,6 +17,11 @@ import { mailAccount } from '../../mail/postgres/schema/accounts';
 import { MailApiError } from '../errors/mail-api-error';
 import { asc } from 'drizzle-orm';
 import type { DB } from '../../../db';
+import { ulid } from 'ulid';
+import {
+  createCustomerCreationRequestService,
+  createPostgresManualCustomerCreationRepository,
+} from '../../mail-notifications';
 
 export type MailApiEnvironment = RuntimeServices;
 
@@ -26,6 +31,7 @@ export type MailApiRuntime = {
   snooze: MailSnoozeRuntime;
   db: DB;
   cursorSigningKey: string;
+  customerCreation: ReturnType<typeof createCustomerCreationRequestService>;
   listAllAccounts(): Promise<MailAccountRecord[]>;
 };
 
@@ -61,6 +67,12 @@ export function createMailApiRuntime(services: MailApiEnvironment): MailApiRunti
     db,
     cursorSigningKey: services.config.betterAuthSecret,
     core,
+    customerCreation: createCustomerCreationRequestService({
+      repository: createPostgresManualCustomerCreationRepository(db),
+      webhookEnabled: services.config.externalIntegration.webhook.enabled,
+      newEventId: () => ulid(),
+      clock,
+    }),
     listAllAccounts: async () =>
       (
         await db

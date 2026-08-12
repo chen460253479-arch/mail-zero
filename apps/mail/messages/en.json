@@ -452,6 +452,10 @@
     "mail": {
       "customerEmail": "Customer email · {customerName}",
       "conversationDetails": "Conversation details",
+      "markAsCustomer": "Mark as customer",
+      "markAsCustomerTitle": "Mark as customer",
+      "markAsCustomerDescription": "Use the latest inbound email from {sender} to create or link a CRM customer.",
+      "confirmMarkAsCustomer": "Mark customer",
       "replies": [
         {
           "declarations": ["input count", "local countPlural = count: plural"],

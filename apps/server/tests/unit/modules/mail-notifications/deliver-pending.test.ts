@@ -11,6 +11,7 @@ const event: ClaimedMailNotification = {
   messageId: 'email-1',
   accountId: 'account-1',
   kind: 'received',
+  createCustomerIfMissing: true,
   attempts: 1,
   leaseOwner: 'worker-1',
 };
@@ -21,7 +22,7 @@ const createRepository = (): MailNotificationDeliveryRepository => ({
 });
 
 describe('mail notification delivery', () => {
-  it('posts only eventId and messageId', async () => {
+  it('posts the customer creation intent', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(null, { status: 202 }));
     const repository = createRepository();
 
@@ -43,6 +44,7 @@ describe('mail notification delivery', () => {
       body: JSON.stringify({
         eventId: 'evt-1',
         messageId: 'email-1',
+        createCustomerIfMissing: true,
       }),
       signal: expect.any(AbortSignal),
     });
@@ -73,7 +75,7 @@ describe('mail notification delivery', () => {
     );
   });
 
-  it('does not add a signature or custom Zero header', async () => {
+  it('uses only the content type header', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(null, { status: 204 }));
 
     await deliverPendingEvent(event, {

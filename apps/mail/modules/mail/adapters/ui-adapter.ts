@@ -13,6 +13,7 @@ export type MailThreadDisplay = {
   messages: ParsedMessage[];
   latest?: ParsedMessage;
   customerMarker: CustomerMarker | null;
+  customerCreationCandidate: { messageId: string; sender: Sender } | null;
   hasUnread: boolean;
   totalReplies: number;
   labels: Array<{ id: string; name: string }>;
@@ -206,6 +207,19 @@ export function buildThreadDisplay(
   const messages = emails.map((email) => adaptEmailForDisplay(email, mailboxes, options));
   const latest = messages.at(-1);
   const customerMarker = emails.findLast((email) => email.customerMarker)?.customerMarker ?? null;
+  const candidateEmail = customerMarker
+    ? undefined
+    : emails.findLast((email) => email.lifecycle === 'received');
+  const candidateAddress = candidateEmail?.sender[0] ?? candidateEmail?.from[0];
+  const customerCreationCandidate = candidateEmail
+    ? {
+        messageId: candidateEmail.id,
+        sender: {
+          name: candidateAddress?.name ?? candidateAddress?.email ?? '',
+          email: candidateAddress?.email ?? '',
+        },
+      }
+    : null;
   const labels = Array.from(
     new Map(
       messages
@@ -219,6 +233,7 @@ export function buildThreadDisplay(
     messages,
     latest,
     customerMarker,
+    customerCreationCandidate,
     hasUnread: messages.some((message) => message.unread && !message.isDraft),
     totalReplies: messages.filter((message) => !message.isDraft).length,
     labels,

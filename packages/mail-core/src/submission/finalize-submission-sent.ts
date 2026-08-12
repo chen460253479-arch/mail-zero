@@ -235,6 +235,7 @@ export async function finalizeSubmissionSentInTransaction(
     messageId: updatedEmail.id,
     accountId: input.accountId,
     kind: 'sent',
+    createCustomerIfMissing: false,
     createdAt: now,
   });
   return { submission: updatedSubmission, email: updatedEmail, stateVersion };

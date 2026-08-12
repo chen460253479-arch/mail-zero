@@ -8,6 +8,7 @@ const event: ClaimedMailNotification = {
   messageId: 'email-1',
   accountId: 'account-1',
   kind: 'received',
+  createCustomerIfMissing: false,
   attempts: 1,
   leaseOwner: 'worker-1',
 };

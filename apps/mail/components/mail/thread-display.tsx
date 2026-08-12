@@ -31,6 +31,7 @@ import {
   type ComponentType,
   type Ref,
 } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { applyOptimisticKeywordTags } from '@/components/mail/optimistic-keyword-tags';
 import { useOptimisticThreadState } from '@/components/mail/optimistic-thread-state';
@@ -45,6 +46,7 @@ import { LabelPicker } from '@/components/mailbox/label-picker';
 import { focusedIndexAtom } from '@/hooks/use-mail-navigation';
 import { handleUnsubscribe } from '@/lib/email-utils.client';
 import { useThread, useThreads } from '@/hooks/use-threads';
+import { MarkCustomerAction } from './mark-customer-action';
 import { EmptyStateIcon } from '../icons/empty-state-svg';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { ParsedMessage, Attachment } from '@/types';
@@ -55,6 +57,7 @@ import { MailDisplaySkeleton } from './mail-skeleton';
 import { ContactRound, Inbox } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useMailDelivery } from '@/modules/mail';
+import { useMailAccountContext } from '@/modules/mail/providers/mail-account-provider';
 import { Button } from '@/components/ui/button';
 import { getLocale } from '@/paraglide/runtime';
 import { cleanHtml } from '@/lib/email-utils';
@@ -68,6 +71,7 @@ import { useQueryState } from 'nuqs';
 import { format } from 'date-fns';
 import { useAtom } from 'jotai';
 import { toast } from 'sonner';
+import { useTRPC } from '@/providers/query-provider';
 
 const formatFileSize = (size: number) => {
   const sizeInMB = (size / (1024 * 1024)).toFixed(2);
@@ -179,6 +183,9 @@ export function ThreadDisplay() {
   const folder = params?.folder ?? 'inbox';
   const [id, setThreadId] = useQueryState('threadId');
   const { data: emailData, isLoading } = useThread(id ?? null);
+  const { account } = useMailAccountContext();
+  const trpc = useTRPC();
+  const customerCreation = useMutation(trpc.mail.crm.requestCustomerCreation.mutationOptions());
   const [, items] = useThreads();
   const [isStarred, setIsStarred] = useState(false);
   const [isImportant, setIsImportant] = useState(false);
@@ -245,6 +252,22 @@ export function ThreadDisplay() {
         })) ?? [],
       ),
     [emailData?.messages, optimisticState.optimisticImportant, optimisticState.optimisticStarred],
+  );
+
+  const handleMarkCustomer = useCallback(
+    async (candidate: { messageId: string }) => {
+      if (!account) return false;
+      try {
+        await customerCreation.mutateAsync({
+          accountId: account.id,
+          messageId: candidate.messageId,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [account, customerCreation],
   );
   const threadHeader = useMemo(
     () => buildThreadHeader(emailData?.messages ?? []),
@@ -939,6 +962,21 @@ export function ThreadDisplay() {
                   threadIds={id ? [id] : []}
                   threadMailboxIds={[threadMailboxIds]}
                   className="h-7 w-7 bg-white dark:bg-[#313131]"
+                />
+
+                <MarkCustomerAction
+                  candidate={emailData.customerCreationCandidate}
+                  pending={customerCreation.isPending}
+                  strings={{
+                    label: m['common.mail.markAsCustomer'](),
+                    title: m['common.mail.markAsCustomerTitle'](),
+                    description: m['common.mail.markAsCustomerDescription']({
+                      sender: '{sender}',
+                    }),
+                    cancel: m['common.actions.cancel'](),
+                    confirm: m['common.mail.confirmMarkAsCustomer'](),
+                  }}
+                  onConfirm={handleMarkCustomer}
                 />
 
                 {!isInBin && (

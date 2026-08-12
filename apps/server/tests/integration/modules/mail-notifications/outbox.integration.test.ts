@@ -152,6 +152,7 @@ describe('mail notification outbox', () => {
         messageId: 'email-managed-a' as never,
         accountId: 'account-managed-a' as never,
         kind: 'received',
+        createCustomerIfMissing: false,
         createdAt: new Date('2026-07-29T10:00:00.000Z'),
       });
       await repository.enqueue({
@@ -159,6 +160,7 @@ describe('mail notification outbox', () => {
         messageId: 'email-managed-b' as never,
         accountId: 'account-managed-b' as never,
         kind: 'received',
+        createCustomerIfMissing: true,
         createdAt: new Date('2026-07-29T10:00:00.000Z'),
       });
       await repository.enqueue({
@@ -166,6 +168,7 @@ describe('mail notification outbox', () => {
         messageId: 'email-admin' as never,
         accountId: 'account-admin' as never,
         kind: 'received',
+        createCustomerIfMissing: false,
         createdAt: new Date('2026-07-29T10:00:00.000Z'),
       });
       await repository.enqueue({
@@ -173,6 +176,7 @@ describe('mail notification outbox', () => {
         messageId: 'email-manual' as never,
         accountId: 'account-manual' as never,
         kind: 'received',
+        createCustomerIfMissing: false,
         createdAt: new Date('2026-07-29T10:00:00.000Z'),
       });
       await repository.enqueue({
@@ -180,6 +184,7 @@ describe('mail notification outbox', () => {
         messageId: 'email-internal' as never,
         accountId: 'account-internal' as never,
         kind: 'received',
+        createCustomerIfMissing: false,
         createdAt: new Date('2026-07-29T10:00:00.000Z'),
       });
 
@@ -188,9 +193,10 @@ describe('mail notification outbox', () => {
           event_id: string;
           message_id: string;
           kind: string;
+          create_customer_if_missing: boolean;
         }>
       >`
-        SELECT event_id, message_id, kind
+        SELECT event_id, message_id, kind, create_customer_if_missing
         FROM mail.notification_outbox
         ORDER BY event_id
       `;
@@ -199,12 +205,31 @@ describe('mail notification outbox', () => {
           event_id: 'evt-managed-a',
           message_id: 'email-managed-a',
           kind: 'received',
+          create_customer_if_missing: false,
         },
         {
           event_id: 'evt-managed-b',
           message_id: 'email-managed-b',
           kind: 'received',
+          create_customer_if_missing: true,
         },
+      ]);
+
+      const claimed = await repository.claim({
+        owner: 'worker-1',
+        now: new Date('2026-07-29T10:00:01.000Z'),
+        limit: 2,
+        leaseForMs: 60_000,
+      });
+      expect(claimed).toEqual([
+        expect.objectContaining({
+          eventId: 'evt-managed-a',
+          createCustomerIfMissing: false,
+        }),
+        expect.objectContaining({
+          eventId: 'evt-managed-b',
+          createCustomerIfMissing: true,
+        }),
       ]);
     });
   });
@@ -220,6 +245,7 @@ describe('mail notification outbox', () => {
         messageId: 'email-missing' as never,
         accountId: 'account-missing' as never,
         kind: 'received',
+        createCustomerIfMissing: false,
         createdAt: new Date('2026-07-29T10:00:00.000Z'),
       });
 

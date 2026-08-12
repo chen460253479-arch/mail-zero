@@ -5,6 +5,7 @@ export type ClaimedMailNotification = {
   messageId: string;
   accountId: string;
   kind: 'received' | 'sent';
+  createCustomerIfMissing: boolean;
   attempts: number;
   leaseOwner: string;
 };

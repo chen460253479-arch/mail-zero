@@ -204,4 +204,53 @@ describe('mail UI adapters', () => {
       latest: { id: 'draft-1', isDraft: true },
     });
   });
+
+  it('selects the latest received unmarked email as the customer creation candidate', () => {
+    const receivedA: Email = {
+      ...email,
+      id: 'received-a',
+      customerMarker: null,
+      sender: [{ name: 'Sender A', email: 'a@example.test' }],
+      from: [{ name: 'Sender A', email: 'a@example.test' }],
+      receivedAt: '2026-07-27T00:00:00.000Z',
+    };
+    const sent: Email = {
+      ...receivedA,
+      id: 'sent-reply',
+      lifecycle: 'sent',
+      receivedAt: '2026-07-27T00:01:00.000Z',
+    };
+    const receivedB: Email = {
+      ...receivedA,
+      id: 'received-b',
+      sender: [{ name: 'Sender B', email: 'b@example.test' }],
+      from: [{ name: 'Sender B', email: 'b@example.test' }],
+      receivedAt: '2026-07-27T00:02:00.000Z',
+    };
+    const draft: Email = {
+      ...receivedA,
+      id: 'draft-latest',
+      lifecycle: 'draft',
+      receivedAt: '2026-07-27T00:03:00.000Z',
+    };
+    const options = {
+      accountId: 'account-1',
+      backendBaseUrl: 'https://api.example.com',
+    };
+
+    expect(
+      buildThreadDisplay([receivedA, sent, receivedB, draft], mailboxes, options)
+        .customerCreationCandidate,
+    ).toEqual({
+      messageId: 'received-b',
+      sender: { name: 'Sender B', email: 'b@example.test' },
+    });
+    expect(buildThreadDisplay([sent, draft], mailboxes, options).customerCreationCandidate).toBe(
+      null,
+    );
+    expect(
+      buildThreadDisplay([{ ...receivedB, customerMarker: email.customerMarker }], mailboxes, options)
+        .customerCreationCandidate,
+    ).toBe(null);
+  });
 });

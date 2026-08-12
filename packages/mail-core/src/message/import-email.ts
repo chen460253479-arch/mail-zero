@@ -674,6 +674,7 @@ export async function importEmail(
         messageId: emailId,
         accountId: input.accountId,
         kind: 'received',
+        createCustomerIfMissing: false,
         createdAt: now,
       });
       importOperationCompleted = true;

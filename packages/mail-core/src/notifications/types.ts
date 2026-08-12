@@ -7,6 +7,7 @@ export type EnqueueMailNotification = {
   messageId: EmailId;
   accountId: MailAccountId;
   kind: MailNotificationKind;
+  createCustomerIfMissing: boolean;
   createdAt: Date;
 };
 

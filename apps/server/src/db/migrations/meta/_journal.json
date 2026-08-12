@@ -8,6 +8,13 @@
       "when": 1785898092051,
       "tag": "0000_tiny_karma",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786499998192,
+      "tag": "0001_add_notification_customer_intent",
+      "breakpoints": true
     }
   ]
 }
