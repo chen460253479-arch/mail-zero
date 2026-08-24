@@ -9,11 +9,19 @@ export const mailNotificationOutbox = mailSchema.table(
   'notification_outbox',
   {
     eventId: text('event_id').primaryKey(),
-    messageId: text('message_id').notNull(),
+    eventType: text('event_type')
+      .$type<'message' | 'submission_status'>()
+      .notNull()
+      .default('message'),
+    messageId: text('message_id'),
     mailAccountId: text('mail_account_id')
       .notNull()
       .references(() => mailAccount.id, { onDelete: 'cascade' }),
-    kind: text('kind').$type<'received' | 'sent'>().notNull(),
+    kind: text('kind').$type<'received' | 'sent' | 'failed'>().notNull(),
+    externalSubmissionId: text('external_submission_id'),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    errorCode: text('error_code'),
+    errorMessage: text('error_message'),
     createCustomerIfMissing: boolean('create_customer_if_missing').notNull().default(false),
     status: text('status')
       .$type<'ready' | 'running' | 'retry' | 'dead'>()
@@ -32,7 +40,37 @@ export const mailNotificationOutbox = mailSchema.table(
     completedAt: timestamp('completed_at', { withTimezone: true }),
   },
   (table) => [
-    check('mail_notification_kind_chk', sql`${table.kind} IN ('received', 'sent')`),
+    check(
+      'mail_notification_event_type_chk',
+      sql`${table.eventType} IN ('message', 'submission_status')`,
+    ),
+    check('mail_notification_kind_chk', sql`${table.kind} IN ('received', 'sent', 'failed')`),
+    check(
+      'mail_notification_payload_chk',
+      sql`(
+        ${table.eventType} = 'message'
+        AND ${table.messageId} IS NOT NULL
+        AND ${table.kind} IN ('received', 'sent')
+        AND ${table.externalSubmissionId} IS NULL
+        AND ${table.sentAt} IS NULL
+        AND ${table.errorCode} IS NULL
+        AND ${table.errorMessage} IS NULL
+      ) OR (
+        ${table.eventType} = 'submission_status'
+        AND ${table.externalSubmissionId} IS NOT NULL
+        AND ((
+            ${table.kind} = 'sent'
+            AND ${table.messageId} IS NOT NULL
+            AND ${table.sentAt} IS NOT NULL
+            AND ${table.errorCode} IS NULL
+            AND ${table.errorMessage} IS NULL
+          ) OR (
+            ${table.kind} = 'failed'
+            AND ${table.sentAt} IS NULL
+            AND ${table.errorCode} IS NOT NULL
+          ))
+      )`,
+    ),
     check(
       'mail_notification_status_chk',
       sql`${table.status} IN ('ready', 'running', 'retry', 'dead')`,
@@ -63,6 +101,7 @@ export const mailNotificationOutbox = mailSchema.table(
       .on(table.completedAt, table.eventId)
       .where(sql`${table.status} = 'dead'`),
     index('mail_notification_message_idx').on(table.mailAccountId, table.messageId),
+    index('mail_notification_external_submission_idx').on(table.externalSubmissionId),
     foreignKey({
       name: 'mail_notification_email_account_fk',
       columns: [table.messageId, table.mailAccountId],

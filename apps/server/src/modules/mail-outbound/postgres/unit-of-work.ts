@@ -1,6 +1,10 @@
 import type { MailAccountId, MailTransaction } from '@zero/mail-core';
 
 import {
+  createPostgresMailSubmissionStatusNotificationRepository,
+  type MailSubmissionStatusNotificationRepository,
+} from '../../mail-notifications/postgres/submission-status-repository';
+import {
   CallbackFailure,
   PostgresMailUnitOfWork,
   createPostgresMailTransaction,
@@ -16,6 +20,7 @@ import type { DB } from '../../../db';
 export interface MailOutboundTransaction {
   mail: MailTransaction;
   outbound: MailOutboundRepository;
+  submissionStatusNotifications: MailSubmissionStatusNotificationRepository;
 }
 
 export interface MailOutboundUnitOfWork {
@@ -48,6 +53,12 @@ export class PostgresMailOutboundUnitOfWork implements MailOutboundUnitOfWork {
               this.options,
             ),
             outbound: createMailOutboundRepository(transaction, this.factories),
+            submissionStatusNotifications: createPostgresMailSubmissionStatusNotificationRepository(
+              transaction,
+              {
+                enabled: this.options.notificationsEnabled,
+              },
+            ),
           });
         } catch (error) {
           throw new CallbackFailure(error);

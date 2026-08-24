@@ -35,5 +35,12 @@ export const finalizeFailedDelivery = async (
       now: input.failedAt,
       error: input.classification,
     });
+    await tx.submissionStatusNotifications.enqueueForMailSubmission({
+      eventId: dependencies.mailCoreDependencies.idFactory.next<'MailNotification'>(),
+      accountId: input.claimed.delivery.mailAccountId,
+      mailSubmissionId: input.claimed.delivery.submissionId,
+      status: 'failed',
+      occurredAt: input.failedAt,
+    });
   });
 };

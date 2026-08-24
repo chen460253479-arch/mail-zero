@@ -34,5 +34,12 @@ export const finalizeAcceptedDelivery = async (
       remoteThreadId: input.accepted.remoteThreadId,
       providerCode: input.accepted.providerCode,
     });
+    await tx.submissionStatusNotifications.enqueueForMailSubmission({
+      eventId: dependencies.mailCoreDependencies.idFactory.next<'MailNotification'>(),
+      accountId: input.claimed.delivery.mailAccountId,
+      mailSubmissionId: input.claimed.delivery.submissionId,
+      status: 'sent',
+      occurredAt: input.accepted.acceptedAt,
+    });
   });
 };

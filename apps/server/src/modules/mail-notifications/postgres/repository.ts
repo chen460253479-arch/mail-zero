@@ -108,11 +108,25 @@ export const createPostgresMailNotificationRepository = (
         )
         .returning();
       return rows.map((row) => ({
+        ...(row.eventType === 'submission_status'
+          ? {
+              eventType: 'submission_status' as const,
+              externalSubmissionId: row.externalSubmissionId!,
+              messageId: row.messageId,
+              kind: row.kind as 'sent' | 'failed',
+              occurredAt: row.createdAt,
+              sentAt: row.sentAt,
+              errorCode: row.errorCode,
+              errorMessage: row.errorMessage,
+            }
+          : {
+              eventType: 'message' as const,
+              messageId: row.messageId!,
+              kind: row.kind as 'received' | 'sent',
+              createCustomerIfMissing: row.createCustomerIfMissing,
+            }),
         eventId: row.eventId,
-        messageId: row.messageId,
         accountId: row.mailAccountId,
-        kind: row.kind,
-        createCustomerIfMissing: row.createCustomerIfMissing,
         attempts: row.attempts,
         leaseOwner: input.owner,
       }));

@@ -8,10 +8,41 @@ import type { ClaimedMailNotification } from '../../../../src/modules/mail-notif
 
 const event: ClaimedMailNotification = {
   eventId: 'evt-1',
+  eventType: 'message',
   messageId: 'email-1',
   accountId: 'account-1',
   kind: 'received',
   createCustomerIfMissing: true,
+  attempts: 1,
+  leaseOwner: 'worker-1',
+};
+
+const sentStatusEvent: ClaimedMailNotification = {
+  eventId: 'evt-status-sent',
+  eventType: 'submission_status',
+  externalSubmissionId: 'external-submission-1',
+  messageId: 'email-1',
+  accountId: 'account-1',
+  kind: 'sent',
+  occurredAt: new Date('2026-08-24T10:00:00.000Z'),
+  sentAt: new Date('2026-08-24T09:59:59.000Z'),
+  errorCode: null,
+  errorMessage: null,
+  attempts: 1,
+  leaseOwner: 'worker-1',
+};
+
+const failedStatusEvent: ClaimedMailNotification = {
+  eventId: 'evt-status-failed',
+  eventType: 'submission_status',
+  externalSubmissionId: 'external-submission-2',
+  messageId: null,
+  accountId: 'account-1',
+  kind: 'failed',
+  occurredAt: new Date('2026-08-24T10:01:00.000Z'),
+  sentAt: null,
+  errorCode: 'ATTACHMENT_DOWNLOAD_FAILED',
+  errorMessage: 'Attachment download failed',
   attempts: 1,
   leaseOwner: 'worker-1',
 };
@@ -48,6 +79,52 @@ describe('mail notification delivery', () => {
       }),
       signal: expect.any(AbortSignal),
     });
+  });
+
+  it.each([
+    {
+      name: 'sent',
+      event: sentStatusEvent,
+      expected: {
+        eventId: 'evt-status-sent',
+        eventType: 'mail.submission.sent',
+        occurredAt: '2026-08-24T10:00:00.000Z',
+        submissionId: 'external-submission-1',
+        messageId: 'email-1',
+        status: 'sent',
+        sentAt: '2026-08-24T09:59:59.000Z',
+        error: null,
+      },
+    },
+    {
+      name: 'failed',
+      event: failedStatusEvent,
+      expected: {
+        eventId: 'evt-status-failed',
+        eventType: 'mail.submission.failed',
+        occurredAt: '2026-08-24T10:01:00.000Z',
+        submissionId: 'external-submission-2',
+        messageId: null,
+        status: 'failed',
+        sentAt: null,
+        error: {
+          code: 'ATTACHMENT_DOWNLOAD_FAILED',
+          message: 'Attachment download failed',
+        },
+      },
+    },
+  ])('posts the external submission $name terminal status', async ({ event, expected }) => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(null, { status: 204 }));
+
+    await deliverPendingEvent(event, {
+      webhookUrl: 'https://external.example.test/mail-events',
+      fetch,
+      repository: createRepository(),
+      timeoutMs: 15_000,
+      clock: { now: () => new Date('2026-08-24T10:02:00.000Z') },
+    });
+
+    expect(JSON.parse(String(fetch.mock.calls[0]![1]!.body))).toEqual(expected);
   });
 
   it('keeps the same eventId when a non-2xx response is retried', async () => {

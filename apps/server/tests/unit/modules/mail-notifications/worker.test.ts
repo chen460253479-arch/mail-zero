@@ -5,6 +5,7 @@ import type { ClaimedMailNotification } from '../../../../src/modules/mail-notif
 
 const event: ClaimedMailNotification = {
   eventId: 'evt-1',
+  eventType: 'message',
   messageId: 'email-1',
   accountId: 'account-1',
   kind: 'received',

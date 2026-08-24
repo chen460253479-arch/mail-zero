@@ -15,6 +15,13 @@
       "when": 1786499998192,
       "tag": "0001_add_notification_customer_intent",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787560645468,
+      "tag": "0002_external_mail_submission_status_webhook",
+      "breakpoints": true
     }
   ]
 }

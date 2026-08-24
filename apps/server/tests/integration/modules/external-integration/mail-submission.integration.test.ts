@@ -11,6 +11,7 @@ import {
   user,
 } from '../../../../src/db/schema';
 import type { ExternalMailSubmissionRecord } from '../../../../src/modules/external-integration/application/mail-submission';
+import { createPostgresMailNotificationRepository } from '../../../../src/modules/mail-notifications/postgres/repository';
 import { withMailTestDatabase } from '../../../helpers/mail-core/database';
 
 const now = new Date('2026-08-05T08:00:00.000Z');
@@ -130,6 +131,23 @@ describe('external mail submission persistence', () => {
           submissionId: 'external-submission-1',
         },
       });
+
+      await repository.recordProcessingFailure({
+        id: record.id,
+        code: 'ATTACHMENT_DOWNLOAD_FAILED',
+        message: 'Attachment download failed',
+        final: true,
+        now: new Date('2026-08-05T08:01:00.000Z'),
+      });
+      const [notification] = await createPostgresMailNotificationRepository(db, {
+        enabled: true,
+      }).claim({
+        owner: 'notification-worker',
+        now: new Date('2026-08-05T08:01:01.000Z'),
+        limit: 1,
+        leaseForMs: 60_000,
+      });
+      expect(notification).toBeUndefined();
     });
   });
 });

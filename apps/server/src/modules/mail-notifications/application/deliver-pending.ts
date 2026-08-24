@@ -34,6 +34,35 @@ const retryAt = (now: Date, attempts: number): Date => {
   return new Date(now.getTime() + delay);
 };
 
+export const toMailNotificationWebhookPayload = (event: ClaimedMailNotification) => {
+  if (event.eventType === 'message') {
+    return {
+      eventId: event.eventId,
+      messageId: event.messageId,
+      createCustomerIfMissing: event.createCustomerIfMissing,
+    };
+  }
+  return {
+    eventId: event.eventId,
+    eventType:
+      event.kind === 'sent'
+        ? ('mail.submission.sent' as const)
+        : ('mail.submission.failed' as const),
+    occurredAt: event.occurredAt.toISOString(),
+    submissionId: event.externalSubmissionId,
+    messageId: event.messageId,
+    status: event.kind,
+    sentAt: event.sentAt?.toISOString() ?? null,
+    error:
+      event.kind === 'failed'
+        ? {
+            code: event.errorCode ?? 'MAIL_SEND_FAILED',
+            message: event.errorMessage,
+          }
+        : null,
+  };
+};
+
 export const deliverPendingEvent = async (
   event: ClaimedMailNotification,
   dependencies: DeliverPendingEventDependencies,
@@ -60,11 +89,7 @@ export const deliverPendingEvent = async (
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        eventId: event.eventId,
-        messageId: event.messageId,
-        createCustomerIfMissing: event.createCustomerIfMissing,
-      }),
+      body: JSON.stringify(toMailNotificationWebhookPayload(event)),
       signal: controller.signal,
     });
     if (!response.ok) {

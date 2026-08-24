@@ -1,23 +1,74 @@
 import { createDraft, createIdentity } from '@zero/mail-core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { createPostgresMailNotificationRepository } from '../../../../../src/modules/mail-notifications/postgres/repository';
 import { PostgresMailOutboundUnitOfWork } from '../../../../../src/modules/mail-outbound/postgres/unit-of-work';
 import { finalizeFailedDelivery } from '../../../../../src/modules/mail-outbound/application/finalize-failed';
 import { finalizeAcceptedDelivery } from '../../../../../src/modules/mail-outbound/application/finalize-sent';
 import type { MailOutboundTransaction } from '../../../../../src/modules/mail-outbound/postgres/unit-of-work';
 import { cancelPendingDelivery } from '../../../../../src/modules/mail-outbound/application/cancel-delivery';
 import { enqueueSubmission } from '../../../../../src/modules/mail-outbound/application/enqueue-submission';
+import { externalMailSubmission } from '../../../../../src/modules/external-integration/postgres/schema';
 import { createPostgresMailTestHarness } from '../../../../helpers/mail-core/harness';
 import { withMailTestDatabase } from '../../../../helpers/mail-core/database';
+import type { DB } from '../../../../../src/db';
+
+const linkExternalSubmission = async (
+  db: DB,
+  input: {
+    id: string;
+    userId: string;
+    accountId: string;
+    connectionId: string;
+    identityId: string;
+    emailId: string;
+    submissionId: string;
+    now: Date;
+    linked?: boolean;
+  },
+) =>
+  await db.insert(externalMailSubmission).values({
+    id: input.id,
+    userId: input.userId,
+    mailAccountId: input.accountId,
+    internalConnectionId: input.connectionId,
+    identityId: input.identityId,
+    externalUserId: `${input.id}-user`,
+    externalConnectionId: `${input.id}-connection`,
+    idempotencyKey: `${input.id}-idempotency`,
+    requestFingerprint: 'a'.repeat(64),
+    payload: {
+      replyToMessageId: null,
+      to: [{ email: 'recipient@example.test' }],
+      cc: [],
+      bcc: [],
+      subject: 'Terminal status notification',
+      textBody: 'Body',
+      htmlBody: '',
+      attachments: [],
+      sendAt: null,
+    },
+    status: input.linked === false ? 'preparing' : 'submitted',
+    emailId: input.emailId,
+    submissionId: input.linked === false ? null : input.submissionId,
+    lastErrorCode: null,
+    lastErrorMessage: null,
+    createdAt: input.now,
+    updatedAt: input.now,
+  });
 
 describe('composite outbound finalization', () => {
   it('atomically marks Provider acceptance, local Draft-to-Sent, and Delivery completed', () =>
     withMailTestDatabase(async ({ db }) => {
       let sequence = 0;
-      const unitOfWork = new PostgresMailOutboundUnitOfWork(db, {
-        nextId: () => `finalize-infra-${++sequence}`,
-        nextLeaseToken: () => `finalize-lease-${++sequence}`,
-      });
+      const unitOfWork = new PostgresMailOutboundUnitOfWork(
+        db,
+        {
+          nextId: () => `finalize-infra-${++sequence}`,
+          nextLeaseToken: () => `finalize-lease-${++sequence}`,
+        },
+        { notificationsEnabled: true },
+      );
       const harness = await createPostgresMailTestHarness(
         db,
         unitOfWork.mailUnitOfWork,
@@ -47,7 +98,7 @@ describe('composite outbound finalization', () => {
           accountId: harness.accountId,
           emailId: draft.id,
           identityId: identity.id,
-          idempotencyKey: 'finalize-success',
+          idempotencyKey: 'external-mail:external-finalize-success',
           sendAt: null,
         },
         {
@@ -58,6 +109,17 @@ describe('composite outbound finalization', () => {
           wakeup: { enqueue: vi.fn() },
         },
       );
+      await linkExternalSubmission(db, {
+        id: 'external-finalize-success',
+        userId: harness.userId,
+        accountId: harness.accountId,
+        connectionId: 'postgres-connection-finalize',
+        identityId: identity.id,
+        emailId: draft.id,
+        submissionId: queued.submission.id,
+        now: harness.dependencies.clock.now(),
+        linked: false,
+      });
       const claimed = await unitOfWork.run((tx) =>
         tx.outbound.claimById({
           deliveryId: queued.delivery.id,
@@ -146,15 +208,37 @@ describe('composite outbound finalization', () => {
           sentAt: acceptedAt,
         });
       });
+      const notificationRepository = createPostgresMailNotificationRepository(db, {
+        enabled: true,
+      });
+      const successNotifications = await notificationRepository.claim({
+        owner: 'success-notification-worker',
+        now: new Date('2026-01-01T00:00:06.000Z'),
+        limit: 10,
+        leaseForMs: 60_000,
+      });
+      expect(successNotifications).toEqual([
+        expect.objectContaining({
+          eventType: 'submission_status',
+          externalSubmissionId: 'external-finalize-success',
+          messageId: draft.id,
+          kind: 'sent',
+          sentAt: acceptedAt,
+        }),
+      ]);
     }));
 
   it('keeps a local Email as Draft while atomically failing Submission and Delivery', () =>
     withMailTestDatabase(async ({ db }) => {
       let sequence = 0;
-      const unitOfWork = new PostgresMailOutboundUnitOfWork(db, {
-        nextId: () => `failed-infra-${++sequence}`,
-        nextLeaseToken: () => `failed-lease-${++sequence}`,
-      });
+      const unitOfWork = new PostgresMailOutboundUnitOfWork(
+        db,
+        {
+          nextId: () => `failed-infra-${++sequence}`,
+          nextLeaseToken: () => `failed-lease-${++sequence}`,
+        },
+        { notificationsEnabled: true },
+      );
       const harness = await createPostgresMailTestHarness(db, unitOfWork.mailUnitOfWork, 'failed');
       const identity = await createIdentity(harness.dependencies, {
         accountId: harness.accountId,
@@ -180,7 +264,7 @@ describe('composite outbound finalization', () => {
           accountId: harness.accountId,
           emailId: draft.id,
           identityId: identity.id,
-          idempotencyKey: 'finalize-failed',
+          idempotencyKey: 'external-mail:external-finalize-failed',
           sendAt: null,
         },
         {
@@ -191,6 +275,17 @@ describe('composite outbound finalization', () => {
           wakeup: { enqueue: vi.fn() },
         },
       );
+      await linkExternalSubmission(db, {
+        id: 'external-finalize-failed',
+        userId: harness.userId,
+        accountId: harness.accountId,
+        connectionId: 'postgres-connection-failed',
+        identityId: identity.id,
+        emailId: draft.id,
+        submissionId: queued.submission.id,
+        now: harness.dependencies.clock.now(),
+        linked: false,
+      });
       const claimed = await unitOfWork.run((tx) =>
         tx.outbound.claimById({
           deliveryId: queued.delivery.id,
@@ -230,6 +325,24 @@ describe('composite outbound finalization', () => {
           lifecycle: 'draft',
         });
       });
+      const failedNotifications = await createPostgresMailNotificationRepository(db, {
+        enabled: true,
+      }).claim({
+        owner: 'failed-notification-worker',
+        now: new Date('2026-01-01T00:00:01.000Z'),
+        limit: 10,
+        leaseForMs: 60_000,
+      });
+      expect(failedNotifications).toEqual([
+        expect.objectContaining({
+          eventType: 'submission_status',
+          externalSubmissionId: 'external-finalize-failed',
+          messageId: draft.id,
+          kind: 'failed',
+          errorCode: 'POLICY',
+          errorMessage: 'policy_rejected',
+        }),
+      ]);
     }));
 
   it('atomically cancels a pending Submission and Delivery while retaining the Draft', () =>

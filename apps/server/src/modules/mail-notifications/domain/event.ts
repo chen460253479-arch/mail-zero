@@ -1,14 +1,31 @@
 import type { EnqueueMailNotification, MailNotificationRepository } from '@zero/mail-core';
 
-export type ClaimedMailNotification = {
+type ClaimedMailNotificationBase = {
   eventId: string;
-  messageId: string;
   accountId: string;
-  kind: 'received' | 'sent';
-  createCustomerIfMissing: boolean;
   attempts: number;
   leaseOwner: string;
 };
+
+export type ClaimedMailNotification = ClaimedMailNotificationBase &
+  (
+    | {
+        eventType: 'message';
+        messageId: string;
+        kind: 'received' | 'sent';
+        createCustomerIfMissing: boolean;
+      }
+    | {
+        eventType: 'submission_status';
+        externalSubmissionId: string;
+        messageId: string | null;
+        kind: 'sent' | 'failed';
+        occurredAt: Date;
+        sentAt: Date | null;
+        errorCode: string | null;
+        errorMessage: string | null;
+      }
+  );
 
 export type ClaimMailNotificationsInput = {
   owner: string;
