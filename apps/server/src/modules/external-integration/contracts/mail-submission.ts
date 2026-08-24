@@ -2,7 +2,9 @@ import { z } from 'zod';
 
 import { externalUserIdSchema } from './bind';
 
-export const EXTERNAL_MAIL_ATTACHMENT_TOTAL_MAX_BYTES = 20 * 1024 * 1024;
+export const EXTERNAL_MAIL_ATTACHMENT_TOTAL_MAX_MIB = 50;
+export const EXTERNAL_MAIL_ATTACHMENT_TOTAL_MAX_BYTES =
+  EXTERNAL_MAIL_ATTACHMENT_TOTAL_MAX_MIB * 1024 * 1024;
 export const EXTERNAL_MAIL_ATTACHMENT_MAX_COUNT = 100;
 
 const mailAddressSchema = z
@@ -60,7 +62,7 @@ export const externalMailSubmissionInputSchema = z
       context.addIssue({
         code: 'custom',
         path: ['attachments'],
-        message: 'The declared attachment total exceeds 20 MiB',
+        message: `The declared attachment total exceeds ${EXTERNAL_MAIL_ATTACHMENT_TOTAL_MAX_MIB} MiB`,
       });
     }
     if (

@@ -17,6 +17,7 @@ export type ThreadSummary = {
     id: string;
     lifecycle: EmailLifecycle;
     receivedAt: string;
+    to: Array<{ name?: string | null; email: string }>;
   };
 };
 

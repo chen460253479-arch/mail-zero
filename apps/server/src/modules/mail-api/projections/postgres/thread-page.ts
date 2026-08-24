@@ -2,6 +2,7 @@ import { and, asc, desc, eq, exists, gt, inArray, isNull, lt, ne, not, or, sql }
 
 import {
   email,
+  emailAddress,
   emailKeyword,
   emailMailbox,
   emailSearch,
@@ -253,7 +254,8 @@ export async function queryThreadPage(
   }
   const allEmailIds = emails.map(({ id }) => id);
   const threadByEmailId = new Map(emails.map(({ id, threadId }) => [id, threadId]));
-  const [mailboxes, keywords, customerMarkers] = await Promise.all([
+  const latestEmailIds = [...latest.values()].map(({ id }) => id);
+  const [mailboxes, keywords, customerMarkers, recipients] = await Promise.all([
     db
       .select({ emailId: emailMailbox.emailId, value: emailMailbox.mailboxId })
       .from(emailMailbox)
@@ -285,6 +287,22 @@ export async function queryThreadPage(
           inArray(crmCustomerMarker.emailId, allEmailIds),
         ),
       ),
+    db
+      .select({
+        emailId: emailAddress.emailId,
+        name: emailAddress.name,
+        email: emailAddress.address,
+        position: emailAddress.position,
+      })
+      .from(emailAddress)
+      .where(
+        and(
+          eq(emailAddress.mailAccountId, input.accountId),
+          inArray(emailAddress.emailId, latestEmailIds),
+          eq(emailAddress.kind, 'to'),
+        ),
+      )
+      .orderBy(asc(emailAddress.position)),
   ]);
   const mapValues = (rows: Array<{ emailId: string; value: string }>, threadId: string) =>
     Object.fromEntries(
@@ -292,6 +310,12 @@ export async function queryThreadPage(
         .filter((row) => threadByEmailId.get(row.emailId) === threadId)
         .map(({ value }) => [value, true as const]),
     ) as Record<string, true>;
+  const recipientsByEmailId = new Map<string, Array<{ name: string | null; email: string }>>();
+  for (const { emailId, name, email: address } of recipients) {
+    const values = recipientsByEmailId.get(emailId);
+    if (values) values.push({ name, email: address });
+    else recipientsByEmailId.set(emailId, [{ name, email: address }]);
+  }
   const items = page.flatMap((row) => {
     const latestEmail = latest.get(row.id);
     if (latestEmail === undefined) return [];
@@ -323,6 +347,7 @@ export async function queryThreadPage(
           id: latestEmail.id,
           lifecycle: latestEmail.lifecycle,
           receivedAt: latestEmail.receivedAt.toISOString(),
+          to: recipientsByEmailId.get(latestEmail.id) ?? [],
         },
       },
     ];

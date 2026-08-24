@@ -94,6 +94,7 @@ describe('mail API adapters', () => {
           id: 'email-1',
           lifecycle: 'received',
           receivedAt: '2026-07-27T00:00:00.000Z',
+          to: [{ name: null, email: 'user@example.com' }],
         },
       }),
     ).toEqual({
@@ -113,6 +114,7 @@ describe('mail API adapters', () => {
         id: 'email-1',
         lifecycle: 'received',
         receivedAt: '2026-07-27T00:00:00.000Z',
+        to: [{ name: null, email: 'user@example.com' }],
       },
     });
   });

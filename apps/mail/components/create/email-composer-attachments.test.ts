@@ -44,4 +44,12 @@ describe('email composer attachments', () => {
     expect(source).toContain('hasBlockingAttachments');
     expect(source).toMatch(/disabled=\{[^}]*hasBlockingAttachments/u);
   });
+
+  it('renders the editor while persisted attachments load and blocks only save and send', () => {
+    expect(source).toContain('initialAttachmentsLoading');
+    expect(source).toContain('initialAttachmentsError');
+    expect(source).toContain("m['pages.createEmail.attachmentDownloading']()");
+    expect(source).toContain('if (hasBlockingAttachments)');
+    expect(source).toContain('if (!hasUnsavedChanges || hasBlockingAttachments) return;');
+  });
 });

@@ -15,11 +15,11 @@ import {
 } from '@/components/ui/select';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { Command, LoaderCircle, Paperclip, RotateCw, Type } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEmailAliases } from '@/hooks/use-email-aliases';
 import { ScheduleSendPicker } from './schedule-send-picker';
 import useComposeEditor from '@/hooks/use-compose-editor';
-import { Command, Paperclip, Type } from 'lucide-react';
 import { gitHubEmojis } from '@tiptap/extension-emoji';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CurvedArrow, X } from '../icons/icons';
@@ -53,6 +53,9 @@ interface EmailComposerProps {
   initialSubject?: string;
   initialMessage?: string;
   initialAttachments?: File[];
+  initialAttachmentsLoading?: boolean;
+  initialAttachmentsError?: unknown;
+  onRetryInitialAttachments?: () => void;
   replyingTo?: string;
   onSendEmail: (data: {
     to: string[];
@@ -92,6 +95,9 @@ export function EmailComposer({
   initialSubject = '',
   initialMessage = '',
   initialAttachments = [],
+  initialAttachmentsLoading = false,
+  initialAttachmentsError = null,
+  onRetryInitialAttachments,
   onSendEmail,
   onClose,
   className,
@@ -131,7 +137,7 @@ export function EmailComposer({
   const {
     items: attachmentItems,
     uploadedFiles,
-    hasUploadingAttachments,
+    hasPendingInitialAttachments,
     addAttachments,
     removeAttachment,
     retryAttachment,
@@ -139,7 +145,11 @@ export function EmailComposer({
     initialAttachments,
     onAttachmentsChanged,
   });
-  const hasBlockingAttachments = attachmentUploadsBlockSend(attachmentItems);
+  const hasBlockingAttachments =
+    initialAttachmentsLoading ||
+    Boolean(initialAttachmentsError) ||
+    hasPendingInitialAttachments ||
+    attachmentUploadsBlockSend(attachmentItems);
 
   const form = useForm<EmailComposerForm>({
     // @hookform/resolvers and the workspace Zod version expose structurally
@@ -310,6 +320,7 @@ export function EmailComposer({
     const values = getValues();
 
     if (!hasUnsavedChanges) return draftId ? { id: draftId } : undefined;
+    if (hasBlockingAttachments) return draftId ? { id: draftId } : undefined;
     const messageText = editor.getText();
 
     if (!values.to.length || !values.subject.length || !messageText.length) {
@@ -350,6 +361,7 @@ export function EmailComposer({
     draftId,
     editor,
     getValues,
+    hasBlockingAttachments,
     hasUnsavedChanges,
     saveLocalDraft,
     setDraftId,
@@ -388,7 +400,7 @@ export function EmailComposer({
   }, [editor, showLeaveConfirmation]);
 
   useEffect(() => {
-    if (!hasUnsavedChanges || hasUploadingAttachments) return;
+    if (!hasUnsavedChanges || hasBlockingAttachments) return;
 
     const autoSaveTimer = setTimeout(() => {
       console.log('timeout set');
@@ -396,7 +408,7 @@ export function EmailComposer({
     }, 3000);
 
     return () => clearTimeout(autoSaveTimer);
-  }, [hasUnsavedChanges, hasUploadingAttachments, saveDraft]);
+  }, [hasBlockingAttachments, hasUnsavedChanges, saveDraft]);
 
   useEffect(() => {
     const handlePasteFiles = (event: ClipboardEvent) => {
@@ -595,6 +607,32 @@ export function EmailComposer({
       {/* Bottom Actions */}
       <div className="inline-flex w-full shrink-0 items-end justify-between self-stretch rounded-b-2xl bg-[#FFFFFF] px-3 py-3 outline-white/5 dark:bg-[#202020]">
         <div className="flex w-full flex-col items-start justify-start gap-2">
+          {initialAttachmentsLoading ? (
+            <div
+              className="text-muted-foreground flex items-center gap-2 text-sm"
+              aria-live="polite"
+            >
+              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+              <span>{m['pages.createEmail.attachmentDownloading']()}</span>
+            </div>
+          ) : initialAttachmentsError ? (
+            <div
+              className="flex w-full max-w-[560px] items-center justify-between gap-3 rounded-xl border border-red-500 bg-red-50/60 px-3 py-2 text-sm text-red-700 dark:bg-red-950/20 dark:text-red-400"
+              role="alert"
+            >
+              <span>{m['pages.createEmail.attachmentDownloadFailed']()}</span>
+              {onRetryInitialAttachments ? (
+                <button
+                  type="button"
+                  onClick={onRetryInitialAttachments}
+                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 font-medium hover:underline"
+                >
+                  <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
+                  {m['pages.createEmail.retryAttachmentDownload']()}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           <AttachmentUploadList
             items={attachmentItems}
             onRemove={removeAttachment}

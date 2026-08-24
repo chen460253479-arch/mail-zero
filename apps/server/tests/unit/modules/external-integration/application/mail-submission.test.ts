@@ -6,7 +6,10 @@ import {
   type ExternalMailSubmissionRepository,
   type ExternalMailSubmissionView,
 } from '../../../../../src/modules/external-integration/application/mail-submission';
-import { externalMailSubmissionInputSchema } from '../../../../../src/modules/external-integration/contracts/mail-submission';
+import {
+  EXTERNAL_MAIL_ATTACHMENT_TOTAL_MAX_BYTES,
+  externalMailSubmissionInputSchema,
+} from '../../../../../src/modules/external-integration/contracts/mail-submission';
 import { ExternalIntegrationError } from '../../../../../src/modules/external-integration/errors';
 
 const now = new Date('2026-08-05T08:00:00.000Z');
@@ -72,6 +75,47 @@ const dependencies = (repository: ExternalMailSubmissionRepository) => ({
 });
 
 describe('submitExternalMail', () => {
+  it('accepts a declared attachment total of 50 MiB', () => {
+    expect(
+      externalMailSubmissionInputSchema.safeParse({
+        ...input,
+        attachments: [
+          {
+            ...input.attachments[0],
+            size: EXTERNAL_MAIL_ATTACHMENT_TOTAL_MAX_BYTES,
+          },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects a declared attachment total above 50 MiB', () => {
+    const result = externalMailSubmissionInputSchema.safeParse({
+      ...input,
+      attachments: [
+        {
+          ...input.attachments[0],
+          size: EXTERNAL_MAIL_ATTACHMENT_TOTAL_MAX_BYTES / 2,
+        },
+        {
+          ...input.attachments[0],
+          filename: 'itinerary-2.pdf',
+          size: EXTERNAL_MAIL_ATTACHMENT_TOTAL_MAX_BYTES / 2 + 1,
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(
+        expect.objectContaining({
+          path: ['attachments'],
+          message: 'The declared attachment total exceeds 50 MiB',
+        }),
+      );
+    }
+  });
+
   it('persists a provider-neutral request and notifies the durable worker', async () => {
     const fake = createRepository();
     const deps = dependencies(fake.repository);

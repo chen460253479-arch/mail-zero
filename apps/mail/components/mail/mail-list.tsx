@@ -19,9 +19,9 @@ import { getArchiveToggleDestination, type ThreadDestination } from '@/lib/threa
 import { useOptimisticThreadState } from '@/components/mail/optimistic-thread-state';
 import { focusedIndexAtom, useMailNavigation } from '@/hooks/use-mail-navigation';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { Label, MailSelectMode, ParsedMessage, ThreadProps } from '@/types';
 import { MoveToFolderMenu } from '@/components/mailbox/move-to-folder-menu';
 import { resolveMailboxRoute } from '@/modules/mail/routing/mailbox-route';
-import type { Label, MailSelectMode, ParsedMessage, ThreadProps } from '@/types';
 import { useMailChanges } from '@/modules/mail/queries/use-mail-changes';
 import { ThreadContextMenu } from '@/components/context/thread-context';
 import { useOptimisticActions } from '@/hooks/use-optimistic-actions';
@@ -45,8 +45,6 @@ import { VList, type VListHandle } from 'virtua';
 import { BimiAvatar } from '../ui/bimi-avatar';
 import { RenderLabels } from './render-labels';
 import { Badge } from '@/components/ui/badge';
-import { useDraft } from '@/hooks/use-drafts';
-import { Skeleton } from '../ui/skeleton';
 import { m } from '@/paraglide/messages';
 import { useParams } from 'react-router';
 import { Button } from '../ui/button';
@@ -588,16 +586,8 @@ const Thread = memo(
   },
 );
 
-const Draft = memo(function Draft({
-  message,
-  index,
-}: {
-  message: { id: string; emailId?: string };
-  index: number;
-}) {
+const Draft = memo(function Draft({ message, index }: ThreadProps & { index: number }) {
   const draftId = message.emailId ?? null;
-  const draftQuery = useDraft(draftId);
-  const draft = draftQuery.data;
   const [, setComposeOpen] = useQueryState('isComposeOpen');
   const [, setDraftId] = useQueryState('draftId');
   const { optimisticDeleteDraft } = useOptimisticActions();
@@ -623,38 +613,8 @@ const Draft = memo(function Draft({
     return null;
   }
 
-  if (!draft) {
-    return (
-      <div className="select-none py-1">
-        <div
-          key={message.id}
-          className={cn(
-            'group relative mx-[8px] flex cursor-pointer flex-col items-start overflow-clip rounded-[10px] border-transparent py-3 text-left text-sm',
-          )}
-        >
-          <div
-            className={cn(
-              'bg-primary absolute inset-y-0 left-0 w-1 -translate-x-2 transition-transform ease-out',
-            )}
-          />
-          <div className="flex w-full items-center justify-between gap-4 px-4">
-            <div className="flex w-full justify-between">
-              <div className="w-full">
-                <div className="flex w-full flex-row items-center justify-between">
-                  <div className="flex flex-row items-center gap-[4px]">
-                    <Skeleton className="bg-muted h-4 w-32 rounded" />
-                  </div>
-                </div>
-                <div className="flex justify-between">
-                  <Skeleton className="bg-muted mt-1 h-4 w-48 rounded" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const recipient = message.to[0];
+  const recipientLabel = recipient?.name || recipient?.email || m['common.mail.noRecipient']();
 
   return (
     <div className="select-none py-1" onClick={handleMailClick}>
@@ -704,17 +664,17 @@ const Draft = memo(function Draft({
                     )}
                   >
                     <span className={cn('max-w-[25ch] truncate text-sm')}>
-                      {cleanNameDisplay(draft?.to?.[0] || m['common.mail.noRecipient']()) || ''}
+                      {cleanNameDisplay(recipientLabel)}
                     </span>
                   </span>
                 </div>
-                {draft.receivedOn && (
+                {message.receivedOn && (
                   <p
                     className={cn(
                       'text-muted-foreground text-nowrap text-xs font-normal opacity-70 transition-opacity group-hover:opacity-100 dark:text-[#8C8C8C]',
                     )}
                   >
-                    {formatDate(Date.parse(draft.receivedOn))}
+                    {formatDate(Date.parse(message.receivedOn))}
                   </p>
                 )}
               </div>
@@ -724,7 +684,7 @@ const Draft = memo(function Draft({
                     'mt-1 line-clamp-1 max-w-[50ch] text-sm text-[#8C8C8C] md:max-w-[30ch]',
                   )}
                 >
-                  {draft?.subject}
+                  {message.subject}
                 </p>
               </div>
             </div>

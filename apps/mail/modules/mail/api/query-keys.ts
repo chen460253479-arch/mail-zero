@@ -34,6 +34,8 @@ export const mailQueryKeys = {
   thread: (accountId: string, threadId: string) =>
     ['mail', accountId, 'threads', threadId] as const,
   email: (accountId: string, emailId: string) => ['mail', accountId, 'emails', emailId] as const,
+  draftAttachments: (accountId: string, emailId: string, draftRevision: number) =>
+    ['mail', accountId, 'emails', emailId, 'attachments', draftRevision] as const,
   identities: (accountId: string) => ['mail', accountId, 'identities'] as const,
   submissions: (accountId: string) => ['mail', accountId, 'submissions'] as const,
   submission: (accountId: string, submissionId: string) =>

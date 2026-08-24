@@ -8,6 +8,9 @@ export function adaptThreadSummary(dto: ThreadSummaryDto): ThreadSummary {
     mailboxIds: Object.keys(dto.mailboxIds),
     keywords: { ...dto.keywords },
     customerMarkers: (dto.customerMarkers ?? []).map((marker) => ({ ...marker })),
-    latestEmail: { ...dto.latestEmail },
+    latestEmail: {
+      ...dto.latestEmail,
+      to: (dto.latestEmail.to ?? []).map((address) => ({ ...address })),
+    },
   };
 }

@@ -104,7 +104,10 @@ export function adaptThreadSummaryForList(
     subject: summary.subject,
     tags: tagsFor(summary.mailboxIds, summary.keywords, mailboxes, summary.customerMarkers),
     sender: participantSender(summary.participants),
-    to: [],
+    to: summary.latestEmail.to.map((address) => ({
+      name: address.name ?? undefined,
+      email: address.email,
+    })),
     cc: null,
     bcc: null,
     tls: true,

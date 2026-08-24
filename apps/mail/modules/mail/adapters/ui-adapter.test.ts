@@ -121,6 +121,7 @@ describe('mail UI adapters', () => {
         id: 'email-1',
         lifecycle: 'received',
         receivedAt: '2026-07-27T00:00:00.000Z',
+        to: [{ name: null, email: 'user@example.com' }],
       },
     };
 
@@ -130,6 +131,7 @@ describe('mail UI adapters', () => {
       threadId: 'thread-1',
       subject: 'Quarterly report',
       sender: { name: 'Ada', email: 'ada@example.com' },
+      to: [{ email: 'user@example.com' }],
       unread: true,
       receivedOn: '2026-07-27T00:00:00.000Z',
       body: 'Attached is the report.',
@@ -249,8 +251,11 @@ describe('mail UI adapters', () => {
       null,
     );
     expect(
-      buildThreadDisplay([{ ...receivedB, customerMarker: email.customerMarker }], mailboxes, options)
-        .customerCreationCandidate,
+      buildThreadDisplay(
+        [{ ...receivedB, customerMarker: email.customerMarker }],
+        mailboxes,
+        options,
+      ).customerCreationCandidate,
     ).toBe(null);
   });
 });

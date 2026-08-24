@@ -58,7 +58,7 @@ describe('Mail API PostgreSQL Thread projection', () => {
             sender: [],
             from: [],
             replyTo: [],
-            to: [],
+            to: [{ email: `recipient-${index}@example.test` }],
             cc: [],
             bcc: [],
             preview: `preview-${index}`,
@@ -178,7 +178,10 @@ describe('Mail API PostgreSQL Thread projection', () => {
         mailboxIds: { [h.inbox.id]: true, [h.drafts.id]: true },
         keywords: { $seen: true, $flagged: true, customer: true },
         customerMarkers: [{ customerId: 'customer-123', customerName: '上海某某有限公司' }],
-        latestEmail: { id: 'view-email-2' },
+        latestEmail: {
+          id: 'view-email-2',
+          to: [{ name: null, email: 'recipient-2@example.test' }],
+        },
       });
       expect(first.items[0]?.emailIds).not.toContain('view-email-2-unfiled');
       expect(first.cursor).not.toBeNull();

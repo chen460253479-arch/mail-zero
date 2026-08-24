@@ -8,6 +8,7 @@ import type {
   ExternalMailSubmissionRecord,
   ExternalMailSubmissionRepository,
 } from '../../../../../src/modules/external-integration/application/mail-submission';
+import { EXTERNAL_MAIL_ATTACHMENT_TOTAL_MAX_BYTES } from '../../../../../src/modules/external-integration/contracts/mail-submission';
 import { MailTaskProcessingError } from '../../../../../src/modules/mail-tasks';
 
 const now = new Date('2026-08-05T08:00:00.000Z');
@@ -127,13 +128,13 @@ describe('processExternalMailSubmission', () => {
     );
   });
 
-  it('permanently rejects an attachment whose declared response exceeds 20 MiB', async () => {
+  it('permanently rejects an attachment whose declared response exceeds 50 MiB', async () => {
     const dependencies = createDependencies(record());
     dependencies.fetch = vi.fn(
       async () =>
         new Response(null, {
           status: 200,
-          headers: { 'content-length': String(20 * 1024 * 1024 + 1) },
+          headers: { 'content-length': String(EXTERNAL_MAIL_ATTACHMENT_TOTAL_MAX_BYTES + 1) },
         }),
     );
 

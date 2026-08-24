@@ -34,6 +34,7 @@ export type ThreadSummaryProjection = {
     id: string;
     lifecycle: EmailLifecycle;
     receivedAt: string;
+    to: Array<{ name?: string | null; email: string }>;
   };
 };
 

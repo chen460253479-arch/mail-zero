@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
-import { cursorSchema, mailAccountIdSchema, mailIdSchema, stateSchema } from './common';
+import {
+  cursorSchema,
+  mailAccountIdSchema,
+  mailAddressSchema,
+  mailIdSchema,
+  stateSchema,
+} from './common';
 import { emailLifecycleSchema, emailSchema } from './email';
 import { customerMarkerSchema } from './customer-marker';
 
@@ -35,6 +41,7 @@ export const threadSummarySchema = z.object({
     id: mailIdSchema,
     lifecycle: emailLifecycleSchema,
     receivedAt: z.string().datetime({ offset: true }),
+    to: z.array(mailAddressSchema),
   }),
 });
 

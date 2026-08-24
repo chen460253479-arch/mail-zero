@@ -26,6 +26,7 @@ describe('Thread view service', () => {
               id: 'email-1',
               lifecycle: 'received' as const,
               receivedAt: '2026-01-01T00:00:00.000Z',
+              to: [{ name: null, email: 'user@example.com' }],
             },
           },
         ],

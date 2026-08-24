@@ -1,9 +1,8 @@
 import {
-  buildBlobDownloadUrl,
-  mailQueryKeys,
-  rememberMailAttachmentBlob,
-  useMailAccountContext,
-} from '@/modules/mail';
+  downloadDraftAttachments,
+  type DraftAttachmentDescriptor,
+} from '@/modules/mail/queries/download-draft-attachments';
+import { mailQueryKeys, rememberMailAttachmentBlob, useMailAccountContext } from '@/modules/mail';
 import { trpcClient } from '@/providers/query-provider';
 import { useQuery } from '@tanstack/react-query';
 
@@ -23,33 +22,36 @@ export const useDraft = (id: string | null) => {
       const result = await trpcClient.mail.email.get.query({
         accountId: account.id,
         ids: [id],
+        properties: [
+          'lifecycle',
+          'draftRevision',
+          'receivedAt',
+          'subject',
+          'to',
+          'cc',
+          'bcc',
+          'textBody',
+          'htmlBody',
+          'attachments',
+          'bodyValues',
+        ],
         fetchTextBodyValues: true,
         fetchHTMLBodyValues: true,
       });
       const draft = result.list[0];
       if (!draft || draft.lifecycle !== 'draft') throw new Error('DRAFT_NOT_FOUND');
-      const attachments = await Promise.all(
-        (draft.attachments ?? []).flatMap((part) => {
-          if (!part.blobId) return [];
-          return [
-            fetch(
-              buildBlobDownloadUrl({
-                accountId: account.id,
+      if (draft.draftRevision === undefined) throw new Error('DRAFT_REVISION_UNAVAILABLE');
+      const attachments = (draft.attachments ?? []).flatMap((part): DraftAttachmentDescriptor[] =>
+        part.blobId
+          ? [
+              {
                 blobId: part.blobId,
                 filename: part.filename ?? 'attachment',
-                backendBaseUrl: import.meta.env.VITE_PUBLIC_BACKEND_URL,
-              }),
-              { credentials: 'include' },
-            ).then(async (response) => {
-              if (!response.ok) throw new Error(`MAIL_BLOB_DOWNLOAD_FAILED:${response.status}`);
-              const file = new File([await response.blob()], part.filename ?? 'attachment', {
-                type: part.contentType,
-              });
-              rememberMailAttachmentBlob(file, part.blobId!);
-              return file;
-            }),
-          ];
-        }),
+                contentType: part.contentType,
+                size: part.size,
+              },
+            ]
+          : [],
       );
 
       return {
@@ -65,6 +67,38 @@ export const useDraft = (id: string | null) => {
         bcc: (draft.bcc ?? []).map((address) => address.email),
         attachments,
       };
+    },
+  });
+};
+
+export const useDraftAttachments = (
+  id: string | null,
+  draftRevision: number | null,
+  attachments: DraftAttachmentDescriptor[],
+) => {
+  const { account, status } = useMailAccountContext();
+  const canDownload =
+    status === 'ready' &&
+    Boolean(account && id) &&
+    draftRevision !== null &&
+    attachments.length > 0;
+
+  return useQuery({
+    queryKey: mailQueryKeys.draftAttachments(account?.id ?? '', id ?? '', draftRevision ?? 0),
+    enabled: canDownload,
+    staleTime: 60 * 60_000,
+    queryFn: async ({ signal }) => {
+      if (!account || !id) throw new Error('DRAFT_NOT_FOUND');
+      const downloaded = await downloadDraftAttachments({
+        accountId: account.id,
+        attachments,
+        backendBaseUrl: import.meta.env.VITE_PUBLIC_BACKEND_URL,
+        signal,
+      });
+      for (const { blobId, file } of downloaded) {
+        rememberMailAttachmentBlob(file, blobId);
+      }
+      return downloaded.map(({ file }) => file);
     },
   });
 };

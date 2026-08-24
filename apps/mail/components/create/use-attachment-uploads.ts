@@ -25,16 +25,21 @@ export function useAttachmentUploads({
   onAttachmentsChanged: () => void;
 }) {
   const { account } = useMailAccountContext();
+  const knownInitialAttachments = useRef(new WeakSet<File>());
   const [items, dispatch] = useReducer(
     attachmentUploadReducer,
     initialAttachments,
     (files): AttachmentUploadItem[] =>
-      files.map((file) =>
-        createAttachmentUploadItem(file, nextAttachmentId(), getRememberedMailAttachmentBlob(file)),
-      ),
+      files.map((file) => {
+        knownInitialAttachments.current.add(file);
+        return createAttachmentUploadItem(
+          file,
+          nextAttachmentId(),
+          getRememberedMailAttachmentBlob(file),
+        );
+      }),
   );
   const controllers = useRef(new Map<string, AbortController>());
-  const initialUploadsStarted = useRef(false);
 
   const startUpload = useCallback(
     async (item: AttachmentUploadItem) => {
@@ -76,10 +81,21 @@ export function useAttachmentUploads({
   );
 
   useEffect(() => {
-    if (initialUploadsStarted.current) return;
-    initialUploadsStarted.current = true;
+    const added = initialAttachments.flatMap((file) => {
+      if (knownInitialAttachments.current.has(file)) return [];
+      knownInitialAttachments.current.add(file);
+      return [
+        createAttachmentUploadItem(file, nextAttachmentId(), getRememberedMailAttachmentBlob(file)),
+      ];
+    });
+    if (added.length > 0) dispatch({ type: 'add', items: added });
+  }, [initialAttachments]);
+
+  useEffect(() => {
     for (const item of items) {
-      if (item.status === 'uploading') void startUpload(item);
+      if (item.status === 'uploading' && !controllers.current.has(item.id)) {
+        void startUpload(item);
+      }
     }
   }, [items, startUpload]);
 
@@ -130,7 +146,9 @@ export function useAttachmentUploads({
   return {
     items,
     uploadedFiles,
-    hasUploadingAttachments: items.some((item) => item.status === 'uploading'),
+    hasPendingInitialAttachments: initialAttachments.some(
+      (file) => !knownInitialAttachments.current.has(file),
+    ),
     addAttachments,
     removeAttachment,
     retryAttachment,
