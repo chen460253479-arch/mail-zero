@@ -459,8 +459,8 @@ describe('importEmail', () => {
       sendAt: null,
     });
     await destroyDraft(deps, { accountId: account.id, emailId: draft.id });
-    expect(submission.rawBlobId).not.toBe(draft.blobId);
-    expect(await deps.inspect.blob(submission.rawBlobId)).toMatchObject({ kind: 'message_mime' });
+    expect(submission.rawBlobId).toBe(draft.blobId);
+    expect(await deps.inspect.blob(submission.rawBlobId)).toMatchObject({ kind: 'draft_mime' });
 
     const importOnlyQuota = BigInt(simpleRaw.byteLength);
     await deps.unitOfWork.run((tx) =>

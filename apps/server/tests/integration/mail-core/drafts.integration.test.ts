@@ -111,11 +111,11 @@ describe('PostgreSQL Draft integration', () => {
           rawObjectKey: frozenMessage!.objectKey,
         });
         expect(frozenMessage).toMatchObject({
-          kind: 'message_mime',
+          kind: 'draft_mime',
           sha256: initialRawBlob!.sha256,
           sizeBytes: initialRawBlob!.sizeBytes,
         });
-        expect(frozenMessage!.id).not.toBe(draft.blobId);
+        expect(frozenMessage!.id).toBe(draft.blobId);
       });
       expect(
         await harness.blobStore.get({

@@ -74,8 +74,10 @@ describe('EmailSubmission creation', () => {
     expect(result.sendAt.toISOString()).toBe('2026-01-01T00:01:00.000Z');
   });
 
-  it('counts the immutable message MIME copy against the account storage quota', async () => {
+  it('reuses the immutable Draft MIME without charging duplicate storage', async () => {
     const h = await createSubmissionHarness();
+    const draft = (await h.inspect.email(h.draftId))!;
+    const blobsBefore = await h.deps.inspect.blobs(h.accountId);
     const currentBytes = await h.deps.unitOfWork.run(async (tx) =>
       (await tx.blobs.listByAccount(h.accountId))
         .filter(
@@ -91,20 +93,16 @@ describe('EmailSubmission creation', () => {
       }),
     );
 
-    await expect(
-      createSubmission(h.deps, {
-        accountId: h.accountId,
-        emailId: h.draftId,
-        identityId: h.identityId,
-        idempotencyKey: 'message-copy-over-quota',
-        sendAt: null,
-      }),
-    ).rejects.toMatchObject({ code: 'OVER_QUOTA' });
+    const submission = await createSubmission(h.deps, {
+      accountId: h.accountId,
+      emailId: h.draftId,
+      identityId: h.identityId,
+      idempotencyKey: 'reuse-draft-mime-at-quota',
+      sendAt: null,
+    });
 
-    expect(await h.inspect.submissions()).toEqual([]);
-    expect(
-      (await h.deps.inspect.blobs(h.accountId)).filter(({ kind }) => kind === 'message_mime'),
-    ).toEqual([]);
+    expect(submission.rawBlobId).toBe(draft.blobId);
+    expect(await h.deps.inspect.blobs(h.accountId)).toEqual(blobsBefore);
     expect(h.deps.blobStore.temporarySnapshot().size).toBe(0);
   });
 
@@ -218,9 +216,9 @@ describe('EmailSubmission creation', () => {
       rawSha256: rawRecordBefore.sha256,
       rawSizeBytes: rawRecordBefore.sizeBytes,
     });
-    expect(submission.rawBlobId).not.toBe(draft.blobId);
-    expect(submittedRaw.kind).toBe('message_mime');
-    expect(submittedRaw.objectKey).toContain(`/accounts/${h.accountId}/messages/sha256/`);
+    expect(submission.rawBlobId).toBe(draft.blobId);
+    expect(submittedRaw.kind).toBe('draft_mime');
+    expect(submittedRaw.objectKey).toContain(`/accounts/${h.accountId}/drafts/sha256/`);
 
     await updateDraft(h.deps, {
       accountId: h.accountId,
@@ -277,9 +275,9 @@ describe('EmailSubmission creation', () => {
       sendAt: null,
     });
 
-    expect(submission.rawBlobId).not.toBe(draft.blobId);
+    expect(submission.rawBlobId).toBe(draft.blobId);
     const rawRecord = (await h.inspect.blob(submission.rawBlobId))!;
-    expect(rawRecord.kind).toBe('message_mime');
+    expect(rawRecord.kind).toBe('draft_mime');
     const raw = decode(
       await h.deps.blobStore.get({
         accountId: h.accountId,

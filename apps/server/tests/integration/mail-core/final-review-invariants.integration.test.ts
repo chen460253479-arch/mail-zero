@@ -108,11 +108,11 @@ describe('final review PostgreSQL invariants', () => {
         rawObjectKey: submissionRawRecord!.objectKey,
       });
       expect(submissionRawRecord).toMatchObject({
-        kind: 'message_mime',
+        kind: 'draft_mime',
         sha256: rawRecord!.sha256,
         sizeBytes: rawRecord!.sizeBytes,
       });
-      expect(submissionRawRecord!.id).not.toBe(draft.blobId);
+      expect(submissionRawRecord!.id).toBe(draft.blobId);
       await updateDraft(h.dependencies, {
         accountId: h.accountId,
         emailId: draft.id,
@@ -143,9 +143,10 @@ describe('final review PostgreSQL invariants', () => {
         tx.blobs.findById(h.accountId, loaded!.rawBlobId),
       );
       expect(preserved).not.toBeNull();
+      expect(preserved!.id).toBe(draft.blobId);
       await expect(
         unitOfWork.run((tx) => tx.blobs.findById(h.accountId, draft.blobId!)),
-      ).resolves.toBeNull();
+      ).resolves.toEqual(preserved);
       await expect(
         h.blobStore.get({
           accountId: h.accountId,

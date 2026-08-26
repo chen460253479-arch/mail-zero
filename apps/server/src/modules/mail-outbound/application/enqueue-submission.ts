@@ -56,7 +56,6 @@ export const enqueueSubmissionInTransaction = async (
   dependencies: EnqueueSubmissionTransactionDependencies,
   tx: MailOutboundTransaction,
   prepared: PreparedSubmission,
-  committedObjectKeys: string[],
 ): Promise<SubmitDraftForDeliveryResult> => {
   await tx.mail.lockAccount(input.accountId);
   const priorSubmission = await tx.mail.submissions.findByIdempotencyKey(
@@ -70,7 +69,6 @@ export const enqueueSubmissionInTransaction = async (
     tx.mail,
     input,
     prepared,
-    committedObjectKeys,
   );
   const existing = await tx.outbound.findBySubmission(input.accountId, submission.id);
   if (existing !== null) {
@@ -94,41 +92,9 @@ export const enqueueSubmission = async (
   dependencies: EnqueueSubmissionDependencies,
 ): Promise<SubmitDraftForDeliveryResult> => {
   const prepared = await prepareSubmission(dependencies.mailCoreDependencies, input);
-  const committedObjectKeys: string[] = [];
-  let callbackCompleted = false;
-  let result: SubmitDraftForDeliveryResult;
-  try {
-    result = await dependencies.unitOfWork.run(async (tx) => {
-      const queued = await enqueueSubmissionInTransaction(
-        input,
-        dependencies,
-        tx,
-        prepared,
-        committedObjectKeys,
-      );
-      callbackCompleted = true;
-      return queued;
-    });
-  } catch (error) {
-    if (!callbackCompleted) {
-      await Promise.allSettled(
-        committedObjectKeys.map((objectKey) =>
-          dependencies.mailCoreDependencies.blobStore.delete({
-            accountId: input.accountId,
-            objectKey,
-          }),
-        ),
-      );
-    }
-    throw error;
-  } finally {
-    await dependencies.mailCoreDependencies.blobStore
-      .deleteTemporary({
-        accountId: input.accountId,
-        temporaryKey: prepared.raw.temporaryKey,
-      })
-      .catch(() => undefined);
-  }
+  const result = await dependencies.unitOfWork.run((tx) =>
+    enqueueSubmissionInTransaction(input, dependencies, tx, prepared),
+  );
 
   try {
     await dependencies.wakeup.enqueue({

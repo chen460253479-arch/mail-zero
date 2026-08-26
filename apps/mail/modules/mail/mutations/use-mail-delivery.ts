@@ -8,6 +8,7 @@ import { buildCancelSubmissionInput, buildSubmissionCreateInput } from './submis
 import { useMailAccountContext } from '../providers/mail-account-provider';
 import { selectDeliveryIdentity, toMailAddresses } from './delivery-input';
 import { useMailIdentities } from '../queries/use-mail-identities';
+import { resolveDeliveryDraft } from './delivery-draft';
 import { uploadMailBlob } from '../api/blob-client';
 
 const attachmentBlobIdCache = new WeakMap<File, string>();
@@ -142,7 +143,18 @@ export function useMailDelivery() {
   const sendMessage = useCallback(
     async (input: SendLocalMessageInput) => {
       if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
-      const draft = await saveDraft(input);
+      const draft = await resolveDeliveryDraft({
+        draftId: input.draftId,
+        loadDraft: async (draftId) => {
+          const current = await trpcClient.mail.email.get.query({
+            accountId: account.id,
+            ids: [draftId],
+            properties: ['lifecycle', 'identityId'],
+          });
+          return current.list[0] ?? null;
+        },
+        saveDraft: () => saveDraft(input),
+      });
       const clientId = nextId('submission');
       const result = await setSubmission.mutateAsync(
         buildSubmissionCreateInput({

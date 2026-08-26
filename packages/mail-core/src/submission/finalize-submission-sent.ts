@@ -114,7 +114,7 @@ export async function finalizeSubmissionSentInTransaction(
     submittedBlob.status !== 'ready' ||
     submittedBlob.readyAt === null ||
     submittedBlob.deletedAt !== null ||
-    submittedBlob.kind !== 'message_mime' ||
+    (submittedBlob.kind !== 'draft_mime' && submittedBlob.kind !== 'message_mime') ||
     submittedBlob.sha256 !== submission.rawSha256 ||
     submittedBlob.sizeBytes !== submission.rawSizeBytes ||
     submittedBlob.objectKey !== submission.rawObjectKey

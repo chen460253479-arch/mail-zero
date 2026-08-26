@@ -7,7 +7,7 @@ const accountId = 'account-email-dto' as MailAccountId;
 const email: EmailRecord = {
   id: 'email-1' as EmailRecord['id'],
   accountId,
-  identityId: null,
+  identityId: 'identity-1' as NonNullable<EmailRecord['identityId']>,
   threadId: 'thread-1' as EmailRecord['threadId'],
   blobId: null,
   messageId: null,
@@ -68,6 +68,7 @@ describe('Email DTO', () => {
     expect(readBlob).not.toHaveBeenCalled();
     expect(readBlobRange).not.toHaveBeenCalled();
     expect(dto).toMatchObject({
+      identityId: email.identityId,
       mailboxIds: { 'mailbox-inbox': true },
       keywords: { $seen: true },
       bodyValues: {},

@@ -90,85 +90,57 @@ export async function setOutboundSubmissions(
     }
   }
 
-  const committedObjectKeys: string[] = [];
-  let callbackCompleted = false;
-  let result: SetOutboundSubmissionsResult;
-  try {
-    result = await dependencies.unitOfWork.run(async (tx) => {
-      await tx.mail.lockAccount(input.accountId);
-      const oldState = await assertState(tx.mail, input.accountId, input.ifInState);
-      const created: Record<string, SubmissionRecord> = {};
-      const destroyed: EmailSubmissionId[] = [];
-      const notCreated: Record<string, MailCoreSetError> = { ...preparationErrors };
-      const notDestroyed: Record<string, MailCoreSetError> = {};
+  const result = await dependencies.unitOfWork.run(async (tx) => {
+    await tx.mail.lockAccount(input.accountId);
+    const oldState = await assertState(tx.mail, input.accountId, input.ifInState);
+    const created: Record<string, SubmissionRecord> = {};
+    const destroyed: EmailSubmissionId[] = [];
+    const notCreated: Record<string, MailCoreSetError> = { ...preparationErrors };
+    const notDestroyed: Record<string, MailCoreSetError> = {};
 
-      for (const [creationId, preparedCreate] of preparedCreates) {
-        try {
-          const queued = await enqueueSubmissionInTransaction(
-            preparedCreate.input,
-            dependencies,
-            tx,
-            preparedCreate.prepared,
-            committedObjectKeys,
-          );
-          created[creationId] = queued.submission;
-          wakeups.push(queued.delivery.id);
-        } catch (error) {
-          const item = asCreateItemError(error);
-          if (item === null) throw error;
-          notCreated[creationId] = item;
-        }
+    for (const [creationId, preparedCreate] of preparedCreates) {
+      try {
+        const queued = await enqueueSubmissionInTransaction(
+          preparedCreate.input,
+          dependencies,
+          tx,
+          preparedCreate.prepared,
+        );
+        created[creationId] = queued.submission;
+        wakeups.push(queued.delivery.id);
+      } catch (error) {
+        const item = asCreateItemError(error);
+        if (item === null) throw error;
+        notCreated[creationId] = item;
       }
-
-      for (const submissionId of input.destroy) {
-        try {
-          await cancelPendingDeliveryInTransaction(
-            { accountId: input.accountId, submissionId },
-            dependencies,
-            tx,
-          );
-          destroyed.push(submissionId);
-        } catch (error) {
-          const item = asDestroyItemError(error);
-          if (item === null) throw error;
-          notDestroyed[submissionId] = item;
-        }
-      }
-
-      const account = await tx.mail.accounts.findById(input.accountId);
-      if (account === null) throw new MailCoreError('ACCOUNT_NOT_FOUND');
-      callbackCompleted = true;
-      return {
-        oldState,
-        newState: account.stateVersion.toString(),
-        created,
-        destroyed,
-        notCreated,
-        notDestroyed,
-      };
-    });
-  } catch (error) {
-    if (!callbackCompleted) {
-      await Promise.allSettled(
-        committedObjectKeys.map((objectKey) =>
-          dependencies.mailCoreDependencies.blobStore.delete({
-            accountId: input.accountId,
-            objectKey,
-          }),
-        ),
-      );
     }
-    throw error;
-  } finally {
-    await Promise.allSettled(
-      [...preparedCreates.values()].map(({ prepared }) =>
-        dependencies.mailCoreDependencies.blobStore.deleteTemporary({
-          accountId: input.accountId,
-          temporaryKey: prepared.raw.temporaryKey,
-        }),
-      ),
-    );
-  }
+
+    for (const submissionId of input.destroy) {
+      try {
+        await cancelPendingDeliveryInTransaction(
+          { accountId: input.accountId, submissionId },
+          dependencies,
+          tx,
+        );
+        destroyed.push(submissionId);
+      } catch (error) {
+        const item = asDestroyItemError(error);
+        if (item === null) throw error;
+        notDestroyed[submissionId] = item;
+      }
+    }
+
+    const account = await tx.mail.accounts.findById(input.accountId);
+    if (account === null) throw new MailCoreError('ACCOUNT_NOT_FOUND');
+    return {
+      oldState,
+      newState: account.stateVersion.toString(),
+      created,
+      destroyed,
+      notCreated,
+      notDestroyed,
+    };
+  });
 
   for (const deliveryId of wakeups) {
     try {

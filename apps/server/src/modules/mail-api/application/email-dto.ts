@@ -74,6 +74,7 @@ export async function toEmailDto(
     id: email.id,
     threadId: email.threadId,
     blobId: email.blobId,
+    identityId: email.identityId,
     mailboxIds: idMap(email.mailboxIds),
     keywords: idMap(email.keywords),
     lifecycle: email.lifecycle,

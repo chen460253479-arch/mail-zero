@@ -1,20 +1,11 @@
-import {
-  commitPreparedBlob,
-  contentAddressedObjectKey,
-  discardCommittedBlobs,
-  discardTemporaryBlobs,
-  prepareBlob,
-  type PreparedBlob,
-  verifyPreparedBlob,
-} from '../blob/blob-lifecycle';
 import type { BlobRecord, SubmissionRecord, MailCoreDependencies, MailTransaction } from '../store';
-import type { BlobId, EmailSubmissionId } from '../types';
 import type { CreateSubmissionInput } from './types';
+import type { EmailSubmissionId } from '../types';
 import { MailCoreError } from '../types';
 import { z } from 'zod';
 
 export type PreparedSubmission = {
-  raw: PreparedBlob;
+  raw: BlobRecord;
 };
 
 const recipientSchema = z.string().email();
@@ -101,7 +92,7 @@ export async function prepareSubmission(
   dependencies: MailCoreDependencies,
   input: CreateSubmissionInput,
 ): Promise<PreparedSubmission> {
-  const source = await dependencies.unitOfWork.run(async (tx) => {
+  return dependencies.unitOfWork.run(async (tx) => {
     const account = await tx.accounts.findById(input.accountId);
     if (account === null) {
       throw new MailCoreError('ACCOUNT_NOT_FOUND', { entityId: input.accountId });
@@ -117,101 +108,15 @@ export async function prepareSubmission(
       throw new MailCoreError('BLOB_NOT_FOUND', { entityId: input.emailId });
     }
     const blob = await requireFrozenBlob(tx, input.accountId, email.blobId);
-    return { account, blob };
+    return { raw: blob };
   });
-  const bytes = await verifyPreparedBlob(
-    dependencies.blobStore,
-    {
-      accountId: input.accountId,
-      sha256: source.blob.sha256,
-      sizeBytes: source.blob.sizeBytes,
-    },
-    source.blob.objectKey,
-    true,
-  );
-  return {
-    raw: await prepareBlob(dependencies.blobStore, {
-      userId: source.account.userId,
-      accountId: input.accountId,
-      kind: 'message_mime',
-      bytes,
-      contentType: 'message/rfc822',
-    }),
-  };
 }
-
-const allocateSubmissionBlob = async (
-  dependencies: MailCoreDependencies,
-  tx: MailTransaction,
-  prepared: PreparedBlob,
-  storageQuotaBytes: bigint | null,
-  committedObjectKeys: string[],
-): Promise<BlobRecord> => {
-  const existing = await tx.blobs.findByDigest(
-    prepared.accountId,
-    prepared.kind,
-    prepared.sha256,
-    prepared.sizeBytes,
-  );
-  if (existing !== null) {
-    if (
-      existing.status !== 'ready' ||
-      existing.readyAt === null ||
-      existing.deletedAt !== null ||
-      existing.kind !== 'message_mime'
-    ) {
-      throw new MailCoreError('BLOB_INTEGRITY', { entityId: existing.id });
-    }
-    await verifyPreparedBlob(dependencies.blobStore, prepared, existing.objectKey, true);
-    return existing;
-  }
-
-  if (storageQuotaBytes !== null) {
-    const currentBytes = (await tx.blobs.listByAccount(prepared.accountId))
-      .filter(
-        ({ deletedAt, status }) =>
-          deletedAt === null && (status === 'ready' || status === 'pending'),
-      )
-      .reduce((total, { sizeBytes }) => total + sizeBytes, 0n);
-    if (currentBytes + prepared.sizeBytes > storageQuotaBytes) {
-      throw new MailCoreError('OVER_QUOTA');
-    }
-  }
-
-  const now = dependencies.clock.now();
-  const pending = await tx.blobs.insert({
-    id: dependencies.idFactory.next<'Blob'>() as BlobId,
-    accountId: prepared.accountId,
-    kind: prepared.kind,
-    sha256: prepared.sha256,
-    sizeBytes: prepared.sizeBytes,
-    contentType: prepared.contentType,
-    objectKey: contentAddressedObjectKey(
-      prepared.userId,
-      prepared.accountId,
-      prepared.kind,
-      prepared.sha256,
-    ),
-    status: 'pending',
-    createdAt: now,
-    readyAt: null,
-    deletedAt: null,
-  });
-  committedObjectKeys.push(pending.objectKey);
-  const receipt = await commitPreparedBlob(dependencies.blobStore, prepared, pending.objectKey);
-  await verifyPreparedBlob(dependencies.blobStore, prepared, receipt.objectKey);
-  return tx.blobs.update(prepared.accountId, pending.id, {
-    status: 'ready',
-    readyAt: now,
-  });
-};
 
 export async function createSubmissionInTransaction(
   dependencies: MailCoreDependencies,
   tx: MailTransaction,
   input: CreateSubmissionInput,
   prepared: PreparedSubmission,
-  committedObjectKeys: string[],
 ): Promise<SubmissionRecord> {
   const requestedSendAt = normalizeRequestedSendAt(input.sendAt);
   if (input.idempotencyKey.length === 0) {
@@ -223,7 +128,13 @@ export async function createSubmissionInTransaction(
   if (account === null) {
     throw new MailCoreError('ACCOUNT_NOT_FOUND', { entityId: input.accountId });
   }
-  if (account.userId !== prepared.raw.userId || prepared.raw.kind !== 'message_mime') {
+  if (
+    prepared.raw.accountId !== input.accountId ||
+    prepared.raw.kind !== 'draft_mime' ||
+    prepared.raw.status !== 'ready' ||
+    prepared.raw.readyAt === null ||
+    prepared.raw.deletedAt !== null
+  ) {
     throw new MailCoreError('BLOB_INTEGRITY', { entityId: input.accountId });
   }
   const now = dependencies.clock.now();
@@ -262,21 +173,18 @@ export async function createSubmissionInTransaction(
     throw new MailCoreError('BLOB_NOT_FOUND', { entityId: email.id });
   }
   const frozenRaw = await requireFrozenBlob(tx, input.accountId, email.blobId);
-  if (frozenRaw.sha256 !== prepared.raw.sha256 || frozenRaw.sizeBytes !== prepared.raw.sizeBytes) {
+  if (
+    frozenRaw.id !== prepared.raw.id ||
+    frozenRaw.sha256 !== prepared.raw.sha256 ||
+    frozenRaw.sizeBytes !== prepared.raw.sizeBytes ||
+    frozenRaw.objectKey !== prepared.raw.objectKey
+  ) {
     throw new MailCoreError('DRAFT_REVISION_CONFLICT', { entityId: email.id });
   }
   if (email.to.length + email.cc.length + email.bcc.length === 0) {
     throw new MailCoreError('INVALID_EMAIL', { entityId: email.id });
   }
   requireValidRecipients(email);
-  const messageRaw = await allocateSubmissionBlob(
-    dependencies,
-    tx,
-    prepared.raw,
-    account.storageQuotaBytes,
-    committedObjectKeys,
-  );
-
   const submission = await tx.submissions.insert({
     id: dependencies.idFactory.next<'EmailSubmission'>() as EmailSubmissionId,
     accountId: input.accountId,
@@ -286,10 +194,10 @@ export async function createSubmissionInTransaction(
     sendAt,
     idempotencyKey: input.idempotencyKey,
     draftRevision: email.draftRevision,
-    rawBlobId: messageRaw.id,
-    rawSha256: messageRaw.sha256,
-    rawSizeBytes: messageRaw.sizeBytes,
-    rawObjectKey: messageRaw.objectKey,
+    rawBlobId: frozenRaw.id,
+    rawSha256: frozenRaw.sha256,
+    rawSizeBytes: frozenRaw.sizeBytes,
+    rawObjectKey: frozenRaw.objectKey,
     providerMessageId: null,
     lastErrorCode: null,
     lastErrorMessage: null,
@@ -315,27 +223,7 @@ export async function createSubmission(
   input: CreateSubmissionInput,
 ): Promise<SubmissionRecord> {
   const prepared = await prepareSubmission(dependencies, input);
-  const committedObjectKeys: string[] = [];
-  let completed = false;
-  try {
-    const submission = await dependencies.unitOfWork.run(async (tx) => {
-      const created = await createSubmissionInTransaction(
-        dependencies,
-        tx,
-        input,
-        prepared,
-        committedObjectKeys,
-      );
-      completed = true;
-      return created;
-    });
-    return submission;
-  } catch (error) {
-    if (!completed) {
-      await discardCommittedBlobs(dependencies.blobStore, input.accountId, committedObjectKeys);
-    }
-    throw error;
-  } finally {
-    await discardTemporaryBlobs(dependencies.blobStore, [prepared.raw]);
-  }
+  return dependencies.unitOfWork.run((tx) =>
+    createSubmissionInTransaction(dependencies, tx, input, prepared),
+  );
 }
