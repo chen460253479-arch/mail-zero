@@ -15,11 +15,11 @@ import {
 } from '@/components/ui/select';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { Command, LoaderCircle, Paperclip, RotateCw, Type } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEmailAliases } from '@/hooks/use-email-aliases';
 import { ScheduleSendPicker } from './schedule-send-picker';
 import useComposeEditor from '@/hooks/use-compose-editor';
+import { Command, Paperclip, Type } from 'lucide-react';
 import { gitHubEmojis } from '@tiptap/extension-emoji';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CurvedArrow, X } from '../icons/icons';
@@ -36,10 +36,11 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
+import type { DraftAttachmentDescriptor } from '@/modules/mail/queries/download-draft-attachments';
+import { AttachmentUploadList, DraftAttachmentLoadingList } from './attachment-upload-list';
 import { RecipientAutosuggest } from '@/components/ui/recipient-autosuggest';
 import { attachmentUploadsBlockSend } from './attachment-upload-state';
 import { useAttachmentUploads } from './use-attachment-uploads';
-import { AttachmentUploadList } from './attachment-upload-list';
 import { useMailDelivery } from '@/modules/mail';
 import { m } from '@/paraglide/messages';
 
@@ -53,6 +54,7 @@ interface EmailComposerProps {
   initialSubject?: string;
   initialMessage?: string;
   initialAttachments?: File[];
+  initialAttachmentDescriptors?: DraftAttachmentDescriptor[];
   initialAttachmentsLoading?: boolean;
   initialAttachmentsError?: unknown;
   onRetryInitialAttachments?: () => void;
@@ -95,6 +97,7 @@ export function EmailComposer({
   initialSubject = '',
   initialMessage = '',
   initialAttachments = [],
+  initialAttachmentDescriptors = [],
   initialAttachmentsLoading = false,
   initialAttachmentsError = null,
   onRetryInitialAttachments,
@@ -607,31 +610,12 @@ export function EmailComposer({
       {/* Bottom Actions */}
       <div className="inline-flex w-full shrink-0 items-end justify-between self-stretch rounded-b-2xl bg-[#FFFFFF] px-3 py-3 outline-white/5 dark:bg-[#202020]">
         <div className="flex w-full flex-col items-start justify-start gap-2">
-          {initialAttachmentsLoading ? (
-            <div
-              className="text-muted-foreground flex items-center gap-2 text-sm"
-              aria-live="polite"
-            >
-              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
-              <span>{m['pages.createEmail.attachmentDownloading']()}</span>
-            </div>
-          ) : initialAttachmentsError ? (
-            <div
-              className="flex w-full max-w-[560px] items-center justify-between gap-3 rounded-xl border border-red-500 bg-red-50/60 px-3 py-2 text-sm text-red-700 dark:bg-red-950/20 dark:text-red-400"
-              role="alert"
-            >
-              <span>{m['pages.createEmail.attachmentDownloadFailed']()}</span>
-              {onRetryInitialAttachments ? (
-                <button
-                  type="button"
-                  onClick={onRetryInitialAttachments}
-                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 font-medium hover:underline"
-                >
-                  <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
-                  {m['pages.createEmail.retryAttachmentDownload']()}
-                </button>
-              ) : null}
-            </div>
+          {initialAttachmentsLoading || initialAttachmentsError ? (
+            <DraftAttachmentLoadingList
+              attachments={initialAttachmentDescriptors}
+              error={initialAttachmentsError}
+              onRetry={onRetryInitialAttachments}
+            />
           ) : null}
           <AttachmentUploadList
             items={attachmentItems}

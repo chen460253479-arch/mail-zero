@@ -4,6 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
 const source = readFileSync(new URL('./email-composer.tsx', import.meta.url), 'utf8');
+const attachmentListSource = readFileSync(
+  new URL('./attachment-upload-list.tsx', import.meta.url),
+  'utf8',
+);
+const createEmailSource = readFileSync(new URL('./create-email.tsx', import.meta.url), 'utf8');
 const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 
 describe('email composer attachments', () => {
@@ -48,8 +53,18 @@ describe('email composer attachments', () => {
   it('renders the editor while persisted attachments load and blocks only save and send', () => {
     expect(source).toContain('initialAttachmentsLoading');
     expect(source).toContain('initialAttachmentsError');
-    expect(source).toContain("m['pages.createEmail.attachmentDownloading']()");
+    expect(source).toContain('<DraftAttachmentLoadingList');
+    expect(attachmentListSource).toContain("m['pages.createEmail.attachmentDownloading']()");
     expect(source).toContain('if (hasBlockingAttachments)');
     expect(source).toContain('if (!hasUnsavedChanges || hasBlockingAttachments) return;');
+  });
+
+  it('shows persisted attachment metadata before its bytes finish downloading', () => {
+    expect(source).toContain('initialAttachmentDescriptors');
+    expect(createEmailSource).toContain(
+      'initialAttachmentDescriptors={typedDraft?.attachments ?? []}',
+    );
+    expect(attachmentListSource).toContain('attachment.filename');
+    expect(attachmentListSource).toContain('formatFileSize(Number(attachment.size) || 0)');
   });
 });

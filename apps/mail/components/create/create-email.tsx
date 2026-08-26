@@ -202,6 +202,7 @@ export function CreateEmail({
                 setDraftId(null);
               }}
               initialAttachments={files}
+              initialAttachmentDescriptors={typedDraft?.attachments ?? []}
               initialAttachmentsLoading={areDraftAttachmentsLoading}
               initialAttachmentsError={draftAttachmentsError}
               onRetryInitialAttachments={() => {

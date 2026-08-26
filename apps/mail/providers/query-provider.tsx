@@ -136,6 +136,10 @@ export function QueryProvider({
         persister,
         buster: CACHE_BURST_KEY,
         maxAge: 1000 * 60 * 60 * 24, // 24 hours
+        dehydrateOptions: {
+          shouldDehydrateQuery: (query) =>
+            query.meta?.persist !== false && query.state.status === 'success',
+        },
       }}
       onSuccess={() => {
         const threadQueryKey = [['mail', 'view', 'threadPage'], { type: 'infinite' }];

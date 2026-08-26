@@ -6,6 +6,8 @@ import { mailQueryKeys, rememberMailAttachmentBlob, useMailAccountContext } from
 import { trpcClient } from '@/providers/query-provider';
 import { useQuery } from '@tanstack/react-query';
 
+const DRAFT_ATTACHMENT_CACHE_RETENTION = 10 * 60_000;
+
 const bodyValue = (
   parts: Array<{ id: string }>,
   values: Record<string, { value: string; isTruncated: boolean }>,
@@ -88,9 +90,9 @@ export const useDraftAttachments = (
   return useQuery({
     queryKey: mailQueryKeys.draftAttachments(account?.id ?? '', id ?? '', draftRevision ?? 0),
     enabled: canDownload,
-    staleTime: 0,
-    gcTime: 0,
-    refetchOnMount: 'always',
+    staleTime: Infinity,
+    gcTime: DRAFT_ATTACHMENT_CACHE_RETENTION,
+    meta: { persist: false },
     queryFn: async ({ signal }) => {
       if (!account || !id) throw new Error('DRAFT_NOT_FOUND');
       const downloaded = await downloadDraftAttachments({

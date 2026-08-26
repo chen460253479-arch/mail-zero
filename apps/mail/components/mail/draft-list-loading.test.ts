@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs';
 
 const mailListSource = readFileSync(new URL('./mail-list.tsx', import.meta.url), 'utf8');
 const draftHookSource = readFileSync(new URL('../../hooks/use-drafts.ts', import.meta.url), 'utf8');
+const queryProviderSource = readFileSync(
+  new URL('../../providers/query-provider.tsx', import.meta.url),
+  'utf8',
+);
 
 describe('draft list loading', () => {
   it('renders draft rows from thread summaries without opening every draft', () => {
@@ -32,13 +36,15 @@ describe('draft list loading', () => {
     expect(baseDraftHook).not.toContain('staleTime: 60 * 60_000');
   });
 
-  it('always downloads attachments when the draft editor is opened', () => {
+  it('keeps downloaded attachments in memory when the draft editor is briefly closed', () => {
     const attachmentHook = draftHookSource.slice(
       draftHookSource.indexOf('export const useDraftAttachments'),
     );
-    expect(attachmentHook).toContain('staleTime: 0');
-    expect(attachmentHook).toContain('gcTime: 0');
-    expect(attachmentHook).toContain("refetchOnMount: 'always'");
-    expect(attachmentHook).not.toContain('staleTime: 60 * 60_000');
+    expect(draftHookSource).toContain('const DRAFT_ATTACHMENT_CACHE_RETENTION = 10 * 60_000');
+    expect(attachmentHook).toContain('staleTime: Infinity');
+    expect(attachmentHook).toContain('gcTime: DRAFT_ATTACHMENT_CACHE_RETENTION');
+    expect(attachmentHook).toContain('meta: { persist: false }');
+    expect(attachmentHook).not.toContain("refetchOnMount: 'always'");
+    expect(queryProviderSource).toContain('query.meta?.persist !== false');
   });
 });
