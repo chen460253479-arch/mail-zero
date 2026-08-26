@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 
-import {
-  getRememberedMailAttachmentBlob,
-  rememberMailAttachmentBlob,
-} from '@/modules/mail/mutations/use-mail-delivery';
 import { useMailAccountContext } from '@/modules/mail/providers/mail-account-provider';
 import { uploadMailBlobWithProgress } from '@/modules/mail/api/blob-client';
+import type { DraftAttachmentDescriptor } from '@/modules/mail/model/draft';
 
 import {
   attachmentUploadReducer,
+  attachmentReferences,
   createAttachmentUploadItem,
+  createPersistedAttachmentItem,
   type AttachmentUploadItem,
 } from './attachment-upload-state';
 
@@ -21,23 +20,15 @@ export function useAttachmentUploads({
   initialAttachments,
   onAttachmentsChanged,
 }: {
-  initialAttachments: File[];
+  initialAttachments: DraftAttachmentDescriptor[];
   onAttachmentsChanged: () => void;
 }) {
   const { account } = useMailAccountContext();
-  const knownInitialAttachments = useRef(new WeakSet<File>());
   const [items, dispatch] = useReducer(
     attachmentUploadReducer,
     initialAttachments,
     (files): AttachmentUploadItem[] =>
-      files.map((file) => {
-        knownInitialAttachments.current.add(file);
-        return createAttachmentUploadItem(
-          file,
-          nextAttachmentId(),
-          getRememberedMailAttachmentBlob(file),
-        );
-      }),
+      files.map((attachment) => createPersistedAttachmentItem(attachment, nextAttachmentId())),
   );
   const controllers = useRef(new Map<string, AbortController>());
 
@@ -48,6 +39,11 @@ export function useAttachmentUploads({
 
       if (!account) {
         dispatch({ type: 'failed', id: item.id, error: 'MAIL_ACCOUNT_UNAVAILABLE' });
+        controllers.current.delete(item.id);
+        return;
+      }
+      if (!item.file) {
+        dispatch({ type: 'failed', id: item.id, error: 'MAIL_ATTACHMENT_FILE_UNAVAILABLE' });
         controllers.current.delete(item.id);
         return;
       }
@@ -62,7 +58,6 @@ export function useAttachmentUploads({
             dispatch({ type: 'progress', id: item.id, progress: percent });
           },
         });
-        rememberMailAttachmentBlob(item.file, uploaded.blobId);
         dispatch({ type: 'uploaded', id: item.id, blobId: uploaded.blobId });
         onAttachmentsChanged();
       } catch (error) {
@@ -79,17 +74,6 @@ export function useAttachmentUploads({
     },
     [account, onAttachmentsChanged],
   );
-
-  useEffect(() => {
-    const added = initialAttachments.flatMap((file) => {
-      if (knownInitialAttachments.current.has(file)) return [];
-      knownInitialAttachments.current.add(file);
-      return [
-        createAttachmentUploadItem(file, nextAttachmentId(), getRememberedMailAttachmentBlob(file)),
-      ];
-    });
-    if (added.length > 0) dispatch({ type: 'add', items: added });
-  }, [initialAttachments]);
 
   useEffect(() => {
     for (const item of items) {
@@ -138,17 +122,11 @@ export function useAttachmentUploads({
     [items, startUpload],
   );
 
-  const uploadedFiles = useMemo(
-    () => items.filter((item) => item.status === 'uploaded').map((item) => item.file),
-    [items],
-  );
+  const attachments = useMemo(() => attachmentReferences(items), [items]);
 
   return {
     items,
-    uploadedFiles,
-    hasPendingInitialAttachments: initialAttachments.some(
-      (file) => !knownInitialAttachments.current.has(file),
-    ),
+    attachments,
     addAttachments,
     removeAttachment,
     retryAttachment,

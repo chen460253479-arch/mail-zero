@@ -1,5 +1,6 @@
 import { toast } from 'sonner';
 
+import type { DraftAttachmentReference } from '@/modules/mail/model/draft';
 import type { UserSettings } from '@zero/server/schemas';
 import { isSendResult } from '@/lib/email-utils';
 import { useMailDelivery } from '@/modules/mail';
@@ -11,7 +12,7 @@ export type EmailData = {
   bcc?: string[];
   subject: string;
   message: string;
-  attachments: File[];
+  attachments: DraftAttachmentReference[];
   fromEmail?: string;
   scheduleAt?: string;
 };

@@ -16,6 +16,7 @@ import { useEffect } from 'react';
 import { toast } from 'sonner';
 
 import { getReplyComposerDefaults, type ReplyMode } from './reply-composer-defaults';
+import type { DraftAttachmentReference } from '@/modules/mail/model/draft';
 
 interface ReplyComposeProps {
   messageId?: string;
@@ -47,7 +48,7 @@ export default function ReplyCompose({ messageId }: ReplyComposeProps) {
     bcc?: string[];
     subject: string;
     message: string;
-    attachments: File[];
+    attachments: DraftAttachmentReference[];
     fromEmail?: string;
     scheduleAt?: string;
     draftId?: string;
@@ -227,6 +228,7 @@ export default function ReplyCompose({ messageId }: ReplyComposeProps) {
         }
         initialBcc={ensureEmailArray(draft?.bcc ?? latestDraftBcc)}
         initialSubject={draft?.subject ?? latestDraft?.subject ?? composerDefaults.subject}
+        initialAttachments={draft?.attachments ?? []}
         autofocus={true}
         settingsLoading={settingsLoading}
         replyingTo={replyToMessage?.sender.email}

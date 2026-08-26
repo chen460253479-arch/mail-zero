@@ -9,6 +9,11 @@ const attachmentListSource = readFileSync(
   'utf8',
 );
 const createEmailSource = readFileSync(new URL('./create-email.tsx', import.meta.url), 'utf8');
+const useDraftsSource = readFileSync(new URL('../../hooks/use-drafts.ts', import.meta.url), 'utf8');
+const deliverySource = readFileSync(
+  new URL('../../modules/mail/mutations/use-mail-delivery.ts', import.meta.url),
+  'utf8',
+);
 const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 
 describe('email composer attachments', () => {
@@ -25,7 +30,7 @@ describe('email composer attachments', () => {
         .filter((filename) => filename.endsWith('.json'))
         .map((filename) => join(messageDirectory, filename)),
       join(repositoryRoot, 'apps/server/src/lib/schemas.ts'),
-      join(repositoryRoot, 'apps/server/src/db/migrations/0000_big_ultron.sql'),
+      join(repositoryRoot, 'apps/server/src/db/migrations/0000_tiny_karma.sql'),
       join(repositoryRoot, 'apps/server/src/db/migrations/meta/0000_snapshot.json'),
       join(repositoryRoot, 'i18n.lock'),
     ];
@@ -50,21 +55,22 @@ describe('email composer attachments', () => {
     expect(source).toMatch(/disabled=\{[^}]*hasBlockingAttachments/u);
   });
 
-  it('renders the editor while persisted attachments load and blocks only save and send', () => {
-    expect(source).toContain('initialAttachmentsLoading');
-    expect(source).toContain('initialAttachmentsError');
-    expect(source).toContain('<DraftAttachmentLoadingList');
-    expect(attachmentListSource).toContain("m['pages.createEmail.attachmentDownloading']()");
+  it('renders persisted attachment metadata without downloading its bytes', () => {
+    expect(source).not.toContain('initialAttachmentsLoading');
+    expect(source).not.toContain('initialAttachmentsError');
+    expect(source).not.toContain('<DraftAttachmentLoadingList');
+    expect(createEmailSource).toContain('initialAttachments={typedDraft?.attachments ?? []}');
+    expect(attachmentListSource).toContain('item.filename');
+    expect(attachmentListSource).toContain('formatFileSize(item.size)');
     expect(source).toContain('if (hasBlockingAttachments)');
     expect(source).toContain('if (!hasUnsavedChanges || hasBlockingAttachments) return;');
   });
 
-  it('shows persisted attachment metadata before its bytes finish downloading', () => {
-    expect(source).toContain('initialAttachmentDescriptors');
-    expect(createEmailSource).toContain(
-      'initialAttachmentDescriptors={typedDraft?.attachments ?? []}',
-    );
-    expect(attachmentListSource).toContain('attachment.filename');
-    expect(attachmentListSource).toContain('formatFileSize(Number(attachment.size) || 0)');
+  it('does not retain the draft attachment download or client cache path', () => {
+    expect(useDraftsSource).not.toContain('useDraftAttachments');
+    expect(useDraftsSource).not.toContain('DRAFT_ATTACHMENT_CACHE_RETENTION');
+    expect(deliverySource).not.toContain('attachmentBlobIdCache');
+    expect(deliverySource).not.toContain('WeakMap<File');
+    expect(deliverySource).not.toContain('uploadMailBlob');
   });
 });

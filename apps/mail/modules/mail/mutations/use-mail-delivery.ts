@@ -8,10 +8,8 @@ import { buildCancelSubmissionInput, buildSubmissionCreateInput } from './submis
 import { useMailAccountContext } from '../providers/mail-account-provider';
 import { selectDeliveryIdentity, toMailAddresses } from './delivery-input';
 import { useMailIdentities } from '../queries/use-mail-identities';
+import type { DraftAttachmentReference } from '../model/draft';
 import { resolveDeliveryDraft } from './delivery-draft';
-import { uploadMailBlob } from '../api/blob-client';
-
-const attachmentBlobIdCache = new WeakMap<File, string>();
 
 const nextId = (prefix: string) =>
   globalThis.crypto?.randomUUID?.() ??
@@ -25,7 +23,7 @@ export type SaveLocalDraftInput = {
   bcc?: string[];
   subject: string;
   htmlBody: string;
-  attachments?: File[];
+  attachments?: DraftAttachmentReference[];
   fromEmail?: string;
 };
 
@@ -33,14 +31,6 @@ export type SendLocalMessageInput = SaveLocalDraftInput & {
   scheduleAt?: string;
   undoWindowMs: number;
 };
-
-export function rememberMailAttachmentBlob(file: File, blobId: string) {
-  attachmentBlobIdCache.set(file, blobId);
-}
-
-export function getRememberedMailAttachmentBlob(file: File) {
-  return attachmentBlobIdCache.get(file);
-}
 
 export function useMailDelivery() {
   const trpc = useTRPC();
@@ -50,33 +40,12 @@ export function useMailDelivery() {
   const setEmail = useMutation(trpc.mail.email.set.mutationOptions());
   const setSubmission = useMutation(trpc.mail.submission.set.mutationOptions());
 
-  const uploadAttachments = useCallback(
-    async (files: File[]) => {
-      if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
-      return Promise.all(
-        files.map(async (file) => {
-          const existing = attachmentBlobIdCache.get(file);
-          if (existing) return { blobId: existing, filename: file.name };
-          const uploaded = await uploadMailBlob({
-            accountId: account.id,
-            file,
-            backendBaseUrl: import.meta.env.VITE_PUBLIC_BACKEND_URL,
-          });
-          attachmentBlobIdCache.set(file, uploaded.blobId);
-          return { blobId: uploaded.blobId, filename: file.name };
-        }),
-      );
-    },
-    [account],
-  );
-
   const saveDraft = useCallback(
     async (input: SaveLocalDraftInput) => {
       if (!account) throw new Error('MAIL_ACCOUNT_UNAVAILABLE');
       const identity = selectDeliveryIdentity(identities, input.fromEmail);
       if (!identity) throw new Error('MAIL_IDENTITY_UNAVAILABLE');
 
-      const attachmentIds = await uploadAttachments(input.attachments ?? []);
       const content = {
         identityId: identity.id,
         replyToEmailId: input.replyToEmailId ?? null,
@@ -86,7 +55,7 @@ export function useMailDelivery() {
         subject: input.subject,
         textBody: htmlToPlainText(input.htmlBody),
         htmlBody: input.htmlBody,
-        attachments: attachmentIds,
+        attachments: input.attachments ?? [],
       };
 
       if (input.draftId) {
@@ -137,7 +106,7 @@ export function useMailDelivery() {
         identityId: identity.id,
       };
     },
-    [account, identities, setEmail, uploadAttachments],
+    [account, identities, setEmail],
   );
 
   const sendMessage = useCallback(

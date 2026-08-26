@@ -1,8 +1,16 @@
+import type {
+  DraftAttachmentDescriptor,
+  DraftAttachmentReference,
+} from '@/modules/mail/model/draft';
+
 export type AttachmentUploadStatus = 'uploading' | 'uploaded' | 'failed';
 
 export type AttachmentUploadItem = {
   id: string;
-  file: File;
+  file: File | null;
+  filename: string;
+  contentType: string;
+  size: number;
   status: AttachmentUploadStatus;
   progress: number;
   blobId: string | null;
@@ -17,28 +25,35 @@ export type AttachmentUploadAction =
   | { type: 'retry'; id: string }
   | { type: 'remove'; id: string };
 
-export function createAttachmentUploadItem(
-  file: File,
+export function createAttachmentUploadItem(file: File, id: string): AttachmentUploadItem {
+  return {
+    id,
+    file,
+    filename: file.name,
+    contentType: file.type,
+    size: file.size,
+    status: 'uploading',
+    progress: 0,
+    blobId: null,
+    error: null,
+  };
+}
+
+export function createPersistedAttachmentItem(
+  attachment: DraftAttachmentDescriptor,
   id: string,
-  uploadedBlobId?: string,
 ): AttachmentUploadItem {
-  return uploadedBlobId
-    ? {
-        id,
-        file,
-        status: 'uploaded',
-        progress: 100,
-        blobId: uploadedBlobId,
-        error: null,
-      }
-    : {
-        id,
-        file,
-        status: 'uploading',
-        progress: 0,
-        blobId: null,
-        error: null,
-      };
+  return {
+    id,
+    file: null,
+    filename: attachment.filename,
+    contentType: attachment.contentType,
+    size: Number(attachment.size) || 0,
+    status: 'uploaded',
+    progress: 100,
+    blobId: attachment.blobId,
+    error: null,
+  };
 }
 
 export function attachmentUploadReducer(
@@ -86,4 +101,12 @@ export function attachmentUploadReducer(
 
 export function attachmentUploadsBlockSend(items: AttachmentUploadItem[]) {
   return items.some((item) => item.status !== 'uploaded');
+}
+
+export function attachmentReferences(items: AttachmentUploadItem[]): DraftAttachmentReference[] {
+  return items.flatMap((item) =>
+    item.status === 'uploaded' && item.blobId
+      ? [{ blobId: item.blobId, filename: item.filename }]
+      : [],
+  );
 }

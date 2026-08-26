@@ -1,5 +1,15 @@
 import type { Email, EmailAddress } from './email';
 
+export type DraftAttachmentReference = {
+  blobId: string;
+  filename: string;
+};
+
+export type DraftAttachmentDescriptor = DraftAttachmentReference & {
+  contentType: string;
+  size: string;
+};
+
 export type DraftContent = {
   identityId: string;
   replyToEmailId: string | null;
@@ -9,10 +19,7 @@ export type DraftContent = {
   subject: string;
   textBody: string;
   htmlBody: string;
-  attachments: Array<{
-    blobId: string;
-    filename: string;
-  }>;
+  attachments: DraftAttachmentReference[];
 };
 
 export type Draft = Email & {

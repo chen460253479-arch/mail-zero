@@ -36,11 +36,14 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
-import type { DraftAttachmentDescriptor } from '@/modules/mail/queries/download-draft-attachments';
-import { AttachmentUploadList, DraftAttachmentLoadingList } from './attachment-upload-list';
+import type {
+  DraftAttachmentDescriptor,
+  DraftAttachmentReference,
+} from '@/modules/mail/model/draft';
 import { RecipientAutosuggest } from '@/components/ui/recipient-autosuggest';
 import { attachmentUploadsBlockSend } from './attachment-upload-state';
 import { useAttachmentUploads } from './use-attachment-uploads';
+import { AttachmentUploadList } from './attachment-upload-list';
 import { useMailDelivery } from '@/modules/mail';
 import { m } from '@/paraglide/messages';
 
@@ -53,11 +56,7 @@ interface EmailComposerProps {
   initialBcc?: string[];
   initialSubject?: string;
   initialMessage?: string;
-  initialAttachments?: File[];
-  initialAttachmentDescriptors?: DraftAttachmentDescriptor[];
-  initialAttachmentsLoading?: boolean;
-  initialAttachmentsError?: unknown;
-  onRetryInitialAttachments?: () => void;
+  initialAttachments?: DraftAttachmentDescriptor[];
   replyingTo?: string;
   onSendEmail: (data: {
     to: string[];
@@ -65,7 +64,7 @@ interface EmailComposerProps {
     bcc?: string[];
     subject: string;
     message: string;
-    attachments: File[];
+    attachments: DraftAttachmentReference[];
     fromEmail?: string;
     scheduleAt?: string;
     draftId?: string;
@@ -97,10 +96,6 @@ export function EmailComposer({
   initialSubject = '',
   initialMessage = '',
   initialAttachments = [],
-  initialAttachmentDescriptors = [],
-  initialAttachmentsLoading = false,
-  initialAttachmentsError = null,
-  onRetryInitialAttachments,
   onSendEmail,
   onClose,
   className,
@@ -139,8 +134,7 @@ export function EmailComposer({
   }, []);
   const {
     items: attachmentItems,
-    uploadedFiles,
-    hasPendingInitialAttachments,
+    attachments,
     addAttachments,
     removeAttachment,
     retryAttachment,
@@ -148,11 +142,7 @@ export function EmailComposer({
     initialAttachments,
     onAttachmentsChanged,
   });
-  const hasBlockingAttachments =
-    initialAttachmentsLoading ||
-    Boolean(initialAttachmentsError) ||
-    hasPendingInitialAttachments ||
-    attachmentUploadsBlockSend(attachmentItems);
+  const hasBlockingAttachments = attachmentUploadsBlockSend(attachmentItems);
 
   const form = useForm<EmailComposerForm>({
     // @hookform/resolvers and the workspace Zod version expose structurally
@@ -287,7 +277,7 @@ export function EmailComposer({
         bcc: showBcc ? values.bcc : undefined,
         subject: values.subject,
         message: editor.getHTML(),
-        attachments: uploadedFiles,
+        attachments,
         fromEmail: values.fromEmail,
         scheduleAt,
         draftId: savedDraft?.id ?? draftId ?? undefined,
@@ -337,7 +327,7 @@ export function EmailComposer({
         bcc: values.bcc,
         subject: values.subject,
         htmlBody: editor.getHTML(),
-        attachments: uploadedFiles,
+        attachments,
         draftId,
         replyToEmailId: activeReplyId,
         fromEmail: values.fromEmail,
@@ -368,7 +358,7 @@ export function EmailComposer({
     hasUnsavedChanges,
     saveLocalDraft,
     setDraftId,
-    uploadedFiles,
+    attachments,
   ]);
 
   const handleClose = () => {
@@ -610,13 +600,6 @@ export function EmailComposer({
       {/* Bottom Actions */}
       <div className="inline-flex w-full shrink-0 items-end justify-between self-stretch rounded-b-2xl bg-[#FFFFFF] px-3 py-3 outline-white/5 dark:bg-[#202020]">
         <div className="flex w-full flex-col items-start justify-start gap-2">
-          {initialAttachmentsLoading || initialAttachmentsError ? (
-            <DraftAttachmentLoadingList
-              attachments={initialAttachmentDescriptors}
-              error={initialAttachmentsError}
-              onRetry={onRetryInitialAttachments}
-            />
-          ) : null}
           <AttachmentUploadList
             items={attachmentItems}
             onRemove={removeAttachment}

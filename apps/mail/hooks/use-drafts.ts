@@ -1,12 +1,7 @@
-import {
-  downloadDraftAttachments,
-  type DraftAttachmentDescriptor,
-} from '@/modules/mail/queries/download-draft-attachments';
-import { mailQueryKeys, rememberMailAttachmentBlob, useMailAccountContext } from '@/modules/mail';
+import type { DraftAttachmentDescriptor } from '@/modules/mail/model/draft';
+import { mailQueryKeys, useMailAccountContext } from '@/modules/mail';
 import { trpcClient } from '@/providers/query-provider';
 import { useQuery } from '@tanstack/react-query';
-
-const DRAFT_ATTACHMENT_CACHE_RETENTION = 10 * 60_000;
 
 const bodyValue = (
   parts: Array<{ id: string }>,
@@ -71,40 +66,6 @@ export const useDraft = (id: string | null) => {
         bcc: (draft.bcc ?? []).map((address) => address.email),
         attachments,
       };
-    },
-  });
-};
-
-export const useDraftAttachments = (
-  id: string | null,
-  draftRevision: number | null,
-  attachments: DraftAttachmentDescriptor[],
-) => {
-  const { account, status } = useMailAccountContext();
-  const canDownload =
-    status === 'ready' &&
-    Boolean(account && id) &&
-    draftRevision !== null &&
-    attachments.length > 0;
-
-  return useQuery({
-    queryKey: mailQueryKeys.draftAttachments(account?.id ?? '', id ?? '', draftRevision ?? 0),
-    enabled: canDownload,
-    staleTime: Infinity,
-    gcTime: DRAFT_ATTACHMENT_CACHE_RETENTION,
-    meta: { persist: false },
-    queryFn: async ({ signal }) => {
-      if (!account || !id) throw new Error('DRAFT_NOT_FOUND');
-      const downloaded = await downloadDraftAttachments({
-        accountId: account.id,
-        attachments,
-        backendBaseUrl: import.meta.env.VITE_PUBLIC_BACKEND_URL,
-        signal,
-      });
-      for (const { blobId, file } of downloaded) {
-        rememberMailAttachmentBlob(file, blobId);
-      }
-      return downloaded.map(({ file }) => file);
     },
   });
 };

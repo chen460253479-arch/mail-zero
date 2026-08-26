@@ -4,11 +4,14 @@ import { useEmailAliases } from '@/hooks/use-email-aliases';
 import { cleanEmailAddresses } from '@/lib/email-utils';
 import { useUndoSend } from '@/hooks/use-undo-send';
 
-import type { DraftAttachmentDescriptor } from '@/modules/mail/queries/download-draft-attachments';
-import { useDraft, useDraftAttachments } from '@/hooks/use-drafts';
+import type {
+  DraftAttachmentDescriptor,
+  DraftAttachmentReference,
+} from '@/modules/mail/model/draft';
 import { useSettings } from '@/hooks/use-settings';
 import { EmailComposer } from './email-composer';
 import { useSession } from '@/lib/auth-client';
+import { useDraft } from '@/hooks/use-drafts';
 import { useEffect, useState } from 'react';
 
 import { useMailDelivery } from '@/modules/mail';
@@ -83,7 +86,7 @@ export function CreateEmail({
     bcc?: string[];
     subject: string;
     message: string;
-    attachments: File[];
+    attachments: DraftAttachmentReference[];
     fromEmail?: string;
     scheduleAt?: string;
     draftId?: string;
@@ -136,11 +139,6 @@ export function CreateEmail({
 
   // Cast draft to our extended type that includes CC and BCC
   const typedDraft = draft as unknown as DraftType;
-  const draftAttachments = useDraftAttachments(
-    typedDraft?.id ?? null,
-    typedDraft?.draftRevision ?? null,
-    typedDraft?.attachments ?? [],
-  );
 
   const handleDialogClose = (open: boolean) => {
     setIsComposeOpen(open ? 'true' : null);
@@ -148,13 +146,6 @@ export function CreateEmail({
       setDraftId(null);
     }
   };
-
-  const files = draftAttachments.data ?? [];
-  const hasDraftAttachments = (typedDraft?.attachments.length ?? 0) > 0;
-  const areDraftAttachmentsLoading =
-    hasDraftAttachments && !draftAttachments.data && draftAttachments.isFetching;
-  const draftAttachmentsError =
-    hasDraftAttachments && !draftAttachments.data ? draftAttachments.error : null;
 
   return (
     <>
@@ -201,13 +192,7 @@ export function CreateEmail({
                 setIsComposeOpen(null);
                 setDraftId(null);
               }}
-              initialAttachments={files}
-              initialAttachmentDescriptors={typedDraft?.attachments ?? []}
-              initialAttachmentsLoading={areDraftAttachmentsLoading}
-              initialAttachmentsError={draftAttachmentsError}
-              onRetryInitialAttachments={() => {
-                void draftAttachments.refetch();
-              }}
+              initialAttachments={typedDraft?.attachments ?? []}
               initialSubject={typedDraft?.subject || initialSubject}
               autofocus={false}
               settingsLoading={settingsLoading}
