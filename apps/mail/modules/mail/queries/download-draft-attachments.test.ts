@@ -55,4 +55,19 @@ describe('downloadDraftAttachments', () => {
       }),
     ).rejects.toThrow('MAIL_BLOB_DOWNLOAD_FAILED:404');
   });
+
+  it('rejects invalid cached descriptors without issuing a malformed request', async () => {
+    const fetcher = vi.fn<typeof fetch>();
+
+    await expect(
+      downloadDraftAttachments({
+        accountId: 'account-1',
+        attachments: [{ blobId: undefined, filename: undefined }] as never,
+        backendBaseUrl: 'https://mail.example.test',
+        fetcher,
+      }),
+    ).rejects.toThrow('INVALID_DRAFT_ATTACHMENT_DESCRIPTOR');
+
+    expect(fetcher).not.toHaveBeenCalled();
+  });
 });

@@ -25,6 +25,18 @@ export async function downloadDraftAttachments({
   signal?: AbortSignal;
   fetcher?: typeof fetch;
 }): Promise<DownloadedDraftAttachment[]> {
+  for (const attachment of attachments) {
+    if (
+      !attachment ||
+      typeof attachment.blobId !== 'string' ||
+      attachment.blobId.length === 0 ||
+      typeof attachment.filename !== 'string' ||
+      attachment.filename.length === 0
+    ) {
+      throw new Error('INVALID_DRAFT_ATTACHMENT_DESCRIPTOR');
+    }
+  }
+
   return Promise.all(
     attachments.map(async (attachment) => {
       const response = await fetcher(

@@ -16,7 +16,9 @@ export const useDraft = (id: string | null) => {
   return useQuery({
     queryKey: mailQueryKeys.email(account?.id ?? '', id ?? ''),
     enabled: status === 'ready' && Boolean(account && id),
-    staleTime: 60 * 60_000,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
     queryFn: async () => {
       if (!account || !id) throw new Error('DRAFT_NOT_FOUND');
       const result = await trpcClient.mail.email.get.query({
@@ -86,7 +88,9 @@ export const useDraftAttachments = (
   return useQuery({
     queryKey: mailQueryKeys.draftAttachments(account?.id ?? '', id ?? '', draftRevision ?? 0),
     enabled: canDownload,
-    staleTime: 60 * 60_000,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
     queryFn: async ({ signal }) => {
       if (!account || !id) throw new Error('DRAFT_NOT_FOUND');
       const downloaded = await downloadDraftAttachments({

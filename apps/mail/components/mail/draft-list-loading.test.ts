@@ -20,4 +20,25 @@ describe('draft list loading', () => {
     expect(baseDraftHook).not.toContain('buildBlobDownloadUrl');
     expect(baseDraftHook).not.toContain('new File(');
   });
+
+  it('always fetches draft details when the editor is opened', () => {
+    const baseDraftHook = draftHookSource.slice(
+      0,
+      draftHookSource.indexOf('export const useDraftAttachments'),
+    );
+    expect(baseDraftHook).toContain('staleTime: 0');
+    expect(baseDraftHook).toContain('gcTime: 0');
+    expect(baseDraftHook).toContain("refetchOnMount: 'always'");
+    expect(baseDraftHook).not.toContain('staleTime: 60 * 60_000');
+  });
+
+  it('always downloads attachments when the draft editor is opened', () => {
+    const attachmentHook = draftHookSource.slice(
+      draftHookSource.indexOf('export const useDraftAttachments'),
+    );
+    expect(attachmentHook).toContain('staleTime: 0');
+    expect(attachmentHook).toContain('gcTime: 0');
+    expect(attachmentHook).toContain("refetchOnMount: 'always'");
+    expect(attachmentHook).not.toContain('staleTime: 60 * 60_000');
+  });
 });
