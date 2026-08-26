@@ -118,6 +118,7 @@ const createHarness = (
     },
     clock: { now: () => new Date('2026-01-01T00:00:10.000Z') },
     jitter: () => 0,
+    logger: { error: vi.fn() },
     finalizeAccepted: vi.fn(),
     finalizeFailed: vi.fn(),
   };
@@ -162,6 +163,22 @@ describe('provider-neutral outbound delivery', () => {
     } as never);
 
     await expect(deliverClaimed(claimed, h.dependencies as never)).resolves.toBe(expected);
+    expect(h.dependencies.logger.error).toHaveBeenCalledWith(
+      'mail.outbound.delivery_failed',
+      expect.objectContaining({
+        provider: 'outlook',
+        accountId: 'account-1',
+        connectionId: 'connection-1',
+        submissionId: 'submission-1',
+        deliveryId: 'delivery-1',
+        attemptKind: 'send',
+        attemptNumber: 1,
+        outcome: expected,
+        classification: kind,
+        providerCode: 'SAFE_CODE',
+        errorMessage: 'provider secret',
+      }),
+    );
     if (kind === 'temporary_failure' || kind === 'authentication_required') {
       expect(h.outbound.scheduleRetry).toHaveBeenCalledOnce();
     }

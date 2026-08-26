@@ -11,6 +11,11 @@ import { nextOutboundRetryAt } from '../domain/retry-policy';
 import type { FinalizeFailedInput } from './finalize-failed';
 import type { FinalizeAcceptedInput } from './finalize-sent';
 import type { ClaimedDelivery } from '../domain/delivery';
+import { outboundFailureLogDetails } from './failure-log';
+
+type OutboundDeliveryLogger = {
+  error(event: string, fields: Readonly<Record<string, unknown>>): void;
+};
 
 export type DeliverDependencies = {
   unitOfWork: MailOutboundUnitOfWork;
@@ -20,6 +25,7 @@ export type DeliverDependencies = {
   connectionState: OutboundConnectionStatePort;
   clock: { now(): Date };
   jitter(): number;
+  logger?: OutboundDeliveryLogger;
   finalizeAccepted(input: FinalizeAcceptedInput): Promise<void>;
   finalizeFailed(input: FinalizeFailedInput): Promise<void>;
 };
@@ -69,6 +75,28 @@ export const deliverClaimed = async (
   } catch (error) {
     const classification = adapter.classifyError(error);
     const now = dependencies.clock.now();
+    const logFailure = (
+      outcome: 'retry_wait' | 'uncertain' | 'failed',
+      retryAt: Date | null = null,
+    ) =>
+      dependencies.logger?.error('mail.outbound.delivery_failed', {
+        provider: adapter.provider,
+        accountId: snapshot.delivery.mailAccountId,
+        connectionId: snapshot.delivery.connectionId,
+        submissionId: snapshot.delivery.submissionId,
+        deliveryId: snapshot.delivery.id,
+        attemptKind: claimed.attemptKind,
+        attemptNumber: claimed.attemptNumber,
+        outcome,
+        retryAt,
+        classification: classification.kind,
+        providerCode: classification.providerCode,
+        safeResponse: classification.safeResponse,
+        rawSizeBytes: snapshot.raw.sizeBytes,
+        recipientCount:
+          snapshot.envelope.to.length + snapshot.envelope.cc.length + snapshot.envelope.bcc.length,
+        ...outboundFailureLogDetails(error),
+      });
     if (classification.kind === 'authentication_required') {
       await dependencies.connectionState.markAuthenticationRequired(snapshot.delivery.connectionId);
     }
@@ -90,6 +118,7 @@ export const deliverClaimed = async (
             error: classification,
           }),
         );
+        logFailure('retry_wait', retryAt);
         return 'retry_wait';
       }
     }
@@ -102,6 +131,7 @@ export const deliverClaimed = async (
           error: classification,
         }),
       );
+      logFailure('uncertain');
       return 'uncertain';
     }
     await dependencies.finalizeFailed({
@@ -109,6 +139,7 @@ export const deliverClaimed = async (
       classification,
       failedAt: now,
     });
+    logFailure('failed');
     return 'failed';
   }
 

@@ -73,6 +73,7 @@ export type CreateMailOutboundRuntimeDependencies = {
   leaseForMs: number;
   scanLimit: number;
   jitter(): number;
+  logger?: DeliverDependencies['logger'];
   onWakeupError?(error: unknown): void;
   operations?: Partial<RuntimeOperations>;
 };
@@ -207,6 +208,7 @@ export const createMailOutboundRuntime = (
         connectionState: dependencies.connectionState,
         clock: dependencies.clock,
         jitter: dependencies.jitter,
+        logger: dependencies.logger,
         finalizeAccepted,
         finalizeFailed,
       });

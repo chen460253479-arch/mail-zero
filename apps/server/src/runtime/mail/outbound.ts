@@ -19,6 +19,7 @@ import { createMailChannelRegistry } from '../../mail-channel/registry';
 import { createImapSmtpPluginForEnvironment } from './protocol-channel';
 import { createGmailPlugin } from '../../mail-channel/gmail/plugin';
 import { createZohoMailPlugin } from '../../mail-channel/zoho-mail';
+import type { Logger } from '../../infrastructure/logging/logger';
 import { createOutlookPlugin } from '../../mail-channel/outlook';
 import { preprocessEmailHtml } from '../../lib/email-processor';
 import type { MailTaskQueuePort } from './task-queue';
@@ -30,6 +31,7 @@ const OUTBOUND_SCAN_LIMIT = 100;
 export type MailOutboundRuntimeResources = MailCredentialRuntimeResources & {
   blobStore: BlobStore;
   taskQueue: MailTaskQueuePort;
+  logger?: Pick<Logger, 'error'>;
 };
 
 export const createMailOutboundRuntimeForEnvironment = (
@@ -136,6 +138,7 @@ export const createMailOutboundRuntimeForEnvironment = (
     leaseForMs: OUTBOUND_LEASE_MS,
     scanLimit: OUTBOUND_SCAN_LIMIT,
     jitter: Math.random,
+    logger: resources.logger,
     onWakeupError: (error) => console.error('[MAIL_OUTBOUND] wakeup failed', error),
   });
 };
