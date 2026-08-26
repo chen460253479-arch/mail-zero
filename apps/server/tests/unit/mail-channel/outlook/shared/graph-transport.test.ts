@@ -10,7 +10,7 @@ const credential = {
 };
 
 describe('Microsoft Graph transport', () => {
-  it('applies a bounded request timeout', async () => {
+  it('does not abort an in-flight provider request', async () => {
     const fetcher = vi.fn(async () =>
       Response.json({
         value: [],
@@ -25,9 +25,7 @@ describe('Microsoft Graph transport', () => {
 
     expect(fetcher).toHaveBeenCalledWith(
       'https://graph.microsoft.com/v1.0/me/messages',
-      expect.objectContaining({
-        signal: expect.any(AbortSignal),
-      }),
+      expect.not.objectContaining({ signal: expect.anything() }),
     );
   });
 

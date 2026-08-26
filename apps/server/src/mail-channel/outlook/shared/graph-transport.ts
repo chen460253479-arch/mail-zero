@@ -20,7 +20,6 @@ export interface MicrosoftGraphTransport {
 }
 
 const MAX_PROVIDER_RESPONSE_BYTES = 32 * 1024 * 1024;
-const REQUEST_TIMEOUT_MS = 30_000;
 
 const readResponseBody = async (
   response: Response,
@@ -63,7 +62,6 @@ export const createMicrosoftGraphTransport = (
           ...headers,
         },
         ...(body === undefined ? {} : { body }),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
       const { bytes, json } = await readResponseBody(response);
       if (!response.ok) {

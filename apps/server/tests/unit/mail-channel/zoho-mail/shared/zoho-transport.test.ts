@@ -10,7 +10,7 @@ const credential = {
 };
 
 describe('Zoho Mail transport', () => {
-  it('applies a bounded request timeout', async () => {
+  it('does not abort an in-flight provider request', async () => {
     const fetcher = vi.fn(async () =>
       Response.json({
         status: { code: 200 },
@@ -26,9 +26,7 @@ describe('Zoho Mail transport', () => {
 
     expect(fetcher).toHaveBeenCalledWith(
       new URL('https://mail.zoho.com/api/accounts'),
-      expect.objectContaining({
-        signal: expect.any(AbortSignal),
-      }),
+      expect.not.objectContaining({ signal: expect.anything() }),
     );
   });
 
