@@ -18,9 +18,9 @@ import {
   type SmtpSendRequest,
   type SmtpSendResponse,
 } from '../shared/contracts';
+import { sendSmtpMessage, verifySmtpConnection, type SmtpDiagnosticLogger } from './smtp/client';
 import { discoverImapMessages, establishImapBaseline, fetchImapRawMessage } from './imap/client';
 import { classifyMailProtocolError, MailProtocolOperationError } from '../shared/errors';
-import { sendSmtpMessage, verifySmtpConnection } from './smtp/client';
 
 export interface ImapSmtpProtocolExecutor {
   verify(input: ProtocolVerifyRequest): Promise<ProtocolVerifyResponse>;
@@ -47,6 +47,7 @@ const execute = async <T>(operation: ProtocolOperation, run: () => Promise<T>): 
 
 export const createImapSmtpProtocolExecutor = (input: {
   allowedHosts?: string;
+  logger?: SmtpDiagnosticLogger;
 }): ImapSmtpProtocolExecutor => ({
   verify: async (value) =>
     await execute('verify', async () => {
@@ -80,6 +81,6 @@ export const createImapSmtpProtocolExecutor = (input: {
   send: async (value) =>
     await execute('smtp_send', async () => {
       const request = parseSmtpSendRequest(value);
-      return await sendSmtpMessage(request, input.allowedHosts);
+      return await sendSmtpMessage(request, input.allowedHosts, input.logger);
     }),
 });

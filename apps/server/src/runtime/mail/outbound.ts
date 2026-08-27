@@ -31,7 +31,7 @@ const OUTBOUND_SCAN_LIMIT = 100;
 export type MailOutboundRuntimeResources = MailCredentialRuntimeResources & {
   blobStore: BlobStore;
   taskQueue: MailTaskQueuePort;
-  logger?: Pick<Logger, 'error'>;
+  logger?: Pick<Logger, 'info' | 'error'>;
 };
 
 export const createMailOutboundRuntimeForEnvironment = (
@@ -112,7 +112,7 @@ export const createMailOutboundRuntimeForEnvironment = (
         return await createCredentialAwareZohoMailClient(db, await getContext(connectionId));
       },
     }),
-    createImapSmtpPluginForEnvironment(runtimeEnv),
+    createImapSmtpPluginForEnvironment(runtimeEnv, resources.logger),
   ]);
   const taskQueue = resources.taskQueue;
 
