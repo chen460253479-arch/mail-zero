@@ -85,7 +85,6 @@ export const deliverClaimed = async (
         connectionId: snapshot.delivery.connectionId,
         submissionId: snapshot.delivery.submissionId,
         deliveryId: snapshot.delivery.id,
-        messageId: snapshot.messageId,
         attemptKind: claimed.attemptKind,
         attemptNumber: claimed.attemptNumber,
         outcome,

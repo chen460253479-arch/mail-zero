@@ -1,4 +1,3 @@
-import { format } from 'node:util';
 import { isIP } from 'node:net';
 
 import {
@@ -11,172 +10,6 @@ import { classifyMailProtocolError, MailProtocolOperationError } from '../../sha
 import { resolveMailEndpoint } from '../network';
 
 const MAX_RAW_MESSAGE_BYTES = 25 * 1024 * 1024;
-
-export type SmtpDiagnosticLogger = {
-  info(event: string, fields?: Readonly<Record<string, unknown>>): void;
-  error(event: string, fields?: Readonly<Record<string, unknown>>): void;
-};
-
-type SmtpPhase =
-  | 'preparing_message'
-  | 'resolving_endpoint'
-  | 'connecting'
-  | 'connected'
-  | 'smtp_greeting_received'
-  | 'smtp_handshake'
-  | 'authenticating'
-  | 'authenticated'
-  | 'mail_from'
-  | 'rcpt_to'
-  | 'awaiting_data_response'
-  | 'streaming_message'
-  | 'awaiting_provider_response'
-  | 'completed';
-
-type SmtpDiagnostics = {
-  logger: SmtpDiagnosticLogger;
-  messageId: string;
-  rawSizeBytes: number;
-  rcptCount: number;
-  startedAt: number;
-  smtpHost: string;
-  smtpAddress: string | null;
-  smtpPort: number;
-  smtpSecure: boolean;
-  phase: SmtpPhase;
-  failurePhase: SmtpPhase | null;
-  lastClientCommand: string | null;
-  lastServerResponse: string | null;
-};
-
-type NodemailerLogEntry = Record<string, unknown>;
-type NodemailerLogMethod = (entry: NodemailerLogEntry, message: string, ...args: unknown[]) => void;
-
-const stringField = (record: Record<string, unknown>, key: string): string | null => {
-  const value = record[key];
-  return typeof value === 'string' && value.length > 0 ? value : null;
-};
-
-const integerField = (record: Record<string, unknown>, key: string): number | null => {
-  const raw = record[key];
-  if (raw === null || raw === undefined || raw === '') return null;
-  const value = Number(raw);
-  return Number.isInteger(value) ? value : null;
-};
-
-const errorFields = (error: unknown): Readonly<Record<string, unknown>> => {
-  const record =
-    typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : {};
-  return {
-    errorName: stringField(record, 'name'),
-    errorCode: stringField(record, 'code'),
-    errorMessage: stringField(record, 'message') ?? String(error),
-    errorStack: stringField(record, 'stack'),
-    smtpCommand: stringField(record, 'command'),
-    smtpResponseCode: integerField(record, 'responseCode'),
-    smtpResponse: stringField(record, 'response'),
-  };
-};
-
-const diagnosticFields = (diagnostics: SmtpDiagnostics): Readonly<Record<string, unknown>> => ({
-  messageId: diagnostics.messageId,
-  smtpHost: diagnostics.smtpHost,
-  smtpAddress: diagnostics.smtpAddress,
-  smtpPort: diagnostics.smtpPort,
-  smtpSecure: diagnostics.smtpSecure,
-  smtpPhase: diagnostics.failurePhase ?? diagnostics.phase,
-  lastClientCommand: diagnostics.lastClientCommand,
-  lastServerResponse: diagnostics.lastServerResponse,
-  rawSizeBytes: diagnostics.rawSizeBytes,
-  rcptCount: diagnostics.rcptCount,
-  elapsedMs: Date.now() - diagnostics.startedAt,
-  connectionTimeoutMs: 15_000,
-  greetingTimeoutMs: 15_000,
-  socketTimeoutMs: 300_000,
-});
-
-const clientPhase = (command: string, current: SmtpPhase): SmtpPhase => {
-  const normalized = command.trimStart().toUpperCase();
-  if (normalized.startsWith('EHLO ') || normalized.startsWith('HELO ')) return 'smtp_handshake';
-  if (normalized.startsWith('MAIL FROM:')) return 'mail_from';
-  if (normalized.startsWith('RCPT TO:')) return 'rcpt_to';
-  if (normalized === 'DATA') return 'awaiting_data_response';
-  if (normalized.startsWith('AUTH ') || current === 'authenticating') return 'authenticating';
-  return current;
-};
-
-const updateProtocolState = (
-  diagnostics: SmtpDiagnostics,
-  level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal',
-  entry: NodemailerLogEntry,
-  protocolMessage: string,
-): void => {
-  const transaction = stringField(entry, 'tnx');
-  if (transaction === 'network' && stringField(entry, 'remoteAddress') !== null) {
-    diagnostics.phase = 'connected';
-  } else if (transaction === 'server') {
-    diagnostics.lastServerResponse = protocolMessage;
-    if (diagnostics.phase === 'connected' && protocolMessage.startsWith('220')) {
-      diagnostics.phase = 'smtp_greeting_received';
-    } else if (
-      diagnostics.phase === 'awaiting_data_response' &&
-      protocolMessage.startsWith('354')
-    ) {
-      diagnostics.phase = 'streaming_message';
-    }
-  } else if (transaction === 'client') {
-    diagnostics.lastClientCommand = protocolMessage;
-    diagnostics.phase = clientPhase(protocolMessage, diagnostics.phase);
-  } else if (transaction === 'smtp' && stringField(entry, 'action') === 'authenticated') {
-    diagnostics.phase = 'authenticated';
-  } else if (transaction === 'message' && integerField(entry, 'outByteCount') !== null) {
-    diagnostics.phase = 'awaiting_provider_response';
-  }
-  if (
-    (level === 'warn' || level === 'error' || level === 'fatal') &&
-    diagnostics.failurePhase === null
-  ) {
-    diagnostics.failurePhase = diagnostics.phase;
-  }
-};
-
-const createNodemailerLogger = (diagnostics: SmtpDiagnostics) => {
-  const write = (
-    level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal',
-    entry: NodemailerLogEntry,
-    message: string,
-    args: unknown[],
-  ): void => {
-    const protocolMessage = format(message, ...args);
-    updateProtocolState(diagnostics, level, entry, protocolMessage);
-    const fields = {
-      ...diagnosticFields(diagnostics),
-      nodemailerLevel: level,
-      nodemailerComponent: stringField(entry, 'component'),
-      smtpSessionId: stringField(entry, 'sid'),
-      smtpTransaction: stringField(entry, 'tnx'),
-      protocolMessage,
-      protocolDetails: entry,
-    };
-    if (level === 'warn' || level === 'error' || level === 'fatal') {
-      diagnostics.logger.error('mail.smtp.protocol_error', fields);
-      return;
-    }
-    diagnostics.logger.info('mail.smtp.protocol_trace', fields);
-  };
-  const method =
-    (level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'): NodemailerLogMethod =>
-    (entry, message, ...args) =>
-      write(level, entry, message, args);
-  return {
-    trace: method('trace'),
-    debug: method('debug'),
-    info: method('info'),
-    warn: method('warn'),
-    error: method('error'),
-    fatal: method('fatal'),
-  };
-};
 
 type SmtpTransport = {
   verify(): Promise<true>;
@@ -191,15 +24,8 @@ type SmtpTransport = {
 const createTransport = async (
   credential: ImapSmtpCredentialInput,
   allowedHosts: string | undefined,
-  diagnostics?: SmtpDiagnostics,
 ): Promise<SmtpTransport> => {
-  if (diagnostics !== undefined) diagnostics.phase = 'resolving_endpoint';
   const endpoint = await resolveMailEndpoint(credential.smtp, allowedHosts);
-  if (diagnostics !== undefined) {
-    diagnostics.smtpAddress = endpoint.address;
-    diagnostics.phase = 'connecting';
-    diagnostics.logger.info('mail.smtp.endpoint_resolved', diagnosticFields(diagnostics));
-  }
   const module = await import('nodemailer');
   return module.default.createTransport({
     host: endpoint.address,
@@ -213,12 +39,6 @@ const createTransport = async (
     connectionTimeout: 15_000,
     greetingTimeout: 15_000,
     socketTimeout: 300_000,
-    ...(diagnostics === undefined
-      ? {}
-      : {
-          logger: createNodemailerLogger(diagnostics),
-          transactionLog: true,
-        }),
     tls: {
       rejectUnauthorized: true,
       servername: isIP(endpoint.originalHost) === 0 ? endpoint.originalHost : undefined,
@@ -271,30 +91,10 @@ const responseCode = (response: string | undefined): number => {
 export const sendSmtpMessage = async (
   request: SmtpSendRequest,
   allowedHosts: string | undefined,
-  logger?: SmtpDiagnosticLogger,
 ): Promise<SmtpSendResponse> => {
   let transport: SmtpTransport | null = null;
-  const raw = Buffer.from(request.rawMimeBase64, 'base64');
-  const diagnostics: SmtpDiagnostics | undefined =
-    logger === undefined
-      ? undefined
-      : {
-          logger,
-          messageId: request.messageId,
-          rawSizeBytes: raw.byteLength,
-          rcptCount: request.envelope.to.length,
-          startedAt: Date.now(),
-          smtpHost: request.credential.smtp.host,
-          smtpAddress: null,
-          smtpPort: request.credential.smtp.port,
-          smtpSecure: request.credential.smtp.secure,
-          phase: 'preparing_message',
-          failurePhase: null,
-          lastClientCommand: null,
-          lastServerResponse: null,
-        };
   try {
-    diagnostics?.logger.info('mail.smtp.send_started', diagnosticFields(diagnostics));
+    const raw = Buffer.from(request.rawMimeBase64, 'base64');
     if (
       raw.byteLength === 0 ||
       raw.byteLength > MAX_RAW_MESSAGE_BYTES ||
@@ -302,7 +102,7 @@ export const sendSmtpMessage = async (
     ) {
       throw new MailProtocolOperationError('SMTP_INVALID_MIME', 'permanent');
     }
-    transport = await createTransport(request.credential, allowedHosts, diagnostics);
+    transport = await createTransport(request.credential, allowedHosts);
     const result = await transport.sendMail({
       envelope: request.envelope,
       raw,
@@ -315,29 +115,13 @@ export const sendSmtpMessage = async (
         accepted > 0 ? 'uncertain' : 'permanent',
       );
     }
-    const response = parseSmtpSendResponse({
+    return parseSmtpSendResponse({
       accepted: true,
       responseCode: responseCode(result.response),
       providerResponse: typeof result.response === 'string' ? result.response.slice(0, 512) : null,
     });
-    if (diagnostics !== undefined) {
-      diagnostics.phase = 'completed';
-      diagnostics.logger.info('mail.smtp.send_succeeded', {
-        ...diagnosticFields(diagnostics),
-        smtpResponseCode: response.responseCode,
-        smtpResponse: response.providerResponse,
-      });
-    }
-    return response;
   } catch (error) {
-    const classified = classifyMailProtocolError(error, 'smtp_send');
-    diagnostics?.logger.error('mail.smtp.send_failed', {
-      ...diagnosticFields(diagnostics),
-      ...errorFields(error),
-      classification: classified.classification,
-      providerCode: classified.code,
-    });
-    throw classified;
+    throw classifyMailProtocolError(error, 'smtp_send');
   } finally {
     transport?.close();
   }

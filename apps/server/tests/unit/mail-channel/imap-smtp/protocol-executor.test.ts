@@ -76,10 +76,8 @@ beforeEach(() => {
 describe('ImapSmtpProtocolExecutor', () => {
   it('parses and forwards every real protocol request without using HTTP', async () => {
     const requestFetch = vi.spyOn(globalThis, 'fetch');
-    const logger = { info: vi.fn(), error: vi.fn() };
     const executor = createImapSmtpProtocolExecutor({
       allowedHosts: 'imap.example.test,smtp.example.test',
-      logger,
     });
     const discoverRequest = {
       credential,
@@ -150,7 +148,6 @@ describe('ImapSmtpProtocolExecutor', () => {
         messageId: '<message-7@example.test>',
       },
       'imap.example.test,smtp.example.test',
-      logger,
     );
     expect(requestFetch).not.toHaveBeenCalled();
     requestFetch.mockRestore();
