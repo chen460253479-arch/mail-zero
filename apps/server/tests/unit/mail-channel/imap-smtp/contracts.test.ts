@@ -89,4 +89,34 @@ describe('IMAP/SMTP protocol contracts', () => {
       }),
     ).toThrow();
   });
+
+  it('validates a 13.43 MiB SMTP MIME payload without overflowing the call stack', () => {
+    const rawMimeBase64 = Buffer.alloc(14_087_341).toString('base64');
+
+    expect(
+      parseSmtpSendRequest({
+        credential,
+        envelope: {
+          from: 'user@example.test',
+          to: ['recipient@example.test'],
+        },
+        rawMimeBase64,
+        messageId: '<large-message@example.test>',
+      }).rawMimeBase64.length,
+    ).toBe(rawMimeBase64.length);
+  });
+
+  it.each(['AQI*', 'A=ID', 'AQI==='])('rejects invalid Base64 MIME payload %s', (rawMimeBase64) => {
+    expect(() =>
+      parseSmtpSendRequest({
+        credential,
+        envelope: {
+          from: 'user@example.test',
+          to: ['recipient@example.test'],
+        },
+        rawMimeBase64,
+        messageId: '<message@example.test>',
+      }),
+    ).toThrow('Invalid Base64 MIME payload');
+  });
 });

@@ -39,11 +39,32 @@ const messageIdSchema = z
   .min(3)
   .max(998)
   .regex(/^<[^\u0000-\u0020\u007f<>]+>$/u);
+
+const isBase64Character = (code: number): boolean =>
+  (code >= 0x41 && code <= 0x5a) ||
+  (code >= 0x61 && code <= 0x7a) ||
+  (code >= 0x30 && code <= 0x39) ||
+  code === 0x2b ||
+  code === 0x2f;
+
+export const isValidBase64 = (value: string): boolean => {
+  if (value.length === 0 || value.length % 4 !== 0) return false;
+  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0;
+  const contentLength = value.length - padding;
+  for (let index = 0; index < contentLength; index += 1) {
+    if (!isBase64Character(value.charCodeAt(index))) return false;
+  }
+  for (let index = contentLength; index < value.length; index += 1) {
+    if (value.charCodeAt(index) !== 0x3d) return false;
+  }
+  return true;
+};
+
 const rawMimeBase64Schema = z
   .string()
   .min(1)
   .max(MAX_RAW_BASE64_LENGTH)
-  .regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u);
+  .refine(isValidBase64, { message: 'Invalid Base64 MIME payload' });
 
 export const imapBaselineRequestSchema = z
   .object({
