@@ -92,7 +92,7 @@ const diagnosticFields = (diagnostics: SmtpDiagnostics): Readonly<Record<string,
   elapsedMs: Date.now() - diagnostics.startedAt,
   connectionTimeoutMs: 15_000,
   greetingTimeoutMs: 15_000,
-  socketTimeoutMs: 30_000,
+  socketTimeoutMs: 300_000,
 });
 
 const clientPhase = (command: string, current: SmtpPhase): SmtpPhase => {
@@ -212,7 +212,7 @@ const createTransport = async (
     },
     connectionTimeout: 15_000,
     greetingTimeout: 15_000,
-    socketTimeout: 30_000,
+    socketTimeout: 300_000,
     ...(diagnostics === undefined
       ? {}
       : {

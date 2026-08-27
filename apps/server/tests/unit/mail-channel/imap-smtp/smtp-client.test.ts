@@ -129,7 +129,7 @@ describe('SMTP client diagnostics', () => {
       expect.objectContaining({
         connectionTimeout: 15_000,
         greetingTimeout: 15_000,
-        socketTimeout: 30_000,
+        socketTimeout: 300_000,
         transactionLog: true,
       }),
     );
