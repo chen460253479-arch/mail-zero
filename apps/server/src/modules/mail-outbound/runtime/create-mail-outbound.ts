@@ -73,7 +73,7 @@ export type CreateMailOutboundRuntimeDependencies = {
   leaseForMs: number;
   scanLimit: number;
   jitter(): number;
-  logger?: DeliverDependencies['logger'];
+  logger?: ReconcileUncertainDependencies['logger'];
   onWakeupError?(error: unknown): void;
   operations?: Partial<RuntimeOperations>;
 };
@@ -185,6 +185,7 @@ export const createMailOutboundRuntime = (
             clock: dependencies.clock,
             jitter: dependencies.jitter,
             finalizeAccepted,
+            logger: dependencies.logger,
           } satisfies ReconcileUncertainDependencies,
         );
         return;

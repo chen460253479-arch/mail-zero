@@ -31,7 +31,7 @@ const OUTBOUND_SCAN_LIMIT = 100;
 export type MailOutboundRuntimeResources = MailCredentialRuntimeResources & {
   blobStore: BlobStore;
   taskQueue: MailTaskQueuePort;
-  logger?: Pick<Logger, 'error'>;
+  logger?: Pick<Logger, 'debug' | 'info' | 'warn' | 'error'>;
 };
 
 export const createMailOutboundRuntimeForEnvironment = (

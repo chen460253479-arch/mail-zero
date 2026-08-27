@@ -79,6 +79,12 @@ const createHarness = (
     classifyError: vi.fn(),
     ...(reconcile === undefined ? {} : { reconcile }),
   };
+  const logger = {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  };
   const dependencies = {
     unitOfWork: {
       run: async <Result>(
@@ -100,8 +106,9 @@ const createHarness = (
     clock: { now: () => new Date('2026-01-01T00:00:10.000Z') },
     jitter: () => 0,
     finalizeAccepted: vi.fn(),
+    logger,
   };
-  return { adapter, current, dependencies, outbound, send };
+  return { adapter, current, dependencies, logger, outbound, send };
 };
 
 describe('reconcileUncertainDelivery', () => {
@@ -129,6 +136,15 @@ describe('reconcileUncertainDelivery', () => {
       provider: 'gmail',
       accepted,
     });
+    expect(h.logger.info).toHaveBeenCalledWith(
+      'mail.outbound.reconciliation_succeeded',
+      expect.objectContaining({
+        deliveryId: 'delivery-1',
+        submissionId: 'submission-1',
+        reconciliationCount: 1,
+        provider: 'gmail',
+      }),
+    );
     expect(h.send).not.toHaveBeenCalled();
   });
 
@@ -169,6 +185,16 @@ describe('reconcileUncertainDelivery', () => {
       ),
     ).resolves.toBe('retry_wait');
     expect(inconclusive.outbound.scheduleReconciliation).toHaveBeenCalledOnce();
+    expect(inconclusive.logger.error).toHaveBeenCalledWith(
+      'mail.outbound.reconciliation_inconclusive',
+      expect.objectContaining({
+        deliveryId: 'delivery-1',
+        reconciliationCount: 1,
+        provider: 'gmail',
+        action: 'reconciliation_rescheduled',
+        retryAt: new Date('2026-01-01T00:00:40.000Z'),
+      }),
+    );
 
     const unsupported = createHarness(1, undefined);
     await expect(
@@ -177,6 +203,14 @@ describe('reconcileUncertainDelivery', () => {
         unsupported.dependencies as never,
       ),
     ).resolves.toBe('unsupported');
+    expect(unsupported.logger.warn).toHaveBeenCalledWith(
+      'mail.outbound.reconciliation_unsupported',
+      expect.objectContaining({
+        deliveryId: 'delivery-1',
+        provider: 'gmail',
+        action: 'resend_scheduled',
+      }),
+    );
     expect(unsupported.send).not.toHaveBeenCalled();
   });
 });

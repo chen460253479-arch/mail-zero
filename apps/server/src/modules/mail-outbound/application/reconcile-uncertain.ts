@@ -1,8 +1,19 @@
 import type { OutboundConnectionStatePort, OutboundCredentialResolver } from '../domain/ports';
+import type { OutboundMailAdapter } from '../../../mail-channel/contracts';
 import type { MailChannelRegistry } from '../../../mail-channel/registry';
 import type { MailOutboundUnitOfWork } from '../postgres/unit-of-work';
+import type { OutboundMessageSnapshot } from '../postgres/repository';
 import { nextOutboundRetryAt } from '../domain/retry-policy';
 import type { FinalizeAcceptedInput } from './finalize-sent';
+import type { ClaimedDelivery } from '../domain/delivery';
+import { outboundFailureLogDetails } from './failure-log';
+
+type ReconciliationLogger = {
+  debug(event: string, fields: Readonly<Record<string, unknown>>): void;
+  info(event: string, fields: Readonly<Record<string, unknown>>): void;
+  warn(event: string, fields: Readonly<Record<string, unknown>>): void;
+  error(event: string, fields: Readonly<Record<string, unknown>>): void;
+};
 
 export type ReconcileUncertainDependencies = {
   unitOfWork: MailOutboundUnitOfWork;
@@ -12,6 +23,7 @@ export type ReconcileUncertainDependencies = {
   clock: { now(): Date };
   jitter(): number;
   finalizeAccepted(input: FinalizeAcceptedInput): Promise<void>;
+  logger?: ReconciliationLogger;
 };
 
 const reconciliationRetryAt = (
@@ -33,27 +45,69 @@ export const reconcileUncertainDelivery = async (
   dependencies: ReconcileUncertainDependencies,
 ): Promise<'sent' | 'not_found' | 'retry_wait' | 'unsupported'> => {
   const now = dependencies.clock.now();
-  const claimed = await dependencies.unitOfWork.run((tx) =>
-    tx.outbound.claimById({
-      ...input,
-      attemptKind: 'reconcile',
-      now,
-    }),
-  );
+  let stage = 'claiming';
+  dependencies.logger?.info('mail.outbound.reconciliation_started', {
+    deliveryId: input.deliveryId,
+    startedAt: now,
+  });
+  let claimed: ClaimedDelivery | null;
+  try {
+    claimed = await dependencies.unitOfWork.run((tx) =>
+      tx.outbound.claimById({
+        ...input,
+        attemptKind: 'reconcile',
+        now,
+      }),
+    );
+  } catch (error) {
+    dependencies.logger?.error('mail.outbound.reconciliation_failed', {
+      deliveryId: input.deliveryId,
+      stage,
+      ...outboundFailureLogDetails(error),
+    });
+    throw error;
+  }
   if (claimed === null) {
+    dependencies.logger?.debug('mail.outbound.reconciliation_skipped', {
+      deliveryId: input.deliveryId,
+      reason: 'not_claimable',
+    });
     return 'not_found';
   }
-  const snapshot = await dependencies.unitOfWork.run((tx) =>
-    tx.outbound.loadMessage({
-      deliveryId: claimed.delivery.id,
-      leaseToken: claimed.delivery.leaseToken,
-    }),
-  );
-  const credential = await dependencies.credentialResolver.resolve(snapshot.delivery.connectionId);
-  const adapter = await dependencies.registry.getOutbound(snapshot.channelId).createAdapter({
-    connectionId: snapshot.delivery.connectionId,
-    credential,
-  });
+  const baseFields = {
+    accountId: claimed.delivery.mailAccountId,
+    connectionId: claimed.delivery.connectionId,
+    submissionId: claimed.delivery.submissionId,
+    deliveryId: claimed.delivery.id,
+    reconciliationCount: claimed.delivery.reconciliationCount,
+  };
+  let snapshot: OutboundMessageSnapshot;
+  let adapter: OutboundMailAdapter;
+  try {
+    stage = 'loading_message';
+    snapshot = await dependencies.unitOfWork.run((tx) =>
+      tx.outbound.loadMessage({
+        deliveryId: claimed.delivery.id,
+        leaseToken: claimed.delivery.leaseToken,
+      }),
+    );
+    stage = 'resolving_credentials';
+    const credential = await dependencies.credentialResolver.resolve(
+      snapshot.delivery.connectionId,
+    );
+    stage = 'creating_adapter';
+    adapter = await dependencies.registry.getOutbound(snapshot.channelId).createAdapter({
+      connectionId: snapshot.delivery.connectionId,
+      credential,
+    });
+  } catch (error) {
+    dependencies.logger?.error('mail.outbound.reconciliation_failed', {
+      ...baseFields,
+      stage,
+      ...outboundFailureLogDetails(error),
+    });
+    throw error;
+  }
   if (adapter.reconcile === undefined) {
     await dependencies.unitOfWork.run((tx) =>
       tx.outbound.scheduleResend({
@@ -65,6 +119,12 @@ export const reconcileUncertainDelivery = async (
         reason: 'reconciliation_unsupported',
       }),
     );
+    dependencies.logger?.warn('mail.outbound.reconciliation_unsupported', {
+      ...baseFields,
+      provider: adapter.provider,
+      action: 'resend_scheduled',
+      availableAt: now,
+    });
     return 'unsupported';
   }
 
@@ -103,6 +163,15 @@ export const reconcileUncertainDelivery = async (
         outcome: 'uncertain',
       }),
     );
+    dependencies.logger?.error('mail.outbound.reconciliation_error_rescheduled', {
+      ...baseFields,
+      provider: adapter.provider,
+      classification: classification.kind,
+      providerCode: classification.providerCode,
+      safeResponse: classification.safeResponse,
+      retryAt,
+      ...outboundFailureLogDetails(error),
+    });
     return 'retry_wait';
   }
 
@@ -111,6 +180,12 @@ export const reconcileUncertainDelivery = async (
       claimed,
       provider: adapter.provider,
       accepted: result.result,
+    });
+    dependencies.logger?.info('mail.outbound.reconciliation_succeeded', {
+      ...baseFields,
+      provider: adapter.provider,
+      remoteMessageId: result.result.remoteMessageId,
+      acceptedAt: result.result.acceptedAt,
     });
     return 'sent';
   }
@@ -124,6 +199,12 @@ export const reconcileUncertainDelivery = async (
           now,
         }),
       );
+      dependencies.logger?.warn('mail.outbound.reconciliation_not_found', {
+        ...baseFields,
+        provider: adapter.provider,
+        action: 'resend_scheduled',
+        availableAt: now,
+      });
       return 'not_found';
     }
     const retryAt = reconciliationRetryAt(
@@ -141,6 +222,12 @@ export const reconcileUncertainDelivery = async (
         outcome: 'not_found',
       }),
     );
+    dependencies.logger?.info('mail.outbound.reconciliation_not_found', {
+      ...baseFields,
+      provider: adapter.provider,
+      action: 'reconciliation_rescheduled',
+      retryAt,
+    });
     return 'retry_wait';
   }
 
@@ -159,5 +246,11 @@ export const reconcileUncertainDelivery = async (
       outcome: 'uncertain',
     }),
   );
+  dependencies.logger?.error('mail.outbound.reconciliation_inconclusive', {
+    ...baseFields,
+    provider: adapter.provider,
+    action: 'reconciliation_rescheduled',
+    retryAt,
+  });
   return 'retry_wait';
 };
