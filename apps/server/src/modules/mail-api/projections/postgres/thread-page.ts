@@ -334,10 +334,6 @@ export async function queryThreadPage(
   }
   const submissionStatusByEmailId = new Map<string, (typeof submissions)[number]['status']>();
   for (const submission of submissions) {
-    const current = submissionStatusByEmailId.get(submission.emailId);
-    const currentIsPending = current === 'queued' || current === 'scheduled';
-    const nextIsPending = submission.status === 'queued' || submission.status === 'scheduled';
-    if (currentIsPending && !nextIsPending) continue;
     submissionStatusByEmailId.set(submission.emailId, submission.status);
   }
   const items = page.flatMap((row) => {

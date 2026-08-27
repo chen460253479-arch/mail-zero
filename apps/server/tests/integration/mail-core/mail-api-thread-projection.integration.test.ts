@@ -5,7 +5,12 @@ import type {
   ThreadId,
   ThreadRecord,
 } from '@zero/mail-core';
-import { createDraft, createIdentity, createSubmission } from '@zero/mail-core';
+import {
+  createDraft,
+  createIdentity,
+  createSubmission,
+  transitionSubmission,
+} from '@zero/mail-core';
 import { describe, expect, it } from 'vitest';
 
 import { createPostgresMailSnoozeRepository } from '../../../src/modules/mail-snooze/postgres/repository';
@@ -274,6 +279,90 @@ describe('Mail API PostgreSQL Thread projection', () => {
             latestEmail: {
               id: draft.id,
               submissionStatus: 'queued',
+            },
+          },
+        ],
+      });
+    }));
+
+  it('does not let an older queued submission override a newer terminal status', () =>
+    withMailTestDatabase(async ({ db, unitOfWork }) => {
+      const h = await createPostgresMailTestHarness(db, unitOfWork, 'draft-latest-submission');
+      const identity = await createIdentity(h.dependencies, {
+        accountId: h.accountId,
+        name: 'Sender',
+        email: 'sender@example.test',
+        replyTo: null,
+        makeDefault: true,
+      });
+      const draft = await createDraft(h.dependencies, {
+        accountId: h.accountId,
+        identityId: identity.id,
+        replyToEmailId: null,
+        to: [{ email: 'recipient@example.test' }],
+        cc: [],
+        bcc: [],
+        subject: 'Latest delivery status',
+        textBody: 'Body',
+        htmlBody: '<p>Body</p>',
+        attachments: [],
+      });
+      const older = await createSubmission(h.dependencies, {
+        accountId: h.accountId,
+        emailId: draft.id,
+        identityId: identity.id,
+        idempotencyKey: 'older-delivery',
+        sendAt: null,
+      });
+      await transitionSubmission(h.dependencies, {
+        accountId: h.accountId,
+        submissionId: older.id,
+        to: 'failed',
+        outcome: {
+          type: 'failure',
+          retryable: false,
+          providerCode: 'TEST_FAILURE',
+          safeResponse: 'permanent_failure',
+        },
+      });
+      const latest = await createSubmission(h.dependencies, {
+        accountId: h.accountId,
+        emailId: draft.id,
+        identityId: identity.id,
+        idempotencyKey: 'latest-delivery',
+        sendAt: null,
+      });
+      await transitionSubmission(h.dependencies, {
+        accountId: h.accountId,
+        submissionId: latest.id,
+        to: 'failed',
+        outcome: {
+          type: 'failure',
+          retryable: false,
+          providerCode: 'TEST_FAILURE',
+          safeResponse: 'permanent_failure',
+        },
+      });
+
+      // Simulate a historical orphaned submission left queued by an older deployment.
+      await unitOfWork.run((tx) =>
+        tx.submissions.update(h.accountId, older.id, { status: 'queued' }),
+      );
+
+      const projection = createPostgresMailViewProjection(db, 'thread-projection-cursor-key');
+      await expect(
+        projection.threadPage({
+          accountId: h.accountId,
+          mailboxId: h.drafts.id,
+          lifecycle: 'draft',
+          limit: 10,
+        }),
+      ).resolves.toMatchObject({
+        items: [
+          {
+            latestEmail: {
+              id: draft.id,
+              submissionStatus: 'failed',
             },
           },
         ],
