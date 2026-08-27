@@ -69,7 +69,6 @@ const createHarness = (
       },
       remoteThreadReferences: [],
     })),
-    scheduleReconciliation: vi.fn(),
     scheduleResend: vi.fn(),
   };
   const send = vi.fn();
@@ -148,32 +147,27 @@ describe('reconcileUncertainDelivery', () => {
     expect(h.send).not.toHaveBeenCalled();
   });
 
-  it.each([
-    [1, 'retry_wait'],
-    [2, 'retry_wait'],
-    [3, 'not_found'],
-  ] as const)('handles not_found reconciliation %i without sending', async (count, expected) => {
-    const h = createHarness(count, async () => ({ status: 'not_found' }));
+  it.each([1, 2, 3] as const)(
+    'schedules an actual resend after not_found reconciliation %i',
+    async (count) => {
+      const h = createHarness(count, async () => ({ status: 'not_found' }));
 
-    await expect(
-      reconcileUncertainDelivery(
-        {
-          deliveryId: 'delivery-1',
-          owner: 'worker-1',
-          leaseForMs: 60_000,
-        },
-        h.dependencies as never,
-      ),
-    ).resolves.toBe(expected);
-    if (count < 3) {
-      expect(h.outbound.scheduleReconciliation).toHaveBeenCalledOnce();
-    } else {
+      await expect(
+        reconcileUncertainDelivery(
+          {
+            deliveryId: 'delivery-1',
+            owner: 'worker-1',
+            leaseForMs: 60_000,
+          },
+          h.dependencies as never,
+        ),
+      ).resolves.toBe('not_found');
       expect(h.outbound.scheduleResend).toHaveBeenCalledOnce();
-    }
-    expect(h.send).not.toHaveBeenCalled();
-  });
+      expect(h.send).not.toHaveBeenCalled();
+    },
+  );
 
-  it('keeps inconclusive and unsupported reconciliation uncertain', async () => {
+  it('schedules a real resend for inconclusive and unsupported reconciliation', async () => {
     const inconclusive = createHarness(1, async () => ({
       status: 'inconclusive',
       retryAfter: null,
@@ -184,14 +178,14 @@ describe('reconcileUncertainDelivery', () => {
         inconclusive.dependencies as never,
       ),
     ).resolves.toBe('retry_wait');
-    expect(inconclusive.outbound.scheduleReconciliation).toHaveBeenCalledOnce();
+    expect(inconclusive.outbound.scheduleResend).toHaveBeenCalledOnce();
     expect(inconclusive.logger.error).toHaveBeenCalledWith(
       'mail.outbound.reconciliation_inconclusive',
       expect.objectContaining({
         deliveryId: 'delivery-1',
         reconciliationCount: 1,
         provider: 'gmail',
-        action: 'reconciliation_rescheduled',
+        action: 'resend_scheduled',
         retryAt: new Date('2026-01-01T00:00:40.000Z'),
       }),
     );
@@ -212,5 +206,33 @@ describe('reconcileUncertainDelivery', () => {
       }),
     );
     expect(unsupported.send).not.toHaveBeenCalled();
+  });
+
+  it('schedules a real resend when reconciliation throws', async () => {
+    const h = createHarness(1, async () => {
+      throw new Error('reconciliation unavailable');
+    });
+    h.adapter.classifyError.mockReturnValue({
+      kind: 'temporary_failure',
+      providerCode: 'TEMP',
+      safeResponse: 'temporary_failure',
+      retryAfter: null,
+    });
+
+    await expect(
+      reconcileUncertainDelivery(
+        { deliveryId: 'delivery-1', owner: 'worker-1', leaseForMs: 60_000 },
+        h.dependencies as never,
+      ),
+    ).resolves.toBe('retry_wait');
+    expect(h.outbound.scheduleResend).toHaveBeenCalledOnce();
+    expect(h.logger.error).toHaveBeenCalledWith(
+      'mail.outbound.reconciliation_error_resend_scheduled',
+      expect.objectContaining({
+        deliveryId: 'delivery-1',
+        action: 'resend_scheduled',
+        errorMessage: 'reconciliation unavailable',
+      }),
+    );
   });
 });

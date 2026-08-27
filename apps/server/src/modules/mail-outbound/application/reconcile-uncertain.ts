@@ -155,7 +155,7 @@ export const reconcileUncertainDelivery = async (
       dependencies.jitter,
     );
     await dependencies.unitOfWork.run((tx) =>
-      tx.outbound.scheduleReconciliation({
+      tx.outbound.scheduleResend({
         deliveryId: claimed.delivery.id,
         leaseToken: claimed.delivery.leaseToken,
         availableAt: retryAt,
@@ -163,12 +163,13 @@ export const reconcileUncertainDelivery = async (
         outcome: 'uncertain',
       }),
     );
-    dependencies.logger?.error('mail.outbound.reconciliation_error_rescheduled', {
+    dependencies.logger?.error('mail.outbound.reconciliation_error_resend_scheduled', {
       ...baseFields,
       provider: adapter.provider,
       classification: classification.kind,
       providerCode: classification.providerCode,
       safeResponse: classification.safeResponse,
+      action: 'resend_scheduled',
       retryAt,
       ...outboundFailureLogDetails(error),
     });
@@ -190,45 +191,21 @@ export const reconcileUncertainDelivery = async (
     return 'sent';
   }
   if (result.status === 'not_found') {
-    if (claimed.delivery.reconciliationCount >= 3) {
-      await dependencies.unitOfWork.run((tx) =>
-        tx.outbound.scheduleResend({
-          deliveryId: claimed.delivery.id,
-          leaseToken: claimed.delivery.leaseToken,
-          availableAt: now,
-          now,
-        }),
-      );
-      dependencies.logger?.warn('mail.outbound.reconciliation_not_found', {
-        ...baseFields,
-        provider: adapter.provider,
-        action: 'resend_scheduled',
-        availableAt: now,
-      });
-      return 'not_found';
-    }
-    const retryAt = reconciliationRetryAt(
-      now,
-      claimed.delivery.reconciliationCount,
-      null,
-      dependencies.jitter,
-    );
     await dependencies.unitOfWork.run((tx) =>
-      tx.outbound.scheduleReconciliation({
+      tx.outbound.scheduleResend({
         deliveryId: claimed.delivery.id,
         leaseToken: claimed.delivery.leaseToken,
-        availableAt: retryAt,
+        availableAt: now,
         now,
-        outcome: 'not_found',
       }),
     );
-    dependencies.logger?.info('mail.outbound.reconciliation_not_found', {
+    dependencies.logger?.warn('mail.outbound.reconciliation_not_found', {
       ...baseFields,
       provider: adapter.provider,
-      action: 'reconciliation_rescheduled',
-      retryAt,
+      action: 'resend_scheduled',
+      availableAt: now,
     });
-    return 'retry_wait';
+    return 'not_found';
   }
 
   const retryAt = reconciliationRetryAt(
@@ -238,7 +215,7 @@ export const reconcileUncertainDelivery = async (
     dependencies.jitter,
   );
   await dependencies.unitOfWork.run((tx) =>
-    tx.outbound.scheduleReconciliation({
+    tx.outbound.scheduleResend({
       deliveryId: claimed.delivery.id,
       leaseToken: claimed.delivery.leaseToken,
       availableAt: retryAt,
@@ -249,7 +226,7 @@ export const reconcileUncertainDelivery = async (
   dependencies.logger?.error('mail.outbound.reconciliation_inconclusive', {
     ...baseFields,
     provider: adapter.provider,
-    action: 'reconciliation_rescheduled',
+    action: 'resend_scheduled',
     retryAt,
   });
   return 'retry_wait';

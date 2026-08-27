@@ -35,6 +35,7 @@ const retryableKinds = new Set<OutboundErrorClassification['kind']>([
   'temporary_failure',
   'authentication_required',
   'quota_exceeded',
+  'uncertain',
 ]);
 
 export const deliverClaimed = async (
@@ -103,7 +104,7 @@ export const deliverClaimed = async (
     if (retryableKinds.has(classification.kind)) {
       const retryAt = nextOutboundRetryAt({
         now,
-        attemptNumber: claimed.attemptNumber,
+        attemptNumber: claimed.delivery.attemptCount,
         kind: claimed.attemptKind,
         providerRetryAfter: classification.retryAfter,
         jitter: dependencies.jitter,
@@ -121,18 +122,6 @@ export const deliverClaimed = async (
         logFailure('retry_wait', retryAt);
         return 'retry_wait';
       }
-    }
-    if (classification.kind === 'uncertain') {
-      await dependencies.unitOfWork.run((tx) =>
-        tx.outbound.markUncertain({
-          deliveryId: claimed.delivery.id,
-          leaseToken: claimed.delivery.leaseToken,
-          now,
-          error: classification,
-        }),
-      );
-      logFailure('uncertain');
-      return 'uncertain';
     }
     await dependencies.finalizeFailed({
       claimed,

@@ -61,7 +61,6 @@ const createHarness = (
       remoteThreadReferences: [{ provider: 'outlook', remoteThreadId: 'outlook-thread' }],
     })),
     scheduleRetry: vi.fn(),
-    markUncertain: vi.fn(),
   };
   const adapter = {
     provider: 'outlook',
@@ -149,7 +148,7 @@ describe('provider-neutral outbound delivery', () => {
   it.each([
     ['temporary_failure', 'retry_wait'],
     ['authentication_required', 'retry_wait'],
-    ['uncertain', 'uncertain'],
+    ['uncertain', 'retry_wait'],
     ['policy_rejected', 'failed'],
   ] as const)('maps %s without leaking provider logic into routing', async (kind, expected) => {
     const h = createHarness(async () => {
@@ -179,7 +178,11 @@ describe('provider-neutral outbound delivery', () => {
         errorMessage: 'provider secret',
       }),
     );
-    if (kind === 'temporary_failure' || kind === 'authentication_required') {
+    if (
+      kind === 'temporary_failure' ||
+      kind === 'authentication_required' ||
+      kind === 'uncertain'
+    ) {
       expect(h.outbound.scheduleRetry).toHaveBeenCalledOnce();
     }
     if (kind === 'authentication_required') {
@@ -187,11 +190,58 @@ describe('provider-neutral outbound delivery', () => {
         'connection-1',
       );
     }
-    if (kind === 'uncertain') {
-      expect(h.outbound.markUncertain).toHaveBeenCalledOnce();
-    }
     if (kind === 'policy_rejected') {
       expect(h.dependencies.finalizeFailed).toHaveBeenCalledOnce();
     }
+  });
+
+  it('uses the actual send count when retrying after prior reconciliations', async () => {
+    const h = createHarness(async () => {
+      throw new Error('unknown smtp result');
+    });
+    h.adapter.classifyError.mockReturnValue({
+      kind: 'uncertain',
+      providerCode: 'SMTP_RESULT_UNKNOWN',
+      safeResponse: 'unknown_result',
+      retryAfter: null,
+    } as never);
+    const retriedAfterReconciliation = {
+      ...claimed,
+      delivery: {
+        ...claimed.delivery,
+        attemptCount: 2,
+        reconciliationCount: 100,
+      },
+      attemptNumber: 102,
+    } satisfies ClaimedDelivery;
+
+    await expect(deliverClaimed(retriedAfterReconciliation, h.dependencies as never)).resolves.toBe(
+      'retry_wait',
+    );
+    expect(h.outbound.scheduleRetry).toHaveBeenCalledOnce();
+  });
+
+  it('fails after the final uncertain send attempt instead of entering reconciliation', async () => {
+    const h = createHarness(async () => {
+      throw new Error('unknown smtp result');
+    });
+    h.adapter.classifyError.mockReturnValue({
+      kind: 'uncertain',
+      providerCode: 'SMTP_RESULT_UNKNOWN',
+      safeResponse: 'unknown_result',
+      retryAfter: null,
+    } as never);
+    const exhausted = {
+      ...claimed,
+      delivery: {
+        ...claimed.delivery,
+        attemptCount: 6,
+      },
+      attemptNumber: 6,
+    } satisfies ClaimedDelivery;
+
+    await expect(deliverClaimed(exhausted, h.dependencies as never)).resolves.toBe('failed');
+    expect(h.outbound.scheduleRetry).not.toHaveBeenCalled();
+    expect(h.dependencies.finalizeFailed).toHaveBeenCalledOnce();
   });
 });

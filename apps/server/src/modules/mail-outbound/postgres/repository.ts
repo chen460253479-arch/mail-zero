@@ -97,12 +97,6 @@ export type MarkDeliveryUncertainInput = LeaseIdentity & {
   error: OutboundErrorClassification;
 };
 
-export type ScheduleReconciliationInput = LeaseIdentity & {
-  availableAt: Date;
-  now: Date;
-  outcome: 'not_found' | 'uncertain';
-};
-
 export type ScheduleResendInput = LeaseIdentity & {
   availableAt: Date;
   now: Date;
@@ -142,7 +136,6 @@ export interface MailOutboundRepository {
   finishAttempt(input: FinishAttemptInput): Promise<void>;
   scheduleRetry(input: ScheduleDeliveryRetryInput): Promise<void>;
   markUncertain(input: MarkDeliveryUncertainInput): Promise<void>;
-  scheduleReconciliation(input: ScheduleReconciliationInput): Promise<void>;
   scheduleResend(input: ScheduleResendInput): Promise<void>;
   markFailed(input: FailDeliveryInput): Promise<void>;
   markCompleted(input: CompleteDeliveryInput): Promise<void>;
@@ -682,25 +675,6 @@ export const createMailOutboundRepository = (
         outcome: 'uncertain',
         providerCode: input.error.providerCode,
         safeResponse: input.error.safeResponse,
-      });
-    }),
-  scheduleReconciliation: (input) =>
-    runOutboundAdapter(async () => {
-      await transitionLeased(db, input, {
-        status: 'uncertain',
-        availableAt: input.availableAt,
-        uncertainSince: sql`coalesce(
-          ${outboundDelivery.uncertainSince},
-          ${sql.param(input.now, outboundDelivery.uncertainSince)}
-        )`,
-        updatedAt: input.now,
-        ...clearLease,
-      });
-      await finishAttemptRows(db, {
-        ...input,
-        finishedAt: input.now,
-        outcome: input.outcome,
-        retryAt: input.availableAt,
       });
     }),
   scheduleResend: (input) =>
