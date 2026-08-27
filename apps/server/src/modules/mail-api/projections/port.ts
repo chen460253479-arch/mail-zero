@@ -1,4 +1,4 @@
-import type { EmailLifecycle } from '@zero/mail-core';
+import type { EmailLifecycle, SubmissionStatus } from '@zero/mail-core';
 
 export type ThreadPageProjectionInput = {
   accountId: string;
@@ -33,6 +33,7 @@ export type ThreadSummaryProjection = {
   latestEmail: {
     id: string;
     lifecycle: EmailLifecycle;
+    submissionStatus: SubmissionStatus | null;
     receivedAt: string;
     to: Array<{ name?: string | null; email: string }>;
   };

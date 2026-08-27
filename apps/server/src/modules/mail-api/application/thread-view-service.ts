@@ -13,10 +13,16 @@ export const createThreadViewService = (
 ) => ({
   async threadPage(input: z.infer<typeof threadPageInputSchema>) {
     const accountId = input.accountId as MailAccountId;
+    const [queryState, submissionState] = await Promise.all([
+      core.getState({ accountId, collection: 'thread' }),
+      core.getState({ accountId, collection: 'email_submission' }),
+    ]);
+    const page = await projection.threadPage(input);
     return {
       accountId: input.accountId,
-      queryState: await core.getState({ accountId, collection: 'thread' }),
-      ...(await projection.threadPage(input)),
+      queryState,
+      submissionState,
+      ...page,
     };
   },
   async threadDetail(input: z.infer<typeof threadDetailInputSchema>) {

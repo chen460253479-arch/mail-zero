@@ -41,6 +41,7 @@ const mapping: Record<MailCoreErrorCode, Mapping> = {
   STORAGE_FAILURE: storageFailure,
   MIME_PARSE_FAILED: storageFailure,
   IDEMPOTENCY_CONFLICT: { code: 'STATE_MISMATCH', retryable: false },
+  SUBMISSION_ALREADY_PENDING: { code: 'SUBMISSION_ALREADY_PENDING', retryable: false },
   DRAFT_REVISION_CONFLICT: { code: 'REVISION_MISMATCH', retryable: false },
   EMAIL_CONTENT_IMMUTABLE: invalidArguments,
   OVER_QUOTA: { code: 'OVER_QUOTA', retryable: false },

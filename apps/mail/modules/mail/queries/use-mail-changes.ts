@@ -9,14 +9,20 @@ import { drainChanges } from './changes-reconciler';
 export function useMailChanges({
   mailboxState,
   threadState,
+  submissionState,
 }: {
   mailboxState?: string;
   threadState?: string;
+  submissionState?: string;
 }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { account } = useMailAccountContext();
-  const states = useRef({ mailbox: mailboxState, thread: threadState });
+  const states = useRef({
+    mailbox: mailboxState,
+    thread: threadState,
+    submission: submissionState,
+  });
   const running = useRef(false);
 
   useEffect(() => {
@@ -25,6 +31,9 @@ export function useMailChanges({
   useEffect(() => {
     if (threadState) states.current.thread = threadState;
   }, [threadState]);
+  useEffect(() => {
+    if (submissionState) states.current.submission = submissionState;
+  }, [submissionState]);
 
   const invalidateAccountMail = useCallback(async () => {
     if (!account) return;
@@ -38,11 +47,15 @@ export function useMailChanges({
       queryClient.invalidateQueries({
         queryKey: trpc.mail.view.threadDetail.queryKey(),
       }),
+      queryClient.invalidateQueries({
+        queryKey: trpc.mail.submission.query.queryKey(),
+      }),
     ]);
   }, [
     account,
     queryClient,
     trpc.mail.mailbox.get,
+    trpc.mail.submission.query,
     trpc.mail.view.threadDetail,
     trpc.mail.view.threadPage,
   ]);
@@ -51,7 +64,7 @@ export function useMailChanges({
     if (!account || running.current) return;
     running.current = true;
     try {
-      const [mailboxChanges, threadChanges] = await Promise.all([
+      const [mailboxChanges, threadChanges, submissionChanges] = await Promise.all([
         states.current.mailbox
           ? drainChanges(states.current.mailbox, (sinceState) =>
               trpcClient.mail.mailbox.changes.query({
@@ -70,10 +83,20 @@ export function useMailChanges({
               }),
             )
           : null,
+        states.current.submission
+          ? drainChanges(states.current.submission, (sinceState) =>
+              trpcClient.mail.submission.changes.query({
+                accountId: account.id,
+                sinceState,
+                maxChanges: 500,
+              }),
+            )
+          : null,
       ]);
       if (mailboxChanges) states.current.mailbox = mailboxChanges.newState;
       if (threadChanges) states.current.thread = threadChanges.newState;
-      const changed = [mailboxChanges, threadChanges].some(
+      if (submissionChanges) states.current.submission = submissionChanges.newState;
+      const changed = [mailboxChanges, threadChanges, submissionChanges].some(
         (changes) =>
           changes &&
           (changes.created.length > 0 ||

@@ -1,4 +1,5 @@
 import type { CustomerMarker, Email, EmailKeywordMap, EmailLifecycle } from './email';
+import type { SubmissionStatus } from './submission';
 
 export type ThreadSummary = {
   id: string;
@@ -16,6 +17,7 @@ export type ThreadSummary = {
   latestEmail: {
     id: string;
     lifecycle: EmailLifecycle;
+    submissionStatus: SubmissionStatus | null;
     receivedAt: string;
     to: Array<{ name?: string | null; email: string }>;
   };

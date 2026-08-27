@@ -6,6 +6,7 @@ import {
   emailKeyword,
   emailMailbox,
   emailSearch,
+  emailSubmission,
   mailboxThread,
   mailbox,
   thread,
@@ -255,7 +256,7 @@ export async function queryThreadPage(
   const allEmailIds = emails.map(({ id }) => id);
   const threadByEmailId = new Map(emails.map(({ id, threadId }) => [id, threadId]));
   const latestEmailIds = [...latest.values()].map(({ id }) => id);
-  const [mailboxes, keywords, customerMarkers, recipients] = await Promise.all([
+  const [mailboxes, keywords, customerMarkers, recipients, submissions] = await Promise.all([
     db
       .select({ emailId: emailMailbox.emailId, value: emailMailbox.mailboxId })
       .from(emailMailbox)
@@ -303,6 +304,21 @@ export async function queryThreadPage(
         ),
       )
       .orderBy(asc(emailAddress.position)),
+    db
+      .select({
+        id: emailSubmission.id,
+        emailId: emailSubmission.emailId,
+        status: emailSubmission.status,
+        createdAt: emailSubmission.createdAt,
+      })
+      .from(emailSubmission)
+      .where(
+        and(
+          eq(emailSubmission.mailAccountId, input.accountId),
+          inArray(emailSubmission.emailId, latestEmailIds),
+        ),
+      )
+      .orderBy(asc(emailSubmission.createdAt), asc(emailSubmission.id)),
   ]);
   const mapValues = (rows: Array<{ emailId: string; value: string }>, threadId: string) =>
     Object.fromEntries(
@@ -315,6 +331,14 @@ export async function queryThreadPage(
     const values = recipientsByEmailId.get(emailId);
     if (values) values.push({ name, email: address });
     else recipientsByEmailId.set(emailId, [{ name, email: address }]);
+  }
+  const submissionStatusByEmailId = new Map<string, (typeof submissions)[number]['status']>();
+  for (const submission of submissions) {
+    const current = submissionStatusByEmailId.get(submission.emailId);
+    const currentIsPending = current === 'queued' || current === 'scheduled';
+    const nextIsPending = submission.status === 'queued' || submission.status === 'scheduled';
+    if (currentIsPending && !nextIsPending) continue;
+    submissionStatusByEmailId.set(submission.emailId, submission.status);
   }
   const items = page.flatMap((row) => {
     const latestEmail = latest.get(row.id);
@@ -346,6 +370,7 @@ export async function queryThreadPage(
         latestEmail: {
           id: latestEmail.id,
           lifecycle: latestEmail.lifecycle,
+          submissionStatus: submissionStatusByEmailId.get(latestEmail.id) ?? null,
           receivedAt: latestEmail.receivedAt.toISOString(),
           to: recipientsByEmailId.get(latestEmail.id) ?? [],
         },

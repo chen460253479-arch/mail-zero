@@ -93,6 +93,7 @@ describe('mail API adapters', () => {
         latestEmail: {
           id: 'email-1',
           lifecycle: 'received',
+          submissionStatus: null,
           receivedAt: '2026-07-27T00:00:00.000Z',
           to: [{ name: null, email: 'user@example.com' }],
         },
@@ -113,6 +114,7 @@ describe('mail API adapters', () => {
       latestEmail: {
         id: 'email-1',
         lifecycle: 'received',
+        submissionStatus: null,
         receivedAt: '2026-07-27T00:00:00.000Z',
         to: [{ name: null, email: 'user@example.com' }],
       },

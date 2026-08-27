@@ -399,6 +399,7 @@ export interface SubmissionRepository {
     accountId: MailAccountId,
     idempotencyKey: string,
   ): Promise<SubmissionRecord | null>;
+  findPendingByEmail(accountId: MailAccountId, emailId: EmailId): Promise<SubmissionRecord | null>;
   listByIdentity(accountId: MailAccountId, identityId: IdentityId): Promise<SubmissionRecord[]>;
   listByAccount(accountId: MailAccountId): Promise<SubmissionRecord[]>;
   queryPage(input: QuerySubmissionPageInput): Promise<SubmissionRecord[]>;

@@ -156,6 +156,11 @@ export async function createSubmissionInTransaction(
     throw new MailCoreError('IDEMPOTENCY_CONFLICT', { entityId: existing.id });
   }
 
+  const pending = await tx.submissions.findPendingByEmail(input.accountId, input.emailId);
+  if (pending !== null) {
+    throw new MailCoreError('SUBMISSION_ALREADY_PENDING', { entityId: pending.id });
+  }
+
   if (
     email.destroyedAt !== null ||
     email.mailboxIds.length === 0 ||

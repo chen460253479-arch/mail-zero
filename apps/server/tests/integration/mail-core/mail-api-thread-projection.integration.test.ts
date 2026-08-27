@@ -5,6 +5,7 @@ import type {
   ThreadId,
   ThreadRecord,
 } from '@zero/mail-core';
+import { createDraft, createIdentity, createSubmission } from '@zero/mail-core';
 import { describe, expect, it } from 'vitest';
 
 import { createPostgresMailSnoozeRepository } from '../../../src/modules/mail-snooze/postgres/repository';
@@ -226,6 +227,56 @@ describe('Mail API PostgreSQL Thread projection', () => {
             customerName: '上海某某有限公司',
           },
         },
+      });
+    }));
+
+  it('projects the latest submission status for a Draft row', () =>
+    withMailTestDatabase(async ({ db, unitOfWork }) => {
+      const h = await createPostgresMailTestHarness(db, unitOfWork, 'draft-submission-view');
+      const identity = await createIdentity(h.dependencies, {
+        accountId: h.accountId,
+        name: 'Sender',
+        email: 'sender@example.test',
+        replyTo: null,
+        makeDefault: true,
+      });
+      const draft = await createDraft(h.dependencies, {
+        accountId: h.accountId,
+        identityId: identity.id,
+        replyToEmailId: null,
+        to: [{ email: 'recipient@example.test' }],
+        cc: [],
+        bcc: [],
+        subject: 'Pending delivery',
+        textBody: 'Body',
+        htmlBody: '<p>Body</p>',
+        attachments: [],
+      });
+      await createSubmission(h.dependencies, {
+        accountId: h.accountId,
+        emailId: draft.id,
+        identityId: identity.id,
+        idempotencyKey: 'pending-delivery',
+        sendAt: null,
+      });
+
+      const projection = createPostgresMailViewProjection(db, 'thread-projection-cursor-key');
+      await expect(
+        projection.threadPage({
+          accountId: h.accountId,
+          mailboxId: h.drafts.id,
+          lifecycle: 'draft',
+          limit: 10,
+        }),
+      ).resolves.toMatchObject({
+        items: [
+          {
+            latestEmail: {
+              id: draft.id,
+              submissionStatus: 'queued',
+            },
+          },
+        ],
       });
     }));
 });

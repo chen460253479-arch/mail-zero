@@ -84,6 +84,7 @@ export interface ParsedMessage {
   messageId?: string;
   threadId?: string;
   isDraft?: boolean;
+  submissionStatus?: 'scheduled' | 'queued' | 'sent' | 'failed' | 'canceled' | null;
   hasAttachment?: boolean;
   attachments?: Attachment[];
 }

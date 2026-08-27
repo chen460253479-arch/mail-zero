@@ -9,6 +9,7 @@ import {
 } from './common';
 import { emailLifecycleSchema, emailSchema } from './email';
 import { customerMarkerSchema } from './customer-marker';
+import { submissionStatusSchema } from './submission';
 
 export const threadPageInputSchema = z.object({
   accountId: mailAccountIdSchema,
@@ -40,6 +41,7 @@ export const threadSummarySchema = z.object({
   latestEmail: z.object({
     id: mailIdSchema,
     lifecycle: emailLifecycleSchema,
+    submissionStatus: submissionStatusSchema.nullable(),
     receivedAt: z.string().datetime({ offset: true }),
     to: z.array(mailAddressSchema),
   }),
@@ -48,6 +50,7 @@ export const threadSummarySchema = z.object({
 export const threadPageResultSchema = z.object({
   accountId: mailAccountIdSchema,
   queryState: stateSchema,
+  submissionState: stateSchema,
   items: z.array(threadSummarySchema),
   cursor: cursorSchema.nullable(),
 });

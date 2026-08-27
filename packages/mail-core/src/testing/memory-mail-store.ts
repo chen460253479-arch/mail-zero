@@ -962,6 +962,20 @@ const createRepositories = (
       );
       return record === undefined ? null : copy(record);
     },
+    async findPendingByEmail(accountId, emailId) {
+      const record = [...state.submissions.values()]
+        .filter(
+          (candidate) =>
+            candidate.accountId === accountId &&
+            candidate.emailId === emailId &&
+            (candidate.status === 'queued' || candidate.status === 'scheduled'),
+        )
+        .sort(
+          (left, right) =>
+            right.createdAt.getTime() - left.createdAt.getTime() || right.id.localeCompare(left.id),
+        )[0];
+      return record === undefined ? null : copy(record);
+    },
     async listByIdentity(accountId, identityId) {
       return listScoped(state.submissions, accountId).filter(
         (submission) => submission.identityId === identityId,

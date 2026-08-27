@@ -120,6 +120,7 @@ describe('mail UI adapters', () => {
       latestEmail: {
         id: 'email-1',
         lifecycle: 'received',
+        submissionStatus: 'queued',
         receivedAt: '2026-07-27T00:00:00.000Z',
         to: [{ name: null, email: 'user@example.com' }],
       },
@@ -136,6 +137,7 @@ describe('mail UI adapters', () => {
       receivedOn: '2026-07-27T00:00:00.000Z',
       body: 'Attached is the report.',
       isDraft: false,
+      submissionStatus: 'queued',
       hasAttachment: true,
       tags: [
         { id: 'label-customer', name: 'Customer', type: 'label' },

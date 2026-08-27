@@ -25,6 +25,7 @@ describe('Thread view service', () => {
             latestEmail: {
               id: 'email-1',
               lifecycle: 'received' as const,
+              submissionStatus: null,
               receivedAt: '2026-01-01T00:00:00.000Z',
               to: [{ name: null, email: 'user@example.com' }],
             },
@@ -49,6 +50,7 @@ describe('Thread view service', () => {
 
     expect(result.items).toHaveLength(1);
     expect(result.items[0]?.latestEmail.id).toBe('email-1');
+    expect(result.submissionState).toBe('3');
     expect(readBlob).not.toHaveBeenCalled();
   });
 

@@ -117,6 +117,7 @@ export function adaptThreadSummaryForList(
     processedHtml: '',
     blobUrl: '',
     isDraft: summary.latestEmail.lifecycle === 'draft',
+    submissionStatus: summary.latestEmail.submissionStatus,
     hasAttachment: summary.hasAttachment,
     attachments: [],
   };

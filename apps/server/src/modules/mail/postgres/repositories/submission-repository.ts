@@ -1,5 +1,5 @@
 import type { SubmissionRecord, SubmissionRepository } from '@zero/mail-core';
-import { and, asc, eq, gt, ne, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, ne, or } from 'drizzle-orm';
 
 import { requireRow, runAdapter, type MailDatabase } from './database';
 import { emailSubmission } from '../schema';
@@ -58,6 +58,22 @@ export const createSubmissionRepository = (db: MailDatabase): SubmissionReposito
             eq(emailSubmission.idempotencyKey, idempotencyKey),
           ),
         )
+        .limit(1);
+      return rows[0] === undefined ? null : hydrateSubmission(rows[0]);
+    }),
+  findPendingByEmail: (accountId, emailId) =>
+    runAdapter(async () => {
+      const rows = await db
+        .select()
+        .from(emailSubmission)
+        .where(
+          and(
+            eq(emailSubmission.mailAccountId, accountId),
+            eq(emailSubmission.emailId, emailId),
+            inArray(emailSubmission.status, ['queued', 'scheduled']),
+          ),
+        )
+        .orderBy(desc(emailSubmission.createdAt), desc(emailSubmission.id))
         .limit(1);
       return rows[0] === undefined ? null : hydrateSubmission(rows[0]);
     }),

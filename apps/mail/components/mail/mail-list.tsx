@@ -24,6 +24,7 @@ import { MoveToFolderMenu } from '@/components/mailbox/move-to-folder-menu';
 import { resolveMailboxRoute } from '@/modules/mail/routing/mailbox-route';
 import { useMailChanges } from '@/modules/mail/queries/use-mail-changes';
 import { ThreadContextMenu } from '@/components/context/thread-context';
+import { Check, CircleAlert, Clock3, LoaderCircle } from 'lucide-react';
 import { useOptimisticActions } from '@/hooks/use-optimistic-actions';
 import { useMailboxes } from '@/modules/mail/queries/use-mailboxes';
 import { buildOptimisticMailListLabels } from './mail-list-labels';
@@ -49,7 +50,6 @@ import { m } from '@/paraglide/messages';
 import { useParams } from 'react-router';
 import { Button } from '../ui/button';
 import { Avatar } from '../ui/avatar';
-import { Check } from 'lucide-react';
 import { useQueryState } from 'nuqs';
 import { useAtom } from 'jotai';
 
@@ -588,25 +588,27 @@ const Thread = memo(
 
 const Draft = memo(function Draft({ message, index }: ThreadProps & { index: number }) {
   const draftId = message.emailId ?? null;
+  const submissionStatus = message.submissionStatus ?? null;
+  const isSubmissionPending = submissionStatus === 'queued' || submissionStatus === 'scheduled';
   const [, setComposeOpen] = useQueryState('isComposeOpen');
   const [, setDraftId] = useQueryState('draftId');
   const { optimisticDeleteDraft } = useOptimisticActions();
   const optimisticState = useOptimisticThreadState(message.id);
 
   const handleMailClick = useCallback(() => {
-    if (!draftId) return;
+    if (!draftId || isSubmissionPending) return;
     setComposeOpen('true');
     setDraftId(draftId);
     return;
-  }, [draftId, setComposeOpen, setDraftId]);
+  }, [draftId, isSubmissionPending, setComposeOpen, setDraftId]);
 
   const handleDeleteDraft = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (!draftId) return;
+      if (!draftId || isSubmissionPending) return;
       optimisticDeleteDraft(draftId, message.id);
     },
-    [draftId, message.id, optimisticDeleteDraft],
+    [draftId, isSubmissionPending, message.id, optimisticDeleteDraft],
   );
 
   if (optimisticState.shouldHide || !draftId) {
@@ -615,13 +617,39 @@ const Draft = memo(function Draft({ message, index }: ThreadProps & { index: num
 
   const recipient = message.to[0];
   const recipientLabel = recipient?.name || recipient?.email || m['common.mail.noRecipient']();
+  const submissionIndicator =
+    submissionStatus === 'queued'
+      ? {
+          label: m['common.mail.sending'](),
+          className: 'text-blue-600 dark:text-blue-400',
+          icon: <LoaderCircle className="size-3 animate-spin" />,
+        }
+      : submissionStatus === 'scheduled'
+        ? {
+            label: m['common.mail.waitingToSend'](),
+            className: 'text-amber-600 dark:text-amber-400',
+            icon: <Clock3 className="size-3" />,
+          }
+        : submissionStatus === 'failed'
+          ? {
+              label: m['common.mail.sendFailed'](),
+              className: 'text-red-600 dark:text-red-400',
+              icon: <CircleAlert className="size-3" />,
+            }
+          : null;
 
   return (
-    <div className="select-none py-1" onClick={handleMailClick}>
+    <div
+      className={cn('select-none py-1', isSubmissionPending && 'cursor-default')}
+      onClick={handleMailClick}
+      aria-disabled={isSubmissionPending}
+      data-submission-status={submissionStatus ?? undefined}
+    >
       <div
         key={message.id}
         className={cn(
-          'hover:bg-offsetLight dark:hover:bg-primary/5 group relative mx-[8px] flex cursor-pointer flex-col items-start overflow-visible rounded-[10px] border-transparent py-3 text-left text-sm hover:opacity-100',
+          'hover:bg-offsetLight dark:hover:bg-primary/5 group relative mx-[8px] flex flex-col items-start overflow-visible rounded-[10px] border-transparent py-3 text-left text-sm hover:opacity-100',
+          isSubmissionPending ? 'cursor-default' : 'cursor-pointer',
         )}
       >
         <div
@@ -638,7 +666,7 @@ const Draft = memo(function Draft({ message, index }: ThreadProps & { index: num
                 size="icon"
                 className="h-6 w-6 hover:bg-[#FDE4E9] dark:hover:bg-[#411D23] [&_svg]:size-3.5"
                 aria-label={m['common.mail.deleteDraft']()}
-                disabled={optimisticState.isRemoving}
+                disabled={optimisticState.isRemoving || isSubmissionPending}
                 onClick={handleDeleteDraft}
               >
                 <Trash className="fill-[#F43F5E]" />
@@ -666,6 +694,17 @@ const Draft = memo(function Draft({ message, index }: ThreadProps & { index: num
                     <span className={cn('max-w-[25ch] truncate text-sm')}>
                       {cleanNameDisplay(recipientLabel)}
                     </span>
+                    {submissionIndicator ? (
+                      <span
+                        className={cn(
+                          'inline-flex shrink-0 items-center gap-1 text-xs font-medium',
+                          submissionIndicator.className,
+                        )}
+                      >
+                        {submissionIndicator.icon}
+                        {submissionIndicator.label}
+                      </span>
+                    ) : null}
                   </span>
                 </div>
                 {message.receivedOn && (
@@ -726,6 +765,7 @@ export const MailList = memo(
     useMailChanges({
       mailboxState: mailboxQuery.mailboxState,
       threadState: threadsQuery.data?.pages[0]?.queryState,
+      submissionState: threadsQuery.data?.pages[0]?.submissionState,
     });
     const trpc = useTRPC();
     const isFetchingMail = useIsFetching({ queryKey: trpc.mail.view.threadDetail.queryKey() }) > 0;

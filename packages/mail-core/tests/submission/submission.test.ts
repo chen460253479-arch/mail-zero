@@ -128,6 +128,52 @@ describe('EmailSubmission creation', () => {
     expect((await h.inspect.changes()).length).toBe(changes + 1);
   });
 
+  it.each(['queued', 'scheduled'] as const)(
+    'rejects a second submission while the same Draft is %s',
+    async (status) => {
+      const h = await createSubmissionHarness();
+      const first = await createSubmission(h.deps, {
+        accountId: h.accountId,
+        emailId: h.draftId,
+        identityId: h.identityId,
+        idempotencyKey: `first-${status}`,
+        sendAt: status === 'scheduled' ? new Date(h.deps.clock.now().getTime() + 60_000) : null,
+      });
+
+      await expect(
+        createSubmission(h.deps, {
+          accountId: h.accountId,
+          emailId: h.draftId,
+          identityId: h.identityId,
+          idempotencyKey: `second-${status}`,
+          sendAt: null,
+        }),
+      ).rejects.toMatchObject({
+        code: 'SUBMISSION_ALREADY_PENDING',
+        details: { entityId: first.id },
+      });
+      expect(await h.inspect.submissions()).toHaveLength(1);
+    },
+  );
+
+  it.each(['failed', 'canceled'] as const)(
+    'allows a new submission after the previous one is %s',
+    async (status) => {
+      const h = await createSubmissionHarness({ initialStatus: status });
+
+      await expect(
+        createSubmission(h.deps, {
+          accountId: h.accountId,
+          emailId: h.draftId,
+          identityId: h.identityId,
+          idempotencyKey: `retry-after-${status}`,
+          sendAt: null,
+        }),
+      ).resolves.toMatchObject({ status: 'queued' });
+      expect(await h.inspect.submissions()).toHaveLength(2);
+    },
+  );
+
   it('rejects reusing an idempotency key with a different frozen request', async () => {
     const h = await createSubmissionHarness();
     const secondIdentity = await h.createIdentity('second');
