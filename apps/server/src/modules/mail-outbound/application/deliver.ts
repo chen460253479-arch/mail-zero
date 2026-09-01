@@ -7,7 +7,6 @@ import type {
 import type { OutboundConnectionStatePort, OutboundCredentialResolver } from '../domain/ports';
 import type { MailChannelRegistry } from '../../../mail-channel/registry';
 import type { MailOutboundUnitOfWork } from '../postgres/unit-of-work';
-import { nextOutboundRetryAt } from '../domain/retry-policy';
 import type { FinalizeFailedInput } from './finalize-failed';
 import type { FinalizeAcceptedInput } from './finalize-sent';
 import type { ClaimedDelivery } from '../domain/delivery';
@@ -30,18 +29,38 @@ export type DeliverDependencies = {
   finalizeFailed(input: FinalizeFailedInput): Promise<void>;
 };
 
-const retryableKinds = new Set<OutboundErrorClassification['kind']>([
-  'rate_limited',
-  'temporary_failure',
-  'authentication_required',
-  'quota_exceeded',
-  'uncertain',
-]);
+const retryDisabledClassification: OutboundErrorClassification = {
+  kind: 'permanent_failure',
+  providerCode: 'AUTOMATIC_SEND_RETRY_DISABLED',
+  safeResponse: 'permanent_failure',
+  retryAfter: null,
+};
 
 export const deliverClaimed = async (
   claimed: ClaimedDelivery,
   dependencies: DeliverDependencies,
-): Promise<'sent' | 'retry_wait' | 'uncertain' | 'failed'> => {
+): Promise<'sent' | 'failed'> => {
+  if (claimed.delivery.attemptCount > 1) {
+    await dependencies.finalizeFailed({
+      claimed,
+      classification: retryDisabledClassification,
+      failedAt: dependencies.clock.now(),
+    });
+    dependencies.logger?.error('mail.outbound.delivery_failed', {
+      accountId: claimed.delivery.mailAccountId,
+      connectionId: claimed.delivery.connectionId,
+      submissionId: claimed.delivery.submissionId,
+      deliveryId: claimed.delivery.id,
+      attemptKind: claimed.attemptKind,
+      attemptNumber: claimed.attemptNumber,
+      outcome: 'failed',
+      classification: retryDisabledClassification.kind,
+      providerCode: retryDisabledClassification.providerCode,
+      safeResponse: retryDisabledClassification.safeResponse,
+      reason: 'automatic_send_retry_disabled',
+    });
+    return 'failed';
+  }
   const snapshot = await dependencies.unitOfWork.run((tx) =>
     tx.outbound.loadMessage({
       deliveryId: claimed.delivery.id,
@@ -76,10 +95,7 @@ export const deliverClaimed = async (
   } catch (error) {
     const classification = adapter.classifyError(error);
     const now = dependencies.clock.now();
-    const logFailure = (
-      outcome: 'retry_wait' | 'uncertain' | 'failed',
-      retryAt: Date | null = null,
-    ) =>
+    const logFailure = () =>
       dependencies.logger?.error('mail.outbound.delivery_failed', {
         provider: adapter.provider,
         accountId: snapshot.delivery.mailAccountId,
@@ -88,8 +104,7 @@ export const deliverClaimed = async (
         deliveryId: snapshot.delivery.id,
         attemptKind: claimed.attemptKind,
         attemptNumber: claimed.attemptNumber,
-        outcome,
-        retryAt,
+        outcome: 'failed',
         classification: classification.kind,
         providerCode: classification.providerCode,
         safeResponse: classification.safeResponse,
@@ -101,34 +116,12 @@ export const deliverClaimed = async (
     if (classification.kind === 'authentication_required') {
       await dependencies.connectionState.markAuthenticationRequired(snapshot.delivery.connectionId);
     }
-    if (retryableKinds.has(classification.kind)) {
-      const retryAt = nextOutboundRetryAt({
-        now,
-        attemptNumber: claimed.delivery.attemptCount,
-        kind: claimed.attemptKind,
-        providerRetryAfter: classification.retryAfter,
-        jitter: dependencies.jitter,
-      });
-      if (retryAt !== null) {
-        await dependencies.unitOfWork.run((tx) =>
-          tx.outbound.scheduleRetry({
-            deliveryId: claimed.delivery.id,
-            leaseToken: claimed.delivery.leaseToken,
-            retryAt,
-            now,
-            error: classification,
-          }),
-        );
-        logFailure('retry_wait', retryAt);
-        return 'retry_wait';
-      }
-    }
     await dependencies.finalizeFailed({
       claimed,
       classification,
       failedAt: now,
     });
-    logFailure('failed');
+    logFailure();
     return 'failed';
   }
 

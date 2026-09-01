@@ -51,7 +51,7 @@ beforeEach(() => {
 });
 
 describe('SMTP client', () => {
-  it('uses the extended socket timeout without enabling protocol diagnostics', async () => {
+  it('does not impose a socket timeout or enable protocol diagnostics', async () => {
     transportMocks.sendMail.mockResolvedValue({
       accepted: ['recipient@example.test'],
       rejected: [],
@@ -78,10 +78,10 @@ describe('SMTP client', () => {
       expect.objectContaining({
         connectionTimeout: 15_000,
         greetingTimeout: 15_000,
-        socketTimeout: 300_000,
       }),
     );
     const transportOptions = transportMocks.createTransport.mock.calls[0]?.[0];
+    expect(transportOptions).not.toHaveProperty('socketTimeout');
     expect(transportOptions).not.toHaveProperty('logger');
     expect(transportOptions).not.toHaveProperty('transactionLog');
     expect(transportMocks.close).toHaveBeenCalledOnce();

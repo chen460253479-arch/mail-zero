@@ -146,11 +146,11 @@ describe('provider-neutral outbound delivery', () => {
   });
 
   it.each([
-    ['temporary_failure', 'retry_wait'],
-    ['authentication_required', 'retry_wait'],
-    ['uncertain', 'retry_wait'],
-    ['policy_rejected', 'failed'],
-  ] as const)('maps %s without leaking provider logic into routing', async (kind, expected) => {
+    'temporary_failure',
+    'authentication_required',
+    'uncertain',
+    'policy_rejected',
+  ] as const)('fails %s immediately without scheduling a retry', async (kind) => {
     const h = createHarness(async () => {
       throw new Error('provider secret');
     });
@@ -161,7 +161,7 @@ describe('provider-neutral outbound delivery', () => {
       retryAfter: null,
     } as never);
 
-    await expect(deliverClaimed(claimed, h.dependencies as never)).resolves.toBe(expected);
+    await expect(deliverClaimed(claimed, h.dependencies as never)).resolves.toBe('failed');
     expect(h.dependencies.logger.error).toHaveBeenCalledWith(
       'mail.outbound.delivery_failed',
       expect.objectContaining({
@@ -172,76 +172,49 @@ describe('provider-neutral outbound delivery', () => {
         deliveryId: 'delivery-1',
         attemptKind: 'send',
         attemptNumber: 1,
-        outcome: expected,
+        outcome: 'failed',
         classification: kind,
         providerCode: 'SAFE_CODE',
         errorMessage: 'provider secret',
       }),
     );
-    if (
-      kind === 'temporary_failure' ||
-      kind === 'authentication_required' ||
-      kind === 'uncertain'
-    ) {
-      expect(h.outbound.scheduleRetry).toHaveBeenCalledOnce();
-    }
+    expect(h.outbound.scheduleRetry).not.toHaveBeenCalled();
     if (kind === 'authentication_required') {
       expect(h.dependencies.connectionState.markAuthenticationRequired).toHaveBeenCalledWith(
         'connection-1',
       );
     }
-    if (kind === 'policy_rejected') {
-      expect(h.dependencies.finalizeFailed).toHaveBeenCalledOnce();
-    }
+    expect(h.dependencies.finalizeFailed).toHaveBeenCalledOnce();
   });
 
-  it('uses the actual send count when retrying after prior reconciliations', async () => {
-    const h = createHarness(async () => {
-      throw new Error('unknown smtp result');
-    });
-    h.adapter.classifyError.mockReturnValue({
-      kind: 'uncertain',
-      providerCode: 'SMTP_RESULT_UNKNOWN',
-      safeResponse: 'unknown_result',
-      retryAfter: null,
-    } as never);
-    const retriedAfterReconciliation = {
+  it('terminates an already-attempted delivery without calling the provider again', async () => {
+    const accepted = {
+      remoteMessageId: 'must-not-send',
+      remoteThreadId: null,
+      acceptedAt: new Date('2026-01-01T00:00:05.000Z'),
+      providerCode: '202',
+      safeResponse: 'accepted' as const,
+    };
+    const h = createHarness(async () => accepted);
+    const retryClaim = {
       ...claimed,
       delivery: {
         ...claimed.delivery,
         attemptCount: 2,
-        reconciliationCount: 100,
       },
-      attemptNumber: 102,
+      attemptNumber: 2,
     } satisfies ClaimedDelivery;
 
-    await expect(deliverClaimed(retriedAfterReconciliation, h.dependencies as never)).resolves.toBe(
-      'retry_wait',
-    );
-    expect(h.outbound.scheduleRetry).toHaveBeenCalledOnce();
-  });
-
-  it('fails after the final uncertain send attempt instead of entering reconciliation', async () => {
-    const h = createHarness(async () => {
-      throw new Error('unknown smtp result');
-    });
-    h.adapter.classifyError.mockReturnValue({
-      kind: 'uncertain',
-      providerCode: 'SMTP_RESULT_UNKNOWN',
-      safeResponse: 'unknown_result',
-      retryAfter: null,
-    } as never);
-    const exhausted = {
-      ...claimed,
-      delivery: {
-        ...claimed.delivery,
-        attemptCount: 6,
-      },
-      attemptNumber: 6,
-    } satisfies ClaimedDelivery;
-
-    await expect(deliverClaimed(exhausted, h.dependencies as never)).resolves.toBe('failed');
+    await expect(deliverClaimed(retryClaim, h.dependencies as never)).resolves.toBe('failed');
+    expect(h.adapter.send).not.toHaveBeenCalled();
+    expect(h.outbound.loadMessage).not.toHaveBeenCalled();
     expect(h.outbound.scheduleRetry).not.toHaveBeenCalled();
-    expect(h.dependencies.finalizeFailed).toHaveBeenCalledOnce();
+    expect(h.dependencies.finalizeFailed).toHaveBeenCalledWith({
+      claimed: retryClaim,
+      classification: expect.objectContaining({
+        providerCode: 'AUTOMATIC_SEND_RETRY_DISABLED',
+      }),
+      failedAt: new Date('2026-01-01T00:00:10.000Z'),
+    });
   });
 });

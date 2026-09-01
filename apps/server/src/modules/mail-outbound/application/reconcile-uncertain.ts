@@ -1,9 +1,12 @@
 import type { OutboundConnectionStatePort, OutboundCredentialResolver } from '../domain/ports';
-import type { OutboundMailAdapter } from '../../../mail-channel/contracts';
+import type {
+  OutboundErrorClassification,
+  OutboundMailAdapter,
+} from '../../../mail-channel/contracts';
 import type { MailChannelRegistry } from '../../../mail-channel/registry';
 import type { MailOutboundUnitOfWork } from '../postgres/unit-of-work';
 import type { OutboundMessageSnapshot } from '../postgres/repository';
-import { nextOutboundRetryAt } from '../domain/retry-policy';
+import type { FinalizeFailedInput } from './finalize-failed';
 import type { FinalizeAcceptedInput } from './finalize-sent';
 import type { ClaimedDelivery } from '../domain/delivery';
 import { outboundFailureLogDetails } from './failure-log';
@@ -23,27 +26,21 @@ export type ReconcileUncertainDependencies = {
   clock: { now(): Date };
   jitter(): number;
   finalizeAccepted(input: FinalizeAcceptedInput): Promise<void>;
+  finalizeFailed(input: FinalizeFailedInput): Promise<void>;
   logger?: ReconciliationLogger;
 };
 
-const reconciliationRetryAt = (
-  now: Date,
-  count: number,
-  retryAfter: Date | null,
-  jitter: () => number,
-): Date =>
-  nextOutboundRetryAt({
-    now,
-    attemptNumber: Math.min(Math.max(count, 1), 3),
-    kind: 'reconcile',
-    providerRetryAfter: retryAfter,
-    jitter,
-  }) ?? new Date(now.getTime() + 600_000);
+const terminalClassification = (providerCode: string): OutboundErrorClassification => ({
+  kind: 'permanent_failure',
+  providerCode,
+  safeResponse: 'permanent_failure',
+  retryAfter: null,
+});
 
 export const reconcileUncertainDelivery = async (
   input: { deliveryId: string; owner: string; leaseForMs: number },
   dependencies: ReconcileUncertainDependencies,
-): Promise<'sent' | 'not_found' | 'retry_wait' | 'unsupported'> => {
+): Promise<'sent' | 'not_found' | 'failed'> => {
   const now = dependencies.clock.now();
   let stage = 'claiming';
   dependencies.logger?.info('mail.outbound.reconciliation_started', {
@@ -106,26 +103,25 @@ export const reconcileUncertainDelivery = async (
       stage,
       ...outboundFailureLogDetails(error),
     });
-    throw error;
+    await dependencies.finalizeFailed({
+      claimed,
+      classification: terminalClassification('RECONCILIATION_PREPARATION_FAILED'),
+      failedAt: now,
+    });
+    return 'failed';
   }
   if (adapter.reconcile === undefined) {
-    await dependencies.unitOfWork.run((tx) =>
-      tx.outbound.scheduleResend({
-        deliveryId: claimed.delivery.id,
-        leaseToken: claimed.delivery.leaseToken,
-        availableAt: now,
-        now,
-        outcome: 'uncertain',
-        reason: 'reconciliation_unsupported',
-      }),
-    );
+    await dependencies.finalizeFailed({
+      claimed,
+      classification: terminalClassification('RECONCILIATION_UNSUPPORTED'),
+      failedAt: now,
+    });
     dependencies.logger?.warn('mail.outbound.reconciliation_unsupported', {
       ...baseFields,
       provider: adapter.provider,
-      action: 'resend_scheduled',
-      availableAt: now,
+      action: 'delivery_failed_no_retry',
     });
-    return 'unsupported';
+    return 'failed';
   }
 
   let result: Awaited<ReturnType<NonNullable<typeof adapter.reconcile>>>;
@@ -148,32 +144,17 @@ export const reconcileUncertainDelivery = async (
     ) {
       await dependencies.connectionState.markAuthenticationRequired(snapshot.delivery.connectionId);
     }
-    const retryAt = reconciliationRetryAt(
-      now,
-      claimed.delivery.reconciliationCount,
-      classification.retryAfter,
-      dependencies.jitter,
-    );
-    await dependencies.unitOfWork.run((tx) =>
-      tx.outbound.scheduleResend({
-        deliveryId: claimed.delivery.id,
-        leaseToken: claimed.delivery.leaseToken,
-        availableAt: retryAt,
-        now,
-        outcome: 'uncertain',
-      }),
-    );
-    dependencies.logger?.error('mail.outbound.reconciliation_error_resend_scheduled', {
+    await dependencies.finalizeFailed({ claimed, classification, failedAt: now });
+    dependencies.logger?.error('mail.outbound.reconciliation_failed', {
       ...baseFields,
       provider: adapter.provider,
       classification: classification.kind,
       providerCode: classification.providerCode,
       safeResponse: classification.safeResponse,
-      action: 'resend_scheduled',
-      retryAt,
+      action: 'delivery_failed_no_retry',
       ...outboundFailureLogDetails(error),
     });
-    return 'retry_wait';
+    return 'failed';
   }
 
   if (result.status === 'found') {
@@ -191,43 +172,28 @@ export const reconcileUncertainDelivery = async (
     return 'sent';
   }
   if (result.status === 'not_found') {
-    await dependencies.unitOfWork.run((tx) =>
-      tx.outbound.scheduleResend({
-        deliveryId: claimed.delivery.id,
-        leaseToken: claimed.delivery.leaseToken,
-        availableAt: now,
-        now,
-      }),
-    );
+    await dependencies.finalizeFailed({
+      claimed,
+      classification: terminalClassification('RECONCILIATION_NOT_FOUND'),
+      failedAt: now,
+    });
     dependencies.logger?.warn('mail.outbound.reconciliation_not_found', {
       ...baseFields,
       provider: adapter.provider,
-      action: 'resend_scheduled',
-      availableAt: now,
+      action: 'delivery_failed_no_retry',
     });
-    return 'not_found';
+    return 'failed';
   }
 
-  const retryAt = reconciliationRetryAt(
-    now,
-    claimed.delivery.reconciliationCount,
-    result.retryAfter,
-    dependencies.jitter,
-  );
-  await dependencies.unitOfWork.run((tx) =>
-    tx.outbound.scheduleResend({
-      deliveryId: claimed.delivery.id,
-      leaseToken: claimed.delivery.leaseToken,
-      availableAt: retryAt,
-      now,
-      outcome: 'uncertain',
-    }),
-  );
+  await dependencies.finalizeFailed({
+    claimed,
+    classification: terminalClassification('RECONCILIATION_INCONCLUSIVE'),
+    failedAt: now,
+  });
   dependencies.logger?.error('mail.outbound.reconciliation_inconclusive', {
     ...baseFields,
     provider: adapter.provider,
-    action: 'resend_scheduled',
-    retryAt,
+    action: 'delivery_failed_no_retry',
   });
-  return 'retry_wait';
+  return 'failed';
 };

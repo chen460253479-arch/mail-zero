@@ -185,6 +185,7 @@ export const createMailOutboundRuntime = (
             clock: dependencies.clock,
             jitter: dependencies.jitter,
             finalizeAccepted,
+            finalizeFailed,
             logger: dependencies.logger,
           } satisfies ReconcileUncertainDependencies,
         );

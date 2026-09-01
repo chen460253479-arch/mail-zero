@@ -38,7 +38,6 @@ const createTransport = async (
     },
     connectionTimeout: 15_000,
     greetingTimeout: 15_000,
-    socketTimeout: 300_000,
     tls: {
       rejectUnauthorized: true,
       servername: isIP(endpoint.originalHost) === 0 ? endpoint.originalHost : undefined,

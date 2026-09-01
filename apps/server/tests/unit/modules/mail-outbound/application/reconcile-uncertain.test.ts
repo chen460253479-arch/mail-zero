@@ -105,6 +105,7 @@ const createHarness = (
     clock: { now: () => new Date('2026-01-01T00:00:10.000Z') },
     jitter: () => 0,
     finalizeAccepted: vi.fn(),
+    finalizeFailed: vi.fn(),
     logger,
   };
   return { adapter, current, dependencies, logger, outbound, send };
@@ -148,7 +149,7 @@ describe('reconcileUncertainDelivery', () => {
   });
 
   it.each([1, 2, 3] as const)(
-    'schedules an actual resend after not_found reconciliation %i',
+    'fails without resending after not_found reconciliation %i',
     async (count) => {
       const h = createHarness(count, async () => ({ status: 'not_found' }));
 
@@ -161,13 +162,18 @@ describe('reconcileUncertainDelivery', () => {
           },
           h.dependencies as never,
         ),
-      ).resolves.toBe('not_found');
-      expect(h.outbound.scheduleResend).toHaveBeenCalledOnce();
+      ).resolves.toBe('failed');
+      expect(h.outbound.scheduleResend).not.toHaveBeenCalled();
+      expect(h.dependencies.finalizeFailed).toHaveBeenCalledWith({
+        claimed: h.current,
+        classification: expect.objectContaining({ providerCode: 'RECONCILIATION_NOT_FOUND' }),
+        failedAt: new Date('2026-01-01T00:00:10.000Z'),
+      });
       expect(h.send).not.toHaveBeenCalled();
     },
   );
 
-  it('schedules a real resend for inconclusive and unsupported reconciliation', async () => {
+  it('fails without resending for inconclusive and unsupported reconciliation', async () => {
     const inconclusive = createHarness(1, async () => ({
       status: 'inconclusive',
       retryAfter: null,
@@ -177,16 +183,16 @@ describe('reconcileUncertainDelivery', () => {
         { deliveryId: 'delivery-1', owner: 'worker-1', leaseForMs: 60_000 },
         inconclusive.dependencies as never,
       ),
-    ).resolves.toBe('retry_wait');
-    expect(inconclusive.outbound.scheduleResend).toHaveBeenCalledOnce();
+    ).resolves.toBe('failed');
+    expect(inconclusive.outbound.scheduleResend).not.toHaveBeenCalled();
+    expect(inconclusive.dependencies.finalizeFailed).toHaveBeenCalledOnce();
     expect(inconclusive.logger.error).toHaveBeenCalledWith(
       'mail.outbound.reconciliation_inconclusive',
       expect.objectContaining({
         deliveryId: 'delivery-1',
         reconciliationCount: 1,
         provider: 'gmail',
-        action: 'resend_scheduled',
-        retryAt: new Date('2026-01-01T00:00:40.000Z'),
+        action: 'delivery_failed_no_retry',
       }),
     );
 
@@ -196,19 +202,21 @@ describe('reconcileUncertainDelivery', () => {
         { deliveryId: 'delivery-1', owner: 'worker-1', leaseForMs: 60_000 },
         unsupported.dependencies as never,
       ),
-    ).resolves.toBe('unsupported');
+    ).resolves.toBe('failed');
+    expect(unsupported.outbound.scheduleResend).not.toHaveBeenCalled();
+    expect(unsupported.dependencies.finalizeFailed).toHaveBeenCalledOnce();
     expect(unsupported.logger.warn).toHaveBeenCalledWith(
       'mail.outbound.reconciliation_unsupported',
       expect.objectContaining({
         deliveryId: 'delivery-1',
         provider: 'gmail',
-        action: 'resend_scheduled',
+        action: 'delivery_failed_no_retry',
       }),
     );
     expect(unsupported.send).not.toHaveBeenCalled();
   });
 
-  it('schedules a real resend when reconciliation throws', async () => {
+  it('fails without resending when reconciliation throws', async () => {
     const h = createHarness(1, async () => {
       throw new Error('reconciliation unavailable');
     });
@@ -224,13 +232,14 @@ describe('reconcileUncertainDelivery', () => {
         { deliveryId: 'delivery-1', owner: 'worker-1', leaseForMs: 60_000 },
         h.dependencies as never,
       ),
-    ).resolves.toBe('retry_wait');
-    expect(h.outbound.scheduleResend).toHaveBeenCalledOnce();
+    ).resolves.toBe('failed');
+    expect(h.outbound.scheduleResend).not.toHaveBeenCalled();
+    expect(h.dependencies.finalizeFailed).toHaveBeenCalledOnce();
     expect(h.logger.error).toHaveBeenCalledWith(
-      'mail.outbound.reconciliation_error_resend_scheduled',
+      'mail.outbound.reconciliation_failed',
       expect.objectContaining({
         deliveryId: 'delivery-1',
-        action: 'resend_scheduled',
+        action: 'delivery_failed_no_retry',
         errorMessage: 'reconciliation unavailable',
       }),
     );
